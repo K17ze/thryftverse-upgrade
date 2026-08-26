@@ -41,13 +41,15 @@ import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isSustainableGrade } from '../utils/sustainabilityScore';
 import { useFeatureFlag } from '../analytics';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useTaxonomy } from '../context/TaxonomyContext';
 
 const { height, width } = Dimensions.get('window');
 const SNAP_HALF = height * 0.5;
 const SNAP_FULL = height * 0.1;
 
 type SortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
-type ConditionOption = 'Any' | 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
+type ConditionOption = 'Any' | string;
 type FilterRoute = RouteProp<RootStackParamList, 'Filter'>;
 
 const SORT_OPTIONS: Array<{ value: SortOption; label: string; accessibilityLabel: string }> = [
@@ -66,14 +68,6 @@ const AUCTION_SORT_OPTION: { value: SortOption; label: string; accessibilityLabe
   label: 'Ending soon',
   accessibilityLabel: 'Sort by ending soon',
 };
-
-const CONDITION_OPTIONS: Array<{ value: ConditionOption; label: string; accessibilityLabel: string }> = [
-  { value: 'Any', label: 'Any', accessibilityLabel: 'Filter any condition' },
-  { value: 'New with tags', label: 'New with tags', accessibilityLabel: 'Filter new with tags' },
-  { value: 'Very good', label: 'Very good', accessibilityLabel: 'Filter very good condition' },
-  { value: 'Good', label: 'Good', accessibilityLabel: 'Filter good condition' },
-  { value: 'Satisfactory', label: 'Satisfactory', accessibilityLabel: 'Filter satisfactory condition' },
-];
 
 const toKey = (value: string) => value.trim().toLowerCase();
 
@@ -112,8 +106,18 @@ export default function FilterScreen() {
   const { show } = useToast();
   const { mySizes, setMySizes, toggleMySize, filterPresets, saveFilterPreset, removeFilterPreset } = useSettingsPreferences();
   const { colors } = useAppTheme();
+  const { formatFromFiat, currencySymbol, currencyCode } = useFormattedPrice();
   const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { conditions } = useTaxonomy();
+  const conditionOptions = useMemo(() => [
+    { value: 'Any' as const, label: 'Any', accessibilityLabel: 'Any condition' },
+    ...conditions.map(c => ({
+      value: c.name as ConditionOption,
+      label: c.name,
+      accessibilityLabel: c.name,
+    })),
+  ], [conditions]);
 
   // Feature flag — gates the advanced filter section (quick price presets).
   // Additive enhancement; absent when the flag is off (current behaviour).
@@ -363,7 +367,7 @@ export default function FilterScreen() {
       sort: activeSort,
       brands: selectedBrands,
       sizes: selectedSizes,
-      condition: selectedCondition,
+      condition: selectedCondition as typeof browseFilters.condition,
       sustainableOnly,
       priceMin: parsedMin != null && !Number.isNaN(parsedMin) ? parsedMin : null,
       priceMax: parsedMax != null && !Number.isNaN(parsedMax) ? parsedMax : null,
@@ -783,7 +787,7 @@ export default function FilterScreen() {
                 {expandedSections.has('condition') && (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
                     <AppSegmentControl
-                      options={CONDITION_OPTIONS}
+                      options={conditionOptions}
                       value={selectedCondition}
                       onChange={setSelectedCondition}
                       optionStyle={styles.chip}
@@ -884,7 +888,7 @@ export default function FilterScreen() {
                       <Text style={styles.priceInputLabel}>Min</Text>
                       <TextInput
                         style={styles.priceInput}
-                        placeholder="£0"
+                        placeholder={formatFromFiat(0, currencyCode)}
                         placeholderTextColor={colors.textMuted}
                         value={priceMin}
                         onChangeText={setPriceMin}
@@ -932,10 +936,10 @@ export default function FilterScreen() {
                     {expandedSections.has('advanced') && (
                       <View style={styles.wrapContainer}>
                         {[
-                          { label: 'Under £20', min: '', max: '20' },
-                          { label: '£20 – £50', min: '20', max: '50' },
-                          { label: '£50 – £100', min: '50', max: '100' },
-                          { label: '£100+', min: '100', max: '' },
+                          { label: `Under ${currencySymbol}20`, min: '', max: '20' },
+                          { label: `${currencySymbol}20 – ${currencySymbol}50`, min: '20', max: '50' },
+                          { label: `${currencySymbol}50 – ${currencySymbol}100`, min: '50', max: '100' },
+                          { label: `${currencySymbol}100+`, min: '100', max: '' },
                         ].map((preset) => {
                           const isActive = priceMin === preset.min && priceMax === preset.max;
                           return (

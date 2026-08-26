@@ -19,7 +19,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
-import { PremiumStatusPill, type StatusPillTone } from '../components/ui/PremiumStatusPill';
+import { AppStatusPill, type AppStatusTone } from '../components/ui/AppStatusPill';
 import { Meta, Caption } from '../components/ui/Text';
 import type {
   SupportCase,
@@ -36,7 +36,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SupportCaseDetail'>;
 // ============================================================================
 interface StateDisplay {
   label: string;
-  tone: StatusPillTone;
+  tone: AppStatusTone;
   icon: keyof typeof Ionicons.glyphMap;
 }
 
@@ -463,7 +463,8 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
             </Caption>
           </View>
           {stateDisplay && (
-            <PremiumStatusPill
+            <AppStatusPill
+              variant="block"
               tone={stateDisplay.tone}
               label={stateDisplay.label}
               icon={stateDisplay.icon}

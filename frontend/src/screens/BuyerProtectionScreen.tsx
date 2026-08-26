@@ -34,12 +34,9 @@ import {
   createBuyerProtectionClaim,
   type BuyerProtectionInfo,
 } from '../services/commerceApi';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BuyerProtection'>;
-
-function formatGbp(minor: number): string {
-  return `£${(minor / 100).toFixed(2)}`;
-}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -53,6 +50,12 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
+
+  const formatGbp = React.useCallback(
+    (minor: number) => formatFromFiat(minor / 100, currencyCode),
+    [formatFromFiat, currencyCode]
+  );
   const { orderId } = route.params;
 
   const [protection, setProtection] = React.useState<BuyerProtectionInfo | null>(null);

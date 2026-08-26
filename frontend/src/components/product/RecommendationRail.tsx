@@ -18,7 +18,6 @@ import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 interface RailCardProps {
   item: Listing;
@@ -53,8 +52,8 @@ function RailCard({
 }: RailCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat } = useFormattedPrice();
-  const formattedPrice = formatFromFiat(item.price, DEFAULT_CURRENCY_CODE);
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const formattedPrice = formatFromFiat(item.price, currencyCode);
   const imageUri = item.images?.[0];
 
   const handlePress = () => {

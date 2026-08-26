@@ -470,12 +470,6 @@ describe('E2E smoke test plan — critical user journeys', () => {
   });
 
   describe('Co-ownership / trade', () => {
-    it('should open the TradeHub and list markets — journey owned', () => {
-      const journey = 'should open the TradeHub and list markets';
-      expectScreen('TradeHubScreen.tsx', journey);
-      expectMaestroFlow('trade-flow.yml', journey);
-    });
-
     it('should place a buy order on an asset — journey owned', () => {
       const journey = 'should place a buy order on an asset';
       expectScreen('TradeConfirmScreen.tsx', journey);

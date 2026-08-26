@@ -35,12 +35,9 @@ import {
 } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnPriceAlerts'>;
-
-function formatGbp(minor: number): string {
-  return `£${(minor / 100).toFixed(2)}`;
-}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -52,6 +49,12 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
+
+  const formatGbp = React.useCallback(
+    (minor: number) => formatFromFiat(minor / 100, currencyCode),
+    [formatFromFiat, currencyCode]
+  );
 
   const [alerts, setAlerts] = React.useState<CoOwnPriceAlert[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);

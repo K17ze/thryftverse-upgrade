@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Type, Typography, Radius } from '../../theme/designTokens';
+import { useRenderTrace } from '../../performance/renderTrace';
 import type { LookApiItem } from '../../services/looksApi';
 
 export interface LookMasonryTileProps {
@@ -15,17 +16,20 @@ export interface LookMasonryTileProps {
   testID?: string;
 }
 
-export function LookMasonryTile({ look, onPress, aspectRatio = 4 / 5, testID }: LookMasonryTileProps) {
+function LookMasonryTileImpl({ look, onPress, aspectRatio = 4 / 5, testID }: LookMasonryTileProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  useRenderTrace('LookMasonryTile', { lookId: look.id, aspectRatio });
 
   const creator = look.creator.username ?? 'creator';
   const caption = look.caption || look.title || '';
   const hasItems = look.tags.length > 0;
 
+  const handlePress = useCallback(() => onPress(look.id), [onPress, look.id]);
+
   return (
     <Pressable
-      onPress={() => onPress(look.id)}
+      onPress={handlePress}
       accessibilityRole="button"
       accessibilityLabel={`${caption || 'Look'} by @${creator}`}
       accessibilityHint="Opens this look"
@@ -64,6 +68,8 @@ export function LookMasonryTile({ look, onPress, aspectRatio = 4 / 5, testID }: 
     </Pressable>
   );
 }
+
+export const LookMasonryTile = React.memo(LookMasonryTileImpl);
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   tile: {

@@ -489,7 +489,7 @@ export async function updateTopicWeight(topicId: string, weight: TopicWeight): P
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            idempotencyKey: `weight-${topicId}-${weight}-${Date.now()}`,
+            idempotencyKey: `weight-${topicId}-${weight}`,
             scope: 'topic',
             targetId: topicId,
             targetLabel: target?.label ?? topicId,
@@ -531,7 +531,7 @@ export async function removeTopic(topicId: string): Promise<boolean> {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            idempotencyKey: `remove-${topicId}-${Date.now()}`,
+            idempotencyKey: `remove-${topicId}`,
             scope: 'topic',
             targetId: topicId,
             targetLabel: target.label,

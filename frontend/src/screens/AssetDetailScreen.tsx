@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Modal, TextInput, Image, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +18,7 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Radius, FontFamily, DockConstants, Stroke, Control, LetterSpacing, Numeric } from '../theme/designTokens';
+import { Space, Radius, FontFamily, DockConstants, Control, Numeric } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
@@ -28,7 +28,6 @@ import {
   type CoOwnDistribution,
   type MarketCoOwnAsset,
   type MarketCoOwnHolding,
-  createCoOwnPriceAlert,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
@@ -79,18 +78,21 @@ import {
   CoOwnCandleChart,
   CoOwnSupplySheet,
   CoOwnOverflowSheet,
+  CoOwnPriceAlertForm,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnCandleRange,
 } from '../components/coown';
-import { AppButton } from '../components/ui/AppButton';
+import { OwnershipStructureBar, HolderPositionSummary, FundamentalsSection } from '../components/asset';
+import { MarketBookRow } from '../components/trade';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useSignupWall } from '../hooks/useSignupWall';
+import { useAssetDetailSheets } from '../hooks/useAssetDetailSheets';
+import { usePriceAlertForm } from '../hooks/usePriceAlertForm';
 import { useFeatureFlag } from '../analytics';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -117,7 +119,7 @@ export default function AssetDetailScreen() {
   const upsertConversation = useStore((state) => state.upsertConversation);
   const isCoOwnWatched = useStore((state) => state.isCoOwnWatched);
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { requireAuth } = useSignupWall();
 
@@ -144,51 +146,42 @@ export default function AssetDetailScreen() {
   const [lastDistribution, setLastDistribution] = React.useState<CoOwnDistribution | null>(null);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
-  const [fullscreenVisible, setFullscreenVisible] = React.useState(false);
-  const [orderBookExpanded, setOrderBookExpanded] = React.useState(false);
-  const [fundamentalsExpanded, setFundamentalsExpanded] = React.useState(false);
-  const [guideVisible, setGuideVisible] = React.useState(false);
   const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
-  const [rightsSheetVisible, setRightsSheetVisible] = React.useState(false);
-  const [overflowVisible, setOverflowVisible] = React.useState(false);
-  const [supplySheetVisible, setSupplySheetVisible] = React.useState(false);
   const [candleRange, setCandleRange] = React.useState<CoOwnCandleRange>('1W');
   const [showVolume, setShowVolume] = React.useState(false);
-  // Price alert creation
-  const [priceAlertVisible, setPriceAlertVisible] = React.useState(false);
-  const [alertTargetPrice, setAlertTargetPrice] = React.useState('');
-  const [alertCondition, setAlertCondition] = React.useState<'above' | 'below'>('above');
-  const [alertSubmitting, setAlertSubmitting] = React.useState(false);
+
+  // ── Sheet/expansion state (discriminated union for modal sheets) ──
+  const { sheets, open: openSheet, close: closeSheet, toggle: toggleExpansion, setExpansion } = useAssetDetailSheets();
+  const {
+    fullscreenVisible,
+    orderBookExpanded,
+    fundamentalsExpanded,
+    guideVisible,
+    rightsSheetVisible,
+    overflowVisible,
+    supplySheetVisible,
+    marketSectionExpanded,
+    diligenceSectionExpanded,
+    riskDisclosureVisible,
+  } = sheets;
+
+  // ── Price alert creation form state ──
+  const {
+    priceAlertVisible,
+    alertTargetPrice,
+    alertCondition,
+    alertSubmitting,
+    setAlertTargetPrice,
+    setAlertCondition,
+    openPriceAlert,
+    closePriceAlert,
+    handleSubmit: handleCreatePriceAlert,
+  } = usePriceAlertForm(assetId);
+
   // Progressive disclosure — expert sections collapsed by default so the
   // first viewport shows identity, story, trust, and holder position.
-  const [marketSectionExpanded, setMarketSectionExpanded] = React.useState(false);
-  const [diligenceSectionExpanded, setDiligenceSectionExpanded] = React.useState(false);
-
-  const handleCreatePriceAlert = React.useCallback(async () => {
-    if (!assetId) return;
-    const priceNum = parseFloat(alertTargetPrice);
-    if (!priceNum || priceNum <= 0) {
-      show('Enter a valid target price', 'error');
-      return;
-    }
-    const priceMinor = Math.round(priceNum * 100);
-    setAlertSubmitting(true);
-    try {
-      await createCoOwnPriceAlert(assetId, alertCondition, priceMinor);
-      haptics.success();
-      show(`Price alert set: ${alertCondition} £${priceNum.toFixed(2)}`, 'success');
-      setPriceAlertVisible(false);
-      setAlertTargetPrice('');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create alert';
-      show(message, 'error');
-    } finally {
-      setAlertSubmitting(false);
-    }
-  }, [assetId, alertTargetPrice, alertCondition, show]);
 
   const [dataLoadedAt, setDataLoadedAt] = React.useState<number | null>(null);
-  const [riskDisclosureVisible, setRiskDisclosureVisible] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
 
   const coOwnCompliance = useStore((s) => s.coOwnCompliance);
@@ -196,7 +189,7 @@ export default function AssetDetailScreen() {
 
   const handleOpenFullscreen = (index: number) => {
     setFullscreenIndex(index);
-    setFullscreenVisible(true);
+    openSheet('fullscreen');
   };
 
   const scrollY = useSharedValue(0);
@@ -540,7 +533,7 @@ export default function AssetDetailScreen() {
     }
     if (!coOwnCompliance.educationCompleted) {
       setPendingTradeSide(side);
-      setGuideVisible(true);
+      openSheet('guide');
       return;
     }
     navigation.navigate('Trade', { assetId: asset.id, side });
@@ -552,7 +545,7 @@ export default function AssetDetailScreen() {
     const tradeSide: 'buy' | 'sell' = bookSide === 'ask' ? 'buy' : 'sell';
     if (!coOwnCompliance.educationCompleted) {
       setPendingTradeSide(tradeSide);
-      setGuideVisible(true);
+      openSheet('guide');
       return;
     }
     navigation.navigate('Trade', { assetId: asset.id, side: tradeSide, limitPrice: price });
@@ -560,7 +553,7 @@ export default function AssetDetailScreen() {
 
   const handleGuideComplete = () => {
     updateCoOwnCompliance({ educationCompleted: true });
-    setGuideVisible(false);
+    closeSheet('guide');
   };
 
   const handleGuideContinueToTrade = () => {
@@ -706,7 +699,7 @@ export default function AssetDetailScreen() {
               isActive: social.isSavedToCollection,
             },
           ]}
-          onOverflow={() => setOverflowVisible(true)}
+          onOverflow={() => openSheet('overflow')}
           showOverflow
         />
 
@@ -845,50 +838,13 @@ export default function AssetDetailScreen() {
               Flat canvas element, no card chrome. Only shown when there is a meaningful
               allocation (not 100% available). */}
           {allocatedPct > 0 && (
-            <View style={styles.ownershipStructureWrap}>
-              <View style={[styles.ownershipBar, { backgroundColor: colors.surfaceAlt }]}>
-                {yourSegmentPct > 0 && (
-                  <View style={{
-                    width: `${yourSegmentPct}%`,
-                    height: '100%',
-                    backgroundColor: colors.brand,
-                  }} />
-                )}
-                {otherHoldersSegmentPct > 0 && (
-                  <View style={{
-                    width: `${otherHoldersSegmentPct}%`,
-                    height: '100%',
-                    backgroundColor: colors.textSecondary,
-                  }} />
-                )}
-              </View>
-              <View style={styles.ownershipLegend}>
-                {yourSegmentPct > 0 && (
-                  <View style={styles.ownershipLegendItem}>
-                    <View style={[styles.ownershipLegendDot, { backgroundColor: colors.brand }]} />
-                    <Text style={[styles.ownershipLegendText, { color: colors.textSecondary }]} numberOfLines={1}>
-                      You {yourSegmentPct.toFixed(1)}%
-                    </Text>
-                  </View>
-                )}
-                {otherHoldersSegmentPct > 0 && (
-                  <View style={styles.ownershipLegendItem}>
-                    <View style={[styles.ownershipLegendDot, { backgroundColor: colors.textSecondary }]} />
-                    <Text style={[styles.ownershipLegendText, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {asset.holders > 0 ? `${asset.holders - (isHolder ? 1 : 0)} other holders` : 'Holders'} {otherHoldersSegmentPct.toFixed(0)}%
-                    </Text>
-                  </View>
-                )}
-                {availableSegmentPct > 0 && (
-                  <View style={styles.ownershipLegendItem}>
-                    <View style={[styles.ownershipLegendDot, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]} />
-                    <Text style={[styles.ownershipLegendText, { color: colors.textSecondary }]} numberOfLines={1}>
-                      Available {availableSegmentPct.toFixed(0)}%
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
+            <OwnershipStructureBar
+              yourSegmentPct={yourSegmentPct}
+              otherHoldersSegmentPct={otherHoldersSegmentPct}
+              availableSegmentPct={availableSegmentPct}
+              isHolder={isHolder}
+              holderCount={asset.holders}
+            />
           )}
         </View>
 
@@ -906,35 +862,13 @@ export default function AssetDetailScreen() {
             Spec P1-B §5: a holder needs position + gain/loss basis
             before market detail. Spec §7 language: "Your position". */}
         {isHolder && yourUnits != null && viewerPct != null ? (
-          <View style={styles.holderPositionSummary}>
-            <View style={styles.holderPositionLeft}>
-              <Text style={[styles.holderPositionText, { color: colors.textSecondary }]}>
-                Your position
-              </Text>
-              {avgEntryPriceGbp != null && (
-                <Text style={[styles.holderPositionText, { color: colors.textSecondary }]}>
-                  Avg. entry {formatCoOwnIze(avgEntryPriceGbp)}
-                </Text>
-              )}
-            </View>
-            <View style={styles.holderPositionRight}>
-              <Text style={[styles.holderPositionText, { color: colors.textSecondary, textAlign: 'right' }]}>
-                You own {yourUnits} units · {viewerPct.toFixed(1)}%
-              </Text>
-              {unrealizedPnlGbp != null && unrealizedPnlPct != null ? (
-                <Text style={[
-                  styles.holderPositionText,
-                  {
-                    color: unrealizedPnlGbp >= 0 ? colors.coownUp : colors.coownDown,
-                    textAlign: 'right',
-                    fontFamily: FontFamily.semibold,
-                  },
-                ]}>
-                  {unrealizedPnlGbp >= 0 ? '+' : ''}{formatCoOwnIze(unrealizedPnlGbp)} ({unrealizedPnlPct >= 0 ? '+' : ''}{unrealizedPnlPct.toFixed(1)}%)
-                </Text>
-              ) : null}
-            </View>
-          </View>
+          <HolderPositionSummary
+            yourUnits={yourUnits}
+            viewerPct={viewerPct}
+            avgEntryPriceGbp={avgEntryPriceGbp}
+            unrealizedPnlGbp={unrealizedPnlGbp}
+            unrealizedPnlPct={unrealizedPnlPct}
+          />
         ) : null}
 
         {/* ── Holder rights/distributions quick summary ──
@@ -943,7 +877,7 @@ export default function AssetDetailScreen() {
             Taps open the full rights sheet. */}
         {isHolder ? (
           <Pressable
-            onPress={() => setRightsSheetVisible(true)}
+            onPress={() => openSheet('rights')}
             hitSlop={4}
             style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.5 }]}
             accessibilityRole="button"
@@ -975,7 +909,7 @@ export default function AssetDetailScreen() {
               ? `Last ${formatCoOwnIze(marketSnapshot.lastExecutionPriceGbp)}${spreadGbp != null ? ` · Spread ${formatCoOwnIze(spreadGbp)}` : ''}`
               : 'Price · chart · depth'
           }
-          onPress={() => setMarketSectionExpanded((prev) => !prev)}
+          onPress={() => toggleExpansion('marketSection')}
           leadingIcon="trending-up-outline"
           accessibilityLabel="Toggle market details"
         />
@@ -1038,7 +972,7 @@ export default function AssetDetailScreen() {
               { borderTopColor: colors.border },
               pressed && { opacity: 0.6 },
             ]}
-            onPress={() => setSupplySheetVisible(true)}
+            onPress={() => openSheet('supply')}
             accessibilityRole="button"
             accessibilityLabel={`Supply details · ${allocatedPct}% allocated, ${availableUnits} units available`}
           >
@@ -1094,43 +1028,18 @@ export default function AssetDetailScreen() {
             label={fundamentalsExpanded ? 'Hide valuation' : 'Valuation'}
             summary={
               navPerUnitGbp != null
-                ? `${formatFromFiat(navPerUnitGbp, DEFAULT_CURRENCY_CODE)} NAV / unit`
+                ? `${formatFromFiat(navPerUnitGbp, currencyCode)} NAV / unit`
                 : 'Reporting'
             }
-            onPress={() => setFundamentalsExpanded((prev) => !prev)}
+            onPress={() => toggleExpansion('fundamentals')}
             leadingIcon="analytics-outline"
           />
           {fundamentalsExpanded ? (
-            <View style={[styles.fundamentalsStacked, { borderTopColor: colors.border }]}>
-              <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Reference vs NAV</Text>
-                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
-                  {referenceVsNavPct != null
-                    ? `${referenceVsNavPct >= 0 ? '+' : ''}${referenceVsNavPct.toFixed(1)}%`
-                    : 'Not available'}
-                </Text>
-              </View>
-              <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>NAV / unit</Text>
-                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
-                  {navPerUnitGbp != null
-                    ? formatFromFiat(navPerUnitGbp, DEFAULT_CURRENCY_CODE)
-                    : 'Not available'}
-                </Text>
-              </View>
-              <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Next report</Text>
-                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
-                  {asset.appraisalValuedAt
-                    ? new Date(asset.appraisalValuedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-                    : 'Not scheduled'}
-                </Text>
-              </View>
-              <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Next distribution</Text>
-                <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>Not scheduled</Text>
-              </View>
-            </View>
+            <FundamentalsSection
+              referenceVsNavPct={referenceVsNavPct}
+              navPerUnitLabel={navPerUnitGbp != null ? formatFromFiat(navPerUnitGbp, currencyCode) : 'Not available'}
+              appraisalValuedAt={asset.appraisalValuedAt}
+            />
           ) : null}
 
           {/* Market summary — best bid/ask. Tabular numerals, aligned
@@ -1143,21 +1052,7 @@ export default function AssetDetailScreen() {
               onRetry={retryOrderBook}
             />
           ) : (
-            <View style={[styles.marketBookRow, { borderTopColor: colors.border }]}>
-              <View style={styles.marketBookSide}>
-                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Highest bid</Text>
-                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} maxFontSizeMultiplier={1.3}>
-                  {bestBid?.unitPriceGbp != null ? `${formatCoOwnIze(bestBid.unitPriceGbp)} × ${bestBid.units ?? 0}` : 'No bid'}
-                </Text>
-              </View>
-              <View style={[styles.marketBookDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.marketBookSide}>
-                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Lowest ask</Text>
-                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} maxFontSizeMultiplier={1.3}>
-                  {bestAsk?.unitPriceGbp != null ? `${formatCoOwnIze(bestAsk.unitPriceGbp)} × ${bestAsk.units ?? 0}` : 'No ask'}
-                </Text>
-              </View>
-            </View>
+            <MarketBookRow bestBid={bestBid} bestAsk={bestAsk} />
           )}
 
           {/* Bids & asks — order book depth disclosure.
@@ -1168,7 +1063,7 @@ export default function AssetDetailScreen() {
               <CommerceDetailDisclosureRow
                 label={orderBookExpanded ? 'Hide bids & asks' : 'Bids & asks'}
                 summary={`${orderBook.bids.length + orderBook.asks.length} offers`}
-                onPress={() => setOrderBookExpanded((prev) => !prev)}
+                onPress={() => toggleExpansion('orderBook')}
                 leadingIcon="bar-chart-outline"
               />
               {orderBookExpanded ? (
@@ -1212,7 +1107,7 @@ export default function AssetDetailScreen() {
           <CommerceDetailDisclosureRow
             label="Price alert"
             summary="Get notified at a target price"
-            onPress={() => setPriceAlertVisible(true)}
+            onPress={openPriceAlert}
             leadingIcon="notifications-outline"
             accessibilityLabel="Create price alert"
           />
@@ -1264,7 +1159,7 @@ export default function AssetDetailScreen() {
           if (trustFacts.length === 0) return null;
           return (
             <Pressable
-              onPress={() => setDiligenceSectionExpanded(true)}
+              onPress={() => setExpansion('diligenceSection', true)}
               hitSlop={4}
               style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.5 }]}
               accessibilityRole="button"
@@ -1290,7 +1185,7 @@ export default function AssetDetailScreen() {
         <CommerceDetailDisclosureRow
           label={diligenceSectionExpanded ? 'Hide asset dossier' : 'Asset dossier'}
           summary={dossierSummary || undefined}
-          onPress={() => setDiligenceSectionExpanded((prev) => !prev)}
+          onPress={() => toggleExpansion('diligenceSection')}
           leadingIcon="document-text-outline"
           accessibilityLabel="Toggle asset dossier"
         />
@@ -1329,7 +1224,7 @@ export default function AssetDetailScreen() {
             label="Rights"
             count={CANONICAL_RIGHTS_LABELS.length}
             summary={hasIncompleteRights ? 'Pending' : undefined}
-            onPress={() => setRightsSheetVisible(true)}
+            onPress={() => openSheet('rights')}
             leadingIcon="document-text-outline"
             accessibilityLabel="Review rights"
           />
@@ -1342,7 +1237,7 @@ export default function AssetDetailScreen() {
           </View>
           <CommerceDetailMetricRow
             label="NAV / unit"
-            value={navPerUnitGbp != null ? formatFromFiat(navPerUnitGbp, DEFAULT_CURRENCY_CODE) : 'Not available'}
+            value={navPerUnitGbp != null ? formatFromFiat(navPerUnitGbp, currencyCode) : 'Not available'}
             muted={navPerUnitGbp == null}
           />
           <CommerceDetailMetricRow
@@ -1354,7 +1249,7 @@ export default function AssetDetailScreen() {
           />
           <CommerceDetailMetricRow
             label="Appraisal"
-            value={asset.appraisalValueGbp != null ? formatFromFiat(asset.appraisalValueGbp, DEFAULT_CURRENCY_CODE) : 'Not available'}
+            value={asset.appraisalValueGbp != null ? formatFromFiat(asset.appraisalValueGbp, currencyCode) : 'Not available'}
             muted={asset.appraisalValueGbp == null}
           />
           <CommerceDetailMetricRow
@@ -1494,7 +1389,7 @@ export default function AssetDetailScreen() {
           </View>
           <CommerceDetailDisclosureRow
             label="Risk disclosure"
-            onPress={() => setRiskDisclosureVisible(true)}
+            onPress={() => openSheet('riskDisclosure')}
             leadingIcon="warning-outline"
             accessibilityLabel="View risks"
           />
@@ -1587,7 +1482,7 @@ export default function AssetDetailScreen() {
               subtitle="Rights review required"
               primaryAction={{
                 label: 'Review rights',
-                onPress: () => setRightsSheetVisible(true),
+                onPress: () => openSheet('rights'),
               }}
             />
           );
@@ -1690,13 +1585,13 @@ export default function AssetDetailScreen() {
         initialIndex={fullscreenIndex}
         visible={fullscreenVisible}
         onActiveIndexChange={setFullscreenIndex}
-        onClose={() => setFullscreenVisible(false)}
+        onClose={() => closeSheet('fullscreen')}
       />
 
       {/* First-trade guided education */}
       <CoOwnFirstTradeGuide
         visible={guideVisible}
-        onClose={() => { setGuideVisible(false); setPendingTradeSide(null); }}
+        onClose={() => { closeSheet('guide'); setPendingTradeSide(null); }}
         onComplete={handleGuideComplete}
         onContinueToTrade={pendingTradeSide ? handleGuideContinueToTrade : undefined}
       />
@@ -1706,14 +1601,14 @@ export default function AssetDetailScreen() {
           expose the answer. For live instruments, TBC rows block trading. */}
       <CoOwnRightsSheet
         visible={rightsSheetVisible}
-        onClose={() => setRightsSheetVisible(false)}
+        onClose={() => closeSheet('rights')}
         disclosureVersion={asset.rights?.version ? `Rights v${asset.rights.version}` : 'Rights v1'}
         rights={rightsRows}
       />
 
       <BottomSheet
         visible={riskDisclosureVisible}
-        onDismiss={() => setRiskDisclosureVisible(false)}
+        onDismiss={() => closeSheet('riskDisclosure')}
         snapPoint={0.7}
       >
         <View style={[styles.riskDisclosureSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
@@ -1721,7 +1616,7 @@ export default function AssetDetailScreen() {
             Risk disclosure
           </Text>
           <Pressable
-            onPress={() => setRiskDisclosureVisible(false)}
+            onPress={() => closeSheet('riskDisclosure')}
             hitSlop={12}
             style={({ pressed }) => [styles.sheetCloseTarget, pressed && { opacity: 0.5 }]}
             accessibilityLabel="Close risk disclosure"
@@ -1734,7 +1629,7 @@ export default function AssetDetailScreen() {
           <CoOwnRiskDisclosure
             disclosures={asset.riskDisclosures ?? null}
             onReportIssue={() => {
-              setRiskDisclosureVisible(false);
+              closeSheet('riskDisclosure');
               navigation.navigate('CoOwnIssue', { assetId: asset.id });
             }}
           />
@@ -1743,7 +1638,7 @@ export default function AssetDetailScreen() {
 
       <CoOwnSupplySheet
         visible={supplySheetVisible}
-        onClose={() => setSupplySheetVisible(false)}
+        onClose={() => closeSheet('supply')}
         unitPriceLabel={formatCoOwnIze(asset.unitPriceGbp)}
         totalUnits={totalUnits}
         availableUnits={availableUnits}
@@ -1766,116 +1661,37 @@ export default function AssetDetailScreen() {
       {/* Overflow sheet — lower-frequency hero actions (Fav, Watch, Report). */}
       <CoOwnOverflowSheet
         visible={overflowVisible}
-        onClose={() => setOverflowVisible(false)}
+        onClose={() => closeSheet('overflow')}
         onShare={social.openShare}
         onOrderHistory={() => navigation.navigate('CoOwnOrderHistory')}
         onToggleFav={guardedToggleLike}
         isFav={social.isLiked}
         onWatch={() => {
           toggleCoOwnWatch(asset.id);
-          setOverflowVisible(false);
+          closeSheet('overflow');
         }}
         isWatched={isWatched}
         onPriceAlert={() => {
-          setOverflowVisible(false);
-          setPriceAlertVisible(true);
+          closeSheet('overflow');
+          openPriceAlert();
         }}
         onReport={() => {
-          setOverflowVisible(false);
+          closeSheet('overflow');
           navigation.navigate('CoOwnIssue', { assetId: asset.id });
         }}
       />
 
       {/* Price alert creation modal — flagship treatment with semantic condition colours */}
-      <Modal
+      <CoOwnPriceAlertForm
         visible={priceAlertVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setPriceAlertVisible(false)}
-      >
-        <View style={[priceAlertStyles.overlay, { backgroundColor: colors.overlay }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPriceAlertVisible(false)} />
-          <View style={[priceAlertStyles.sheet, { backgroundColor: colors.surface }]}>
-            {/* Header with icon */}
-            <View style={priceAlertStyles.headerRow}>
-              <View style={[priceAlertStyles.headerIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="notifications" size={20} color={colors.textInverse} />
-              </View>
-              <View style={priceAlertStyles.headerText}>
-                <Text style={[priceAlertStyles.sheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Create price alert</Text>
-                <Text style={[priceAlertStyles.sheetSubtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-                  Get notified when the price {alertCondition === 'above' ? 'rises above' : 'drops below'} your target.
-                </Text>
-              </View>
-            </View>
-
-            {/* Condition selector — semantic colours */}
-            <Text style={[priceAlertStyles.inputLabel, { color: colors.textSecondary }]}>Condition</Text>
-            <View style={priceAlertStyles.conditionRow}>
-              {(['above', 'below'] as const).map((c) => {
-                const isSelected = alertCondition === c;
-                const semanticColor = c === 'above' ? colors.success : colors.danger;
-                return (
-                  <Pressable
-                    key={c}
-                    style={({ pressed }) => [
-                      priceAlertStyles.conditionTab,
-                      {
-                        backgroundColor: isSelected ? semanticColor : colors.surfaceAlt,
-                        borderColor: isSelected ? semanticColor : colors.border,
-                      },
-                      pressed && { opacity: 0.7 },
-                    ]}
-                    onPress={() => { haptics.tap(); setAlertCondition(c); }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Alert when price goes ${c}`}
-                    accessibilityState={{ selected: isSelected }}
-                  >
-                    <Ionicons
-                      name={c === 'above' ? 'arrow-up' : 'arrow-down'}
-                      size={18}
-                      color={isSelected ? colors.textInverse : colors.textSecondary}
-                    />
-                    <Text style={[priceAlertStyles.conditionText, { color: isSelected ? colors.textInverse : colors.textSecondary }]}>
-                      {c === 'above' ? 'Above' : 'Below'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Price input */}
-            <Text style={[priceAlertStyles.inputLabel, { color: colors.textSecondary }]}>Target price (£)</Text>
-            <TextInput
-              style={[priceAlertStyles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-              value={alertTargetPrice}
-              onChangeText={setAlertTargetPrice}
-              placeholder="e.g. 25.00"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              accessibilityLabel="Target price"
-            />
-
-            <View style={priceAlertStyles.actions}>
-              <AppButton
-                title="Cancel"
-                onPress={() => setPriceAlertVisible(false)}
-                variant="secondary"
-                size="md"
-                style={{ flex: 1, marginRight: Space.sm }}
-              />
-              <AppButton
-                title={alertSubmitting ? 'Creating…' : 'Create alert'}
-                onPress={() => { haptics.tap(); void handleCreatePriceAlert(); }}
-                variant="primary"
-                size="md"
-                disabled={alertSubmitting || !alertTargetPrice}
-                style={{ flex: 1 }}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={closePriceAlert}
+        alertTargetPrice={alertTargetPrice}
+        onAlertTargetPriceChange={setAlertTargetPrice}
+        alertCondition={alertCondition}
+        onAlertConditionChange={setAlertCondition}
+        alertSubmitting={alertSubmitting}
+        onSubmit={handleCreatePriceAlert}
+      />
     </View>
   );
 }
@@ -1967,41 +1783,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
-  // ── Ownership structure stacked bar (spec 14 V3) ──
-  // Flat canvas element within the identity section. Shows supply breakdown
-  // as a 3-segment bar: your position (brand), other holders (textSecondary),
-  // available (surfaceAlt). No card chrome — just the bar and legend.
-  ownershipStructureWrap: {
-    marginTop: Space.md,
-    gap: Space.xs,
-  },
-  ownershipBar: {
-    height: Space.sm,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    overflow: 'hidden',
-    flexDirection: 'row',
-  },
-  ownershipLegend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-  },
-  ownershipLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2,
-  },
-  ownershipLegendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: Radius.full,
-  },
-  ownershipLegendText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
   // ── Trust factual line (spec 14 V3: flat, one tap target) ──
   trustFactualLine: {
     flexDirection: 'row',
@@ -2012,31 +1793,6 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   trustFactualText: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  // ── Holder position summary (spec 09: quiet with P&L) ──
-  holderPositionSummary: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: Space.md,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.md,
-  },
-  holderPositionLeft: {
-    gap: 2,
-    flexShrink: 1,
-  },
-  holderPositionRight: {
-    gap: 2,
-    flexShrink: 1,
-    alignItems: 'flex-end',
-  },
-  holderPositionText: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.medium,
@@ -2129,14 +1885,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
-  // ── Market book row (bid/ask inside transaction surface) ──
-  marketBookRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: Space.lg,
-    paddingTop: Space.lg,
-  },
   // ── Allocation indicator (Layer 1 compact) ──
   allocationIndicatorRow: {
     flexDirection: 'row',
@@ -2153,68 +1901,6 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
     flexShrink: 1,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
-  marketBookSide: {
-    flex: 1,
-    gap: Space.xs,
-  },
-  marketBookDivider: {
-    width: StyleSheet.hairlineWidth,
-    marginHorizontal: Space.sm,
-  },
-  // Market book labels — captionElevated for quiet hierarchy.
-  marketBookLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  // Market book values — Numeric.priceList (20/24/700) with tabular-nums.
-  marketBookValue: {
-    fontSize: Numeric.priceList.size,
-    lineHeight: Numeric.priceList.lineHeight,
-    fontFamily: FontFamily.bold,
-    letterSpacing: Numeric.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
-  // ── Fundamentals — stacked layout ──
-  fundamentalsStacked: {
-    marginTop: Space.lg,
-    paddingTop: Space.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: Space.md,
-  },
-  // Secondary market facts — NAV, distribution, report availability.
-  // Kept outside the dominant market surface (spec 03 §2).
-  marketSecondaryFacts: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  fundamentalsRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  // Fundamentals label — captionElevated for quiet hierarchy.
-  fundamentalsLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    flexShrink: 0,
-  },
-  // Fundamentals value — bodyEmphasis (15/21/600) with tabular-nums.
-  fundamentalsValue: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-    textAlign: 'right',
-    flexShrink: 1,
   },
   // ── Risk disclosure sheet ──
   riskDisclosureSheetHeader: {
@@ -2338,94 +2024,5 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-});
-
-const priceAlertStyles = StyleSheet.create({
-  // ── Price alert sheet — calm, professional modal ──
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    borderTopLeftRadius: RadiusRoleValue.standalonePanel,
-    borderTopRightRadius: RadiusRoleValue.standalonePanel,
-    padding: Space.lg,
-    paddingBottom: Space.xl,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.md,
-    marginBottom: Space.lg,
-  },
-  headerIcon: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerText: {
-    flex: 1,
-  },
-  sheetTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-    marginBottom: Space.xs - 2,
-  },
-  // Sheet subtitle — captionElevated for quiet, professional explanation.
-  sheetSubtitle: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  conditionRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginBottom: Space.md,
-  },
-  conditionTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.sm + 2,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
-    borderWidth: Stroke.standard,
-  },
-  // Condition text uses body (14/20/400) for clear readability.
-  conditionText: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  // Input label — captionElevated for quiet hierarchy.
-  inputLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    marginBottom: Space.xs,
-  },
-  // Price input — tabular-nums for stable numeric entry.
-  input: {
-    borderWidth: Stroke.standard,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.body.letterSpacing,
-    marginBottom: Space.lg,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
-  actions: {
-    flexDirection: 'row',
   },
 });

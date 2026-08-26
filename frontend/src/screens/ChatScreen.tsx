@@ -6,7 +6,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   Pressable,
   Dimensions,
   type NativeSyntheticEvent,
@@ -34,7 +33,6 @@ import { useFormattedPrice } from "../hooks/useFormattedPrice";
 import { useBackendData } from "../context/BackendDataContext";
 
 import { getListingCoverUri } from "../utils/media";
-import { makeStableId } from "../utils/createStableId";
 
 import { useStore } from "../store/useStore";
 
@@ -43,19 +41,17 @@ import {
   reportConversationOnApi,
 } from "../services/chatApi";
 import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
-import { acceptListingOfferOnApi, declineListingOfferOnApi } from "../services/listingOffersApi";
 
 import { useToast } from "../context/ToastContext";
 
 import { useHaptic } from "../hooks/useHaptic";
+import { useA11yAudit } from "../hooks/useA11yAudit";
 
 import { KeyboardStickyView } from "../platform/keyboard/KeyboardProvider";
 
 import { ChatComposerBar } from "../components/chat/ChatComposerBar";
 
-import { MessageBubble } from "../components/chat/MessageBubble";
-
-import { MarketplaceChatCard } from "../components/chat/MarketplaceChatCard";
+import { ChatMessageRow } from "../components/chat/ChatMessageRow";
 
 import { ChatTopBar } from "../components/chat/ChatTopBar";
 
@@ -76,12 +72,6 @@ import { ReplyQuote } from "../components/chat/ReplyQuote";
 
 import { ScrollToBottomFAB } from "../components/chat/ScrollToBottomFAB";
 
-import {
-  LinkPreviewCard,
-  extractFirstUrl,
-} from "../components/chat/LinkPreviewCard";
-import { PaymentWarningCard } from "../components/chat/PaymentWarningCard";
-
 import { SkeletonChatLoader } from "../components/chat/SkeletonChatLoader";
 
 import { RetryState } from "../components/RetryState";
@@ -91,25 +81,15 @@ import { ChatAgentPicker } from "../components/chat/ChatAgentPicker";
 import { SuggestedRepliesBar } from "../components/chat/SuggestedRepliesBar";
 import { OfflineBanner } from "../components/OfflineBanner";
 import {
-  deployAgent as deployChatAgent,
-  removeAgent as removeChatAgent,
-  getDeployedAgents as getDeployedChatAgents,
   getAgentSuggestions as getChatAgentSuggestions,
   getAgentResponse as getChatAgentResponse,
-  type ChatAgent,
-  type SuggestedReply,
 } from "../services/chatAgentsApi";
 
 import * as Clipboard from "expo-clipboard";
 
 import { Caption } from "../components/ui/Text";
 
-import {
-  isFirstInCluster as isFirstInClusterHelper,
-  isLastInCluster as isLastInClusterHelper,
-} from "../utils/messageGrouping";
-
-import { detectChatSafetyWarning, detectComposerSafetyWarning, containsOffPlatformPaymentPattern } from "../utils/chatSafetyWarnings";
+import { detectChatSafetyWarning, containsOffPlatformPaymentPattern } from "../utils/chatSafetyWarnings";
 import {
   resolveComposerStack,
   isSlotVisible,
@@ -117,9 +97,26 @@ import {
 } from "../utils/chatComposerStack";
 
 import {
+  resolveContextualStack,
+  type ContextualStackSlot,
+  type ContextualSlotState,
+  MESSAGE_LIST_MIN_HEIGHT_RATIO,
+} from "../utils/chatContextualStack";
+
+import {
+  isFirstInCluster as isFirstInClusterHelper,
+  isLastInCluster as isLastInClusterHelper,
+} from "../utils/messageGrouping";
+
+import {
   isTrustedSystemMessage,
   resolveSystemMessageProvenance,
 } from "../utils/systemMessageProvenance";
+
+import { MarketplaceChatCard } from "../components/chat/MarketplaceChatCard";
+import { MessageBubble } from "../components/chat/MessageBubble";
+import { LinkPreviewCard, extractFirstUrl } from "../components/chat/LinkPreviewCard";
+import { PaymentWarningCard } from "../components/chat/PaymentWarningCard";
 
 import { t } from "../i18n";
 
@@ -130,100 +127,22 @@ import { useVisuallyComplete } from "../performance/visuallyComplete";
 import {
   useConversationMessages,
   useConversationComposer,
+  useConversationCommerce,
+  useConversationAgents,
+  useConversationSafety,
+  useMessageSelection,
   type Message,
-  formatDateSeparator,
-  formatMessageTime,
   DEFAULT_SELLER_QUICK_REPLIES,
   DEFAULT_BUYER_QUICK_REPLIES,
+  formatDateSeparator,
+  formatMessageTime,
 } from "../hooks/chat";
 import { useTypingIndicator } from "../services/realtimeClient";
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
-// ─── Composer-stack contextual resolver ───────────────────────────────
-// The audit defines a strict priority for the contextual elements that
-// compete for vertical space around the message list. Only the
-// highest-priority contextual elements that fit the height budget are
-// shown, so the message list is never squeezed below ~40% of screen
-// height. Persistent elements (top bar, message list, composer) are
-// always visible and not part of this resolver.
-//
-// Priority order (highest first):
-//   1. safetyWarning       — user safety, always wins
-//   2. listingTransaction  — active commerce state only
-//   3. agentRow            — only when an agent is deployed/active
-//   4. suggestedReplies    — only when useful and not dismissed
-type ContextualStackSlot =
-  | "safetyWarning"
-  | "listingTransaction"
-  | "agentRow"
-  | "suggestedReplies";
-
-const CONTEXTUAL_SLOT_PRIORITY: Record<ContextualStackSlot, number> = {
-  safetyWarning: 1,
-  listingTransaction: 2,
-  agentRow: 3,
-  suggestedReplies: 4,
-};
-
-interface ContextualSlotState {
-  slot: ContextualStackSlot;
-  visible: boolean;
-  /** Estimated rendered height in pixels, including margins. */
-  estimatedHeight: number;
-}
-
-interface ContextualStackResolution {
-  /** Slots that should remain visible, in priority order. */
-  visible: Set<ContextualStackSlot>;
-  /** Slots suppressed to fit the height budget. */
-  suppressed: ContextualStackSlot[];
-  /** Total estimated height of the visible contextual stack. */
-  totalHeight: number;
-}
-
-/**
- * Resolve which contextual stack slots should be visible given a pixel
- * budget. Slots are kept in priority order until the cumulative height
- * would exceed the budget; lower-priority slots are suppressed rather
- * than overflowing. The highest-priority active slot is always admitted
- * even if it alone exceeds the budget (e.g. a safety warning must never
- * be hidden by the budget).
- */
-function resolveContextualStack(
-  slots: ContextualSlotState[],
-  budgetPixels: number,
-): ContextualStackResolution {
-  const active = slots
-    .filter((s) => s.visible && s.estimatedHeight > 0)
-    .sort(
-      (a, b) =>
-        CONTEXTUAL_SLOT_PRIORITY[a.slot] - CONTEXTUAL_SLOT_PRIORITY[b.slot],
-    );
-
-  const visible = new Set<ContextualStackSlot>();
-  const suppressed: ContextualStackSlot[] = [];
-  let totalHeight = 0;
-
-  for (const slot of active) {
-    if (
-      visible.size === 0 ||
-      totalHeight + slot.estimatedHeight <= budgetPixels
-    ) {
-      visible.add(slot.slot);
-      totalHeight += slot.estimatedHeight;
-    } else {
-      suppressed.push(slot.slot);
-    }
-  }
-
-  return { visible, suppressed, totalHeight };
-}
-
-/** Minimum share of screen height reserved for the message list. */
-const MESSAGE_LIST_MIN_HEIGHT_RATIO = 0.4;
-
 export default function ChatScreen({ navigation, route }: Props) {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'ChatScreen');
   const { colors, isDark } = useAppTheme();
   useVisuallyComplete('Chat');
 
@@ -625,35 +544,87 @@ export default function ChatScreen({ navigation, route }: Props) {
     });
   }, [botLookup, conversation?.messages, currentUser?.id, userLookup]);
 
-  const [dangerWarningDismissed, setDangerWarningDismissed] = useState(false);
-  const [cautionWarningDismissed, setCautionWarningDismissed] = useState(false);
+  // Early ref for composer hydration — updated after useConversationMessages
+  // returns. useConversationComposer only reads this inside effects, so an
+  // empty initial value is safe; by the time any effect runs the ref will
+  // hold the latest messages.
+  const messagesRef = useRef<Message[]>([]);
 
-  // AI chat agents (demo-mode service) — deployable assistants that surface
-  // suggested replies and an optional agent response after the user sends.
-  const [chatAgentPickerVisible, setChatAgentPickerVisible] = useState(false);
-  const [deployedChatAgents, setDeployedChatAgents] = useState<ChatAgent[]>([]);
-  const [chatAgentSuggestions, setChatAgentSuggestions] = useState<SuggestedReply[]>([]);
+  // ─── Controller hook: composer state, attachments, search, reply ───
+  // useConversationComposer owns text input, reply context, attachment picker,
+  // pending attachment, voice recording toggle, reaction picker, search state,
+  // and cross-device composer state hydration/persistence.
+  const {
+    input,
+    setInput,
+    setTypingInput,
+    notifyStoppedTyping,
+    replyTo,
+    setReplyTo,
+    attachmentPickerVisible,
+    setAttachmentPickerVisible,
+    isVoiceRecording,
+    setIsVoiceRecording,
+    pendingAttachment,
+    setPendingAttachment,
+    reactingToMessage,
+    setReactingToMessage,
+    searchQuery,
+    setSearchQuery,
+    searchMatchIndex,
+    setSearchMatchIndex,
+    isSearchActive,
+    setIsSearchActive,
+    handleAttachmentSelect,
+  } = useConversationComposer({
+    conversationId,
+    initialSearchQuery: route.params?.focusQuery,
+    messagesRef,
+    show,
+    haptic,
+    setConversationDraft,
+  });
+
+  // ─── Controller hook: AI chat agents (demo-mode service) ───
+  // useConversationAgents owns deployed agents, agent picker visibility,
+  // agent suggested replies, deploy/remove/suggest handlers, and agent
+  // quick replies from connected custom bots.
+  const {
+    chatAgentPickerVisible,
+    setChatAgentPickerVisible,
+    deployedChatAgents,
+    chatAgentSuggestions,
+    setChatAgentSuggestions,
+    handleDeployChatAgent,
+    handleRemoveChatAgent,
+    handleSelectChatAgentSuggestion,
+    agentQuickReplies,
+  } = useConversationAgents({
+    conversationId,
+    show,
+    haptic,
+    setInput,
+  });
+
+  // ─── Controller hook: safety warnings ───
+  // useConversationSafety owns composer-level safety detection, danger/
+  // caution dismissal state, and per-message dismissed warning IDs.
+  const {
+    composerDangerWarning,
+    composerCautionWarning,
+    dismissedWarningIds,
+    setDangerWarningDismissed,
+    setCautionWarningDismissed,
+    dismissMessageWarning,
+  } = useConversationSafety({ input });
 
   // Suggested replies are dismissible for the current conversation session.
   // Once dismissed they do not reappear until the conversation changes.
   const [suggestedRepliesDismissed, setSuggestedRepliesDismissed] = useState(false);
 
-  const [contextMenuVisible, setContextMenuVisible] = useState(false);
-
-  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-
-  // Messages where the off-platform payment warning has been dismissed
-  const [dismissedWarningIds, setDismissedWarningIds] = useState<Set<string>>(new Set());
-
-  const [selectionMode, setSelectionMode] = useState(false);
-
-  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
-    new Set(),
-  );
-
   const isTyping = useTypingIndicator(conversationId);
 
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
 
   // ─── Controller hook: message list state, sync, send, retry, delete ───
   // useConversationMessages owns the message list, API sync, sending, retry,
@@ -715,11 +686,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     replaceConversationMessages,
   });
 
-  // ─── Controller hook: composer state, attachments, search, reply ───
-  // useConversationComposer owns text input, reply context, attachment picker,
-  // pending attachment, voice recording toggle, reaction picker, search state,
-  // and cross-device composer state hydration/persistence.
-  const messagesRef = useRef(messages);
+  // Update composer hydration ref with the latest messages (the ref was
+  // created before useConversationComposer so the hook has a stable object;
+  // effects inside the hook read .current after render, so this is safe).
   messagesRef.current = messages;
 
   // Track which message IDs have already been rendered so only genuinely
@@ -743,58 +712,38 @@ export default function ChatScreen({ navigation, route }: Props) {
     [],
   );
 
+  // ─── Controller hook: commerce (offers, commerce events) ───
+  // useConversationCommerce owns accept/decline/counter/expire offer
+  // handlers with optimistic updates and API-failure revert.
   const {
-    input,
-    setInput,
-    setTypingInput,
-    notifyStoppedTyping,
-    replyTo,
-    setReplyTo,
-    attachmentPickerVisible,
-    setAttachmentPickerVisible,
-    isVoiceRecording,
-    setIsVoiceRecording,
-    pendingAttachment,
-    setPendingAttachment,
-    reactingToMessage,
-    setReactingToMessage,
-    searchQuery,
-    setSearchQuery,
-    searchMatchIndex,
-    setSearchMatchIndex,
-    isSearchActive,
-    setIsSearchActive,
-    handleAttachmentSelect,
-  } = useConversationComposer({
-    conversationId,
-    initialSearchQuery: route.params?.focusQuery,
-    messagesRef,
+    handleAcceptOffer,
+    handleDeclineOffer,
+    handleCounterOffer,
+    handleOfferExpired,
+  } = useConversationCommerce({
+    messages,
+    setMessages,
+    routeItemId,
+    conversationItemId: conversation?.itemId,
     show,
     haptic,
-    setConversationDraft,
+    navigation,
   });
 
-  // Real-time composer safety detection — re-evaluates as the user types
-  const composerSafetyWarning = React.useMemo(() => {
-    if (dangerWarningDismissed && cautionWarningDismissed) return null;
-    const detected = detectComposerSafetyWarning(input);
-    if (!detected) return null;
-    if (detected.level === 'danger' && dangerWarningDismissed) return null;
-    if (detected.level === 'caution' && cautionWarningDismissed) return null;
-    return detected;
-  }, [input, dangerWarningDismissed, cautionWarningDismissed]);
-
-  const composerDangerWarning = composerSafetyWarning?.level === 'danger' ? composerSafetyWarning : null;
-  const composerCautionWarning = composerSafetyWarning?.level === 'caution' ? composerSafetyWarning : null;
-
-  // Reset dismissal when the text changes enough to clear the pattern
-  React.useEffect(() => {
-    const detected = detectComposerSafetyWarning(input);
-    if (!detected) {
-      if (dangerWarningDismissed) setDangerWarningDismissed(false);
-      if (cautionWarningDismissed) setCautionWarningDismissed(false);
-    }
-  }, [input, dangerWarningDismissed, cautionWarningDismissed]);
+  // ─── Controller hook: message selection ───
+  // useMessageSelection owns selection mode, selected IDs, context menu
+  // visibility, and enter/exit/toggle selection handlers.
+  const {
+    selectionMode,
+    selectedMessageIds,
+    contextMenuVisible,
+    setContextMenuVisible,
+    selectedMessage,
+    setSelectedMessage,
+    toggleMessageSelection,
+    enterSelectionMode,
+    exitSelectionMode,
+  } = useMessageSelection({ selectionMode: false });
 
   // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature
   const handleSend = useCallback(() => {
@@ -860,38 +809,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     };
   }, [resolvedPartnerId]);
 
-  const deployedBotIds = conversation?.botIds ?? [];
-  const connectedAgents = useMemo(
-    () =>
-      customBots.filter(
-        (bot) => deployedBotIds.includes(bot.id) && bot.runtimeMode === "ai",
-      ),
-    [customBots, deployedBotIds],
-  );
-  const agentQuickReplies = useMemo(
-    () =>
-      connectedAgents.slice(0, 3).map((agent) => {
-        const starter = agent.agentConfig?.starterPrompts[0] ?? "";
-        const invocation =
-          agent.agentConfig?.triggerMode === "always"
-            ? starter
-            : agent.agentConfig?.triggerMode === "command"
-              ? `${agent.commandHint}${starter ? ` ${starter}` : ""}`
-              : `@${agent.slug}${starter ? ` ${starter}` : ""}`;
-        return {
-          label: starter || `Ask ${agent.name}`,
-          onPress: () => setInput(invocation),
-        };
-      }),
-    [connectedAgents],
-  );
-
-  // Sync demo AI chat agents from the chatAgentsApi service for this conversation.
-  useEffect(() => {
-    if (!conversationId) return;
-    setDeployedChatAgents(getDeployedChatAgents(conversationId));
-  }, [conversationId]);
-
   // Per spec 16: "Do not stack quick replies + agent suggestions." When agent
   // suggestions are active (agent deployed, suggestions available, no input),
   // suppress quick replies so only one suggestion area is visible.
@@ -899,39 +816,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     deployedChatAgents.length > 0 &&
     chatAgentSuggestions.length > 0 &&
     input.trim().length === 0;
-
-  const handleDeployChatAgent = useCallback(
-    (agent: ChatAgent) => {
-      if (!conversationId) return;
-      haptic.success();
-      deployChatAgent(conversationId, agent.type);
-      setDeployedChatAgents(getDeployedChatAgents(conversationId));
-      setChatAgentPickerVisible(false);
-      show(`${agent.name} connected`, "success");
-      setChatAgentSuggestions(getChatAgentSuggestions(conversationId, ""));
-    },
-    [conversationId, haptic, show],
-  );
-
-  const handleRemoveChatAgent = useCallback(
-    (agentId: string) => {
-      if (!conversationId) return;
-      haptic.medium();
-      removeChatAgent(conversationId, agentId);
-      setDeployedChatAgents(getDeployedChatAgents(conversationId));
-      setChatAgentSuggestions([]);
-      show("Agent removed", "info");
-    },
-    [conversationId, haptic, show],
-  );
-
-  const handleSelectChatAgentSuggestion = useCallback(
-    (reply: SuggestedReply) => {
-      haptic.selection();
-      setInput(reply.text);
-    },
-    [haptic],
-  );
 
   const partnerSummary = resolvedPartnerId
     ? conversation?.participantProfiles?.find((participant) => participant.id === resolvedPartnerId)
@@ -977,114 +861,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
   }, [searchMatchIndex, searchMatches]);
 
-  const handleAcceptOffer = async (msgId: string) => {
-    const msg = messages.find((m) => m.id === msgId);
-    const offerId = msg?.offer?.offerId;
-    if (!offerId) {
-      show("Cannot accept this offer — missing offer reference.", "error");
-      return;
-    }
-
-    haptic.medium();
-
-    // Optimistic update — revert on API failure so UI tells the truth (§11).
-    const prevStatus = msg?.offer?.status;
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msgId && m.offer
-          ? { ...m, offer: { ...m.offer, status: "accepted" as const } }
-          : m,
-      ),
-    );
-
-    try {
-      await acceptListingOfferOnApi(offerId);
-      const linkedItemId = routeItemId || conversation?.itemId;
-      if (linkedItemId) {
-        navigation.navigate("Checkout", { itemId: linkedItemId });
-      } else {
-        show("Offer accepted. Checkout requires a linked listing.", "info");
-      }
-    } catch {
-      // Revert optimistic state — the offer was NOT accepted server-side.
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === msgId && m.offer
-            ? { ...m, offer: { ...m.offer, status: prevStatus ?? "pending" } }
-            : m,
-        ),
-      );
-      show("Could not accept offer. Try again.", "error");
-    }
-  };
-
-  const handleDeclineOffer = async (msgId: string) => {
-    const msg = messages.find((m) => m.id === msgId);
-    const offerId = msg?.offer?.offerId;
-    if (!offerId) {
-      show("Cannot decline this offer — missing offer reference.", "error");
-      return;
-    }
-
-    haptic.light();
-
-    // Optimistic update — revert on API failure so UI tells the truth (§11).
-    const prevStatus = msg?.offer?.status;
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msgId && m.offer
-          ? { ...m, offer: { ...m.offer, status: "declined" as const } }
-          : m,
-      ),
-    );
-
-    try {
-      await declineListingOfferOnApi(offerId);
-    } catch {
-      // Revert optimistic state — the offer was NOT declined server-side.
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === msgId && m.offer
-            ? { ...m, offer: { ...m.offer, status: prevStatus ?? "pending" } }
-            : m,
-        ),
-      );
-      show("Could not decline offer. Try again.", "error");
-    }
-  };
-
-  const handleCounterOffer = (msgId: string, offerPrice?: number, originalPrice?: number) => {
-    haptic.medium();
-    const linkedItemId = routeItemId || conversation?.itemId;
-    if (!linkedItemId) {
-      show("Cannot counter without a linked listing.", "info");
-      return;
-    }
-    // Find the current offer to pass the counter round
-    const currentMsg = messages.find((m) => m.id === msgId);
-    const currentRound = currentMsg?.offer?.counterRound ?? 0;
-    // Navigate to MakeOfferScreen with counter-offer context
-    navigation.navigate("MakeOffer", {
-      itemId: linkedItemId,
-      price: originalPrice ?? 0,
-      title: "Item",
-      counterOffer: true,
-      previousOffer: offerPrice ?? 0,
-      counterRound: currentRound + 1,
-      parentOfferId: currentMsg?.offer?.offerId,
-    });
-  };
-
-  const handleOfferExpired = (msgId: string) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msgId && m.offer && m.offer.status === "pending"
-          ? { ...m, offer: { ...m.offer, status: "expired" as const } }
-          : m,
-      ),
-    );
-  };
-
   const handleMessageLongPress = (msg: Message) => {
     if (selectionMode) {
       toggleMessageSelection(msg.id);
@@ -1097,31 +873,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     setContextMenuVisible(true);
 
     haptic.medium();
-  };
-
-  const toggleMessageSelection = (msgId: string) => {
-    setSelectedMessageIds((prev) => {
-      const next = new Set(prev);
-
-      if (next.has(msgId)) next.delete(msgId);
-      else next.add(msgId);
-
-      if (next.size === 0) setSelectionMode(false);
-
-      return next;
-    });
-  };
-
-  const enterSelectionMode = (msgId: string) => {
-    setSelectionMode(true);
-
-    setSelectedMessageIds(new Set([msgId]));
-  };
-
-  const exitSelectionMode = () => {
-    setSelectionMode(false);
-
-    setSelectedMessageIds(new Set());
   };
 
   // Adapter: bind selection state to hookBulkDelete's (selectedMessageIds, exitSelectionMode) signature
@@ -1310,11 +1061,11 @@ export default function ChatScreen({ navigation, route }: Props) {
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
             offer={msg.offer}
-            formattedPrice={formatFromFiat(msg.offer!.price, DEFAULT_CURRENCY_CODE, {
+            formattedPrice={formatFromFiat(msg.offer!.price, currencyCode, {
               displayMode: "fiat",
             })}
             formattedOriginalPrice={formatFromFiat(
-              msg.offer!.originalPrice, DEFAULT_CURRENCY_CODE,
+              msg.offer!.originalPrice, currencyCode,
               { displayMode: "fiat" },
             )}
             onAccept={() => handleAcceptOffer(msg.id)}
@@ -1485,11 +1236,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               <PaymentWarningCard
                 dismissed={dismissedWarningIds.has(msg.id)}
                 onDismiss={() => {
-                  setDismissedWarningIds((prev) => {
-                    const next = new Set(prev);
-                    next.add(msg.id);
-                    return next;
-                  });
+                  dismissMessageWarning(msg.id);
                 }}
                 onReport={() => {
                   navigation.navigate("Report", {
@@ -1651,7 +1398,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   );
 
   return (
-    <SafeAreaView edges={["bottom"]} style={styles.screenRoot}>
+    <SafeAreaView ref={a11yRef} edges={["bottom"]} style={styles.screenRoot}>
       <View style={styles.screenRoot}>
         <ChatTopBar
           title={topBarTitle}
@@ -1765,7 +1512,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           <ChatListingContextBar
             thumbnailUri={getListingCoverUri(linkedListing.images, "")}
             title={linkedListing.title}
-            price={formatFromFiat(linkedListing.price, DEFAULT_CURRENCY_CODE, {
+            price={formatFromFiat(linkedListing.price, currencyCode, {
               displayMode: "fiat",
             })}
             availability={linkedListing.isSold ? "Sold" : "Available"}

@@ -129,7 +129,7 @@ function applyHighContrast(base: ThemeColors, isDark: boolean): ThemeColors {
       // Strengthen text contrast on dark backgrounds
       textPrimary: '#FFFFFF',
       textSecondary: '#C4C4C4', // was #A3A3A3 — raised for WCAG AAA
-      textMuted: '#9A9A9A',     // was #7A7A7A — raised for stronger separation
+      textMuted: '#9A9A9A',     // was #888888 (base) — raised for WCAG AAA
       // Strengthen borders for clearer structural separation
       border: '#3A3A3A',        // was #262626
       borderSubtle: '#2E2E2E',  // was #1E1E1E
@@ -143,7 +143,7 @@ function applyHighContrast(base: ThemeColors, isDark: boolean): ThemeColors {
     // Strengthen text contrast on light backgrounds
     textPrimary: '#000000',
     textSecondary: '#4A4A4A', // was #666666 — raised for WCAG AAA
-    textMuted: '#5A5A5A',     // was #767676 — raised for stronger separation
+    textMuted: '#5A5A5A',     // was #6C6C6C (base) — raised for WCAG AAA
     // Strengthen borders
     border: '#CCCCCC',        // was #E5E5E5
     borderSubtle: '#DDDDDD',  // was #F0F0F0

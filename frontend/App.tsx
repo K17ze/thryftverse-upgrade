@@ -27,7 +27,7 @@ import * as Network from 'expo-network';
 import * as Notifications from 'expo-notifications';
 import { View, ActivityIndicator, Text, TextInput, Alert, AppState } from 'react-native';
 import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from './src/constants/colors';
+import { ActiveTheme, Colors, DARK_COLORS, LIGHT_COLORS } from './src/constants/colors';
 import { ToastProvider } from './src/context/ToastContext';
 import { TabScrollProvider } from './src/context/TabScrollContext';
 import { CurrencyProvider } from './src/context/CurrencyContext';
@@ -74,6 +74,7 @@ import { usePushTokenCleanup } from './src/hooks/usePushTokenCleanup';
 import { useScreenshotTracking } from './src/platform/screenCapture';
 import { trackScreenView } from './src/lib/telemetry';
 import { trackScreenChange } from './src/analytics/useScreenTracking';
+import { auditColorContrast } from './src/utils/accessibilityAudit';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Keep app startup resilient even if splash API rejects.
@@ -288,6 +289,33 @@ export default function App() {
     });
 
     markInteractive({ surface: 'app_mounted' });
+  }, []);
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Dev-only WCAG 2.2 contrast audit at boot.
+  // ----------------------------------------------------------------------------
+  // Audits the critical text-on-surface color pairs for both base and
+  // high-contrast palettes in both themes. Fails are logged to console.error
+  // so they surface during development. No-op in production — the function
+  // itself returns early when __DEV__ is false.
+  // ──────────────────────────────────────────────────────────────────────────
+  React.useEffect(() => {
+    if (!__DEV__) return;
+
+    const basePairs = [
+      // Dark base palette — textMuted must clear 4.5:1 on surface/surfaceAlt
+      { name: 'dark.textMuted/surface', foreground: DARK_COLORS.textMuted, background: DARK_COLORS.surface },
+      { name: 'dark.textMuted/surfaceAlt', foreground: DARK_COLORS.textMuted, background: DARK_COLORS.surfaceAlt },
+      { name: 'dark.textMuted/background', foreground: DARK_COLORS.textMuted, background: DARK_COLORS.background },
+      { name: 'dark.textSecondary/surface', foreground: DARK_COLORS.textSecondary, background: DARK_COLORS.surface },
+      // Light base palette
+      { name: 'light.textMuted/surface', foreground: LIGHT_COLORS.textMuted, background: LIGHT_COLORS.surface },
+      { name: 'light.textMuted/surfaceAlt', foreground: LIGHT_COLORS.textMuted, background: LIGHT_COLORS.surfaceAlt },
+      { name: 'light.textMuted/background', foreground: LIGHT_COLORS.textMuted, background: LIGHT_COLORS.background },
+      { name: 'light.textSecondary/surface', foreground: LIGHT_COLORS.textSecondary, background: LIGHT_COLORS.surface },
+    ];
+
+    auditColorContrast(basePairs, 'App.boot');
   }, []);
 
   // P0.14: Mount the application-owned chat outbox drain. NetInfo reconnects

@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
@@ -68,6 +69,7 @@ export function SmartSellCard({
   serverPolicyId,
 }: SmartSellCardProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -108,13 +110,13 @@ export function SmartSellCard({
   const summary = useMemo(() => {
     if (!policy.enabled) return 'Auto-accept offers above your threshold';
     if (policy.minimumNet > 0) {
-      return `Min payout £${policy.minimumNet.toFixed(2)}`;
+      return `Min payout ${currencySymbol}${policy.minimumNet.toFixed(2)}`;
     }
     if (policy.acceptGrossThreshold > 0) {
-      return `Auto-accept above £${policy.acceptGrossThreshold.toFixed(2)}`;
+      return `Auto-accept above ${currencySymbol}${policy.acceptGrossThreshold.toFixed(2)}`;
     }
     return 'Configure thresholds';
-  }, [policy.enabled, policy.minimumNet, policy.acceptGrossThreshold]);
+  }, [policy.enabled, policy.minimumNet, policy.acceptGrossThreshold, currencySymbol]);
 
   return (
     <>
@@ -201,6 +203,7 @@ function SmartSellSheet({
   isPreview,
   policyId,
 }: SmartSellSheetProps) {
+  const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createSheetStyles(colors), [colors]);
   const haptic = useHaptic();
 
@@ -325,7 +328,7 @@ function SmartSellSheet({
             ]}
           >
             <Text style={[styles.inputPrefix, { color: colors.textSecondary }]}>
-              £
+              {currencySymbol}
             </Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary }]}
@@ -362,7 +365,7 @@ function SmartSellSheet({
                 accessibilityLabel={`Offer amount ${acceptQuote.gross} pounds`}
                 accessibilityHint="The gross offer amount"
               >
-                £{acceptQuote.gross.toFixed(2)}
+                {currencySymbol}{acceptQuote.gross.toFixed(2)}
               </Text>
             </View>
             <View style={styles.quoteRow}>
@@ -374,7 +377,7 @@ function SmartSellSheet({
                 accessibilityLabel={`Platform fee ${acceptQuote.fee} pounds`}
                 accessibilityHint="The platform fee deducted"
               >
-                −£{acceptQuote.fee.toFixed(2)}
+                −{currencySymbol}{acceptQuote.fee.toFixed(2)}
               </Text>
             </View>
             <View style={[styles.quoteDivider, { backgroundColor: colors.border }]} />
@@ -387,7 +390,7 @@ function SmartSellSheet({
                 accessibilityLabel={`You receive ${acceptQuote.net} pounds`}
                 accessibilityHint="Your net payout after fees"
               >
-                £{acceptQuote.net.toFixed(2)}
+                {currencySymbol}{acceptQuote.net.toFixed(2)}
               </Text>
             </View>
           </View>
@@ -435,7 +438,7 @@ function SmartSellSheet({
                 <Text
                   style={[styles.inputPrefix, { color: colors.textSecondary }]}
                 >
-                  £
+                  {currencySymbol}
                 </Text>
                 <TextInput
                   style={[styles.input, { color: colors.textPrimary }]}
@@ -497,7 +500,7 @@ function SmartSellSheet({
                   <Text
                     style={[styles.inputPrefix, { color: colors.textSecondary }]}
                   >
-                    £
+                    {currencySymbol}
                   </Text>
                   <TextInput
                     style={[styles.input, { color: colors.textPrimary }]}
@@ -576,7 +579,7 @@ function SmartSellSheet({
                       {d.decision === 'accept'
                         ? 'Accepted'
                         : d.decision === 'counter'
-                          ? `Countered at £${d.counterPriceGbp?.toFixed(2) ?? '—'}`
+                          ? `Countered at ${currencySymbol}${d.counterPriceGbp?.toFixed(2) ?? '—'}`
                           : d.decision === 'escalate'
                             ? 'Escalated to you'
                             : 'Declined'}
@@ -590,7 +593,7 @@ function SmartSellSheet({
                   </View>
                 </View>
                 <Text style={[styles.decisionNet, { color: colors.textSecondary }]}>
-                  £{d.netProceedsGbp.toFixed(2)}
+                  {currencySymbol}{d.netProceedsGbp.toFixed(2)}
                 </Text>
               </View>
             ))}

@@ -33,7 +33,7 @@ export default function BuyoutScreen() {
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencySymbol } = useFormattedPrice();
   const { width: screenWidth } = useWindowDimensions();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
 
@@ -99,7 +99,7 @@ export default function BuyoutScreen() {
 
     Alert.alert(
       'Submit buyout offer?',
-      `Offer £${priceNum.toFixed(2)}${unitsNum ? ` for ${unitsNum} units` : ' for remaining units'}?`,
+      `Offer ${currencySymbol}${priceNum.toFixed(2)}${unitsNum ? ` for ${unitsNum} units` : ' for remaining units'}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -238,7 +238,7 @@ export default function BuyoutScreen() {
         {/* Buyout offer form — flat section */}
         {!ownsAll && (
           <View style={styles.formSection}>
-            <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Offer price (£)</Text>
+            <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Offer price ({currencySymbol})</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
               value={offerPrice}

@@ -12,6 +12,7 @@ import Reanimated, {
 import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import type { PosterSticker as ApiPosterSticker } from '../../services/postersApi';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -81,6 +82,7 @@ export function PosterStickerLayer({
 }: PosterStickerLayerProps) {
   const reducedMotion = useReducedMotion();
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const knownIdsRef = React.useRef<Set<string>>(new Set());
   const mountedRef = React.useRef(false);
 
@@ -631,6 +633,7 @@ function DraggableSticker({
 
 function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   switch (sticker.type) {
     case 'text':
@@ -677,7 +680,7 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
             </View>
           )}
           {sticker.payload.snapshotPriceGbp !== undefined && (
-            <Text style={styles.listingPrice}>£{sticker.payload.snapshotPriceGbp.toFixed(0)}</Text>
+            <Text style={styles.listingPrice}>{currencySymbol}{sticker.payload.snapshotPriceGbp.toFixed(0)}</Text>
           )}
         </View>
       );

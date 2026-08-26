@@ -23,7 +23,6 @@ import { toIze, formatIzeAmount } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
 import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { GoldRates } from '../../utils/currency';
 import type { AuctionDetailResponse } from '../../services/marketApi';
 import type { AuctionEffectiveState } from '../../hooks/useServerClock';
@@ -39,6 +38,8 @@ import {
   type TransactionError,
 } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
+import { useUnknownOutcomeReconciliation } from '../../hooks/useUnknownOutcomeReconciliation';
+import { lookupAuctionBidByIdempotencyKey, type MarketAuctionBid } from '../../services/marketApi';
 
 export interface BidSheetAuctionContext {
   id: string;
@@ -116,6 +117,13 @@ export function BidSheet({
   const [maxBidInput, setMaxBidInput] = React.useState('');
   const [maxBidGbp, setMaxBidGbp] = React.useState<number | null>(null);
   const idempotencyKeyRef = React.useRef<string | null>(null);
+  const isMountedRef = React.useRef(true);
+  const { reconcile } = useUnknownOutcomeReconciliation();
+
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   // Shared authoritative snapshot helper — returns refreshed state or null on failure
   const getAuthoritativeSnapshot = async (): Promise<{
@@ -392,13 +400,50 @@ export function BidSheet({
         parsed.message,
         parsed.isNetworkError,
         parsed.structuredDetails,
+        currencyCode,
+        goldRates,
       );
       setError(txError);
 
       if (txError.isAmbiguous) {
-        // Ambiguous failure — preserve the same idempotency key for replay
-        // Do NOT reset the key. User retries with the same key.
-        setStage('error');
+        // Ambiguous failure — the server may have committed the bid.
+        // Instead of showing a generic error, poll the lookup endpoint
+        // to resolve the outcome automatically. The idempotency key is
+        // preserved so a manual retry (if reconciliation fails) won't
+        // create a duplicate.
+        setStage('unknown_outcome');
+        const key = idempotencyKeyRef.current;
+        if (!key) {
+          setStage('error');
+          return;
+        }
+        const result = await reconcile<MarketAuctionBid>({
+          lookup: () => lookupAuctionBidByIdempotencyKey(key),
+          onAcknowledged: () => {
+            // Bid was committed — treat as success.
+            setStage('success');
+            haptics.success();
+            // Refresh detail so the auction reflects the new bid.
+            void onRefreshDetail();
+          },
+          onSafeToRetry: () => {
+            // No bid was committed — safe to retry with a new key.
+            idempotencyKeyRef.current = null;
+            setError(null);
+            setStage('review');
+          },
+          onUnresolved: () => {
+            // Could not determine — show the ambiguous error with retry.
+            setError(txError);
+            setStage('error');
+          },
+          shouldContinue: () => isMountedRef.current && visible,
+        });
+        if (result.outcome === 'acknowledged' || result.outcome === 'safe_to_retry') {
+          return;
+        }
+        // 'unresolved' falls through to the error stage set by onUnresolved.
+        return;
       } else if (txError.kind === 'buy_now_review_required') {
         // Recoverable conflict — refresh detail once to get authoritative Buy Now price
         await onRefreshDetail();
@@ -489,11 +534,11 @@ export function BidSheet({
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Current bid</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, DEFAULT_CURRENCY_CODE)}</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, currencyCode)}</Text>
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Minimum to lead</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, DEFAULT_CURRENCY_CODE)}</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, currencyCode)}</Text>
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Time remaining</Text>
@@ -654,16 +699,16 @@ export function BidSheet({
             <View style={styles.reviewReceipt}>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Current value</Text>
-                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, DEFAULT_CURRENCY_CODE)}</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, currencyCode)}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Minimum to lead</Text>
-                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, DEFAULT_CURRENCY_CODE)}</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, currencyCode)}</Text>
               </View>
               {proxyEnabled && maxBidGbp != null && (
                 <View style={styles.reviewReceiptRow}>
                   <Text style={styles.reviewReceiptLabel}>Maximum bid</Text>
-                  <Text style={styles.reviewReceiptValue}>{formatFromFiat(maxBidGbp, DEFAULT_CURRENCY_CODE)}</Text>
+                  <Text style={styles.reviewReceiptValue}>{formatFromFiat(maxBidGbp, currencyCode)}</Text>
                 </View>
               )}
               <View style={styles.reviewReceiptRow}>
@@ -734,6 +779,23 @@ export function BidSheet({
           </View>
         )}
 
+        {/* ── Unknown outcome stage ── */}
+        {/* The bid response was lost. We are polling the backend to
+            determine whether the bid was committed. The user must not
+            retry until the status is resolved. */}
+        {stage === 'unknown_outcome' && (
+          <View style={styles.centerStage}>
+            <View style={styles.submittingSpinnerWrap}>
+              <ActivityIndicator size="large" color={themed.brand} />
+            </View>
+            <Text style={styles.submittingText}>Checking your bid...</Text>
+            <Text style={styles.submittingDetail}>
+              We lost connection while placing your bid. We are checking
+              whether it went through. Please do not place another bid.
+            </Text>
+          </View>
+        )}
+
         {/* ── Success stage ── */}
         {stage === 'success' && (
           <View style={styles.centerStage}>
@@ -742,7 +804,7 @@ export function BidSheet({
             </View>
             <Text style={styles.successTitle}>Bid placed</Text>
             <Text style={styles.successDetail}>
-              Your bid of {formatFromFiat(gbpAmount ?? 0, DEFAULT_CURRENCY_CODE)} has been submitted
+              Your bid of {formatFromFiat(gbpAmount ?? 0, currencyCode)} has been submitted
             </Text>
             <AppButton
               style={styles.doneBtn}
@@ -768,7 +830,7 @@ export function BidSheet({
               <View style={styles.conflictPriceRow}>
                 <Meta style={styles.conflictPriceLabel}>Buy Now price</Meta>
                 <Text style={styles.conflictPriceValue}>
-                  {formatFromFiat(error.buyNowPriceGbp, DEFAULT_CURRENCY_CODE)}
+                  {formatFromFiat(error.buyNowPriceGbp, currencyCode)}
                 </Text>
               </View>
             )}

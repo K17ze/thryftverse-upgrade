@@ -59,6 +59,7 @@ import { MoodboardCommentsSheet } from '../components/MoodboardCommentsSheet';
 import { MoodboardVersionHistorySheet } from '../components/MoodboardVersionHistorySheet';
 import { MoodboardConflictCompareSheet } from '../components/MoodboardConflictCompareSheet';
 import { useHaptic } from '../hooks/useHaptic';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useRealtimeEvent } from '../platform/realtime/useRealtimeEvent';
@@ -376,6 +377,7 @@ interface PickerTileProps {
 
 const PickerTile = React.memo(function PickerTile({ item, onPress }: PickerTileProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol, currencyCode } = useFormattedPrice();
   return (
     <AnimatedPressable
       style={[styles.pickerTile, { width: PICKER_TILE_SIZE }]}
@@ -383,7 +385,7 @@ const PickerTile = React.memo(function PickerTile({ item, onPress }: PickerTileP
       activeOpacity={0.85}
       scaleValue={0.96}
       accessibilityRole="button"
-      accessibilityLabel={`Add ${item.title}, ${item.price.toFixed(0)} pounds to moodboard`}
+      accessibilityLabel={`Add ${item.title}, ${item.price.toFixed(0)} ${currencyCode} to moodboard`}
       accessibilityHint="Adds this item to the center of the canvas"
     >
       <CachedImage
@@ -396,7 +398,7 @@ const PickerTile = React.memo(function PickerTile({ item, onPress }: PickerTileP
         {item.title}
       </Text>
       <Text style={styles.pickerTilePrice} numberOfLines={1}>
-        £{item.price.toFixed(0)}
+        {currencySymbol}{item.price.toFixed(0)}
       </Text>
     </AnimatedPressable>
   );

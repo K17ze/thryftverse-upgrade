@@ -1,26 +1,29 @@
 /**
  * i18next configuration for ThryftVerse.
  *
- * Migrates the hand-rolled i18n system to i18next + react-i18next +
- * expo-localization, adding:
- *   - ICU plural rules (via intl-pluralrules polyfill)
- *   - Automatic device locale detection (via expo-localization)
- *   - Namespace-based organization (future-proofing)
- *   - RTL support (via I18nManager)
- *   - Type-safe translation keys
+ * Dual-resource architecture:
+ *   1. Legacy `translation` namespace — flat-key system from `./index.ts`
+ *      (EN_TRANSLATIONS + locale patches). Used by the backward-compatible
+ *      `t(key)` export and ~8 files that haven't migrated yet.
+ *   2. Structured namespaces — `common`, `home`, `search`, `settings`,
+ *      `profile`, `listing`, `messaging`, `commerce`, `auction`, `coown`,
+ *      `seller`, `trade`, `discovery`, `asset` from `./locales/en.json`.
+ *      Used by `useAppTranslation(namespace)` which is the preferred hook
+ *      for all new and migrated screens.
  *
- * Backward compatibility:
- *   The existing `t(key, params)` function signature is preserved.
- *   The existing translation data (EN_TRANSLATIONS, ES_TRANSLATION_PATCH,
- *   FR_TRANSLATION_PATCH, DE_TRANSLATION_PATCH) is reused as i18next
- *   resources. Keys use dot notation (e.g., "auctions.bid.current") which
- *   maps to i18next's nested resource structure.
+ * Both systems coexist during the migration period. Once all screens
+ * migrate to `useAppTranslation`, the legacy `translation` namespace and
+ * `./index.ts` flat-key system will be removed.
  *
  * Key flattening:
- *   i18next supports both flat keys ("auctions.bid.current") and nested
- *   keys ("auctions": { "bid": { "current": "..." } }). We use flat keys
- *   with `keySeparator: false` so the existing dot-notation keys work
- *   without restructuring the translation data.
+ *   `keySeparator: false` — keys like `auctions.bid.current` are flat
+ *   keys (dots are part of the name, not path separators). This applies
+ *   to both the legacy `translation` namespace and the flattened namespace
+ *   resources from `./locales/index.ts`.
+ *
+ * Namespace separation:
+ *   `nsSeparator: ':'` — allows `t('common:buttons.close')` to resolve
+ *   across namespaces. Legacy keys don't contain `:` so this is safe.
  *
  * @see https://www.i18next.com
  * @see https://react.i18next.com
@@ -39,6 +42,7 @@ import {
   type SupportedLocale,
   type TranslationKey,
 } from './index';
+import { localeResources } from './locales';
 
 // ── Locale constants ───────────────────────────────────────────────
 
@@ -50,20 +54,40 @@ const RTL_LOCALES: string[] = ['ar', 'he', 'fa', 'ur'];
 
 /**
  * Merge the English base with a locale patch, producing a complete
- * translation resource for i18next. Missing keys fall through to English.
+ * translation resource for the legacy `translation` namespace.
+ * Missing keys fall through to English.
  */
-function buildResource(
+function buildLegacyResource(
   patch: Partial<Record<TranslationKey, string>>,
 ): Record<string, string> {
   return { ...EN_TRANSLATIONS, ...patch };
 }
 
-const resources = {
-  en: { translation: EN_TRANSLATIONS },
-  es: { translation: buildResource(ES_TRANSLATION_PATCH) },
-  fr: { translation: buildResource(FR_TRANSLATION_PATCH) },
-  de: { translation: buildResource(DE_TRANSLATION_PATCH) },
-} as const;
+/**
+ * Build the full resource bundle for a locale. Combines:
+ *   - The legacy `translation` namespace (flat keys from index.ts)
+ *   - The structured namespaces (common, home, search, etc. from locale JSON)
+ *
+ * Non-English locales get per-key fallback to English via `localeResources`
+ * (which merges locale JSON over the English base at the flattened-key level).
+ */
+function buildLocaleResources(
+  legacyPatch: Partial<Record<TranslationKey, string>>,
+  localeCode: string,
+): Record<string, Record<string, string>> {
+  const namespaced = localeResources[localeCode] ?? localeResources.en;
+  return {
+    translation: buildLegacyResource(legacyPatch),
+    ...namespaced,
+  };
+}
+
+const resources: Record<string, Record<string, Record<string, string>>> = {
+  en: buildLocaleResources({}, 'en'),
+  es: buildLocaleResources(ES_TRANSLATION_PATCH, 'es'),
+  fr: buildLocaleResources(FR_TRANSLATION_PATCH, 'fr'),
+  de: buildLocaleResources(DE_TRANSLATION_PATCH, 'de'),
+};
 
 // ── Device locale detection ────────────────────────────────────────
 
@@ -122,9 +146,17 @@ export function initI18n(initialLocale?: SupportedLocale): void {
     lng: locale,
     fallbackLng: 'en',
     supportedLngs: SUPPORTED_LOCALES,
+    // Use v4 plural compatibility for modern ICU plural rules
+    // (required by intl-pluralrules polyfill for correct pluralisation)
+    compatibilityJSON: 'v4',
+    // Legacy `translation` namespace is the default so `t('auctions.bid.current')`
+    // continues to work without specifying a namespace.
+    defaultNS: 'translation',
     // Flat keys — don't split on dots (existing keys use dots as part of the key name)
     keySeparator: false,
-    nsSeparator: false,
+    // Allow `t('common:buttons.close')` to resolve across namespaces.
+    // Legacy keys don't contain `:` so this is safe.
+    nsSeparator: ':',
     // Disable HTML escaping — React handles XSS prevention
     interpolation: {
       escapeValue: false,

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import {
   NotificationRowBase,
   NotificationThumbnail,
@@ -66,6 +67,7 @@ export function AuctionNotificationRow({
   onAction,
 }: AuctionNotificationRowProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const visual = useMemo(() => resolveAuctionVisual(event.eventType), [event.eventType]);
@@ -79,7 +81,7 @@ export function AuctionNotificationRow({
   // Structured bid data from the payload — never from prose text.
   const currentBid = readPayloadNumber(event.payload, 'currentBidGbp') ?? readPayloadNumber(event.payload, 'currentBid');
   const minimumNextBid = readPayloadNumber(event.payload, 'minimumNextBidGbp') ?? readPayloadNumber(event.payload, 'minimumNextBid');
-  const currency = readPayloadString(event.payload, 'currency') ?? '£';
+  const currency = readPayloadString(event.payload, 'currency') ?? currencySymbol;
 
   const bidText = currentBid != null
     ? `Current bid ${currency}${currentBid.toFixed(2)}`

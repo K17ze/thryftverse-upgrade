@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import {
   NotificationRowBase,
   NotificationStatusIcon,
@@ -60,6 +61,7 @@ export function FinancialNotificationRow({
   onPress,
 }: FinancialNotificationRowProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const visual = useMemo(() => resolveFinancialVisual(event.eventType), [event.eventType]);
@@ -69,7 +71,7 @@ export function FinancialNotificationRow({
 
   // Structured amount from the payload — never from prose text.
   const amount = readPayloadNumber(event.payload, 'amountGbp') ?? readPayloadNumber(event.payload, 'amount');
-  const currency = readPayloadString(event.payload, 'currency') ?? '£';
+  const currency = readPayloadString(event.payload, 'currency') ?? currencySymbol;
   const status = readPayloadString(event.payload, 'status') ?? 'processed';
 
   const amountText = amount != null ? `${currency}${amount.toFixed(2)}` : null;

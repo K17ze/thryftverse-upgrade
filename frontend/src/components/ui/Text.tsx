@@ -9,6 +9,7 @@ import { Text as RNText, TextProps as RNTextProps, StyleSheet, StyleProp, TextSt
 import { Type, Typography } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useAccessibilityPreferences } from '../../context/AccessibilityPreferencesContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 
 interface TextComponentProps extends RNTextProps {
   children: React.ReactNode;
@@ -248,12 +249,13 @@ interface PriceProps extends Omit<TextComponentProps, 'children'> {
 
 export const Price: React.FC<PriceProps> = ({
   amount,
-  currency = '£',
+  currency,
   color,
   style,
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const scale = useTextSizeMultiplier();
   return (
     <RNText
@@ -266,19 +268,20 @@ export const Price: React.FC<PriceProps> = ({
       ]}
       {...props}
     >
-      {currency}{amount.toFixed(2)}
+      {currency ?? currencySymbol}{amount.toFixed(2)}
     </RNText>
   );
 };
 
 export const PriceCompact: React.FC<PriceProps> = ({
   amount,
-  currency = '£',
+  currency,
   color,
   style,
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const scale = useTextSizeMultiplier();
   return (
     <RNText
@@ -291,19 +294,20 @@ export const PriceCompact: React.FC<PriceProps> = ({
       ]}
       {...props}
     >
-      {currency}{amount.toFixed(0)}
+      {currency ?? currencySymbol}{amount.toFixed(0)}
     </RNText>
   );
 };
 
 export const PriceLarge: React.FC<PriceProps> = ({
   amount,
-  currency = '£',
+  currency,
   color,
   style,
   ...props
 }) => {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const scale = useTextSizeMultiplier();
   return (
     <RNText
@@ -316,7 +320,7 @@ export const PriceLarge: React.FC<PriceProps> = ({
       ]}
       {...props}
     >
-      {currency}{amount.toFixed(2)}
+      {currency ?? currencySymbol}{amount.toFixed(2)}
     </RNText>
   );
 };

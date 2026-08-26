@@ -34,7 +34,6 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RefreshIndicator } from '../components/RefreshIndicator';
-import { MasonryGrid } from '../components/ProductCardV2';
 import { ClosetMediaMosaic } from '../components/closet/ClosetMediaMosaic';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -45,7 +44,6 @@ import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout, AspectRatio } from '../theme/designTokens';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -114,7 +112,7 @@ export default function ClosetScreen() {
 
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const [activeTab, setActiveTab] = useState<TabKey>('SAVED');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('Default');
@@ -857,7 +855,7 @@ export default function ClosetScreen() {
               </View>
               <View style={[styles.statDivider, t.statDivider]} />
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, DEFAULT_CURRENCY_CODE)}</Text>
+                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, currencyCode)}</Text>
                 <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
               </View>
               <View style={[styles.statDivider, t.statDivider]} />
@@ -870,7 +868,7 @@ export default function ClosetScreen() {
               <View style={[styles.savingsRow, t.savingsRow]}>
                 <Ionicons name="trending-down" size={12} color={colors.success} />
                 <Text style={[styles.savingsText, t.savingsText]}>
-                  {formatFromFiat(closetStats.totalSavings, DEFAULT_CURRENCY_CODE)} in price drops tracked
+                  {formatFromFiat(closetStats.totalSavings, currencyCode)} in price drops tracked
                 </Text>
               </View>
             ) : null}

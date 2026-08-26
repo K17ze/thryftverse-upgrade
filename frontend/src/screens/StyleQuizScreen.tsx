@@ -21,6 +21,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -49,13 +50,6 @@ const STYLE_OPTIONS: QuizOption[] = [
   { label: 'Techwear', value: 'Techwear', icon: 'hardware-chip-outline' },
 ];
 
-const PRICE_OPTIONS: QuizOption[] = [
-  { label: 'Under £50', value: 'budget' },
-  { label: '£50 – £150', value: 'mid' },
-  { label: '£150 – £300', value: 'premium' },
-  { label: '£300+', value: 'luxury' },
-];
-
 export default function StyleQuizScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
@@ -63,7 +57,15 @@ export default function StyleQuizScreen() {
   const reducedMotion = useReducedMotion();
   const updatePersonalisation = useStore((state) => state.updatePersonalisationPreferences);
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const PRICE_OPTIONS = useMemo<QuizOption[]>(() => [
+    { label: `Under ${currencySymbol}50`, value: 'budget' },
+    { label: `${currencySymbol}50 – ${currencySymbol}150`, value: 'mid' },
+    { label: `${currencySymbol}150 – ${currencySymbol}300`, value: 'premium' },
+    { label: `${currencySymbol}300+`, value: 'luxury' },
+  ], [currencySymbol]);
 
   const [step, setStep] = useState<Step>(0);
   const [selectedGender, setSelectedGender] = useState<string>('');

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
+import { useVisuallyComplete } from '../performance/visuallyComplete';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -26,6 +27,7 @@ import { Type, Space, Radius, Typography, Stroke, Control, LetterSpacing, Aspect
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
 import { LookDetailSkeleton } from '../components/skeletons/LookDetailSkeleton';
 import { LookSocialActions } from '../components/look/LookSocialActions';
@@ -101,9 +103,11 @@ export default function LookDetailScreen() {
   const haptic = useHaptic();
   const { show } = useToast();
   const reducedMotion = useReducedMotion();
+  const { formatFromFiat, currencyCode, currencySymbol } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  useVisuallyComplete('LookDetail');
 
   const { lookId } = route.params;
 
@@ -412,13 +416,15 @@ export default function LookDetailScreen() {
     navigation.navigate('UserProfile', { userId: look.creator.id });
   }, [look, navigation, haptic]);
 
-  const handleMoreLookPress = useCallback(
-    (other: LookApiItem) => {
+  // Stable callback for LookMasonryGrid's onPress (takes lookId string).
+  // Avoids inline arrow at the call site that would break React.memo on
+  // LookMasonryTile (audit item-29 §5.4).
+  const handleRelatedLookPress = useCallback(
+    (lookId: string) => {
       haptic.light();
-      // Push a fresh LookDetail route so the back stack is preserved.
-      navigation.push('LookDetail', { lookId: other.id });
+      navigation.push('LookDetail', { lookId });
     },
-    [navigation, haptic]
+    [navigation, haptic],
   );
 
   // Build the media pager pages. The current data model exposes a single
@@ -581,7 +587,7 @@ export default function LookDetailScreen() {
               }}
               accessibilityLabel={`Look media, ${mediaPages.length} image${mediaPages.length === 1 ? '' : 's'}`}
             >
-              {mediaPages.map((page) => (
+              {mediaPages.map((page, pageIndex) => (
                 <View
                   key={page.id}
                   style={styles.heroPage}
@@ -612,7 +618,7 @@ export default function LookDetailScreen() {
                       source={{ uri: page.uri }}
                       style={styles.heroImage}
                       resizeMode={ResizeMode.COVER}
-                      shouldPlay
+                      shouldPlay={activeMediaIndex === pageIndex}
                       isMuted
                       isLooping
                       useNativeControls
@@ -687,7 +693,7 @@ export default function LookDetailScreen() {
                       {tag.isSold ? (
                         <Text style={styles.tagTooltipSold}>Sold</Text>
                       ) : typeof tag.price === 'number' ? (
-                        <Text style={styles.tagTooltipPrice}>£{tag.price}</Text>
+                        <Text style={styles.tagTooltipPrice}>{formatFromFiat(tag.price, currencyCode)}</Text>
                       ) : null}
                     </View>
                     <Ionicons name="chevron-forward" size={14} color={colors.scrimTextSecondary} aria-hidden={true} />
@@ -892,7 +898,7 @@ export default function LookDetailScreen() {
                     onPress={() => handleTagTap(tag)}
                     activeOpacity={0.9}
                     accessibilityRole="button"
-                    accessibilityLabel={`${tagTitle}${typeof tag.price === 'number' ? `, £${tag.price}` : ''}`}
+                    accessibilityLabel={`${tagTitle}${typeof tag.price === 'number' ? `, ${currencySymbol}${tag.price}` : ''}`}
                     accessibilityHint="Opens a product preview before viewing details"
                   >
                     <View style={styles.trayImgWrap}>
@@ -915,7 +921,7 @@ export default function LookDetailScreen() {
                     {tag.isSold ? (
                       <Text style={styles.trayCardSold}>Sold</Text>
                     ) : typeof tag.price === 'number' ? (
-                      <Text style={styles.trayCardPrice}>£{tag.price}</Text>
+                      <Text style={styles.trayCardPrice}>{formatFromFiat(tag.price, currencyCode)}</Text>
                     ) : ref ? (
                       <Text style={styles.trayCardCta}>View</Text>
                     ) : null}
@@ -941,10 +947,7 @@ export default function LookDetailScreen() {
             ) : (
               <LookMasonryGrid
                 looks={relatedLooks}
-                onPress={(lookId) => {
-                  haptic.light();
-                  navigation.push('LookDetail', { lookId });
-                }}
+                onPress={handleRelatedLookPress}
                 isLoadingMore={relatedLoadingMore}
                 testIDPrefix="look-related"
               />
@@ -1015,7 +1018,7 @@ export default function LookDetailScreen() {
                       {inspectTag.isSold ? (
                         <Text style={styles.inspectSold}>Sold</Text>
                       ) : typeof inspectTag.price === 'number' ? (
-                        <Text style={styles.inspectPrice}>£{inspectTag.price}</Text>
+                        <Text style={styles.inspectPrice}>{formatFromFiat(inspectTag.price, currencyCode)}</Text>
                       ) : null}
                       {inspectTag.label && inspectTag.title && (
                         <Text style={styles.inspectLabel}>{inspectTag.label}</Text>

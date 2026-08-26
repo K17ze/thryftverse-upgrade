@@ -29,6 +29,7 @@ import { useToast } from '../context/ToastContext';
 import { Switch } from 'react-native';
 import { AppButton } from '../components/ui/AppButton';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type RouteT = RouteProp<RootStackParamList, 'DistributionHistory'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -36,11 +37,6 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 function formatDistributionAmount(minor: number): string {
   const major = minor / 100;
   return formatCoOwnIze(major);
-}
-
-function formatPerUnit(minor: number): string {
-  const major = minor / 100;
-  return `£${major.toFixed(2)}/unit`;
 }
 
 function formatDate(iso: string | null): string {
@@ -56,6 +52,12 @@ export default function DistributionHistoryScreen() {
   const { colors } = useAppTheme();
   const filterAssetId = route.params?.assetId;
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { formatFromFiat } = useFormattedPrice();
+
+  const formatPerUnit = React.useCallback(
+    (minor: number) => `${formatFromFiat(minor / 100)}/unit`,
+    [formatFromFiat]
+  );
 
   const [distributions, setDistributions] = React.useState<CoOwnDistribution[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -92,7 +94,7 @@ export default function DistributionHistoryScreen() {
 
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
-    navigation.navigate('Portfolio');
+    navigation.navigate('CoOwnHub');
   }, [navigation]);
 
   const handleRefresh = React.useCallback(() => {

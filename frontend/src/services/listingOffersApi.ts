@@ -157,6 +157,38 @@ export async function declineListingOfferOnApi(offerId: string): Promise<{ statu
   return { status: payload.status };
 }
 
+// ── Unknown-outcome reconciliation ──────────────────────────────────
+//
+// When a POST /listings/:id/offers response is lost (network timeout),
+// the client cannot tell whether the offer was created. This lookup
+// resolves the ambiguity by querying the backend by idempotency key.
+//
+// Returns one of three states:
+//   - 'acknowledged': the offer exists, body contains the offer
+//   - 'processing': the server returned a transient error (retry)
+//   - 'safe_to_retry': no offer with this key exists (may resubmit)
+
+import type { LookupResult } from '../hooks/useUnknownOutcomeReconciliation';
+
+export async function lookupOfferByIdempotencyKey(
+  idempotencyKey: string,
+): Promise<LookupResult<ListingOffer>> {
+  try {
+    const payload = await fetchJson<{ ok: true; status: 'acknowledged'; offer: ListingOffer }>(
+      `/users/me/offers/lookup-by-key/${encodeURIComponent(idempotencyKey)}`,
+    );
+    return { status: 'acknowledged', value: payload.offer };
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status === 404) {
+      return { status: 'safe_to_retry' };
+    }
+    // Network error or 5xx — the server may be transiently unavailable.
+    // Treat as 'processing' so the caller polls again rather than retrying.
+    return { status: 'processing' };
+  }
+}
+
 export async function cancelListingOfferOnApi(offerId: string): Promise<{ status: string }> {
   const payload = await fetchJson<{ ok: true; status: string }>(
     `/offers/${encodeURIComponent(offerId)}/cancel`,

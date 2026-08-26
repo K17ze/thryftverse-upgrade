@@ -21,10 +21,9 @@ import {
 } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
 import { createStableId } from '../../utils/createStableId';
-import { toIze, formatAuctionIze } from '../../utils/currency';
+import { toIze, formatAuctionIze, type GoldRates } from '../../utils/currency';
 import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
 import type { AuctionEffectiveState } from '../../hooks/useServerClock';
 
@@ -43,6 +42,7 @@ interface BuyNowSheetProps {
   onDismiss: () => void;
   auction: BuyNowSheetAuctionContext;
   currencyCode: SupportedCurrencyCode;
+  goldRates: Partial<GoldRates>;
   formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: any) => string;
   onSubmitBuyNow: (gbpAmount: number, idempotencyKey: string) => Promise<BuyNowResult>;
   onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
@@ -55,6 +55,7 @@ export function BuyNowSheet({
   onDismiss,
   auction,
   currencyCode,
+  goldRates,
   formatFromFiat,
   onSubmitBuyNow,
   onRefreshDetail,
@@ -196,6 +197,8 @@ export function BuyNowSheet({
         parsed.message,
         parsed.isNetworkError,
         parsed.structuredDetails,
+        currencyCode,
+        goldRates,
       );
       setError(txError);
 
@@ -252,7 +255,7 @@ export function BuyNowSheet({
   const displayPriceGbp = authoritativePrice ?? auction.buyNowPriceGbp;
 
   const priceText = displayPriceGbp
-    ? formatFromFiat(displayPriceGbp, DEFAULT_CURRENCY_CODE)
+    ? formatFromFiat(displayPriceGbp, currencyCode)
     : '—';
 
   const displayPriceText = displayPriceGbp && currencyCode !== 'GBP'

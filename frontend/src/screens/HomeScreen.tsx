@@ -220,7 +220,7 @@ export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
   const isGuest = useIsGuest();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const haptic = useHaptic();
   const { requireAuth } = useSignupWall();
   const reducedMotionEnabled = useReducedMotion();
@@ -557,7 +557,7 @@ export default function HomeScreen() {
     return listings.map((listing, index) =>
       toHomeDiscoveryItemVM(listing, {
         isSaved: wishlist.includes(listing.id),
-        currency: 'GBP',
+        currency: currencyCode,
         followedSellerIds: followedSellerIdsSet,
       }),
     ).map((vm, index) => ({
@@ -571,7 +571,7 @@ export default function HomeScreen() {
     return followingFeed.listings.map((listing) =>
       toHomeDiscoveryItemVM(listing, {
         isSaved: wishlist.includes(listing.id),
-        currency: 'GBP',
+        currency: currencyCode,
         followedSellerIds: followedSellerIdsSet,
       }),
     ).map((vm, index) => ({
@@ -585,7 +585,7 @@ export default function HomeScreen() {
     return forYouFeed.listings.map((listing) =>
       toHomeDiscoveryItemVM(listing, {
         isSaved: wishlist.includes(listing.id),
-        currency: 'GBP',
+        currency: currencyCode,
         followedSellerIds: followedSellerIdsSet,
       }),
     ).map((vm, index) => ({

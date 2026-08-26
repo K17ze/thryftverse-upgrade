@@ -5,9 +5,9 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
-import { PremiumTextField } from '../components/ui/PremiumTextField';
-import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
-import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
+import { AppInput } from '../components/ui/AppInput';
+import { AppSelectRow } from '../components/ui/AppSelectRow';
+import { AppStatusPill } from '../components/ui/AppStatusPill';
 import { EmptyState } from '../components/EmptyState';
 import { Headline, Body, Meta } from '../components/ui/Text';
 import {
@@ -159,16 +159,16 @@ export default function DesignReviewScreen() {
 
         <SectionTitle>Inputs</SectionTitle>
         <View style={styles.card}>
-          <PremiumTextField label="Name" value="" onChangeText={() => {}} placeholder="Enter name" />
-          <PremiumTextField label="Website" value="" onChangeText={() => {}} placeholder="https://" />
+          <AppInput variant="section" label="Name" value="" onChangeText={() => {}} placeholder="Enter name" />
+          <AppInput variant="section" label="Website" value="" onChangeText={() => {}} placeholder="https://" />
         </View>
 
         <SectionTitle>Status Pills</SectionTitle>
         <View style={styles.rowWrap}>
-          <PremiumStatusPill tone="delivered" label="Delivered" />
-          <PremiumStatusPill tone="pending" label="Pending" />
-          <PremiumStatusPill tone="error" label="Cancelled" />
-          <PremiumStatusPill tone="shipped" label="Shipped" />
+          <AppStatusPill variant="block" tone="delivered" label="Delivered" />
+          <AppStatusPill variant="block" tone="pending" label="Pending" />
+          <AppStatusPill variant="block" tone="error" label="Cancelled" />
+          <AppStatusPill variant="block" tone="shipped" label="Shipped" />
         </View>
 
         <SectionTitle>Empty States</SectionTitle>

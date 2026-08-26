@@ -25,7 +25,7 @@
  */
 
 /** Current schema version number. Bumped on every breaking migration. */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 // ── Drizzle-style table definitions (SQL strings) ──────────────────────
 
@@ -304,3 +304,35 @@ export const SCHEMA_VERSION_2 = [
   `INSERT OR IGNORE INTO schema_version (version, applied_at)
    VALUES (2, datetime('now'));`,
 ].join('\n');
+
+/**
+ * Schema v3 — adds sync-aligned columns to `listing_draft` and `product` so
+ * the sync engine's `applyDeltas` can upsert server deltas without column
+ * mismatches. The backend `/sync/listing_draft` and `/sync/product` endpoints
+ * return `seller_id`, `image_url`, `status`, `category`, `original_price_gbp`,
+ * `shipping_method`, `shipping_payer` — these columns did not exist in the v1
+ * tables. `ALTER TABLE ADD COLUMN` is used so existing databases gain the
+ * columns without recreating the tables.
+ *
+ * The column rename map in `syncEngine.ts` (`DOMAIN_COLUMN_RENAME`) translates
+ * `original_price_gbp` → `original_price` and `category` → `category_id` (for
+ * the product domain) so the backend column names map to the local table
+ * columns.
+ */
+export const SCHEMA_VERSION_3 = [
+  // listing_draft: add columns returned by the /sync/listing_draft endpoint.
+  `ALTER TABLE listing_draft ADD COLUMN seller_id TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE listing_draft ADD COLUMN image_url TEXT`,
+  `ALTER TABLE listing_draft ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`,
+  `ALTER TABLE listing_draft ADD COLUMN category TEXT`,
+  `ALTER TABLE listing_draft ADD COLUMN original_price TEXT`,
+  `ALTER TABLE listing_draft ADD COLUMN shipping_method TEXT`,
+  `ALTER TABLE listing_draft ADD COLUMN shipping_payer TEXT`,
+  // product: add columns returned by the /sync/product endpoint.
+  `ALTER TABLE product ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`,
+  `ALTER TABLE product ADD COLUMN original_price TEXT`,
+  `ALTER TABLE product ADD COLUMN shipping_method TEXT`,
+  `ALTER TABLE product ADD COLUMN shipping_payer TEXT`,
+  `INSERT OR IGNORE INTO schema_version (version, applied_at)
+   VALUES (3, datetime('now'));`,
+].join(';\n');

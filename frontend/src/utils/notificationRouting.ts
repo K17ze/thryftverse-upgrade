@@ -43,7 +43,7 @@ const VALID_SCREENS: ReadonlySet<string> = new Set<ScreenName>([
   'VerificationResponse',
   'Withdraw',
   'SellerEarnings',
-  'WalletActivity',
+  'WalletHistory',
   'LiveShopping',
 ]);
 

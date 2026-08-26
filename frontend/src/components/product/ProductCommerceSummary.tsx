@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { ListingCommerceContext } from '../../platform/product';
 import { NativeSheet } from '../../platform/native';
@@ -26,6 +27,7 @@ export function ProductCommerceSummary({
   formattedProtectionTotal,
 }: ProductCommerceSummaryProps) {
   const { colors } = useAppTheme();
+  const { formatFromFiat } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [activeSheet, setActiveSheet] = useState<{ title: string; body: string } | null>(null);
 
@@ -38,7 +40,7 @@ export function ProductCommerceSummary({
       value: formattedProtectionTotal,
       sheetContent: {
         title: 'Estimated total',
-        body: `Item price: ${formattedPrice}\nBuyer protection fee: ${commerce.buyerProtectionFee != null ? `£${commerce.buyerProtectionFee.toFixed(2)}` : 'Included'}\n\nThe estimated total includes the item price and buyer protection fee. Shipping costs are confirmed at checkout.`,
+        body: `Item price: ${formattedPrice}\nBuyer protection fee: ${commerce.buyerProtectionFee != null ? formatFromFiat(commerce.buyerProtectionFee) : 'Included'}\n\nThe estimated total includes the item price and buyer protection fee. Shipping costs are confirmed at checkout.`,
       },
     });
   }

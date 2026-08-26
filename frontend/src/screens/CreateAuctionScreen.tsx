@@ -28,7 +28,6 @@ import { EmptyState } from '../components/EmptyState';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -218,7 +217,7 @@ export default function CreateAuctionScreen() {
         />
         <View style={styles.listingMeta}>
           <BodyEmphasis style={styles.listingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)}</Meta>
+          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, currencyCode)}</Meta>
         </View>
         {selected && (
           <View style={styles.selectedTick}>
@@ -312,7 +311,7 @@ export default function CreateAuctionScreen() {
                         {selectedListing?.title ?? 'Select a listing'}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
-                        {selectedListing ? formatFromFiat(selectedListing.price, DEFAULT_CURRENCY_CODE) : '—'}
+                        {selectedListing ? formatFromFiat(selectedListing.price, currencyCode) : '—'}
                       </Meta>
                     </View>
                   </TradeCard>
@@ -458,7 +457,7 @@ export default function CreateAuctionScreen() {
                         {selectedListing?.title ?? 'Select a listing'}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
-                        {selectedListing ? formatFromFiat(selectedListing.price, DEFAULT_CURRENCY_CODE) : '—'}
+                        {selectedListing ? formatFromFiat(selectedListing.price, currencyCode) : '—'}
                       </Meta>
                     </View>
                   </TradeCard>

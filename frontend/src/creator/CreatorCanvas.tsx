@@ -31,6 +31,7 @@ import {
 } from '@shopify/react-native-skia';
 import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -1902,6 +1903,7 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
 function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'product' }> }) {
   const { payload } = layer;
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const productStyles = React.useMemo(() => createProductStyles(colors), [colors]);
   const isSold = payload.availability === 'sold';
   const isDeleted = payload.availability === 'deleted';
@@ -1912,7 +1914,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
     return (
       <View
         style={productStyles.imageContainer}
-        accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, £${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}`}
+        accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}`}
         accessibilityRole="link"
       >
         <ExpoImage
@@ -1929,7 +1931,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
           </Text>
           {payload.snapshotPriceGbp !== undefined && (
             <Text style={[productStyles.imagePrice, isSold && productStyles.soldPrice]}>
-              {isSold ? 'SOLD' : `£${payload.snapshotPriceGbp.toFixed(0)}`}
+              {isSold ? 'SOLD' : `${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}`}
             </Text>
           )}
         </View>
@@ -1946,7 +1948,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
     return (
       <View
         style={productStyles.hotspotContainer}
-        accessibilityLabel={`Product hotspot, ${payload.hotspotLabel}${payload.snapshotPriceGbp !== undefined ? `, £${payload.snapshotPriceGbp.toFixed(0)}` : ''}`}
+        accessibilityLabel={`Product hotspot, ${payload.hotspotLabel}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}`}
         accessibilityRole="link"
       >
         <View style={productStyles.hotspotDot} />
@@ -1955,7 +1957,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
         </Text>
         {payload.snapshotPriceGbp !== undefined && !isSold && (
           <Text style={productStyles.hotspotPrice}>
-            £{payload.snapshotPriceGbp.toFixed(0)}
+            {currencySymbol}{payload.snapshotPriceGbp.toFixed(0)}
           </Text>
         )}
       </View>
@@ -1967,7 +1969,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
   return (
     <View
       style={productStyles.container}
-      accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, £${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}${isDeleted ? ', unavailable' : ''}`}
+      accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}${isDeleted ? ', unavailable' : ''}`}
       accessibilityRole="link"
     >
       <View style={productStyles.row}>
@@ -1976,7 +1978,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       </View>
       {payload.snapshotPriceGbp !== undefined && (
         <Text style={[productStyles.price, isSold && productStyles.soldPrice, isDeleted && productStyles.deletedPrice]}>
-          {isSold ? 'SOLD' : isDeleted ? 'UNAVAILABLE' : `£${payload.snapshotPriceGbp.toFixed(0)}`}
+          {isSold ? 'SOLD' : isDeleted ? 'UNAVAILABLE' : `${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}`}
         </Text>
       )}
     </View>

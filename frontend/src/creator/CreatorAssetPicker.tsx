@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -562,7 +563,7 @@ function PermissionDeniedState({
   );
 }
 
-function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -1188,7 +1189,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       )}
     </SheetContainer>
   );
-}
+});
 
 // ── Product Picker ─────────────────────────────────────────────────
 // Per spec 10 (Look Architecture V3), the Add item drawer sources are:
@@ -1262,8 +1263,9 @@ function listingApiItemToSearchResult(item: ListingApiItem): ListingSearchResult
 
 type ProductSourceTab = 'closet' | 'saved' | 'search' | 'recent';
 
-function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const ProductPicker = React.memo(function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
@@ -1561,7 +1563,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
               </View>
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.resultPrice}>£{item.priceGbp.toFixed(0)}</Text>
+                <Text style={styles.resultPrice}>{currencySymbol}{item.priceGbp.toFixed(0)}</Text>
               </View>
             </Pressable>
           )}
@@ -1589,11 +1591,11 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       )}
     </PickerShell>
   );
-}
+});
 
 // ── Mention Picker ─────────────────────────────────────────────────
 
-function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const MentionPicker = React.memo(function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -1706,11 +1708,11 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       )}
     </PickerShell>
   );
-}
+});
 
 // ── Look Picker ────────────────────────────────────────────────────
 
-function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const LookPicker = React.memo(function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -1814,7 +1816,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       )}
     </PickerShell>
   );
-}
+});
 
 // ── Text Picker ────────────────────────────────────────────────────
 // Instagram 2025-2026 parity: 10 fonts, text effects, background color,
@@ -1880,7 +1882,7 @@ const TEXT_STYLE_PREVIEW: Record<string, { fontFamily: string; fontSize: number;
   neon: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size + 4, lineHeight: (Type.bodyStrong.size + 4) * 1.2 },
 };
 
-function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const TextPicker = React.memo(function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -2032,6 +2034,8 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 }}
                 accessibilityLabel="Spectrum color picker"
                 accessibilityRole="adjustable"
+                accessibilityHint="Tap to select a color"
+                accessibilityValue={{ text: `Color ${textColor}` }}
               />
             </LinearGradient>
             <View style={[styles.spectrumIndicator, { backgroundColor: textColor }]} />
@@ -2161,7 +2165,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Draw Picker ───────────────────────────────────────────────────
 // Instagram/Snapchat parity: freehand drawing with pen, marker,
@@ -2209,7 +2213,7 @@ function buildSkiaPath(points: DrawPoint[], canvasW: number, canvasH: number): a
   return path;
 }
 
-function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const DrawPicker = React.memo(function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -2390,6 +2394,9 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   }}
                   accessibilityLabel="Brush size slider"
                   accessibilityRole="adjustable"
+                  accessibilityHint="Tap higher to decrease, lower to increase brush size"
+                  accessibilityValue={{ min: 2, max: 20, now: brushSize, text: `Brush size ${brushSize}` }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <View style={[styles.brushSliderFill, { height: `${(brushSize - 2) / 18 * 100}%` }]} />
                   <View style={[styles.brushSliderHandle, { bottom: `${(brushSize - 2) / 18 * 100}%` }]}>
@@ -2463,6 +2470,8 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                     }}
                     accessibilityLabel="Spectrum color picker"
                     accessibilityRole="adjustable"
+                    accessibilityHint="Tap to select a color"
+                    accessibilityValue={{ text: `Color ${activeColor}` }}
                   />
                 </LinearGradient>
                 <View style={[styles.spectrumIndicator, { backgroundColor: activeColor }]} />
@@ -2534,7 +2543,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── GIF Picker ────────────────────────────────────────────────────
 // GIPHY-style search: trending GIFs on load, search by query.
@@ -2561,7 +2570,7 @@ interface GifResult {
   height: number;
 }
 
-function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const GifPicker = React.memo(function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -2728,7 +2737,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
       )}
     </PickerShell>
   );
-}
+});
 
 // ── Music Picker ──────────────────────────────────────────────────
 // Instagram-style music sticker: search trending tracks via iTunes API
@@ -2742,7 +2751,7 @@ interface MusicTrack {
   previewUrl: string;
 }
 
-function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const MusicPicker = React.memo(function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -2910,14 +2919,14 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       )}
     </PickerShell>
   );
-}
+});
 
 // ── Quiz Picker ───────────────────────────────────────────────────
 // Instagram 2026 parity: multiple-choice quiz with correct answer.
 
 const QUIZ_EMOJIS = ['🎯', '🔥', '💡', '❓', '✅', '⭐', '🎨', '👍'];
 
-function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const QuizPicker = React.memo(function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3111,12 +3120,12 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Question Picker ───────────────────────────────────────────────
 // Instagram 2026 parity: open-ended question box sticker.
 
-function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const QuestionPicker = React.memo(function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3217,14 +3226,14 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Emoji Slider Picker ───────────────────────────────────────────
 // Instagram 2026 parity: emoji slider for intensity measurement.
 
 const SLIDER_EMOJIS = ['😍', '🔥', '💯', '😂', '🤔', '👍', '❤️', '✨', '🎨', '🛍️'];
 
-function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const EmojiSliderPicker = React.memo(function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3343,12 +3352,12 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Countdown Picker ──────────────────────────────────────────────
 // Instagram 2026 parity: countdown to a date/time sticker.
 
-function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const CountdownPicker = React.memo(function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3465,7 +3474,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Shape Picker ───────────────────────────────────────────────────
 
@@ -3480,7 +3489,7 @@ const SHAPES: Array<{ shape: 'circle' | 'square' | 'line' | 'arrow' | 'star' | '
 
 const SHAPE_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#E06666', '#7B68EE'];
 
-function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const ShapePicker = React.memo(function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3556,11 +3565,11 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Vote Picker ────────────────────────────────────────────────────
 
-function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const VotePicker = React.memo(function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3731,7 +3740,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Unified Sticker Tray ──────────────────────────────────────────
 // Instagram-pattern: ONE sticker entry point that opens a tray with
@@ -3818,7 +3827,7 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
   }),
 })).filter((cat) => cat.stickers.length > 0);
 
-function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const StickerTray = React.memo(function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3946,11 +3955,11 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       </ScrollView>
     </SheetContainer>
   );
-}
+});
 
 // ── Link Picker ───────────────────────────────────────────────────
 
-function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const LinkPicker = React.memo(function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -4036,11 +4045,11 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Location Picker ───────────────────────────────────────────────
 
-function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const LocationPicker = React.memo(function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -4095,11 +4104,11 @@ function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Hashtag Picker ────────────────────────────────────────────────
 
-function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const HashtagPicker = React.memo(function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -4159,11 +4168,11 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Time Picker ───────────────────────────────────────────────────
 
-function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const TimePicker = React.memo(function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -4233,11 +4242,11 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Weather Picker ────────────────────────────────────────────────
 
-function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const WeatherPicker = React.memo(function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -4357,7 +4366,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Styles ─────────────────────────────────────────────────────────
 

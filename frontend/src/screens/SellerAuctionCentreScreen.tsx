@@ -16,6 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { SupportedCurrencyCode } from '../constants/currencies';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { toIze, formatAuctionIze } from '../utils/currency';
 import { useBucketedServerClock, resolveAuctionTiming } from '../hooks/useServerClock';
@@ -35,7 +36,6 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { RetryState } from '../components/RetryState';
 import { Space, Radius, Typography, Type, Stroke, Control } from '../theme/designTokens';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
 
   listAuctions,
@@ -234,12 +234,14 @@ function SellerAuctionRow({
   onPress,
   formatFromFiat,
   goldRates,
+  currencyCode,
 }: {
   item: AuctionHomeItem;
   clockMs: number;
   onPress: () => void;
   formatFromFiat: (amount: number, currency?: any, opts?: any) => string;
   goldRates: any;
+  currencyCode: SupportedCurrencyCode;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -251,7 +253,7 @@ function SellerAuctionRow({
   const presentation = resolveStatePresentation(item, timing, urgency, timeLabel, colors);
 
   const amount = item.currentBidGbp > 0 ? item.currentBidGbp : item.startingBidGbp;
-  const izeText = amount > 0 ? formatAuctionIze(toIze(amount, 'GBP', goldRates)) : null;
+  const izeText = amount > 0 ? formatAuctionIze(toIze(amount, currencyCode, goldRates)) : null;
   const localText = priceLabel === 'No bids' ? null : priceText;
 
   // Value prefix depends on state
@@ -339,10 +341,12 @@ function SellerSummary({
   stats,
   formatFromFiat,
   goldRates,
+  currencyCode,
 }: {
   stats: SellerStats;
   formatFromFiat: (amount: number, currency?: any, opts?: any) => string;
   goldRates: any;
+  currencyCode: SupportedCurrencyCode;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -350,10 +354,10 @@ function SellerSummary({
   const activeColor = active > 0 ? colors.danger : colors.textPrimary;
   const hasBidContext = stats.totalBids > 0 && stats.highestBid > 0;
   const highestBidIze = hasBidContext
-    ? formatAuctionIze(toIze(stats.highestBid, 'GBP', goldRates))
+    ? formatAuctionIze(toIze(stats.highestBid, currencyCode, goldRates))
     : null;
   const highestBidLocal = hasBidContext
-    ? formatFromFiat(stats.highestBid, DEFAULT_CURRENCY_CODE)
+    ? formatFromFiat(stats.highestBid, currencyCode)
     : null;
 
   return (
@@ -399,7 +403,7 @@ function SellerSummary({
 
 export default function SellerAuctionCentreScreen() {
   const navigation = useNavigation<NavT>();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { goldRates } = useCurrencyContext();
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -706,9 +710,10 @@ export default function SellerAuctionCentreScreen() {
         onPress={() => navigateToDetail(item.id)}
         formatFromFiat={formatFromFiat}
         goldRates={goldRates}
+        currencyCode={currencyCode}
       />
     );
-  }, [renderSectionHeader, renderEmpty, secondClock, navigateToDetail, formatFromFiat, goldRates]);
+  }, [renderSectionHeader, renderEmpty, secondClock, navigateToDetail, formatFromFiat, goldRates, currencyCode]);
 
   // Row separator — only between two row items. FlashList inserts separators
   // between every adjacent pair in the flattened array, so suppress the divider
@@ -730,9 +735,10 @@ export default function SellerAuctionCentreScreen() {
         stats={stats}
         formatFromFiat={formatFromFiat}
         goldRates={goldRates}
+        currencyCode={currencyCode}
       />
     );
-  }, [stats, formatFromFiat, goldRates]);
+  }, [stats, formatFromFiat, goldRates, currencyCode]);
 
   // Load-more affordance — previously rendered via SectionList's
   // renderSectionFooter. With a single flattened section FlashList's

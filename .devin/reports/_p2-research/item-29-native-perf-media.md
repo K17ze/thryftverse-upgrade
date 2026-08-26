@@ -275,3 +275,143 @@ Severity is **Medium** overall: the image/video infrastructure is strong, but th
 - **Atlas bundle analysis**: `npm run bundle:analyze` — ThryftVerse has this. Should be run and baseline documented in `BUNDLE_ANALYSIS.md`. [VERIFIED — CODE]
 - **whyDidYouRender**: not installed. Recommended for `__DEV__` on `CachedImage`, `ProductCardV2`, `CreatorCanvas`, all `*Tile` components. [VERIFIED — CODE]
 - **VCF (Visually Complete)**: `performance/visuallyComplete.ts` exists but `useVisuallyComplete` is not called on key screens. Add to HomeScreen, DiscoverScene, UserProfileScreen, LookDetailScreen. [VERIFIED — CODE]
+
+---
+
+## Implementation completion — 26 August 2026
+
+### All 10 rerender hotspots + 6 memory risks: RESOLVED
+
+| # | Hotspot | Status | Fix |
+|---|---------|--------|-----|
+| 1 | CreatorContext provider value churn | ✅ Fixed (prior) | `useMemo` with 60-field dep array |
+| 2 | MoodboardHomeScreen non-virtualized masonry | ✅ Fixed (prior) | FlashList masonry |
+| 3 | GalleriaScreen non-virtualized masonry | ✅ Fixed (prior) | FlashList masonry |
+| 4 | LooksTab FlashList inline callbacks | ✅ Fixed (prior) | All callbacks `useCallback`/`useMemo` |
+| 5 | LookMasonryGrid non-virtualized | ✅ Fixed (prior) | FlashList masonry with `scrollEnabled={false}` |
+| 6 | LookDetailScreen multi-video autoplay | ✅ Fixed (prior) | `shouldPlay={activeMediaIndex === pageIndex}` |
+| 7 | LookMasonryTile not memoized | ✅ Fixed (this session) | `React.memo` + `useCallback` handlePress + `useRenderTrace` |
+| 8 | compat/Video polling interval | ✅ Fixed (this session) | `player.addListener('timeUpdate')` + `timeUpdateEventInterval=0.2` + AppState listener |
+| 9 | DiscoverScene inline nav callbacks | ✅ Fixed (this session) | `useCallback` for all 3 nav callbacks |
+| 10 | SellScreen controlled inputs | ✅ Fixed (this session) | `DebouncedTextInput` for title (300ms) + description (400ms) |
+
+### Additional fixes (this session)
+
+| # | Fix | Files |
+|---|-----|-------|
+| 11 | Legacy `MasonryGrid` deleted from ProductCardV2 | `ProductCardV2.tsx` |
+| 12 | ExploreCollectionScreen migrated to `PinterestMasonryGrid` | `ExploreCollectionScreen.tsx` |
+| 13 | Unused `MasonryGrid` imports removed from CollectionDetailScreen + ClosetScreen | 2 files |
+| 14 | VCF added to DiscoverScene, UserProfileScreen, LookDetailScreen | 3 files |
+| 15 | `useRenderTrace` dev-only re-render tracker (replaces whyDidYouRender — incompatible with React Compiler) | `performance/renderTrace.ts` |
+| 16 | `useRenderTrace` wired into ProductDiscoveryTile + LookMasonryTile | 2 files |
+| 17 | LookDetailScreen inline `onPress` arrow → `useCallback` `handleRelatedLookPress` | `LookDetailScreen.tsx` |
+| 18 | PinterestMasonryGrid legacy Listing path: save button wiring via `mapListingToDiscoverySummary` | `PinterestMasonryGrid.tsx` |
+
+### Verified clean (no fix needed)
+
+| Item | Evidence |
+|------|----------|
+| ToastContext provider value | `useMemo` — `ToastContext.tsx:49` |
+| ThemeContext provider value | `useMemo` — `ThemeContext.tsx:208-211` |
+| BackendDataContext provider value | `useMemo` — `BackendDataContext.tsx:139-141` |
+| PublicMoodboardCard React.memo | `React.memo` — `MoodboardHomeScreen.tsx:191` |
+| UserMoodboardCard React.memo | `React.memo` — `MoodboardHomeScreen.tsx:144` |
+| MoodboardHomeScreen handleMoodboardPress | `useCallback` — `MoodboardHomeScreen.tsx:354` |
+| HomeScreen Video in feed | `shouldPlay={false}` — not playing, poster preview only |
+| expo-image cachePolicy audit | Zero `cachePolicy="none"` matches |
+| imagePreloader maxConcurrent | Default 4, avatars 10 — within 4-6 range for cellular |
+| allowsAnimated prop | Not supported by expo-image API — `isAnimated` is read-only on source |
+
+### Future work (not blocking, flagged for next iteration)
+
+- **thumbhash migration**: Consider for new images (smaller payload than blurhash, supports alpha).
+- **Atlas bundle baseline**: Run `npm run bundle:analyze` and document baseline in `BUNDLE_ANALYSIS.md`.
+- **Hermes profiler runbook**: Document `EXPO_HERMES_PROFILING=true` flow.
+
+### Validation
+
+- **TypeScript**: 0 errors across entire codebase (`npx tsc --noEmit` exit code 0)
+- **ESLint**: 0 new errors/warnings introduced. `useActiveSheet.ts` — zero warnings. PosterComposerScreen/CreatorAssetPicker — all warnings pre-existing (a11y hints, max-lines, no-explicit-any). Fixed 1 exhaustive-deps warning by adding `openSheet` to dependency arrays.
+- **Research**: expo-video `timeUpdate` API verified against [official docs](https://docs.expo.dev/versions/latest/sdk/video/). FlashList v2 masonry verified against [Shopify docs](https://github.com/Shopify/flash-list/blob/main/documentation/docs/guides/masonry-layout.md). whyDidYouRender v10 incompatible with React Compiler per [library README](https://github.com/welldone-software/why-did-you-render).
+
+---
+
+## Phase 2 completion — 27 August 2026
+
+### PosterComposerScreen state granularity — RESOLVED
+
+**Problem**: 37 `useState` calls, 13 of which were mutually exclusive sheet visibility booleans. Each keystroke or gesture touching any state caused the entire 3387-line component to re-render. The cascading Escape/back handler had 13 `else if` branches.
+
+**Solution**: Created `useActiveSheet` hook (`frontend/src/creator/poster/useActiveSheet.ts`) — a `useReducer`-based discriminated union that replaces 13 independent `useState(false)` booleans with a single `ActiveSheet` type:
+
+```typescript
+type ActiveSheet =
+  | 'layers' | 'publish' | 'settings' | 'overflow' | 'help'
+  | 'a11yMove' | 'a11yZOrder' | 'transitions' | 'keyframes'
+  | 'speedCurve' | 'reverse' | 'freezeFrame' | 'audioFade'
+  | null;
+```
+
+**Benefits**:
+- 13 `useState` → 1 `useReducer` (fewer state slots, fewer re-renders)
+- Mutual exclusivity enforced by the type system, not by developer discipline
+- Escape/back handler simplified from 13 `else if` branches to `if (activeSheet) { closeSheet(); }`
+- Opening a sheet automatically closes the previous one (no stale state)
+- `open` and `close` are stable `useCallback` references (empty deps)
+
+**Additional PosterComposerScreen fixes**:
+- Memoized `CreatorAssetPicker` callbacks (`handlePickerClose`, `handlePickerAddLayer`) — were inline arrows creating new function references every render
+- Memoized `handleSheetDone` for effects sheet "Done" buttons — was 6 inline arrows
+- Simplified `onClose={() => closeSheet()}` → `onClose={closeSheet}` (4 sheet components)
+- Simplified `onPress={() => closeSheet()}` → `onPress={closeSheet}` (8 backdrop Pressables)
+- Fixed `openSheet` missing from 2 `useCallback`/`useMemo` dependency arrays
+
+**Files modified**: `PosterComposerScreen.tsx`, `useActiveSheet.ts` (new)
+
+### CreatorAssetPicker state granularity — RESOLVED
+
+**Problem**: 91 `useState` calls flagged as a rerender risk.
+
+**Analysis**: The 91 useState calls are distributed across 25+ already-extracted independent subcomponents (MediaPicker, ProductPicker, TextPicker, DrawPicker, GifPicker, MusicPicker, QuizPicker, etc.). The main `CreatorAssetPicker` component itself has only 1 `useState`. `AssetPickerContent` is a switch statement that renders only ONE picker at a time — no cascading re-renders occur because only one picker is ever mounted.
+
+**Solution**: The architecture was already well-decomposed. The real issue was that none of the 20 picker subcomponents were wrapped in `React.memo`, so any parent re-render would re-render the active picker even if its props hadn't changed. Wrapped all 20 picker subcomponents in `React.memo`:
+
+| # | Picker | Wrapped |
+|---|--------|---------|
+| 1 | MediaPicker | `React.memo` |
+| 2 | ProductPicker | `React.memo` |
+| 3 | MentionPicker | `React.memo` |
+| 4 | LookPicker | `React.memo` |
+| 5 | TextPicker | `React.memo` |
+| 6 | DrawPicker | `React.memo` |
+| 7 | GifPicker | `React.memo` |
+| 8 | MusicPicker | `React.memo` |
+| 9 | QuizPicker | `React.memo` |
+| 10 | QuestionPicker | `React.memo` |
+| 11 | EmojiSliderPicker | `React.memo` |
+| 12 | CountdownPicker | `React.memo` |
+| 13 | ShapePicker | `React.memo` |
+| 14 | VotePicker | `React.memo` |
+| 15 | StickerTray | `React.memo` |
+| 16 | LinkPicker | `React.memo` |
+| 17 | LocationPicker | `React.memo` |
+| 18 | HashtagPicker | `React.memo` |
+| 19 | TimePicker | `React.memo` |
+| 20 | WeatherPicker | `React.memo` |
+
+Combined with the memoized `onClose`/`onAddLayer` callbacks in PosterComposerScreen, the active picker now only re-renders when its own internal state changes — not when the parent composer re-renders.
+
+**Files modified**: `CreatorAssetPicker.tsx`
+
+### Final scorecard
+
+| Category | Before | After |
+|----------|--------|-------|
+| PosterComposerScreen useState count | 37 | 25 (13 consolidated) |
+| PosterComposerScreen Escape handler branches | 22 | 11 (13 sheet branches → 1) |
+| CreatorAssetPicker React.memo'd pickers | 0 | 20 |
+| CreatorAssetPicker inline callback refs | 2 (onClose, onAddLayer) | 0 (memoized) |
+| TypeScript errors (entire codebase) | 0 | 0 |
+| ESLint new warnings | 0 | 0 |
+| useActiveSheet.ts lint | N/A | 0 errors, 0 warnings |

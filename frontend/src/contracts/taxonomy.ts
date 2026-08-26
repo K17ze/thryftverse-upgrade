@@ -6,6 +6,8 @@ export type TaxonomyType =
   | 'colour'
   | 'material';
 
+export type ListingCondition = 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
+
 export interface TaxonomyNode {
   id: string;
   name: string;
@@ -255,6 +257,29 @@ const brandNodes: TaxonomyNode[] = [
   { id: 'brand-other', name: 'Other', displayKey: 'Other', type: 'brand', parentId: null, sortOrder: 38 },
 ];
 
+// Curated luxury classification. Lives in the taxonomy contract so the
+// luxury heuristic has a single source of truth alongside the brand nodes
+// it classifies — not a parallel array in a screen utility file.
+const LUXURY_BRAND_IDS: ReadonlySet<string> = new Set([
+  'brand-gucci',
+  'brand-prada',
+  'brand-louis-vuitton',
+  'brand-chanel',
+  'brand-hermes',
+  'brand-dior',
+  'brand-balenciaga',
+  'brand-bottega-veneta',
+  'brand-saint-laurent',
+  'brand-burberry',
+  'brand-versace',
+  'brand-givenchy',
+  'brand-valentino',
+]);
+
+export const LUXURY_BRAND_NAMES: readonly string[] = brandNodes
+  .filter((node) => LUXURY_BRAND_IDS.has(node.id))
+  .map((node) => node.name);
+
 const colourNodes: TaxonomyNode[] = [
   { id: 'colour-black', name: 'Black', displayKey: 'black', type: 'colour', parentId: null, sortOrder: 0 },
   { id: 'colour-white', name: 'White', displayKey: 'white', type: 'colour', parentId: null, sortOrder: 1 },
@@ -277,6 +302,8 @@ const colourNodes: TaxonomyNode[] = [
 ];
 
 const materialNodes: TaxonomyNode[] = [];
+
+export const CONDITION_NAMES: readonly string[] = conditionNodes.map(n => n.name);
 
 export const TAXONOMY_SEED: TaxonomyCollection = {
   categories: categoryNodes,

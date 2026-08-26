@@ -11,7 +11,7 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { CATEGORIES } from '../constants/categories';
+import { useTaxonomy } from '../context/TaxonomyContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -45,6 +45,7 @@ export default function CategoryDetailScreen() {
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const haptic = useHaptic();
+  const { categories } = useTaxonomy();
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
 
   const handleSortSelect = useCallback((sortValue: string) => {
@@ -62,18 +63,25 @@ export default function CategoryDetailScreen() {
 
   const category = useMemo(() => {
     const target = normalize(categoryId);
-    return CATEGORIES.find(
-      (candidate) =>
-        normalize(candidate.id) === target || normalize(candidate.name) === target
-    );
-  }, [categoryId]);
+    return categories
+      .filter((candidate) => candidate.parentId === null)
+      .find(
+        (candidate) =>
+          normalize(candidate.id) === target || normalize(candidate.name) === target
+      );
+  }, [categoryId, categories]);
+
+  const subcategories = useMemo(
+    () => (category ? categories.filter((candidate) => candidate.parentId === category.id) : []),
+    [category, categories],
+  );
 
   const gridData = useMemo(() => {
     if (!category) return [];
     const categoryTokens = new Set([
       normalize(category.id),
       normalize(category.name),
-      ...category.subcategories.flatMap((subcategory) => [
+      ...subcategories.flatMap((subcategory) => [
         normalize(subcategory.id),
         normalize(subcategory.name),
       ]),
@@ -131,7 +139,7 @@ export default function CategoryDetailScreen() {
     }
 
     return sorted;
-  }, [category, listings, browseFilters.brands, browseFilters.sizes, browseFilters.condition, browseFilters.sort, browseFilters.priceMin, browseFilters.priceMax]);
+  }, [category, subcategories, listings, browseFilters.brands, browseFilters.sizes, browseFilters.condition, browseFilters.sort, browseFilters.priceMin, browseFilters.priceMax]);
 
   const styles = useMemo(
     () =>
@@ -312,7 +320,7 @@ export default function CategoryDetailScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryRail}
         >
-          {category.subcategories.map((subcategory) => (
+          {subcategories.map((subcategory) => (
             <AnimatedPressable
               key={subcategory.id}
               style={styles.categoryChip}

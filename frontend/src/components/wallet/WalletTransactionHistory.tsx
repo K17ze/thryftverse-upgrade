@@ -18,7 +18,6 @@ import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { EmptyState } from '../EmptyState';
 import { useConnectivity } from '../../hooks/useConnectivity';
 import { OfflineBanner } from '../OfflineBanner';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 interface WalletTransactionHistoryProps {
   /** Optional filter — 'ALL' shows everything, '1ZE' or 'FIAT' filters by asset */
@@ -81,7 +80,7 @@ export function WalletTransactionHistory({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentUser = useStore((state) => state.currentUser);
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { isOffline } = useConnectivity();
 
   const [items, setItems] = useState<WalletLedgerItem[]>([]);
@@ -119,7 +118,7 @@ export function WalletTransactionHistory({
     const isPositive = item.amount > 0;
     const amountText = item.asset === '1ZE'
       ? `${isPositive ? '+' : ''}${item.amountDisplay.toFixed(3)} 1ZE`
-      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`;
+      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), currencyCode, { displayMode: 'fiat' })}`;
 
     // Direction-aware icon color: inflows use success, outflows use textPrimary,
     // neutral trades use brand. This pairs glyph + colour per AGENTS.md §13.

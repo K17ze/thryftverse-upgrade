@@ -11,6 +11,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
@@ -33,6 +34,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   }), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { listings } = useBackendData();
   const conversations = useStore((state) => state.conversations);
   const deleteConversation = useStore((state) => state.deleteConversation);
@@ -244,7 +246,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               icon="bag-handle-outline"
               label={linkedListing?.title || 'Linked listing'}
               subtitle="Open the product linked to this conversation"
-              detail={linkedListing ? `£${linkedListing.price.toFixed(2)}` : undefined}
+              detail={linkedListing ? formatFromFiat(linkedListing.price, currencyCode) : undefined}
               onPress={() => navigation.navigate('ItemDetail', { itemId: conversation.itemId! })}
               showChevron
             />

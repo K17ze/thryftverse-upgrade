@@ -4,7 +4,7 @@ import {
   type AuctionEffectiveState,
 } from '../hooks/useServerClock';
 import { formatFinalMinutesCountdown, type AuctionViewerState } from './auctionHomeLogic';
-import type { AuctionFulfilmentSummary } from '../services/marketApi';
+import type { AuctionDetail, AuctionFulfilmentSummary } from '../services/marketApi';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 // ── Detail-level auction input (richer than AuctionHomeItem) ──
@@ -1158,4 +1158,249 @@ export function formatBidActivityRow(
     isTopBid: index === 0,
     relativeTime: formatRelativeTime(bid.createdAt, serverNow ?? null),
   };
+}
+
+// ── Effective state resolver for AuctionDetail ──
+// Resolves the canonical effective state from a full AuctionDetail record
+// and the current server clock. This mirrors the precedence rules in
+// resolveAuctionTiming but operates on the richer AuctionDetail shape.
+
+export function resolveEffectiveState(
+  auction: AuctionDetail,
+  clockMs: number,
+): AuctionEffectiveState {
+  // 1. Cancelled — highest precedence
+  if (auction.cancelledAt) return 'cancelled';
+  // 2. Settled — explicit settlement
+  if (auction.settledAt) return 'settled';
+  // 3. Winner set or Buy Now terminal — ended regardless of dates
+  if (auction.winnerBidderId) return 'ended';
+  if (auction.terminalReason === 'buy_now') return 'ended';
+  // 4. Authoritative lifecycle from backend (includes post-end states)
+  if (auction.lifecycle === 'ended') return 'ended';
+  if (auction.lifecycle === 'cancelled') return 'cancelled';
+  if (auction.lifecycle === 'settled') return 'settled';
+  if (auction.lifecycle === 'reserve_not_met') return 'reserve_not_met';
+  if (auction.lifecycle === 'awaiting_payment') return 'awaiting_payment';
+  if (auction.lifecycle === 'payment_expired') return 'payment_expired';
+  if (auction.lifecycle === 'second_chance_offered') return 'second_chance_offered';
+  // 5. Scheduled end according to server clock
+  const endsMs = new Date(auction.endsAt).getTime();
+  const startsMs = new Date(auction.startsAt).getTime();
+  if (clockMs >= endsMs) return 'ended';
+  // 6. Live
+  if (clockMs >= startsMs) return 'live';
+  // 7. Upcoming
+  return 'upcoming';
+}
+
+// ── Countdown sentence formatter ──
+// Produces a compact "12m 08s" / "3h 15m" / "2d 5h" string for the
+// primary state sentence and dock subtitle. Uses tabular-friendly
+// zero-padded seconds to prevent per-second layout shift.
+
+export function formatCountdownSentence(ms: number): string {
+  if (ms <= 0) return 'Ended';
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+}
+
+// ── Canonical media array (spec 02_AUCTION §7) ──
+// Maps the backend mediaItems contract to the CommerceMediaStage shape.
+// Maintains imageUrl as a temporary compatibility fallback.
+
+export interface AuctionMediaItemView {
+  id?: string;
+  uri: string;
+  kind: 'image' | 'video';
+  posterUri?: string | null;
+  width?: number | null;
+  height?: number | null;
+  focalPoint: { x: number; y: number } | null;
+  fit: 'cover' | 'contain';
+  altText: string;
+}
+
+export function buildAuctionMediaItems(auction: {
+  title: string;
+  imageUrl: string | null;
+  mediaItems?: Array<{
+    id: string;
+    url: string;
+    type: string;
+    posterUrl?: string | null;
+    order: number;
+    width?: number | null;
+    height?: number | null;
+    focalX?: number | null;
+    focalY?: number | null;
+  }> | null;
+}): AuctionMediaItemView[] {
+  if (auction.mediaItems && auction.mediaItems.length > 0) {
+    return auction.mediaItems
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map((item) => ({
+        id: item.id,
+        uri: item.url,
+        kind: (item.type === 'video' ? 'video' : 'image') as 'image' | 'video',
+        posterUri: item.posterUrl,
+        width: item.width,
+        height: item.height,
+        focalPoint: item.focalX != null && item.focalY != null
+          ? { x: item.focalX, y: item.focalY }
+          : null,
+        fit: item.focalX != null && item.focalY != null ? 'cover' : 'contain',
+        altText: `${auction.title} ${item.type}`,
+      }));
+  }
+  return auction.imageUrl
+    ? [{
+        uri: auction.imageUrl,
+        kind: 'image' as const,
+        focalPoint: null,
+        fit: 'contain' as const,
+        altText: auction.title,
+      }]
+    : [];
+}
+
+// ── Terminal sale-state derivations (audit P0.5) ──
+
+export function resolveTerminalAmountGbp(auction: {
+  bidCount: number;
+  currentBidGbp: number;
+}): number | null {
+  return auction.bidCount > 0 && Number.isFinite(auction.currentBidGbp)
+    ? auction.currentBidGbp
+    : null;
+}
+
+export function resolveTerminalAmountText(
+  auction: { bidCount: number; currentBidGbp: number },
+  formatFromFiat: (amount: number, currency?: any, opts?: any) => string,
+): string {
+  const amount = resolveTerminalAmountGbp(auction);
+  return amount != null
+    ? formatFromFiat(amount, DEFAULT_CURRENCY_CODE)
+    : 'Amount unavailable';
+}
+
+/** Public version of the private hasValidWinner for AuctionDetail shape. */
+export function auctionHasValidWinner(auction: {
+  winnerBidderId: string | null;
+  bidCount: number;
+} | null): boolean {
+  return auction != null && auction.winnerBidderId != null && auction.bidCount > 0;
+}
+
+export function isAuctionPaymentConfirmed(fulfilment: {
+  paymentStatus?: string;
+} | null): boolean {
+  return fulfilment?.paymentStatus === 'paid';
+}
+
+export function resolveSellerSaleTitle(
+  hasWinner: boolean,
+  settled: boolean,
+  paid: boolean,
+): string {
+  if (!hasWinner) return 'Ended without bids';
+  if (settled) return 'Sold';
+  if (paid) return 'Sold · settlement pending';
+  return 'Sold · awaiting payment';
+}
+
+export function resolveWinnerSubtitle(
+  fulfilment: {
+    buyerNextAction?: string | null;
+    fulfilmentStatus?: string | null;
+  } | null,
+  settled: boolean,
+  paid: boolean,
+): string {
+  if (settled) {
+    return fulfilment?.buyerNextAction
+      ? fulfilment.buyerNextAction
+      : fulfilment?.fulfilmentStatus
+        ? `Fulfilment · ${fulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+        : 'Fulfilment details are not available yet.';
+  }
+  if (paid) return 'Payment confirmed · settlement pending';
+  return fulfilment?.buyerNextAction
+    ? fulfilment.buyerNextAction
+    : 'Complete payment to secure your win.';
+}
+
+export function resolveSellerSubtitle(
+  hasWinner: boolean,
+  fulfilment: {
+    sellerNextAction?: string | null;
+    fulfilmentStatus?: string | null;
+  } | null,
+  settled: boolean,
+  paid: boolean,
+): string {
+  if (!hasWinner) return 'No bids were received.';
+  if (fulfilment?.sellerNextAction) return fulfilment.sellerNextAction;
+  if (settled) {
+    return fulfilment?.fulfilmentStatus
+      ? `Fulfilment · ${fulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+      : 'Fulfilment details are not available yet.';
+  }
+  if (paid) return 'Payment confirmed · settlement pending.';
+  return 'Awaiting buyer payment.';
+}
+
+// ── Live countdown ms helpers ──
+
+export function resolveLiveMsToEnd(auction: { endsAt: string }, clockMs: number): number {
+  return Math.max(0, new Date(auction.endsAt).getTime() - clockMs);
+}
+
+export function resolveLiveMsToStart(auction: { startsAt: string }, clockMs: number): number {
+  return Math.max(0, new Date(auction.startsAt).getTime() - clockMs);
+}
+
+// ── Countdown colour (single urgency accent) ──
+
+export function resolveCountdownColor(
+  isLive: boolean,
+  liveMsToEnd: number,
+  colors: { textPrimary: string; danger: string; warning: string },
+): string {
+  if (!isLive) return colors.textPrimary;
+  if (liveMsToEnd <= 10_000) return colors.danger;
+  if (liveMsToEnd <= 60_000) return colors.warning;
+  return colors.textPrimary;
+}
+
+// ── Dual-dock geometry resolver ──
+
+export function resolveHasDualDock(params: {
+  showBidControls: boolean;
+  buyNowAvailable: boolean;
+  secondaryActionType: string;
+  isBuyNowLoading: boolean;
+  isPostEnd: boolean;
+  isReserveNotMet: boolean;
+  isSeller: boolean;
+  bidCount: number;
+  isPaymentExpired: boolean;
+  isSecondChanceOffered: boolean;
+  isSecondChanceRecipient: boolean;
+}): boolean {
+  return (
+    (params.showBidControls && params.buyNowAvailable && params.secondaryActionType === 'buyNow' && !params.isBuyNowLoading) ||
+    (params.isPostEnd && (
+      (params.isReserveNotMet && params.isSeller && params.bidCount > 0) ||
+      ((params.isPaymentExpired || params.isSecondChanceOffered) && params.isSecondChanceRecipient)
+    ))
+  );
 }

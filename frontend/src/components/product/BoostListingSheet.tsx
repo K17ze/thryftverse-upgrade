@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { BottomSheet } from '../BottomSheet';
 import { AppButton } from '../ui/AppButton';
 import { haptics } from '../../utils/haptics';
@@ -44,6 +45,7 @@ export function BoostListingSheet({
   onBoost,
 }: BoostListingSheetProps) {
   const { colors } = useAppTheme();
+  const { formatFromFiat } = useFormattedPrice();
   const [selectedTierId, setSelectedTierId] = useState<string>(BOOST_TIERS[1].id);
 
   const selectedTier = BOOST_TIERS.find((t) => t.id === selectedTierId) ?? BOOST_TIERS[1];
@@ -98,7 +100,7 @@ export function BoostListingSheet({
               ]}
               accessibilityRole="radio"
               accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`${tier.label} boost for £${tier.priceGbp.toFixed(2)}`}
+              accessibilityLabel={`${tier.label} boost for ${formatFromFiat(tier.priceGbp)}`}
             >
               <View style={styles.tierInfo}>
                 <View style={styles.tierHeader}>
@@ -106,7 +108,7 @@ export function BoostListingSheet({
                     {tier.label}
                   </Text>
                   <Text style={[styles.tierPrice, { color: colors.brand }]}>
-                    £{tier.priceGbp.toFixed(2)}
+                    {formatFromFiat(tier.priceGbp)}
                   </Text>
                 </View>
                 <Text style={[styles.tierDescription, { color: colors.textSecondary }]}>
@@ -125,12 +127,12 @@ export function BoostListingSheet({
 
       <View style={styles.footer}>
         <AppButton
-          title={`Boost for £${selectedTier.priceGbp.toFixed(2)}`}
+          title={`Boost for ${formatFromFiat(selectedTier.priceGbp)}`}
           variant="primary"
           size="lg"
           style={styles.boostBtn}
           onPress={handleBoost}
-          accessibilityLabel={`Confirm boost for ${selectedTier.label} at £${selectedTier.priceGbp.toFixed(2)}`}
+          accessibilityLabel={`Confirm boost for ${selectedTier.label} at ${formatFromFiat(selectedTier.priceGbp)}`}
           hapticFeedback="light"
         />
       </View>

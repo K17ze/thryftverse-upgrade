@@ -18,6 +18,7 @@ import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens'
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useHaptic } from '../hooks/useHaptic';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { CachedImage } from '../components/CachedImage';
 import { Caption } from '../components/ui/Text';
@@ -36,6 +37,7 @@ export default function MessageRequestsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const haptic = useHaptic();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { colors } = useAppTheme();
 
   const conversations = useStore((state) => state.conversations);
@@ -229,7 +231,7 @@ export default function MessageRequestsScreen() {
               )}
               <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
               {listing.price != null && (
-                <Text style={styles.listingPrice}>£{listing.price.toFixed(2)}</Text>
+                <Text style={styles.listingPrice}>{formatFromFiat(listing.price, currencyCode)}</Text>
               )}
             </View>
           )}

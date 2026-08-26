@@ -56,6 +56,16 @@ export interface ScheduledPublicationSweepJobData {
   reason: 'scheduled' | 'manual';
 }
 
+export interface BackupExpiryJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface DsarExportJobData {
+  requestId: string;
+  userId: string;
+  reason: 'scheduled' | 'manual';
+}
+
 export interface MediaIngestJobData {
   assetId: string;
   reason: string;
@@ -158,7 +168,9 @@ type InfraJobData =
   | RetentionSweepJobData
   | AnalyticsAggregationJobData
   | PushReceiptReconciliationJobData
-  | ScheduledPublicationSweepJobData;
+  | ScheduledPublicationSweepJobData
+  | BackupExpiryJobData
+  | DsarExportJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
@@ -171,6 +183,8 @@ interface QueueHandlers {
   handleAnalyticsAggregationJob: (job: AnalyticsAggregationJobData) => Promise<void>;
   handlePushReceiptReconciliationJob: (job: PushReceiptReconciliationJobData) => Promise<void>;
   handleScheduledPublicationSweepJob: (job: ScheduledPublicationSweepJobData) => Promise<void>;
+  handleBackupExpiryJob: (job: BackupExpiryJobData) => Promise<void>;
+  handleDsarExportJob: (job: DsarExportJobData) => Promise<void>;
   handleMediaIngestJob: (job: MediaIngestJobData) => Promise<void>;
   handleMediaEmbeddingJob: (job: MediaEmbeddingJobData) => Promise<void>;
   handleModerationTriageJob: (job: ModerationTriageJobData) => Promise<void>;
@@ -456,6 +470,10 @@ export function startBackgroundWorkers(
             await handlers.handlePushReceiptReconciliationJob(job.data as PushReceiptReconciliationJobData);
           } else if (job.name === 'scheduled_publication_sweep') {
             await handlers.handleScheduledPublicationSweepJob(job.data as ScheduledPublicationSweepJobData);
+          } else if (job.name === 'backup_expiry_check') {
+            await handlers.handleBackupExpiryJob(job.data as BackupExpiryJobData);
+          } else if (job.name === 'dsar_export') {
+            await handlers.handleDsarExportJob(job.data as DsarExportJobData);
           }
 
           const durationMs = Date.now() - jobStart;
@@ -1141,6 +1159,22 @@ export async function enqueueCatalogImportReconcileJob(
       backoff: { type: 'exponential', delay: 10_000 },
       removeOnComplete: true,
       removeOnFail: 200,
+    },
+  );
+}
+
+export async function enqueueDsarExportJob(
+  input: DsarExportJobData,
+): Promise<void> {
+  await infraQueue.add(
+    'dsar_export',
+    input,
+    {
+      jobId: `dsar_export_${input.requestId}`,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 30_000 },
+      removeOnComplete: true,
+      removeOnFail: 100,
     },
   );
 }

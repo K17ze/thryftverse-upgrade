@@ -19,11 +19,12 @@
  *    truthfully **retryable** (the whole file is re-uploaded on failure)
  *    but not **resumable** (no part-level checkpoint).
  *
- * 2. **S3 multipart upload** (ready, awaiting backend endpoints). Splits
- *    the file into 5 MB+ parts, uploads each part to its own presigned
- *    URL, and completes by sending the ETag list to S3. This is
- *    truthfully **resumable** — on failure, only the failed part is
- *    retried; on app restart, completed parts are skipped.
+ * 2. **S3 multipart upload** (active). Splits the file into 5 MB+ parts,
+ *    uploads each part to its own presigned URL, and completes by sending
+ *    the ETag list to the backend which assembles the final S3 object and
+ *    creates an `upload_finalizations` record. This is truthfully
+ *    **resumable** — on failure, only the failed part is retried; on app
+ *    restart, completed parts are skipped.
  *
  * The active transport is chosen by `UploadManager` based on file size
  * and backend capability. See `MultipartUploader` for the backend
@@ -57,6 +58,11 @@ export type UploadPart = {
 export type UploadSession = {
   uploadId: string; // S3 multipart upload ID
   key: string; // S3 object key
+  /** Backend session ID — used in the /uploads/multipart/:id/* path. */
+  sessionId?: string;
+  /** Cached presigned part URLs from the initiate response. Stored as a
+   *  plain object (not Map) so it survives JSON serialisation in AsyncStorage. */
+  presignedUrls?: Record<number, string>;
   parts: UploadPart[];
   totalBytes: number;
   uploadedBytes: number;
@@ -64,6 +70,8 @@ export type UploadSession = {
   expiresAt: number; // signed URL expiration (epoch ms)
   mimeType: string;
   assetId: string;
+  /** Set by `complete()` — the backend's finalization record ID. */
+  finalizationId?: string;
 };
 
 // ── Job types ───────────────────────────────────────────────────────

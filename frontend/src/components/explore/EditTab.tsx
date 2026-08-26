@@ -22,6 +22,7 @@ import { useBackendData } from '../../context/BackendDataContext';
 import { fetchTrendingListings, type TrendingListing } from '../../services/marketApi';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { HorizontalRail } from '../HorizontalRail';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -29,12 +30,13 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 /* ── Sub-components ── */
 function TrendingRailItem({ item, onPress, styles }: { item: { id: string; title: string; brand: string | null; price: number; image: string }; onPress: () => void; styles: ReturnType<typeof createStyles> }) {
+  const { formatFromFiat } = useFormattedPrice();
   return (
     <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
       <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
       <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
       <Text style={styles.trendingTitle} numberOfLines={1}>{item.title}</Text>
-      <Text style={styles.trendingPrice}>£{item.price}</Text>
+      <Text style={styles.trendingPrice}>{formatFromFiat(item.price)}</Text>
     </AnimatedPressable>
   );
 }

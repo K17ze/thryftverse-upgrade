@@ -49,7 +49,6 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { t } from '../i18n';
 
 
@@ -63,7 +62,7 @@ export default function ManageListingScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const insets = useSafeAreaInsets();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const reducedMotion = useReducedMotion();
   const { show } = useToast();
   const { itemId } = route.params;
@@ -205,7 +204,7 @@ export default function ManageListingScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.priceGbp ?? 0, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}.`,
+        message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.priceGbp ?? 0, currencyCode, { displayMode: 'fiat' })}.`,
       });
     } catch {
       // silently fail
@@ -371,7 +370,7 @@ export default function ManageListingScreen() {
         {/* ── Flat identity block (no floating card over media) ── */}
         <View style={styles.identityBlock}>
           <Text style={styles.identityTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.identityPrice}>{formatFromFiat(item.priceGbp ?? 0, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+          <Text style={styles.identityPrice}>{formatFromFiat(item.priceGbp ?? 0, currencyCode, { displayMode: 'fiat' })}</Text>
 
           <View style={styles.statusRow}>
             <View style={[styles.statusPillFlat, { backgroundColor: `${statusColor}1A` }]}>

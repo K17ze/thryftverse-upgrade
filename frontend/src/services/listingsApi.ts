@@ -30,11 +30,8 @@ export interface ListingEngagementSummaryApi {
   generatedAt: string;
 }
 
-export type ListingCondition =
-  | 'New with tags'
-  | 'Very good'
-  | 'Good'
-  | 'Satisfactory';
+export type { ListingCondition } from '../contracts/taxonomy';
+import type { ListingCondition } from '../contracts/taxonomy';
 
 export type ListingLifecycleStatus =
   | 'draft'
@@ -75,6 +72,9 @@ export interface Listing {
   engagement?: ListingEngagementSummaryApi | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
+  sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
+  materialComposition?: string | null;
+  weightKg?: number | null;
 }
 
 interface ApiListingRow {
@@ -98,6 +98,9 @@ interface ApiListingRow {
   seller?: ListingSeller | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
+  sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
+  materialComposition?: string | null;
+  weightKg?: number | null;
 }
 
 interface ApiListingsResponse {
@@ -342,6 +345,8 @@ export interface ListingCreateBody {
   originalPriceGbp?: number;
   shippingMethod?: string;
   shippingPayer?: string;
+  materialComposition?: string;
+  weightKg?: number;
 }
 
 export interface ListingApiItem {

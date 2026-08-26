@@ -9,6 +9,13 @@ import {
 } from '../lib/shippingProvider.js';
 import { resolveCountryCapabilities, type UserCountryCapabilities } from '../lib/countryCapabilities.js';
 import { getOrCreateComplianceProfile } from '../lib/compliance.js';
+import {
+  MONEY_REGISTRY_VERSION,
+  currencyExponent,
+  moneyFromMajorDecimal,
+  normalizeCurrencyCode,
+  type Money,
+} from '../lib/money.js';
 
 type ShippingRouteDependencies = {
   app: FastifyInstance;
@@ -167,9 +174,29 @@ export const registerShippingRoutes = ({
       preferredCarrierId: z.string().min(2).max(80).optional(),
       parcelWeightKg: z.number().positive().max(40).optional(),
       declaredValueGbp: z.number().positive().max(20000).optional(),
+      currency: z.string().length(3).optional(),
     });
 
     const payload = bodySchema.parse(request.body);
+
+    // Resolve the quote currency from the request, defaulting to GBP for
+    // backward compatibility with clients that do not send a currency. The
+    // code is validated against the ISO-4217 money registry so unsupported
+    // currencies are rejected early with a 400 rather than persisted.
+    let quoteCurrencyCode: ReturnType<typeof normalizeCurrencyCode> = 'GBP';
+    if (payload.currency) {
+      try {
+        quoteCurrencyCode = normalizeCurrencyCode(payload.currency);
+      } catch {
+        reply.code(400);
+        return {
+          ok: false,
+          error: `Unsupported currency '${payload.currency}'`,
+          code: 'CURRENCY_UNSUPPORTED',
+        };
+      }
+    }
+    const quoteCurrencyExponent = currencyExponent(quoteCurrencyCode);
 
     const authUser = request.authUser;
     if (!authUser) {
@@ -303,6 +330,16 @@ export const registerShippingRoutes = ({
     const quoteExpiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
     const quotes = await Promise.all(quoteResult.quotes.map(async (quote) => {
       const quoteId = createRuntimeId('shipq');
+      // Build the canonical Money representation in the requested currency.
+      // The shipping provider currently returns GBP-denominated magnitudes;
+      // FX conversion to non-GBP currencies is a future concern. Until then
+      // the requested currency code is recorded alongside the provider's
+      // magnitude so the canonical columns are no longer hardcoded to GBP,
+      // and price_gbp is shadow-written for backward compatibility/reconciliation.
+      const quoteMoney: Money = moneyFromMajorDecimal(
+        quoteCurrencyCode,
+        quote.priceGbp.toFixed(quoteCurrencyExponent)
+      );
       const quoteSnapshot = {
         quoteId,
         buyerId: actorUserId,
@@ -311,7 +348,8 @@ export const registerShippingRoutes = ({
         addressId: payload.addressId ?? null,
         carrierId: quote.carrierId,
         priceGbp: quote.priceGbp,
-        currency: 'GBP',
+        currency: quoteMoney.currency,
+        amountMinor: quoteMoney.minorAmount,
         source: quote.source,
         expiresAt: quoteExpiresAt,
       };
@@ -324,12 +362,14 @@ export const registerShippingRoutes = ({
           `INSERT INTO commerce_shipping_quotes (
              id, buyer_id, seller_id, listing_id, address_id,
              carrier_id, carrier_label, price_gbp, currency, source,
-             quote_hash, provider_reference, metadata, expires_at
+             quote_hash, provider_reference, metadata, expires_at,
+             amount_minor, currency_code, currency_exponent, money_registry_version
            )
            VALUES (
              $1, $2, $3, $4, $5,
-             $6, $7, $8, 'GBP', $9,
-             $10, $11, $12::jsonb, $13
+             $6, $7, $8, $9, $10,
+             $11, $12, $13::jsonb, $14,
+             $15, $16, $17, $18
            )`,
           [
             quoteId,
@@ -340,6 +380,7 @@ export const registerShippingRoutes = ({
             quote.carrierId,
             quote.carrierLabel,
             quote.priceGbp,
+            quoteMoney.currency,
             quote.source,
             quoteHash,
             typeof quote.metadata.quoteRef === 'string'
@@ -347,6 +388,10 @@ export const registerShippingRoutes = ({
               : null,
             toJsonString(quote.metadata),
             quoteExpiresAt,
+            BigInt(quoteMoney.minorAmount),
+            quoteMoney.currency,
+            quoteMoney.exponent,
+            MONEY_REGISTRY_VERSION,
           ]
         );
       }
@@ -358,6 +403,9 @@ export const registerShippingRoutes = ({
         carrierId: quote.carrierId,
         label: quote.carrierLabel,
         priceFromGbp: quote.priceGbp,
+        currency: quoteMoney.currency,
+        amountMinor: quoteMoney.minorAmount,
+        currencyExponent: quoteMoney.exponent,
         etaMinDays: quote.etaMinDays,
         etaMaxDays: quote.etaMaxDays,
         tracking: quote.tracking,

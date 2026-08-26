@@ -19,16 +19,6 @@ interface TaxonomyContextValue {
 
 const TaxonomyContext = React.createContext<TaxonomyContextValue | undefined>(undefined);
 
-const SEED_VALUE: TaxonomyContextValue = {
-  categories: TAXONOMY_SEED.categories,
-  conditions: TAXONOMY_SEED.conditions,
-  sizes: TAXONOMY_SEED.sizes,
-  brands: TAXONOMY_SEED.brands,
-  colours: TAXONOMY_SEED.colours,
-  materials: TAXONOMY_SEED.materials,
-  isLoading: true,
-};
-
 export function TaxonomyProvider({ children }: { children: React.ReactNode }) {
   const [taxonomy, setTaxonomy] = React.useState<TaxonomyCollection>(TAXONOMY_SEED);
   const [isLoading, setIsLoading] = React.useState(true);

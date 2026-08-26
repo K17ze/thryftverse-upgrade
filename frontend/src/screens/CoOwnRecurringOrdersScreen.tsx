@@ -39,14 +39,11 @@ import {
 } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { t } from '../i18n';
 
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnRecurringOrders'>;
-
-function formatGbp(minor: number): string {
-  return `£${(minor / 100).toFixed(2)}`;
-}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -70,6 +67,12 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const { formatFromFiat, currencySymbol, currencyCode } = useFormattedPrice();
+
+  const formatGbp = React.useCallback(
+    (minor: number) => formatFromFiat(minor / 100, currencyCode),
+    [formatFromFiat, currencyCode]
+  );
 
   const [orders, setOrders] = React.useState<CoOwnRecurringOrder[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -396,7 +399,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
               })}
             </View>
 
-            <Text style={styles.inputLabel}>Max price per unit (optional, £)</Text>
+            <Text style={styles.inputLabel}>Max price per unit (optional, {currencySymbol})</Text>
             <TextInput
               style={styles.input}
               value={maxPrice}

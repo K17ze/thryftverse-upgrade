@@ -32,6 +32,7 @@ import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '..
 import { IconGrammar } from '../../../theme/designTokens';
 import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
+import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import {
   searchListingsFromApi,
@@ -239,6 +240,7 @@ export function ProductBrowserSheet({
   sources,
 }: ProductBrowserSheetProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentUserId = useStore((state) => state.currentUser?.id);
@@ -538,7 +540,7 @@ export function ProductBrowserSheet({
                     </Text>
                   )}
                   <Text style={[styles.resultPrice, { color: colors.brand }]}>
-                    £{item.priceGbp.toFixed(0)}
+                    {currencySymbol}{item.priceGbp.toFixed(0)}
                   </Text>
                 </View>
               </Pressable>

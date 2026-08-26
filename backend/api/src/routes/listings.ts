@@ -23,6 +23,7 @@ import {
   scoreProductRecommendation,
 } from '../lib/productRecommendationPolicy.js';
 import { validateListingActivation } from '../lib/listingCategoryPolicy.js';
+import { getTaxonomyNormaliser, normaliseTaxonomyValue } from '../lib/taxonomyValidation.js';
 import { moderateListingText } from '../lib/moderation/moderationService.js';
 import { appendDomainEvent, completeDomainOutboxEvent } from '../lib/domainOutbox.js';
 import { enqueueOutboxDrainJob } from '../lib/queues.js';
@@ -36,6 +37,7 @@ import {
 import { evaluatePriceAlertsForListing } from './priceAlerts.js';
 import { recordListingCreated } from '../lib/metrics.js';
 import type { AuthenticatedUser } from '../lib/auth.js';
+import { calculateImpact } from '../lib/impactCalculator.js';
 
 // â”€â”€ Local helpers (mirrored from index.ts) â”€â”€
 
@@ -261,6 +263,7 @@ app.get('/listings', async (request) => {
     original_price_gbp: number | string | null;
     created_at: string;
     seller_username: string | null;
+    sustainability_grade: string | null;
     like_count?: string | number | null;
     ends_at?: string | null;
   }>(
@@ -268,6 +271,7 @@ app.get('/listings', async (request) => {
       SELECT
         l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
         l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
+        l.sustainability_grade,
         u.username AS seller_username${extraSelects.length ? `, ${extraSelects.join(', ')}` : ''}
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
@@ -357,6 +361,7 @@ app.get('/listings', async (request) => {
         condition: row.condition,
         originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
         createdAt: row.created_at,
+        sustainabilityGrade: row.sustainability_grade,
         seller: row.seller_username
           ? {
               id: row.seller_id,
@@ -2384,6 +2389,8 @@ app.post('/listings', {
         originalPriceGbp: { type: 'number', minimum: 0 },
         shippingMethod: { type: 'string', minLength: 1 },
         shippingPayer: { type: 'string', minLength: 1 },
+        materialComposition: { type: 'string', minLength: 1, maxLength: 100 },
+        weightKg: { type: 'number', minimum: 0.01, maximum: 100 },
       },
     },
   },
@@ -2405,6 +2412,8 @@ app.post('/listings', {
     originalPriceGbp: z.number().nonnegative().optional(),
     shippingMethod: z.string().min(1).optional(),
     shippingPayer: z.string().min(1).optional(),
+    materialComposition: z.string().min(1).max(100).optional(),
+    weightKg: z.number().positive().max(100).optional(),
   });
 
   const payload = bodySchema.parse(request.body);
@@ -2416,6 +2425,15 @@ app.post('/listings', {
     reply.code(422);
     return { ok: false, error: 'A verified cover upload is required' };
   }
+
+  // Normalise taxonomy free-text against the canonical taxonomy_nodes set
+  // (name + synonyms) so casing/synonym drift collapses to one value before
+  // persistence. Unknown values pass through — lenient until backfill (P2 #25).
+  const taxonomyNormaliser = await getTaxonomyNormaliser(readDb);
+  payload.category = normaliseTaxonomyValue(taxonomyNormaliser.category, payload.category);
+  payload.brand = normaliseTaxonomyValue(taxonomyNormaliser.brand, payload.brand);
+  payload.size = normaliseTaxonomyValue(taxonomyNormaliser.size, payload.size);
+  payload.condition = normaliseTaxonomyValue(taxonomyNormaliser.condition, payload.condition);
 
   // Category-aware activation validation â€” only for active listings.
   // Drafts bypass validation so sellers can save incomplete work.
@@ -2557,9 +2575,10 @@ app.post('/listings', {
         INSERT INTO listings (
           id, seller_id, title, description, price_gbp, image_url,
           status, category, brand, size, condition,
-          original_price_gbp, shipping_method, shipping_payer
+          original_price_gbp, shipping_method, shipping_payer,
+          material_composition, weight_kg
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         ON CONFLICT (id) DO UPDATE
         SET title = EXCLUDED.title,
             description = EXCLUDED.description,
@@ -2573,6 +2592,8 @@ app.post('/listings', {
             original_price_gbp = EXCLUDED.original_price_gbp,
             shipping_method = EXCLUDED.shipping_method,
             shipping_payer = EXCLUDED.shipping_payer,
+            material_composition = EXCLUDED.material_composition,
+            weight_kg = EXCLUDED.weight_kg,
             updated_at = NOW()
         WHERE listings.seller_id = EXCLUDED.seller_id
         RETURNING id
@@ -2592,6 +2613,8 @@ app.post('/listings', {
         payload.originalPriceGbp ?? null,
         payload.shippingMethod ?? null,
         payload.shippingPayer ?? null,
+        payload.materialComposition ?? null,
+        payload.weightKg ?? null,
       ],
     );
     if (!inserted.rowCount) {
@@ -2768,6 +2791,35 @@ app.post('/listings', {
 
     await client.query('COMMIT');
 
+    // Compute sustainability grade from impact data (best-effort, non-blocking)
+    if (payload.materialComposition && payload.weightKg) {
+      try {
+        const impactResult = await calculateImpact(
+          {
+            material: payload.materialComposition,
+            weightKg: payload.weightKg,
+            category: payload.category ?? '',
+          },
+          db,
+        );
+        if (impactResult) {
+          const grade = impactResult.co2eAvoidedKg >= 20 ? 'A'
+            : impactResult.co2eAvoidedKg >= 10 ? 'B'
+            : impactResult.co2eAvoidedKg >= 1 ? 'C'
+            : 'D';
+          await db.query(
+            `UPDATE listings SET sustainability_grade = $1 WHERE id = $2`,
+            [grade, payload.id],
+          );
+        }
+      } catch (gradeError) {
+        request.log.warn(
+          { err: gradeError, listingId: payload.id },
+          'Failed to compute sustainability grade — listing saved without grade',
+        );
+      }
+    }
+
     if (upsertPriceEvent) {
       try {
         await evaluatePriceAlertsForListing({
@@ -2906,6 +2958,9 @@ app.get('/listings/:listingId', async (request, reply) => {
     created_at: string;
     media_frozen_at: string | null;
     seller_username: string | null;
+    sustainability_grade: string | null;
+    material_composition: string | null;
+    weight_kg: string | null;
   }>(
     `
       SELECT
@@ -2913,6 +2968,7 @@ app.get('/listings/:listingId', async (request, reply) => {
         l.status, l.category, l.brand, l.size, l.condition,
         l.original_price_gbp, l.shipping_method, l.shipping_payer, l.created_at,
         l.media_frozen_at,
+        l.sustainability_grade, l.material_composition, l.weight_kg::text,
         u.username AS seller_username
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
@@ -3014,6 +3070,9 @@ app.get('/listings/:listingId', async (request, reply) => {
       shippingPayer: row.shipping_payer,
       createdAt: row.created_at,
       mediaFrozenAt: row.media_frozen_at,
+      sustainabilityGrade: row.sustainability_grade,
+      materialComposition: row.material_composition,
+      weightKg: row.weight_kg === null ? null : Number(row.weight_kg),
       seller: row.seller_username
         ? {
             id: row.seller_id,
@@ -4065,6 +4124,15 @@ app.patch('/listings/:listingId', async (request, reply) => {
   });
 
   const payload = bodySchema.parse(request.body);
+
+  // Normalise taxonomy free-text against the canonical taxonomy_nodes set
+  // (name + synonyms) so casing/synonym drift collapses to one value before
+  // persistence. Unknown values pass through — lenient until backfill (P2 #25).
+  const taxonomyNormaliser = await getTaxonomyNormaliser(readDb);
+  payload.category = normaliseTaxonomyValue(taxonomyNormaliser.category, payload.category);
+  payload.brand = normaliseTaxonomyValue(taxonomyNormaliser.brand, payload.brand);
+  payload.size = normaliseTaxonomyValue(taxonomyNormaliser.size, payload.size);
+  payload.condition = normaliseTaxonomyValue(taxonomyNormaliser.condition, payload.condition);
 
   const sets: string[] = [];
   const values: unknown[] = [];

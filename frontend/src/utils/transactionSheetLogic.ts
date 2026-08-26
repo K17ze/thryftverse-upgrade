@@ -4,13 +4,13 @@ import {
   getSuggestedBidDisplayAmount,
   sanitizeDecimalInput,
 } from './currencyAuthoringFlows';
-import type { SupportedCurrencyCode } from '../constants/currencies';
+import { CURRENCIES, type SupportedCurrencyCode } from '../constants/currencies';
 import type { GoldRates } from './currency';
 import type { AuctionEffectiveState } from '../hooks/useServerClock';
 
 // ── Types ──
 
-export type BidSheetStage = 'entry' | 'review' | 'submitting' | 'success' | 'recoverable_conflict' | 'error';
+export type BidSheetStage = 'entry' | 'review' | 'submitting' | 'success' | 'recoverable_conflict' | 'error' | 'unknown_outcome';
 
 export interface BidSheetState {
   stage: BidSheetStage;
@@ -176,12 +176,13 @@ export function validateBidEntry(
   }
 
   if (gbpAmount < ctx.minimumNextBidGbp) {
+    const minimumDisplay = convertGbpToDisplayAmount(ctx.minimumNextBidGbp, currencyCode, goldRates);
     return {
       valid: false,
       gbpAmount: null,
       error: {
         kind: 'below_minimum',
-        message: `Bid must be at least £${ctx.minimumNextBidGbp.toFixed(2)}.`,
+        message: `Bid must be at least ${CURRENCIES[currencyCode].symbol}${minimumDisplay.toFixed(2)}.`,
         canRetry: true,
         transactionPossible: true,
         isAmbiguous: false,
@@ -233,6 +234,8 @@ export function mapApiErrorToTransactionError(
   parsedMessage: string,
   isNetworkError: boolean,
   structuredDetails?: AuctionErrorDetails | null,
+  currencyCode: SupportedCurrencyCode = 'GBP',
+  goldRates: Partial<GoldRates> = {},
 ): TransactionError {
   // Network/timeout — ambiguous: commit status unknown
   if (isNetworkError) {
@@ -293,10 +296,13 @@ export function mapApiErrorToTransactionError(
     if (parsedMessage.toLowerCase().includes('minimum') || parsedMessage.toLowerCase().includes('at least')) {
       const updatedMin = structuredDetails?.minimumNextBidGbp
         ?? (parsedMessage.match(/£?([\d.]+)/)?.[1] ? Number(parsedMessage.match(/£?([\d.]+)/)![1]) : undefined);
+      const minimumDisplay = updatedMin != null
+        ? convertGbpToDisplayAmount(updatedMin, currencyCode, goldRates)
+        : undefined;
       return {
         kind: 'minimum_changed',
-        message: updatedMin
-          ? `The minimum bid is now £${updatedMin.toFixed(2)}. Review your amount and try again.`
+        message: minimumDisplay != null
+          ? `The minimum bid is now ${CURRENCIES[currencyCode].symbol}${minimumDisplay.toFixed(2)}. Review your amount and try again.`
           : 'The minimum bid has changed. Review your amount and try again.',
         updatedMinimumGbp: updatedMin,
         canRetry: true,

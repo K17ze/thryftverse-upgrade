@@ -283,13 +283,13 @@ export function getCommands(navigation: CommandNavigation): Command[] {
       action: nav('AuctionHome'),
     },
     {
-      id: 'nav-tradehub',
-      label: 'Trade Hub',
+      id: 'nav-coownhub',
+      label: 'Co-Own Hub',
       subtitle: 'Co-Own market & exchange',
       category: 'navigation',
       icon: 'trending-up-outline',
       keywords: ['co own', 'market', 'exchange', 'trade'],
-      action: nav('TradeHub'),
+      action: nav('CoOwnHub'),
     },
     {
       id: 'nav-galleria',
@@ -544,7 +544,7 @@ export function getCommands(navigation: CommandNavigation): Command[] {
       category: 'settings',
       icon: 'list-outline',
       keywords: ['agent', 'activity', 'ledger', 'log', 'approval', 'tool'],
-      action: nav('AgentActivity'),
+      action: nav('AgentLedger'),
     },
     {
       id: 'settings-notifications',

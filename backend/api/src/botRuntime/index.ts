@@ -23,6 +23,8 @@ import type { PoolClient } from 'pg';
 import type { BotRuntimeContext, BotInstallInfo, BotHandlerResult } from './types.js';
 import { resolveBotHandler } from './handlers.js';
 import { normalizeAgentConfig } from './agentConfig.js';
+import { encryptMessageBody, resolveMessageBody } from '../lib/messageEncryption.js';
+import { logger } from '../lib/logger.js';
 
 interface DbQueryable {
   query: PoolClient['query'];
@@ -144,11 +146,14 @@ async function loadConversationHistory(
 ): Promise<BotRuntimeContext['conversationHistory']> {
   if (limit <= 0) return [];
   const result = await client.query<{
+    id: string;
     sender_type: 'user' | 'bot' | 'system';
     body: string;
+    body_ciphertext: string | null;
+    key_version: number | null;
   }>(
     `
-      SELECT sender_type, body
+      SELECT id, sender_type, body, body_ciphertext, key_version
       FROM chat_messages
       WHERE conversation_id = $1
         AND sender_type IN ('user', 'bot')
@@ -158,7 +163,12 @@ async function loadConversationHistory(
     `,
     [conversationId, Math.min(40, limit + 1)]
   );
-  const history = result.rows
+  // PII encryption: decrypt message bodies before building history.
+  const decryptedRows = await Promise.all(result.rows.map(async (row) => ({
+    ...row,
+    body: await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null),
+  })));
+  const history = decryptedRows
     .reverse()
     .map((row) => ({
       role: row.sender_type === 'bot' ? 'assistant' as const : 'user' as const,
@@ -238,9 +248,9 @@ async function loadRuntimeData(
   }
 
   if (input.category === 'safety') {
-    const recentMessages = await client.query<{ body: string }>(
+    const recentMessages = await client.query<{ id: string; body: string; body_ciphertext: string | null; key_version: number | null }>(
       `
-        SELECT body
+        SELECT id, body, body_ciphertext, key_version
         FROM chat_messages
         WHERE conversation_id = $1
           AND sender_type = 'user'
@@ -249,9 +259,14 @@ async function loadRuntimeData(
       `,
       [input.conversationId]
     );
+    // PII encryption: decrypt message bodies before safety analysis.
+    const decryptedRows = await Promise.all(recentMessages.rows.map(async (row) => ({
+      ...row,
+      body: await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null),
+    })));
     const reviewPattern = /\b(?:scam|fraud|pay\s+outside|bank\s+transfer|gift\s+card|crypto\s+only)\b/i;
-    runtimeData.recentMessagesAnalyzed = recentMessages.rows.length;
-    runtimeData.messagesRequiringReview = recentMessages.rows.filter((row) =>
+    runtimeData.recentMessagesAnalyzed = decryptedRows.length;
+    runtimeData.messagesRequiringReview = decryptedRows.filter((row) =>
       reviewPattern.test(row.body)
     ).length;
   }
@@ -277,6 +292,22 @@ async function insertBotMessage(
   }
 ): Promise<{ id: string; createdAt: string }> {
   const messageId = createRuntimeId('chatmsg');
+  // PII encryption dual-write: encrypt the body before INSERT. On failure,
+  // store plaintext so the backfill worker can encrypt later.
+  let bodyToStore = input.text;
+  let bodyCiphertext: string | null = null;
+  let keyVersion: number | null = null;
+  try {
+    const encrypted = await encryptMessageBody(messageId, input.text);
+    bodyCiphertext = encrypted.ciphertext;
+    keyVersion = encrypted.keyVersion;
+    bodyToStore = '[encrypted]';
+  } catch (err) {
+    logger.warn(
+      { messageId, err: err instanceof Error ? err.message : String(err) },
+      'messageEncryption.encryptFailed — storing plaintext for backfill',
+    );
+  }
   const result = await client.query<{ id: string; created_at: string }>(
     `
       INSERT INTO chat_messages (
@@ -286,12 +317,14 @@ async function insertBotMessage(
         sender_user_id,
         sender_bot_id,
         body,
+        body_ciphertext,
+        key_version,
         metadata
       )
-      VALUES ($1, $2, 'bot', NULL, $3, $4, $5::jsonb)
+      VALUES ($1, $2, 'bot', NULL, $3, $4, $5, $6, $7::jsonb)
       RETURNING id, created_at::text
     `,
-    [messageId, input.conversationId, input.botId, input.text, toJsonString(input.metadata ?? {})]
+    [messageId, input.conversationId, input.botId, bodyToStore, bodyCiphertext, keyVersion, toJsonString(input.metadata ?? {})]
   );
 
   await client.query(

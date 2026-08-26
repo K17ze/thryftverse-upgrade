@@ -29,7 +29,6 @@ import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
 import { RefreshIndicator } from '../components/RefreshIndicator';
-import { MasonryGrid } from '../components/ProductCardV2';
 import { ClosetMediaMosaic } from '../components/closet/ClosetMediaMosaic';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -42,7 +41,6 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
 import { Type, Space, Radius, DockConstants, Typography, Stroke, Control } from '../theme/designTokens';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 220;
 
@@ -74,7 +72,7 @@ export default function CollectionDetailScreen() {
   const route = useRoute<any>();
   const haptic = useHaptic();
   const { show } = useToast();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -400,7 +398,7 @@ export default function CollectionDetailScreen() {
         )}
 
         {/* More like this */}
-        <MoreLikeThisRow collectionItems={collectionItems} listings={listings} navigation={navigation} formatFromFiat={formatFromFiat} />
+        <MoreLikeThisRow collectionItems={collectionItems} listings={listings} navigation={navigation} formatFromFiat={formatFromFiat} currencyCode={currencyCode} />
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
@@ -426,11 +424,13 @@ function MoreLikeThisRow({
   listings,
   navigation,
   formatFromFiat,
+  currencyCode,
 }: {
   collectionItems: any[];
   listings: any[];
   navigation: any;
   formatFromFiat: any;
+  currencyCode: string;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -468,7 +468,7 @@ function MoreLikeThisRow({
                 contentFit="cover"
               />
             </SharedTransitionView>
-            <Text style={styles.morePrice}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+            <Text style={styles.morePrice}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
           </AnimatedPressable>
         ))}
       </ScrollView>

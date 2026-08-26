@@ -23,6 +23,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -50,15 +51,6 @@ function getEntryCashflow(entry: { action: 'bid' | 'win' | 'buy-units' | 'sell-u
   if (entry.action === 'sell-units') return entry.amountGBP;
   if (entry.action === 'buy-units' || entry.action === 'win') return -entry.amountGBP;
   return 0;
-}
-
-function formatMoney(value: number) {
-  return `£${value.toFixed(2)}`;
-}
-
-function formatSignedMoney(value: number) {
-  const sign = value >= 0 ? '+' : '-';
-  return `${sign}${formatMoney(Math.abs(value))}`;
 }
 
 function relativeTime(isoTs: string) {
@@ -101,6 +93,20 @@ export default function MarketLedgerScreen() {
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const viewerId = currentUser?.id ?? '';
   const { isOffline } = useConnectivity();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
+
+  const formatMoney = useCallback(
+    (value: number) => formatFromFiat(value, currencyCode),
+    [formatFromFiat, currencyCode]
+  );
+
+  const formatSignedMoney = useCallback(
+    (value: number) => {
+      const sign = value >= 0 ? '+' : '-';
+      return `${sign}${formatMoney(Math.abs(value))}`;
+    },
+    [formatMoney]
+  );
 
   const [filter, setFilter] = React.useState<LedgerFilter>('ALL');
   const [remoteEntries, setRemoteEntries] = React.useState<LedgerEntry[]>([]);
@@ -193,7 +199,7 @@ export default function MarketLedgerScreen() {
 
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
-    navigation.navigate('Portfolio');
+    navigation.navigate('CoOwnHub');
   }, [navigation]);
 
   // FlashList v2 performance: memoized renderItem prevents full re-render of
@@ -236,7 +242,7 @@ export default function MarketLedgerScreen() {
         }}
       />
     );
-  }, [navigation]);
+  }, [navigation, formatMoney, formatSignedMoney]);
 
   // ── Loading state (initial sync, no entries yet) ──
   if (isSyncingLedger && entries.length === 0) {

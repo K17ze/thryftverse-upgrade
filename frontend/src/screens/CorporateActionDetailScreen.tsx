@@ -32,6 +32,7 @@ import { CoOwnAssetDetailSkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { fetchCoOwnAssetCorporateActions, fetchGovernanceVotes, castGovernanceVote, type CoOwnCorporateAction } from '../services/marketApi';
 import { useToast } from '../context/ToastContext';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type RouteT = RouteProp<RootStackParamList, 'CorporateActionDetail'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -56,19 +57,23 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function formatAmount(minor: number | null): string | null {
-  if (minor === null || minor === undefined) return null;
-  const major = minor / 100;
-  const sign = major >= 0 ? '+' : '−';
-  return `${sign}£${Math.abs(major).toFixed(2)}`;
-}
-
 export default function CorporateActionDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { currencySymbol } = useFormattedPrice();
+
+  const formatAmount = React.useCallback(
+    (minor: number | null): string | null => {
+      if (minor === null || minor === undefined) return null;
+      const major = minor / 100;
+      const sign = major >= 0 ? '+' : '−';
+      return `${sign}${currencySymbol}${Math.abs(major).toFixed(2)}`;
+    },
+    [currencySymbol],
+  );
 
   const {
     assetId,

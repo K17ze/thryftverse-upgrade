@@ -1,15 +1,14 @@
 {
   "core": {
-    "workingDir": ".reg",
+    "distDir": "src/__tests__/__screenshots__/actual",
     "actualDir": "src/__tests__/__screenshots__/actual",
-    "expectedDir": "src/__tests__/__screenshots__/expected",
-    "diffDir": "src/__tests__/__screenshots__/diff",
-    "report": "./report.html",
-    "threshold": 0.1
+    "expectedDir": "src/__tests__/__screenshots__/baseline",
+    "diffDir": "src/__tests__/__screenshots__/diff"
   },
   "plugins": {
-    "reg-keygen-git-hash-plugin": {
-      "targetDir": "src/__tests__/__screenshots__/expected"
+    "reg-notify-github-plugin": {
+      "prComment": true,
+      "prCommentBehavior": "once"
     }
   }
 }

@@ -4,10 +4,16 @@ import type { MediaUploadQueue } from '../services/mediaUploadQueue';
 import type { ListingFieldKey } from '../contracts/listingCategoryPolicy';
 import type { ListingMode } from '../components/listing/ListingModeSelector';
 import { getListingModeOptions } from '../components/listing/ListingModeSelector';
-
-const CONDITION_OPTIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory'];
+import { LUXURY_BRAND_NAMES } from '../contracts/taxonomy';
 
 export type PickerMode = 'Brand' | 'Size' | 'Condition' | 'Category' | 'Format' | null;
+
+export interface PickerTaxonomyOptions {
+  category: readonly string[];
+  brand: readonly string[];
+  size: readonly string[];
+  condition: readonly string[];
+}
 
 export type PublishedMedia = {
   url: string;
@@ -39,16 +45,16 @@ export function resolvePublishedMedia(
   });
 }
 
-export function getPickerOptionsForMode(mode: PickerMode): string[] {
+export function getPickerOptionsForMode(mode: PickerMode, taxonomy: PickerTaxonomyOptions): string[] {
   switch (mode) {
     case 'Category':
-      return ['Women', 'Men', 'Kids', 'Home', 'Vintage', 'Accessories', 'Beauty', 'Sportswear', 'Luxury'];
+      return [...taxonomy.category];
     case 'Brand':
-      return ['Nike', 'Adidas', 'Zara', 'H&M', 'Gucci', 'Prada', 'Uniqlo', 'Levi\'s', 'ASOS', 'Other'];
+      return [...taxonomy.brand];
     case 'Size':
-      return ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'UK 6', 'UK 8', 'UK 10', 'UK 12', 'One Size'];
+      return [...taxonomy.size];
     case 'Condition':
-      return CONDITION_OPTIONS;
+      return [...taxonomy.condition];
     case 'Format':
       return getListingModeOptions();
     default:
@@ -170,8 +176,7 @@ export function buildContextualPhotoPrompts(
   photoCount: number,
   category: string,
 ): ContextualPhotoPrompt[] {
-  const LUXURY_BRANDS = ['Gucci', 'Prada', 'Louis Vuitton', 'Chanel', 'Hermès', 'Dior', 'Balenciaga', 'Bottega Veneta', 'Saint Laurent', 'Burberry', 'Versace'];
-  const isLuxury = LUXURY_BRANDS.some((b) => brand.toLowerCase() === b.toLowerCase());
+  const isLuxury = LUXURY_BRAND_NAMES.some((b) => brand.toLowerCase() === b.toLowerCase());
   const hasFlaws = condition === 'Good' || condition === 'Satisfactory';
 
   const prompts: ContextualPhotoPrompt[] = [];

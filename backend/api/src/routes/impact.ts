@@ -60,6 +60,11 @@ function impactResultToResponse(result: ImpactResult) {
     co2eEolAvoidedKg: result.co2eEolAvoidedKg,
     co2eShippingKg: result.co2eShippingKg,
     co2ePackagingKg: result.co2ePackagingKg,
+    waterSavedL: result.waterSavedL,
+    displacementRate: result.displacementRate,
+    reboundEffect: result.reboundEffect,
+    distanceKm: result.distanceKm,
+    carrierMode: result.carrierMode,
     methodologyVersion: result.methodologyVersion,
     factorSources: result.factorSources,
   };
@@ -254,6 +259,86 @@ export const registerImpactRoutes = ({
       alreadyMaterialised: false,
       impact: impactResultToResponse(result),
     };
+  });
+
+  // GET /users/me/sustainability-preferences
+  app.get('/users/me/sustainability-preferences', async (request) => {
+    const userId = resolveAuthenticatedUserId(request);
+    const result = await db.query<{
+      carbon_target_kg: number | null;
+      ratio_target_pct: number | null;
+      plastic_free_packaging: boolean;
+      show_badges: boolean;
+      track_impact: boolean;
+      local_first: boolean;
+    }>(
+      `SELECT carbon_target_kg, ratio_target_pct, plastic_free_packaging,
+              show_badges, track_impact, local_first
+       FROM sustainability_preferences
+       WHERE user_id = $1`,
+      [userId],
+    );
+    if (!result.rowCount) {
+      // Return defaults when no preferences saved yet
+      return {
+        carbonTargetKg: null,
+        ratioTargetPct: null,
+        plasticFreePackaging: true,
+        showBadges: true,
+        trackImpact: true,
+        localFirst: false,
+      };
+    }
+    const row = result.rows[0];
+    return {
+      carbonTargetKg: row.carbon_target_kg,
+      ratioTargetPct: row.ratio_target_pct,
+      plasticFreePackaging: row.plastic_free_packaging,
+      showBadges: row.show_badges,
+      trackImpact: row.track_impact,
+      localFirst: row.local_first,
+    };
+  });
+
+  // PUT /users/me/sustainability-preferences
+  app.put('/users/me/sustainability-preferences', async (request) => {
+    const userId = resolveAuthenticatedUserId(request);
+    const bodySchema = z.object({
+      carbonTargetKg: z.number().int().min(0).max(10000).nullable().optional(),
+      ratioTargetPct: z.number().int().min(0).max(100).nullable().optional(),
+      plasticFreePackaging: z.boolean().optional(),
+      showBadges: z.boolean().optional(),
+      trackImpact: z.boolean().optional(),
+      localFirst: z.boolean().optional(),
+    });
+    const payload = bodySchema.parse(request.body);
+
+    await db.query(
+      `INSERT INTO sustainability_preferences (
+         user_id, carbon_target_kg, ratio_target_pct,
+         plastic_free_packaging, show_badges, track_impact, local_first
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (user_id) DO UPDATE SET
+         carbon_target_kg = COALESCE(EXCLUDED.carbon_target_kg, sustainability_preferences.carbon_target_kg),
+         ratio_target_pct = COALESCE(EXCLUDED.ratio_target_pct, sustainability_preferences.ratio_target_pct),
+         plastic_free_packaging = COALESCE(EXCLUDED.plastic_free_packaging, sustainability_preferences.plastic_free_packaging),
+         show_badges = COALESCE(EXCLUDED.show_badges, sustainability_preferences.show_badges),
+         track_impact = COALESCE(EXCLUDED.track_impact, sustainability_preferences.track_impact),
+         local_first = COALESCE(EXCLUDED.local_first, sustainability_preferences.local_first),
+         updated_at = NOW()`,
+      [
+        userId,
+        payload.carbonTargetKg ?? null,
+        payload.ratioTargetPct ?? null,
+        payload.plasticFreePackaging ?? true,
+        payload.showBadges ?? true,
+        payload.trackImpact ?? true,
+        payload.localFirst ?? false,
+      ],
+    );
+
+    return { ok: true };
   });
 };
 

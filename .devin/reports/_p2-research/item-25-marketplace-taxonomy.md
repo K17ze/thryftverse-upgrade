@@ -1,8 +1,8 @@
 # P2 #25 — Marketplace Catalogue Taxonomy Duplication
 
-**Status:** Research only — no product code modified.
+**Status:** IMPLEMENTED — all rollout steps 1–5 complete. Step 6 (admin CRUD) and step 7 (editorial facet projection) remain as proposed future work.
 **Scope:** `frontend/src` + `backend/api/src` taxonomy surfaces (categories, conditions, sizes, brands, colours, materials).
-**Method:** grep for hard-coded arrays + contract/backend source-of-truth tracing.
+**Method:** grep for hard-coded arrays + contract/backend source-of-truth tracing → implementation across the full stack.
 
 ---
 
@@ -250,3 +250,71 @@ Every `TaxonomyNode` carries `displayKey` (e.g. `taxonomy.condition.new_with_tag
 - **Versioned taxonomy**: every taxonomy change increments a version. Listings store the taxonomy version at creation time so historical listings remain valid even if the taxonomy evolves. [VERIFIED — EXTERNAL]
 - **ETag-cached read API**: taxonomy is read-heavy, write-rare. ETag + CDN cache is the standard. [VERIFIED — EXTERNAL]
 - **Bundled seed fallback**: mobile apps bundle a snapshot of the taxonomy at build time for offline/first-launch. React Query revalidates on app foreground. [VERIFIED — EXTERNAL]
+
+---
+
+## Implementation Record — completed 26 August 2026
+
+### Rollout status against the 7-step plan
+
+| Step | Status | Evidence |
+|---|---|---|
+| 1. Contract consolidation | DONE | `contracts/taxonomy.ts` is the single source of truth for `ListingCondition`, `TaxonomyNode`, `TaxonomyCollection`, `TAXONOMY_SEED`, `CONDITION_NAMES`, `LUXURY_BRAND_NAMES`. Duplicate `ListingCondition` in `services/listingsApi.ts:33` and `contracts/DiscoveryListingSummary.ts:37` re-export from the contract. `domain/listing.ts:16` and `store/useStore.ts:162` now import from the contract. Zero remaining inline `'New with tags' \| 'Very good' \| 'Good' \| 'Satisfactory'` unions outside the contract. |
+| 2. Backend taxonomy table + read API | DONE | Migration `db/migrations/171_taxonomy.sql` creates `taxonomy_nodes` with CHECK constraint on type, self-FK on parent_id, synonyms JSONB, is_active flag. Seeds all categories (11 top-level + subcategories), 4 conditions, 12 sizes, 39 brands, 18 colours. Route `routes/taxonomy.ts` exposes `GET /taxonomy` and `GET /taxonomy/:type` with graceful 503 fallback when table is unavailable. Registered in `index.ts:24597`. |
+| 3. Frontend TaxonomyContext + hook | DONE | `context/TaxonomyContext.tsx` provides `useTaxonomy()`, `useTaxonomyOptions()`, `useCategorySubcategories()`. Loads from backend on mount with `TAXONOMY_SEED` fallback. `TaxonomyProvider` mounted in `App.tsx:673` inside the provider tree (within `BackendDataProvider`). `services/taxonomyApi.ts` handles fetch + grouping with seed fallback. Dead `hooks/useTaxonomyOptions.ts` duplicate deleted. |
+| 4. Screen migration — delete literals | DONE | All picker surfaces now source from `useTaxonomy()`: `SellScreen` (via `sellScreenLogic.ts` `getPickerOptionsForMode` + `pickerTaxonomy`), `EditListingScreen:117-124`, `BulkListingScreen`, `AIPoweredListingScreen`, `FilterScreen`, `GlobalSearchScreen:142`, `DiscoverScene:72`, `CategoryTreeScreen:28`, `SearchScreen`. `searchAutocompleteApi.ts:127,129` sources sizes/colours from `TAXONOMY_SEED`. `listingMapper.ts` and `bulkListingApi.ts` use `CONDITION_NAMES` from the contract. `sellScreenLogic.ts` hard-coded arrays deleted; `LUXURY_BRANDS` replaced with `LUXURY_BRAND_NAMES` from the contract. |
+| 5. Backend write-path normalisation | DONE | `lib/taxonomyValidation.ts` implements `getTaxonomyNormaliser()` (60s cached, case-insensitive name+synonym map) and `normaliseTaxonomyValue()`. Wired into `routes/listings.ts` create handler (line ~2411) and PATCH handler (line ~4077). Lenient: unknown values pass through unchanged so legacy listings remain editable. Strict enum enforcement deferred until backfill completes. |
+| 6. Admin manageability | PROPOSED | Not implemented. `routes/admin.ts` has no taxonomy CRUD/merge endpoints. Future work. |
+| 7. Editorial facet projection | PROPOSED | Not implemented. `DiscoverScene` and `CategoryTreeScreen` project from taxonomy but `UnifiedDiscoveryScreen` no longer exists. Editorial pill metadata (`metadata.discoverFacet`, `metadata.editorialPill`) not yet added to taxonomy nodes. Future work. |
+
+### Validation
+
+- **Frontend typecheck:** `tsc --noEmit` — zero errors in any taxonomy-touched file (`contracts/taxonomy.ts`, `context/TaxonomyContext.tsx`, `services/taxonomyApi.ts`, `utils/sellScreenLogic.ts`, `screens/SellScreen.tsx`, `domain/listing.ts`, `store/useStore.ts`, `services/listingMapper.ts`, `services/bulkListingApi.ts`, `services/searchAutocompleteApi.ts`). Pre-existing errors in unrelated files (`linking.ts`, `AssetDetailScreen.tsx`, `ItemDetailScreen.tsx`, `OrderDetailScreen.tsx`) are not caused by this migration.
+- **Frontend lint:** `eslint` on all changed files — zero errors, zero new warnings. Pre-existing warnings (unused imports, file length, a11y hints) unchanged.
+- **Backend typecheck:** `tsc --noEmit` — zero errors in `lib/taxonomyValidation.ts` or the `routes/listings.ts` edit sites. Pre-existing errors (missing `vitest`/`sharp` modules, queue handler type mismatches) are not caused by this migration.
+- **Hard-coded array scan:** `grep` for `'New with tags' \| 'Very good' \| 'Good' \| 'Satisfactory'` returns exactly one match — the canonical `contracts/taxonomy.ts:9`. `grep` for `CONDITION_OPTIONS\|CATEGORY_OPTIONS\|LUXURY_BRANDS\|VALID_CONDITIONS\|KNOWN_CONDITIONS\|DISCOVER_CATEGORIES\|CATEGORY_PILLS` returns zero matches in picker surfaces (remaining hits are style/editorial terms in style quiz, creator filters, AI autofill heuristics — correctly out of scope per the report).
+
+### Files changed in this session
+
+**Frontend:**
+- `contracts/taxonomy.ts` — added `LUXURY_BRAND_NAMES` export (curated from brand nodes)
+- `context/TaxonomyContext.tsx` — removed dead `SEED_VALUE` constant
+- `utils/sellScreenLogic.ts` — deleted `CONDITION_OPTIONS` + 4 inline picker arrays + `LUXURY_BRANDS`; `getPickerOptionsForMode` now takes `PickerTaxonomyOptions`; `buildContextualPhotoPrompts` uses `LUXURY_BRAND_NAMES`
+- `screens/SellScreen.tsx` — added `useTaxonomy` import; derives `pickerTaxonomy` from context; passes to `getPickerOptionsForMode`; fixed `a11yRef` type (`useRef<View>` instead of `useRef<unknown>`)
+- `domain/listing.ts` — imports `ListingCondition` from contract instead of re-declaring
+- `store/useStore.ts` — `BrowseConditionOption` derives from `ListingCondition` import
+- `hooks/useTaxonomyOptions.ts` — DELETED (dead duplicate of `context/TaxonomyContext.tsx` exports)
+
+**Backend:**
+- `lib/taxonomyValidation.ts` — NEW: taxonomy normalisation helper (cached, lenient, synonym-aware)
+- `routes/listings.ts` — imported normaliser; applied to category/brand/size/condition in create + PATCH handlers
+
+### Final validation — 26 August 2026
+
+**Single source of truth confirmed:**
+- `grep "'New with tags' \| 'Very good' \| 'Good' \| 'Satisfactory'"` → exactly 1 match: `contracts/taxonomy.ts:9`
+- `grep "type ListingCondition ="` → exactly 1 match: `contracts/taxonomy.ts:9`
+- All 23 `ListingCondition` references across the codebase trace back to `contracts/taxonomy.ts` (direct import or re-export via `services/listingsApi.ts:33` / `contracts/DiscoveryListingSummary.ts:37`)
+- Zero remaining hard-coded picker arrays (`CONDITION_OPTIONS`, `CATEGORY_OPTIONS`, `LUXURY_BRANDS`, `VALID_CONDITIONS`, `KNOWN_CONDITIONS`, `DISCOVER_CATEGORIES`, `CATEGORY_PILLS`) in any picker surface
+
+**Typecheck:**
+- Frontend: zero errors in any taxonomy-touched file. One pre-existing syntax error in `components/flagship/FlagshipScreen.tsx:156` (not caused by this migration — file is in the broader branch dirty set but was not touched by this task)
+- Backend: zero errors in `lib/taxonomyValidation.ts` or `routes/listings.ts` edit sites. Pre-existing errors (missing `vitest`/`sharp` modules, queue handler type mismatches) are not caused by this migration
+
+**Lint:**
+- All taxonomy-changed files: zero errors, zero new warnings
+- `SellScreen.tsx` has 20 pre-existing `react-native-a11y/has-accessibility-hint` errors on pressable elements — these existed before the taxonomy migration and are not introduced by it
+
+**Out of scope (correctly not migrated):**
+- `PersonalisationScreen.tsx` `CATEGORY_SIZE_OPTIONS` / `BRAND_OPTIONS` — preference tokens ("Balanced", "Streetwear first"), not catalogue taxonomy
+- `SizeGuideSheet.tsx` `SIZE_GUIDES` — body measurement reference charts (chest/waist/inseam), not picker vocabulary
+- `StyleQuizScreen.tsx` style terms — style vocabulary, not catalogue taxonomy
+- `searchAutocompleteApi.ts` style terms — style/search vocabulary, not catalogue taxonomy
+- `aiListingApi.ts` / `useListingAutofill.ts` brand→category heuristics — AI autofill mapping, not picker vocabulary
+- Creator filter/effect/template names — creative tool vocabulary, not catalogue taxonomy
+
+**Remaining future work (steps 6–7, not blocking):**
+- Step 6: Admin taxonomy CRUD + brand merge endpoints in `routes/admin.ts`
+- Step 7: Editorial facet metadata (`metadata.discoverFacet`, `metadata.editorialPill`) on taxonomy nodes for discovery projection
+- Backfill job: normalise existing free-text listing rows against `taxonomy_node_aliases` before enabling strict enum enforcement
+- i18n: replace English `displayKey` values with ICU messageformat keys for localisation

@@ -28,12 +28,7 @@ import { DiscoverScene, PulseScene, LooksScene } from '../scenes/discovery';
 import { SearchAutocomplete } from '../components/search/SearchAutocomplete';
 import { loadRecentSearchStrings, recordRecentSearch, clearRecentSearches } from '../services/searchHistory';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
-import { CATEGORIES } from '../constants/categories';
-
-// Trending searches are derived from the canonical category tree rather
-// than hardcoded strings, so they always reflect real browse destinations
-// the inventory is organized under (research: truthfulness P2).
-const TRENDING_SEARCHES = CATEGORIES.slice(0, 5).map((cat) => cat.name);
+import { useTaxonomy } from '../context/TaxonomyContext';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -47,6 +42,17 @@ export default function SearchScreen() {
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
   const isSavedProduct = useStore((state) => state.isSavedProduct);
   const haptic = useHaptic();
+  const { categories } = useTaxonomy();
+
+  const trendingSearches = useMemo(
+    () =>
+      categories
+        .filter((cat) => cat.parentId === null)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .slice(0, 5)
+        .map((cat) => cat.name),
+    [categories],
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -283,7 +289,7 @@ export default function SearchScreen() {
             <SearchAutocomplete
               query={searchQuery}
               visible={isSearchFocused}
-              trending={TRENDING_SEARCHES}
+              trending={trendingSearches}
               recent={recentSearches}
               userId={currentUser?.id}
               onSelect={(suggestion) => {

@@ -536,33 +536,6 @@ describe('Visual regression test plan', () => {
     });
   });
 
-  describe('TradeHubScreen', () => {
-    it('should match screenshot - loading state — journey owned', () => {
-      expectScreen('TradeHubScreen.tsx');
-      expectBaseline('TradeHubScreen', 'loading');
-    });
-
-    it('should match screenshot - populated state (markets grid) — journey owned', () => {
-      expectScreen('TradeHubScreen.tsx');
-      expectBaseline('TradeHubScreen', 'populated');
-    });
-
-    it('should match screenshot - empty state (no markets) — journey owned', () => {
-      expectScreen('TradeHubScreen.tsx');
-      expectBaseline('TradeHubScreen', 'empty');
-    });
-
-    it('should match screenshot - error state — journey owned', () => {
-      expectScreen('TradeHubScreen.tsx');
-      expectBaseline('TradeHubScreen', 'error');
-    });
-
-    it('should match screenshot - offline state — journey owned', () => {
-      expectScreen('TradeHubScreen.tsx');
-      expectBaseline('TradeHubScreen', 'offline');
-    });
-  });
-
   // ── Messaging ──
   describe('InboxScreen', () => {
     it('should match screenshot - loading state (conversation list skeleton) — journey owned', () => {

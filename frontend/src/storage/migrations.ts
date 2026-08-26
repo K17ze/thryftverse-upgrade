@@ -7,12 +7,12 @@
  * transaction so a failure rolls back that migration without leaving the
  * database in a half-applied state.
  *
- * Today only v1 exists (the full initial schema). Future migrations append
- * to the `MIGRATIONS` array below — never edit an already-shipped migration.
+ * Today v1–v3 exist. Future migrations append to the `MIGRATIONS` array
+ * below — never edit an already-shipped migration.
  */
 
 import type { OPSQLiteDatabase } from '@op-engineering/op-sqlite';
-import { CURRENT_SCHEMA_VERSION, SCHEMA_VERSION_1, SCHEMA_VERSION_2 } from './schema';
+import { SCHEMA_VERSION_1, SCHEMA_VERSION_2, SCHEMA_VERSION_3 } from './schema';
 
 /**
  * A single migration step. `version` is the schema version produced by
@@ -39,6 +39,11 @@ export const MIGRATIONS: Migration[] = [
     version: 2,
     description: 'Moodboard cache table for offline-first editing.',
     sql: SCHEMA_VERSION_2,
+  },
+  {
+    version: 3,
+    description: 'Add sync-aligned columns to listing_draft and product for /sync delta upserts.',
+    sql: SCHEMA_VERSION_3,
   },
 ];
 

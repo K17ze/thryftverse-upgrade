@@ -23,7 +23,6 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { Typography, Radius, Type, Space, Elevation, Stroke } from '../theme/designTokens';
 import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 type RouteT = RouteProp<RootStackParamList, 'Success'>;;
 
 export default function SuccessScreen() {
@@ -33,7 +32,7 @@ export default function SuccessScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
 
   const [order, setOrder] = React.useState<CommerceOrder | null>(null);
@@ -159,7 +158,7 @@ export default function SuccessScreen() {
                 <View style={styles.orderInfo}>
                   <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
                   <Text style={styles.orderSeller}>from @{sellerName}</Text>
-                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, DEFAULT_CURRENCY_CODE)}</Text>
+                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, currencyCode)}</Text>
                 </View>
               </ElevatedSurface>
             </View>

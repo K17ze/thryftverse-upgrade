@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +17,8 @@ import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useFeatureFlag, track } from '../analytics';
 import { t } from '../i18n';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useA11yAudit } from '../hooks/useA11yAudit';
 
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -230,11 +232,14 @@ const chartStyles = StyleSheet.create({
 });
 
 export default function SellerAnalyticsScreen() {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'SellerAnalyticsScreen');
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
   const { isOffline } = useConnectivity();
+  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
 
   // Feature flag — gates the enhanced Seller Analytics v2 metrics section.
   // Defaults to false (current behaviour) when PostHog is not loaded.
@@ -348,12 +353,12 @@ export default function SellerAnalyticsScreen() {
       {
         icon: 'cash-outline',
         label: 'Avg order value',
-        value: avgOrderValue != null ? `£${avgOrderValue.toFixed(2)}` : 'Unavailable',
+        value: avgOrderValue != null ? formatFromFiat(avgOrderValue, currencyCode) : 'Unavailable',
       },
       { icon: 'trending-up-outline', label: 'Conversion', value: conversionRate != null ? `${conversionRate.toFixed(1)}%` : 'Unavailable' },
       { icon: 'eye-outline', label: 'Views', value: totalViews != null ? String(totalViews) : 'Unavailable' },
     ];
-  }, [itemsSold, avgOrderValue, conversionRate, totalViews]);
+  }, [itemsSold, avgOrderValue, conversionRate, totalViews, formatFromFiat]);
 
   // ── Top listings — enriched with imageUrl from listings data ──
   const topPerformers = useMemo(() => {
@@ -496,6 +501,7 @@ export default function SellerAnalyticsScreen() {
 
   return (
     <FlagshipScreen
+      ref={a11yRef}
       header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
@@ -519,7 +525,7 @@ export default function SellerAnalyticsScreen() {
         <View style={styles.heroBlock}>
           <Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>Revenue · Last {periodLabel}</Text>
           <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
-            {revenue != null ? `£${revenue.toFixed(2)}` : 'Unavailable'}
+            {revenue != null ? formatFromFiat(revenue, currencyCode) : 'Unavailable'}
           </Text>
           <View style={styles.heroTrendRow}>
             <Ionicons
@@ -652,7 +658,7 @@ export default function SellerAnalyticsScreen() {
                   ]}
                   onPress={() => handleListingPress(item.id)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Listing: ${item.title}, ${item.views} views, £${item.price.toFixed(0)} revenue`}
+                  accessibilityLabel={`Listing: ${item.title}, ${item.views} views, ${currencySymbol}${item.price.toFixed(0)} revenue`}
                 >
                   <View style={[styles.topListingImageWrap, { backgroundColor: colors.surfaceAlt }]}>
                     {item.imageUrl ? (
@@ -669,7 +675,7 @@ export default function SellerAnalyticsScreen() {
                   </View>
                   <Text style={[styles.topListingTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
                   <Text style={[styles.topListingRevenue, { color: colors.brand }]}>
-                    £{item.price.toFixed(0)}
+                    {currencySymbol}{item.price.toFixed(0)}
                   </Text>
                   <Text style={[styles.topListingMeta, { color: colors.textMuted }]}>
                     {item.views} views
@@ -707,7 +713,7 @@ export default function SellerAnalyticsScreen() {
                   ]}
                   onPress={() => handleListingPress(item.id)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Needs attention: ${item.title}, ${item.views} views, £${item.price.toFixed(0)}`}
+                  accessibilityLabel={`Needs attention: ${item.title}, ${item.views} views, ${currencySymbol}${item.price.toFixed(0)}`}
                 >
                   <View style={[styles.attentionImageWrap, { backgroundColor: colors.surfaceAlt }]}>
                     {item.imageUrl ? (
@@ -729,7 +735,7 @@ export default function SellerAnalyticsScreen() {
                     </Text>
                   </View>
                   <Text style={[styles.attentionPrice, { color: colors.textSecondary }]}>
-                    £{item.price.toFixed(0)}
+                    {currencySymbol}{item.price.toFixed(0)}
                   </Text>
                 </Pressable>
               ))}

@@ -82,6 +82,39 @@ export type CapabilityShippingZone =
   | 'middle_east'
   | 'global';
 
+// ── Regional policy infrastructure ───────────────────────────────────
+// Complements the existing CapabilityTaxRule / CapabilityShippingZone
+// fields with database-backed regional policy data (tax_rules,
+// category_restrictions, shipping_zones, jurisdiction_age_rules tables).
+// Grouped under a single additive `regionalPolicy` block so the existing
+// public `tax` and `shippingZones` contracts remain unchanged.
+
+export type CapabilityRegionalTaxType = 'vat' | 'sales_tax' | 'gst';
+
+export interface CapabilityRegionalTax {
+  defaultRateBps: number;
+  inclusive: boolean;
+  taxType: CapabilityRegionalTaxType;
+}
+
+export interface CapabilityRegionalMinAge {
+  commerce: number;
+  coown: number;
+}
+
+export interface CapabilityRetentionPolicy {
+  days: number;
+  jurisdiction: string;
+}
+
+export interface CapabilityRegionalPolicy {
+  tax: CapabilityRegionalTax;
+  restrictedCategories: string[];
+  minAge: CapabilityRegionalMinAge;
+  shippingZones: string[];
+  retentionPolicy: CapabilityRetentionPolicy;
+}
+
 interface CapabilityTemplate {
   defaultCurrency: string;
   supportedCurrencies: string[];
@@ -96,6 +129,7 @@ interface CapabilityTemplate {
   restrictedItems: CapabilityRestrictedItem[];
   ageRestrictions: CapabilityAgeRestriction[];
   shippingZones: CapabilityShippingZone[];
+  regionalPolicy: CapabilityRegionalPolicy;
 }
 
 type GatewayFallbackContext = {
@@ -132,6 +166,7 @@ export interface UserCountryCapabilities {
   restrictedItems: CapabilityRestrictedItem[];
   ageRestrictions: CapabilityAgeRestriction[];
   shippingZones: CapabilityShippingZone[];
+  regionalPolicy: CapabilityRegionalPolicy;
 }
 
 export interface ResolveCountryCapabilitiesInput {
@@ -202,6 +237,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'asia_pacific', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 1800, inclusive: true, taxType: 'gst' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: [],
+      retentionPolicy: { days: 1825, jurisdiction: 'IN' },
+    },
   },
   US: {
     defaultCurrency: 'USD',
@@ -244,6 +286,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'north_america', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 0, inclusive: false, taxType: 'sales_tax' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: ['US_ZONE'],
+      retentionPolicy: { days: 2555, jurisdiction: 'US' },
+    },
   },
   UK: {
     defaultCurrency: 'GBP',
@@ -285,6 +334,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'europe', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 2000, inclusive: true, taxType: 'vat' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: ['UK_ZONE'],
+      retentionPolicy: { days: 2555, jurisdiction: 'UK-GDPR' },
+    },
   },
   EUROPE: {
     defaultCurrency: 'EUR',
@@ -326,6 +382,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'europe', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 2100, inclusive: true, taxType: 'vat' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: ['EU_ZONE'],
+      retentionPolicy: { days: 2190, jurisdiction: 'EU' },
+    },
   },
   MIDDLE_EAST: {
     defaultCurrency: 'AED',
@@ -369,6 +432,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'middle_east', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 500, inclusive: true, taxType: 'vat' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: [],
+      retentionPolicy: { days: 1825, jurisdiction: 'ME' },
+    },
   },
   CHINA_NEARBY: {
     defaultCurrency: 'USD',
@@ -411,6 +481,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'asia_pacific', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 1300, inclusive: true, taxType: 'vat' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: [],
+      retentionPolicy: { days: 1825, jurisdiction: 'CN' },
+    },
   },
   GLOBAL: {
     defaultCurrency: 'USD',
@@ -448,6 +525,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 0, inclusive: false, taxType: 'sales_tax' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: [],
+      retentionPolicy: { days: 1825, jurisdiction: 'GLOBAL' },
+    },
   },
 };
 
@@ -488,6 +572,13 @@ function cloneTemplate(template: CapabilityTemplate): CapabilityTemplate {
     restrictedItems: template.restrictedItems.map((item) => ({ ...item })),
     ageRestrictions: template.ageRestrictions.map((ar) => ({ ...ar, categories: [...ar.categories] })),
     shippingZones: [...template.shippingZones],
+    regionalPolicy: {
+      tax: { ...template.regionalPolicy.tax },
+      restrictedCategories: [...template.regionalPolicy.restrictedCategories],
+      minAge: { ...template.regionalPolicy.minAge },
+      shippingZones: [...template.regionalPolicy.shippingZones],
+      retentionPolicy: { ...template.regionalPolicy.retentionPolicy },
+    },
   };
 }
 
@@ -698,5 +789,6 @@ export function resolveCountryCapabilities(input: ResolveCountryCapabilitiesInpu
     restrictedItems: template.restrictedItems,
     ageRestrictions: template.ageRestrictions,
     shippingZones: template.shippingZones,
+    regionalPolicy: template.regionalPolicy,
   };
 }

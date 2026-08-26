@@ -12,6 +12,7 @@
 
 import { fetchJson } from '../lib/apiClient';
 import { loadRecentSearchStrings, recordRecentSearch } from './searchHistory';
+import { TAXONOMY_SEED } from '../contracts/taxonomy';
 
 // ---------------------------------------------------------------------------
 // Demo-mode flag — single source of truth
@@ -123,27 +124,9 @@ const CATALOGUE: CatalogueEntry[] = [
   { term: 'Oversized', type: 'style' },
   { term: 'Retro', type: 'style' },
   // Sizes
-  { term: 'XS', type: 'size' },
-  { term: 'S', type: 'size' },
-  { term: 'M', type: 'size' },
-  { term: 'L', type: 'size' },
-  { term: 'XL', type: 'size' },
-  { term: 'XXL', type: 'size' },
-  { term: 'UK 6', type: 'size' },
-  { term: 'UK 8', type: 'size' },
-  { term: 'UK 10', type: 'size' },
-  { term: 'UK 12', type: 'size' },
-  { term: 'UK 14', type: 'size' },
+  ...TAXONOMY_SEED.sizes.map(s => ({ term: s.name, type: 'size' as const })),
   // Colours
-  { term: 'Black', type: 'color' },
-  { term: 'White', type: 'color' },
-  { term: 'Beige', type: 'color' },
-  { term: 'Brown', type: 'color' },
-  { term: 'Navy', type: 'color' },
-  { term: 'Olive', type: 'color' },
-  { term: 'Burgundy', type: 'color' },
-  { term: 'Cream', type: 'color' },
-  { term: 'Grey', type: 'color' },
+  ...TAXONOMY_SEED.colours.map(c => ({ term: c.name, type: 'color' as const })),
 ];
 
 // Curated trending searches — shown when the input is empty and focused.

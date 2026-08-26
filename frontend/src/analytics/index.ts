@@ -51,3 +51,35 @@ export type {
 
 // Guardrails — experiment auto-kill thresholds.
 export { GUARDRAIL_METRICS } from './guardrails';
+
+// Impression lineage — impression_id generation, context, and tracking.
+export {
+  generateImpressionId,
+  useImpressionId,
+  ImpressionProvider,
+  useImpressionContext,
+  trackWithImpression,
+  useImpressionTracking,
+} from './impressions';
+export type { ImpressionContextValue } from './impressions';
+
+// Experiments — registry client, types, and hooks.
+export {
+  fetchExperiments,
+  fetchExperiment,
+  createExperiment,
+  updateExperiment,
+  checkExperimentGuardrails,
+  useExperiment,
+  useExperiments,
+} from './experiments';
+export type {
+  Experiment,
+  ExperimentStatus,
+  ExperimentDecision,
+  ExperimentVariant,
+  GuardrailCheckResult,
+  GuardrailCheckResponse,
+  CreateExperimentInput,
+  UpdateExperimentInput,
+} from './experiments';

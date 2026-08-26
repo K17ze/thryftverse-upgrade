@@ -36,7 +36,6 @@ import { parseApiError } from '../lib/apiClient';
 import { useBackendData } from '../context/BackendDataContext';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -46,7 +45,7 @@ export default function PortfolioScreen() {
   const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { show } = useToast();
   const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
@@ -273,16 +272,16 @@ export default function PortfolioScreen() {
         unitsOwned={item.unitsOwned}
         totalUnits={item.totalUnits}
         ownershipPct={item.ownershipPct}
-        currentValueLabel={formatFromFiat(item.currentValueGbp, DEFAULT_CURRENCY_CODE)}
-        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, DEFAULT_CURRENCY_CODE)}
+        currentValueLabel={formatFromFiat(item.currentValueGbp, currencyCode)}
+        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, currencyCode)}
         unrealizedLabel={item.unrealizedPnlGbp >= 0
-          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), DEFAULT_CURRENCY_CODE)}`
-          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), DEFAULT_CURRENCY_CODE)}`
+          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), currencyCode)}`
+          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), currencyCode)}`
         }
         realizedLabel={item.realizedPnlGbp !== 0
           ? (item.realizedPnlGbp >= 0
-            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), DEFAULT_CURRENCY_CODE)}`
-            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), DEFAULT_CURRENCY_CODE)}`)
+            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), currencyCode)}`
+            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), currencyCode)}`)
           : undefined
         }
         status={formatPositionStatus(item)}
@@ -791,7 +790,7 @@ export default function PortfolioScreen() {
             {performers.best && performers.best.avgEntryPriceGbp > 0 && (
               <CoOwnPortfolioStorytelling
                 premiumPct={null}
-                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, DEFAULT_CURRENCY_CODE)}
+                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, currencyCode)}
                 markSourceLabel="Last trade"
                 markAgeLabel={undefined}
               />
@@ -876,7 +875,7 @@ export default function PortfolioScreen() {
         title={actionSheetAsset?.title ?? ''}
         unitsOwned={actionSheetAsset?.unitsOwned ?? 0}
         ownershipPct={actionSheetAsset?.ownershipPct ?? 0}
-        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, DEFAULT_CURRENCY_CODE) : ''}
+        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, currencyCode) : ''}
         statusLabel={actionSheetAsset ? (actionSheetAsset.isOpen ? 'Active' : 'Closed') : ''}
         actions={actionSheetActions}
       />

@@ -224,7 +224,7 @@ export default function CoOwnOrderHistoryScreen() {
 
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
-    navigation.navigate('Portfolio');
+    navigation.navigate('CoOwnHub');
   }, [navigation]);
 
   const entries = React.useMemo(() => {

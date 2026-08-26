@@ -131,10 +131,33 @@ export async function pullDomain(
 }
 
 /**
+ * Per-domain column rename map. The backend returns column names from the
+ * server schema; the local SQLite tables may use different names. This map
+ * translates incoming `delta.data` keys to the local table's column names
+ * before the upsert. Keys not in the map pass through unchanged.
+ */
+const DOMAIN_COLUMN_RENAME: Record<string, Record<string, string>> = {
+  listing_draft: {
+    // Backend returns `original_price_gbp`; the local table column is
+    // `original_price` (stored as TEXT to match the `price` column pattern).
+    original_price_gbp: 'original_price',
+  },
+  product: {
+    // Backend returns `category`; the local product table column is
+    // `category_id`.
+    category: 'category_id',
+    // Backend returns `original_price_gbp`; the local table column is
+    // `original_price` (stored as TEXT to match the `price` column pattern).
+    original_price_gbp: 'original_price',
+  },
+};
+
+/**
  * Apply a batch of server deltas to the local store inside a single
  * transaction. Each delta is an upsert (or soft-delete when `deleted` is set)
- * against the domain table. The generic upsert mirrors columns from
- * `delta.data` by name; domain-specific type narrowing is the caller's job.
+ * against the domain table. Column names from `delta.data` are renamed per
+ * the `DOMAIN_COLUMN_RENAME` map so the backend schema maps to the local
+ * table schema.
  */
 export async function applyDeltas(
   domain: string,
@@ -142,6 +165,7 @@ export async function applyDeltas(
 ): Promise<void> {
   if (deltas.length === 0) return;
   const db = await getDb();
+  const renameMap = DOMAIN_COLUMN_RENAME[domain] ?? {};
 
   await db.transaction(() => {
     for (const delta of deltas) {
@@ -156,17 +180,16 @@ export async function applyDeltas(
         continue;
       }
 
-      // Generic upsert. Column names come from `delta.data` keys; values are
-      // bound positionally. This is deliberately generic — a production
-      // specialisation would map per-domain column sets with full types.
-      const columns = Object.keys(delta.data);
+      // Rename incoming columns to local table columns, then upsert.
+      const rawColumns = Object.keys(delta.data);
+      const columns = rawColumns.map((c) => renameMap[c] ?? c);
       const placeholders = columns.map(() => '?').join(', ');
       const columnList = columns.join(', ');
       const updateList = columns
         .filter((c) => c !== 'id')
         .map((c) => `${c} = excluded.${c}`)
         .join(', ');
-      const values = columns.map((c) => delta.data[c] as string | number | null);
+      const values = rawColumns.map((c) => delta.data[c] as string | number | null);
 
       db.execute(
         `INSERT OR REPLACE INTO ${domain} (${columnList}, server_rev, sync_seq, is_deleted, updated_at)
@@ -190,10 +213,15 @@ export async function applyDeltas(
  */
 export async function pushOutbox(): Promise<void> {
   const db = await getDb();
+  // Only drain 'pending' rows. 'pushing' rows are already in-flight (a
+  // concurrent drain marked them); 'conflict' rows require a pull
+  // reconciliation before they can be re-evaluated, so re-pushing them
+  // without a pull would loop indefinitely. 'failed' rows need manual
+  // intervention. 'synced' rows are removed.
   const result = db.execute(
     `SELECT seq, operation_id, entity_type, entity_id, operation, payload_json, base_rev, state, attempt_count, last_error
      FROM mutation_outbox
-     WHERE state IN ('pending', 'pushing', 'conflict')
+     WHERE state = 'pending'
      ORDER BY seq ASC;`,
   );
 
@@ -261,12 +289,17 @@ export async function pushOutbox(): Promise<void> {
     } catch (error) {
       // Network / server error — leave the row as `pending` for the next run
       // and record the failure. Do not abort the whole loop; subsequent rows
-      // for unrelated entities can still succeed.
+      // for unrelated entities can still succeed. After 10 attempts the row
+      // is marked `failed` so it stops being retried automatically and
+      // surfaces for manual intervention.
+      const nextAttempt = op.attemptCount + 1;
+      const nextState = nextAttempt >= 10 ? 'failed' : 'pending';
       db.execute(
         `UPDATE mutation_outbox
-         SET state = 'pending', attempt_count = ?, last_error = ?, updated_at = datetime('now')
+         SET state = ?, attempt_count = ?, last_error = ?, updated_at = datetime('now')
          WHERE seq = ?;`,
-        op.attemptCount + 1,
+        nextState,
+        nextAttempt,
         error instanceof Error ? error.message : String(error),
         op.seq,
       );

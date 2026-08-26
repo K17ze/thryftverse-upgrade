@@ -17,10 +17,10 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
+import { useA11yAudit } from '../hooks/useA11yAudit';
 import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, IconGrammar } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
@@ -48,6 +48,8 @@ import { t } from '../i18n';
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
 export default function WalletScreen({ navigation }: Props) {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'WalletScreen');
   useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -201,7 +203,7 @@ export default function WalletScreen({ navigation }: Props) {
   // ── Local-fiat indication for spendable hero ──
   const localFiatRate = convertGbpToDisplayAmount(1, currencyCode, goldRates);
   const localFiatLabel = balance.available > 0 && localFiatRate > 0
-    ? `≈ ${formatFromFiat(balance.available, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`
+    ? `≈ ${formatFromFiat(balance.available, currencyCode, { displayMode: 'fiat' })}`
     : undefined;
 
   // ── Add money (extracted AddMoneySheet — spec 17 dedicated flow) ──
@@ -215,10 +217,10 @@ export default function WalletScreen({ navigation }: Props) {
     setBalanceHidden((prev) => !prev);
   }, []);
 
-  // ── Activity (canonical WalletActivityScreen — spec 17) ──
+  // ── Activity (canonical WalletHistoryScreen — spec 17) ──
   const handleViewActivity = React.useCallback(() => {
     haptics.tap();
-    navigation.navigate('WalletActivity');
+    navigation.navigate('WalletHistory');
   }, [navigation]);
 
   // ── Seller earnings (extracted SellerEarningsScreen — spec 17) ──
@@ -366,6 +368,7 @@ export default function WalletScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen
+      ref={a11yRef}
       header={
         <FlagshipHeader
           title={t('commerce.wallet.title')}
@@ -521,7 +524,7 @@ export default function WalletScreen({ navigation }: Props) {
           />
         )}
 
-        {/* ── Seller earnings summary (spec 17: "Seller earnings · £X available · £Y pending") ── */}
+        {/* ── Seller earnings summary (spec 17: "Seller earnings · {currencySymbol}X available · {currencySymbol}Y pending") ── */}
         {sellerBalances !== null && (sellerBalances.pendingGbp > 0 || sellerBalances.availableGbp > 0 || sellerBalances.heldInReserveGbp > 0) && (
           <FlagshipNavigationRow
             icon="pricetag-outline"

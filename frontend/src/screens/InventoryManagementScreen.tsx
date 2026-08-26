@@ -40,6 +40,7 @@ import {
   type SellerHubBatchResult,
 } from '../services/sellerHubApi';
 import { parseApiError } from '../lib/apiClient';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InventoryManagement'>;
 
@@ -74,6 +75,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -298,7 +300,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
       prev.map((l) => (selectedIds.has(l.id) ? { ...l, status: nextStatus } : l))
     );
     try {
-      const idempotencyKey = `bulk-${command}-${Date.now()}-${ids.length}`;
+      const idempotencyKey = `bulk-${command}-${ids.slice().sort().join('-')}`;
       const response = await submitSellerHubBatchCommand(
         command,
         ids.map((id) => ({ listingId: id })),
@@ -388,7 +390,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
             // Optimistic: remove all selected from the list
             setListings((prev) => prev.filter((l) => !selectedIds.has(l.id)));
             try {
-              const idempotencyKey = `bulk-delete-${Date.now()}-${ids.length}`;
+              const idempotencyKey = `bulk-delete-${ids.slice().sort().join('-')}`;
               const response = await submitSellerHubBatchCommand(
                 'delete',
                 ids.map((id) => ({ listingId: id })),
@@ -521,7 +523,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
             <SummaryCell label="Active" value={String(summary.active)} colors={colors} styles={styles} accent={colors.success} />
             <SummaryCell label="Sold" value={String(summary.sold)} colors={colors} styles={styles} accent={colors.textMuted} />
             <SummaryCell label="Paused" value={String(summary.paused)} colors={colors} styles={styles} accent={colors.warning} />
-            <SummaryCell label="Value" value={`£${summary.totalValue.toFixed(0)}`} colors={colors} styles={styles} accent={colors.brand} last />
+            <SummaryCell label="Value" value={formatFromFiat(summary.totalValue, currencyCode)} colors={colors} styles={styles} accent={colors.brand} last />
           </View>
         ) : null}
 
@@ -826,6 +828,7 @@ function InventoryRow({
   onDelete: () => void;
   onToggleSelect: () => void;
 }) {
+  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
   const statusConfig = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.unknown;
   const statusColor =
     statusConfig.accent === 'success' ? colors.success
@@ -848,7 +851,7 @@ function InventoryRow({
         onLongPress={onLongPress}
         delayLongPress={400}
         activeOpacity={0.88}
-        accessibilityLabel={`${item.title}, £${item.priceGbp.toFixed(2)}, status: ${item.status}`}
+        accessibilityLabel={`${item.title}, ${currencySymbol}${item.priceGbp.toFixed(2)}, status: ${item.status}`}
         accessibilityRole="button"
         accessibilityHint={selectionMode ? 'Tap to toggle selection' : 'Tap to view listing details. Long-press to select.'}
       >
@@ -883,7 +886,7 @@ function InventoryRow({
         {/* Body */}
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.rowPrice}>£{item.priceGbp.toFixed(2)}</Text>
+          <Text style={styles.rowPrice}>{formatFromFiat(item.priceGbp, currencyCode)}</Text>
           <View style={styles.rowMetaRow}>
             {/* Status badge */}
             <View style={styles.statusBadge}>

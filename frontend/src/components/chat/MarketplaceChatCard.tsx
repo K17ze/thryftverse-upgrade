@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CommerceStateCard, CommerceStateType } from './CommerceStateCard';
 
@@ -113,6 +114,7 @@ export function MarketplaceChatCard({
   onExpire,
 }: MarketplaceChatCardProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   // Stable callback so the countdown hook doesn't re-run every render
   const handleExpire = useCallback(() => {
@@ -125,8 +127,8 @@ export function MarketplaceChatCard({
 
   if (type === 'offer' && offer) {
     const status = effectiveStatus;
-    const priceLabel = formattedPrice ?? `£${offer.price.toFixed(2)}`;
-    const origLabel = formattedOriginalPrice ?? `£${offer.originalPrice.toFixed(2)}`;
+    const priceLabel = formattedPrice ?? `${currencySymbol}${offer.price.toFixed(2)}`;
+    const origLabel = formattedOriginalPrice ?? `${currencySymbol}${offer.originalPrice.toFixed(2)}`;
     const showCountdown = offer.expiresAt && (status === 'pending' || status === 'countered');
     const tone = getExpiryTone(msRemaining, colors);
     const counterRoundLabel = offer.counterRound && offer.counterRound > 0

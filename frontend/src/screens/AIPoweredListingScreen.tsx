@@ -51,14 +51,10 @@ import {
   scoreListing,
   type ListingQualityScore,
 } from '../services/listingQualityApi';
+import { useTaxonomy } from '../context/TaxonomyContext';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-
-const CONDITION_OPTIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory'];
-const CATEGORY_OPTIONS = [
-  'Women', 'Men', 'Kids', 'Home', 'Vintage', 'Accessories',
-  'Beauty', 'Sportswear', 'Luxury',
-];
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIPoweredListing'>;
 
@@ -74,6 +70,13 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
   const { isOffline } = useConnectivity();
   const currentUser = useStore((s) => s.currentUser);
   const { showError, showInfo } = useNotifications();
+  const { categories, conditions } = useTaxonomy();
+  const { currencySymbol } = useFormattedPrice();
+  const categoryOptions = useMemo(
+    () => categories.filter((n) => n.parentId === null).map((n) => n.name),
+    [categories],
+  );
+  const conditionOptions = useMemo(() => conditions.map((n) => n.name), [conditions]);
 
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
   const [title, setTitle] = useState('');
@@ -91,6 +94,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     fetchSmartSellPolicy(`draft_${currentUser?.id ?? 'anon'}`),
   );
   const [sustainabilityTags, setSustainabilityTags] = useState<string[]>([]);
+  const [materialComposition, setMaterialComposition] = useState<string>('');
+  const [weightKg, setWeightKg] = useState<string>('');
 
   // Track which fields the seller has manually edited — these are never
   // overwritten by suggestions. This is the dirty-field protection (P0).
@@ -292,10 +297,10 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
   // -- Picker --------------------------------------------------------------
   const pickerOptions = useMemo(() => {
-    if (pickerMode === 'Category') return CATEGORY_OPTIONS;
-    if (pickerMode === 'Condition') return CONDITION_OPTIONS;
+    if (pickerMode === 'Category') return categoryOptions;
+    if (pickerMode === 'Condition') return conditionOptions;
     return [];
-  }, [pickerMode]);
+  }, [pickerMode, categoryOptions, conditionOptions]);
 
   // -- Publish -------------------------------------------------------------
   const uploadQueueRef = useRef<MediaUploadQueue | null>(null);
@@ -376,6 +381,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         condition: condition || undefined,
         shippingMethod: 'standard',
         shippingPayer: 'buyer',
+        materialComposition: materialComposition.trim() || undefined,
+        weightKg: weightKg ? parseFloat(weightKg) : undefined,
       });
 
       for (let i = 0; i < uploadedUrls.length; i++) {
@@ -424,7 +431,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentUser, isOffline, photos, title, price, description, category, brand, condition, navigation, smartSellPolicy, showInfo]);
+  }, [currentUser, isOffline, photos, title, price, description, category, brand, condition, materialComposition, weightKg, navigation, smartSellPolicy, showInfo]);
 
   // -- Listing quality score (heuristic, updates live as the form fills) -----
   const qualityScore: ListingQualityScore = useMemo(() => {
@@ -694,7 +701,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               {/* Price guidance — communicates uncertainty as a range */}
               {priceGuidance && !dirtyFieldsRef.current.has('price') && (
                 <Text style={[styles.priceRangeHint, { color: colors.textMuted }]}>
-                  {priceGuidance.basis}: £{priceGuidance.min}–£{priceGuidance.max}
+                  {priceGuidance.basis}: {currencySymbol}{priceGuidance.min}–{currencySymbol}{priceGuidance.max}
                 </Text>
               )}
 
@@ -765,6 +772,28 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 selectedTags={sustainabilityTags}
                 onTagsChange={setSustainabilityTags}
               />
+
+              {/* Material composition + weight — used to calculate real environmental impact */}
+              <FieldLabel label="Material composition" colors={colors} styles={styles} />
+              <TextInput
+                style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                value={materialComposition}
+                onChangeText={setMaterialComposition}
+                placeholder="e.g. cotton, polyester, wool..."
+                placeholderTextColor={colors.textMuted}
+              />
+              <FieldLabel label="Weight (kg)" colors={colors} styles={styles} />
+              <TextInput
+                style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                value={weightKg}
+                onChangeText={(v) => setWeightKg(sanitizeDecimalInput(v))}
+                placeholder="e.g. 0.45"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+              />
+              <Text style={[styles.impactHelperText, { color: colors.textMuted }]}>
+                Used to calculate real environmental impact. Optional but recommended.
+              </Text>
 
               {/* Listing preview */}
               <View style={styles.sectionLabelWrap}>
@@ -1352,6 +1381,12 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md,
     },
     attentionHint: {
+      fontSize: Type.meta.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      marginTop: Space.xs,
+      lineHeight: Type.meta.lineHeight,
+    },
+    impactHelperText: {
       fontSize: Type.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       marginTop: Space.xs,

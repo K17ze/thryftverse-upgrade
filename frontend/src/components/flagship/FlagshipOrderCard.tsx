@@ -7,7 +7,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, FontFamily, IconGrammar, ThumbSize } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
-import { PremiumStatusPill } from '../ui/PremiumStatusPill';
+import { AppStatusPill } from '../ui/AppStatusPill';
 
 interface FlagshipOrderCardProps {
   imageUri?: string | null;
@@ -83,7 +83,7 @@ export function FlagshipOrderCard({
         </View>
 
         <View style={styles.middleRow}>
-          <PremiumStatusPill tone={tone} label={status.charAt(0).toUpperCase() + status.slice(1)} />
+          <AppStatusPill variant="block" tone={tone} label={status.charAt(0).toUpperCase() + status.slice(1)} />
           {actorLabel ? <Text style={styles.actor}>{actorLabel}</Text> : null}
         </View>
 

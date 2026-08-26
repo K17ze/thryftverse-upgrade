@@ -32,6 +32,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import type { Listing } from '../domain';
 import { visualSearch } from '../services/listingsApi';
 import VisualSearchCamera from '../components/VisualSearchCamera';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VisualSearch'>;
 
@@ -39,6 +40,7 @@ type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error' | 'offl
 
 export default function VisualSearchScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -534,7 +536,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           />
         </View>
         <View style={styles.filterInputWrap}>
-          <Text style={styles.filterInputLabel}>Min £</Text>
+          <Text style={styles.filterInputLabel}>Min {currencySymbol}</Text>
           <TextInput
             style={styles.filterInput}
             value={minPrice}
@@ -548,7 +550,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           />
         </View>
         <View style={styles.filterInputWrap}>
-          <Text style={styles.filterInputLabel}>Max £</Text>
+          <Text style={styles.filterInputLabel}>Max {currencySymbol}</Text>
           <TextInput
             style={styles.filterInput}
             value={maxPrice}

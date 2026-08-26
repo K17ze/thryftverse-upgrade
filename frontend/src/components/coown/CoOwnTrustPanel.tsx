@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { Space, Type, Typography } from '../../theme/designTokens';
 
 export interface CoOwnTrustPanelProps {
@@ -36,6 +37,7 @@ export function CoOwnTrustPanel({
   legalVehicleJurisdiction,
 }: CoOwnTrustPanelProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
 
   const items: Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; positive: boolean }> = [];
 
@@ -80,7 +82,7 @@ export function CoOwnTrustPanel({
     // Equity-market pattern: disclose insurer, coverage amount, and
     // policy reference — not just the boolean "insured."
     const coverageStr = custodyCoverageGbp != null
-      ? ` · £${custodyCoverageGbp.toLocaleString()} coverage`
+      ? ` · ${currencySymbol}${custodyCoverageGbp.toLocaleString()} coverage`
       : '';
     const policyStr = custodyPolicyRef ? ` · policy ${custodyPolicyRef}` : '';
     items.push({

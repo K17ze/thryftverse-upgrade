@@ -10,7 +10,6 @@ import type {
   UploadEventListener,
   UploadJob,
   UploadProgress,
-  UploadSession,
   QueueUploadParams,
   ProjectProgress,
 } from './UploadTypes';
@@ -97,7 +96,8 @@ export class UploadManager {
   private processing = false;
   /** Multipart uploader (lazy-initialised). */
   private multipartUploader: MultipartUploader;
-  /** Whether multipart transport is enabled. Defaults to false — the backend does not yet expose multipart endpoints. */
+  /** Whether multipart transport is enabled. Defaults to true — the backend
+   *  exposes /uploads/multipart/* endpoints for resumable large-file uploads. */
   private multipartEnabled: boolean;
 
   constructor(
@@ -110,7 +110,7 @@ export class UploadManager {
   ) {
     this.jobStore = jobStore;
     this.maxConcurrent = options?.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
-    this.multipartEnabled = options?.multipartEnabled ?? false;
+    this.multipartEnabled = options?.multipartEnabled ?? true;
     this.multipartUploader = new MultipartUploader({
       partSize: options?.partSize,
     });
@@ -572,10 +572,21 @@ export class UploadManager {
     );
 
     this.emitProgress(job.id, job.sizeBytes, job.sizeBytes);
-    return {
-      ok: false,
-      error: `Multipart object ${remoteUrl} cannot publish until the backend returns a verified finalization receipt`,
-    };
+
+    // The backend's /complete endpoint creates an upload_finalizations
+    // record and returns the finalizationId. Store it on the job so
+    // downstream consumers (listing publication, media assets) can
+    // reference the verified object — identical to the single-PUT path.
+    const finalizationId = session.finalizationId;
+    await this.persistState(job.id, {
+      status: 'completed',
+      progress: 1,
+      remoteUrl,
+      finalizationId,
+      session,
+    });
+
+    return { ok: true, remoteUrl, finalizationId };
   }
 
   // ── XHR file upload with real byte progress ───────────────────────

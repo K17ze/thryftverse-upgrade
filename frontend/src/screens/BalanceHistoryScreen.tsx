@@ -12,7 +12,6 @@ import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/fla
 import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { useToast } from '../context/ToastContext';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 const PAGE_SIZE = 50;
 
@@ -55,7 +54,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const { show } = useToast();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const { isOffline } = useConnectivity();
   const [transactions, setTransactions] = useState<UserTransaction[]>([]);
@@ -175,9 +174,9 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                 styles.heroValue,
                 { color: netFlow >= 0 ? colors.success : colors.danger },
               ]}
-              accessibilityLabel={`Net flow ${formatFromFiat(Math.abs(netFlow), DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
+              accessibilityLabel={`Net flow ${formatFromFiat(Math.abs(netFlow), currencyCode, { displayMode: 'fiat' })}`}
             >
-              {netFlow >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(netFlow), DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+              {netFlow >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(netFlow), currencyCode, { displayMode: 'fiat' })}
             </Text>
             <Text style={[styles.heroSubtitle, { color: colors.textMuted }]}>
               {transactions.length} transaction{transactions.length === 1 ? '' : 's'}
@@ -198,7 +197,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                     <Text style={styles.txDate}>{formatDateLabel(tx.createdAt)}</Text>
                   </View>
                   <Text style={[styles.txAmount, { color: tx.direction === 'credit' ? colors.success : colors.textPrimary }]}>
-                    {tx.direction === 'credit' ? '+' : '-'}{formatFromFiat(Math.abs(tx.amount), DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+                    {tx.direction === 'credit' ? '+' : '-'}{formatFromFiat(Math.abs(tx.amount), currencyCode, { displayMode: 'fiat' })}
                   </Text>
                 </View>
                 {idx < transactions.length - 1 && <View style={styles.separator} />}

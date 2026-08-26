@@ -131,7 +131,6 @@ export type RootStackParamList = {
 
   // ── Auctions & Trading ──
   AuctionHome: undefined;
-  Auctions: undefined;
   SellerAuctionCentre: undefined;
   CreateAuction: { listingId?: string } | undefined;
   AuctionDetail: {
@@ -207,9 +206,6 @@ export type RootStackParamList = {
 
   // ── Social / Profile ──
   UserProfile: { userId: string };
-  // Followers / following — full-screen people lists (spec 50)
-  Followers: { userId: string };
-  Following: { userId: string };
   // Unified followers/following list — mode determines which to show.
   ConnectionList: { userId: string; mode: 'followers' | 'following' };
 
@@ -218,7 +214,7 @@ export type RootStackParamList = {
   // Wallet V3 — focused money-movement destinations (spec 17)
   SellerEarnings: undefined;
   WalletConvert: undefined;
-  WalletActivity: undefined;
+  WalletHistory: undefined;
   MyOrders: undefined;
 
   // ── Settings & Account ──
@@ -347,7 +343,7 @@ export type RootStackParamList = {
       | { type: 'brand'; brand: string }
       | { type: 'price_drop' }
       | { type: 'newest' }
-      | { type: 'saved_affinity' }
+      | { type: 'closet_affinity' }
       | { type: 'auction' };
   };
   StyleQuiz: undefined;
@@ -466,7 +462,6 @@ export type RootStackParamList = {
   CatalogImportReview: { batchId: string };
   CatalogImportItem: { itemId: string; batchId: string };
   CatalogImportSummary: { batchId: string };
-  TradeHub: { destination?: 'auction' | 'co_own' } | undefined;
   // GDPR — Account deletion & data export
   DeleteAccount: undefined;
   DataExport: undefined;
@@ -524,7 +519,7 @@ export type RootStackParamList = {
   // AI provider API integration — bring-your-own-key for OpenAI / Anthropic / Gemini / custom
   AIAgentIntegration: undefined;
   // Agent activity ledger — transparent record of agent actions and approvals
-  AgentActivity: undefined;
+  AgentLedger: undefined;
 };
 
 export const ROOT_STACK_ROUTES = [
@@ -545,7 +540,6 @@ export const ROOT_STACK_ROUTES = [
   'PosterHighlightViewer',
   'CreatePosterHighlight',
   'AuctionHome',
-  'Auctions',
   'SellerAuctionCentre',
   'CreateAuction',
   'AuctionDetail',
@@ -575,13 +569,11 @@ export const ROOT_STACK_ROUTES = [
   'BotBuilder',
   'EditGroup',
   'UserProfile',
-  'Followers',
-  'Following',
   'ConnectionList',
   'Wallet',
   'SellerEarnings',
   'WalletConvert',
-  'WalletActivity',
+  'WalletHistory',
   'MyOrders',
   'Personalisation',
   'Settings',
@@ -671,7 +663,6 @@ export const ROOT_STACK_ROUTES = [
   'CatalogImportReview',
   'CatalogImportItem',
   'CatalogImportSummary',
-  'TradeHub',
   'DeleteAccount',
   'DataExport',
   'Verification',
@@ -701,7 +692,7 @@ export const ROOT_STACK_ROUTES = [
   'DataPrivacy',
   'NotificationPreferences',
   'AIAgentIntegration',
-  'AgentActivity',
+  'AgentLedger',
 ] as const;
 
 export type RootStackRouteName = typeof ROOT_STACK_ROUTES[number];
@@ -713,15 +704,12 @@ export type RootStackRouteName = typeof ROOT_STACK_ROUTES[number];
 
 export type HomeTabParamList = {
   Home: undefined;
-  PulseFeed: undefined;
   ExploreCollection: RootStackParamList['ExploreCollection'];
   LookDetail: RootStackParamList['LookDetail'];
-  Galleria: undefined;
   GalleriaCollectionDetail: RootStackParamList['GalleriaCollectionDetail'];
   MoodboardHome: undefined;
   YourAlgorithm: undefined;
   StyleQuiz: undefined;
-  ConversationalSearch: undefined;
 };
 
 export type ExploreTabParamList = {
@@ -733,6 +721,10 @@ export type ExploreTabParamList = {
   SavedSearches: undefined;
   CollectionDetail: RootStackParamList['CollectionDetail'];
   LookDetail: RootStackParamList['LookDetail'];
+  // Discovery surfaces — moved from HomeStack during IA convergence (item-26 Phase 3).
+  PulseFeed: undefined;
+  Galleria: undefined;
+  ConversationalSearch: undefined;
 };
 
 export type InboxTabParamList = {

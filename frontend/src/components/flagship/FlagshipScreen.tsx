@@ -38,7 +38,7 @@ export interface FlagshipScreenProps {
   respectBottomInset?: boolean;
 }
 
-export function FlagshipScreen({
+export const FlagshipScreen = React.forwardRef<View, FlagshipScreenProps>(function FlagshipScreen({
   children,
   header,
   stickyFooter,
@@ -50,7 +50,7 @@ export function FlagshipScreen({
   scrollRef,
   footerInsetHeight,
   respectBottomInset = false,
-}: FlagshipScreenProps) {
+}, ref) {
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -140,7 +140,7 @@ export function FlagshipScreen({
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+    <SafeAreaView ref={ref} style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       {keyboardAvoiding ? (
         <KeyboardStickyView style={{ flex: 1 }}>
@@ -151,7 +151,7 @@ export function FlagshipScreen({
       )}
     </SafeAreaView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

@@ -15,6 +15,7 @@ import {
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useTaxonomy } from '../../context/TaxonomyContext';
 import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
 import { RefreshIndicator } from '../../components/RefreshIndicator';
 import { EmptyState } from '../../components/EmptyState';
@@ -29,37 +30,12 @@ import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { fetchPosterStories, type PosterStory } from '../../services/postersApi';
 import { fetchPublicMoodboards, type Moodboard } from '../../services/moodboardApi';
 import type { RootStackParamList } from '../../navigation/types';
+import { useVisuallyComplete } from '../../performance/visuallyComplete';
+import { useA11yAudit } from '../../hooks/useA11yAudit';
 
 const DISCOVER_NUM_COLUMNS = 2;
 type DiscoverNavigation = NativeStackNavigationProp<RootStackParamList>;
 
-/**
- * Category pill bar categories. Selecting a pill filters the feed client-side
- * by matching the listing's `category` / `subcategory` against a keyword.
- * "All" is the default active category and shows every listing.
- */
-const DISCOVER_CATEGORIES = [
-  'All',
-  'Clothing',
-  'Shoes',
-  'Bags',
-  'Accessories',
-  'Jewelry',
-  'Home',
-  'Art',
-] as const;
-
-/**
- * Maps a discover category pill to a predicate that tests whether a listing
- * belongs to that category. The listing's `subcategory` ID (e.g.
- * `women-clothing`, `men-shoes`, `designer-jewellery`, `hob-arts`) carries
- * the granular type; `category` is the top-level ID (`home`, `women`, …).
- *
- * Matching is keyword-based on the subcategory so that items across all
- * top-level groups (Women, Men, Designer, Kids) are included — e.g. tapping
- * "Clothing" surfaces `women-clothing`, `men-clothing`, `designer-clothing`,
- * and `kids-clothing` alike.
- */
 const CATEGORY_FILTERS: Record<string, (listing: Listing) => boolean> = {
   Clothing: (l) => !!l.subcategory && l.subcategory.includes('clothing'),
   Shoes: (l) => !!l.subcategory && l.subcategory.includes('shoes'),
@@ -94,7 +70,12 @@ interface DiscoverCategoryBarProps {
  */
 function DiscoverCategoryBar({ activeCategory, onSelect }: DiscoverCategoryBarProps) {
   const { colors } = useAppTheme();
+  const { categories } = useTaxonomy();
   const styles = useMemo(() => createCategoryBarStyles(colors), [colors]);
+  const discoverCategories = useMemo(
+    () => ['All', ...categories.map((c) => c.name)],
+    [categories],
+  );
 
   return (
     <View style={styles.bar}>
@@ -105,7 +86,7 @@ function DiscoverCategoryBar({ activeCategory, onSelect }: DiscoverCategoryBarPr
         accessibilityRole="tablist"
         accessibilityLabel="Discovery categories"
       >
-        {DISCOVER_CATEGORIES.map((category) => {
+        {discoverCategories.map((category) => {
           const isActive = category === activeCategory;
           return (
             <Pressable
@@ -216,6 +197,9 @@ export function DiscoverScene({
   const navigation = useNavigation<DiscoverNavigation>();
   const scrollY = useSharedValue(0);
   const scrollRef = useRef<any>(null);
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'DiscoverScene');
+  useVisuallyComplete('Discover');
 
   // Active category for the pill bar. Drives client-side filtering of the
   // feed via CATEGORY_FILTERS. "All" is the default and shows every listing.
@@ -347,6 +331,27 @@ export function DiscoverScene({
     [handleRefresh, refreshing],
   );
 
+  // ── Stable navigation callbacks ──
+  // These are passed to PinterestMasonryGrid which includes them in its
+  // renderItem useCallback deps. Inline arrows would create new identities
+  // every render, invalidating the memoized renderItem and destabilizing
+  // FlashList cell recycling.
+  const handleLookPress = useCallback(
+    (lookId: string) => navigation.navigate('MainTabs', {
+      screen: 'Home',
+      params: { screen: 'LookDetail', params: { lookId } },
+    }),
+    [navigation],
+  );
+  const handlePosterPress = useCallback(
+    (storyId: string) => navigation.navigate('PosterViewer', { storyId }),
+    [navigation],
+  );
+  const handleMoodboardPress = useCallback(
+    (moodboardId: string) => navigation.navigate('MoodboardEditor', { moodboardId }),
+    [navigation],
+  );
+
   const hasSupplementalContent = looks.length > 0 || posters.length > 0 || moodboards.length > 0;
   const hasAnyListings = listings.length > 0 || forYouFeed.listings.length > 0;
 
@@ -449,19 +454,16 @@ export function DiscoverScene({
   // The RefreshIndicator is positioned absolutely over the grid and reads
   // the shared scrollY driven by the animated scroll handler above.
   return (
-    <View style={styles.container}>
+    <View ref={a11yRef} style={styles.container}>
       <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
       <PinterestMasonryGrid
         items={units}
         onItemPress={onPressItem}
         onItemSaveToggle={onToggleSave}
         isItemSaved={isSavedListing}
-        onLookPress={(lookId) => navigation.navigate('MainTabs', {
-          screen: 'Home',
-          params: { screen: 'LookDetail', params: { lookId } },
-        })}
-        onPosterPress={(storyId) => navigation.navigate('PosterViewer', { storyId })}
-        onMoodboardPress={(moodboardId) => navigation.navigate('MoodboardEditor', { moodboardId })}
+        onLookPress={handleLookPress}
+        onPosterPress={handlePosterPress}
+        onMoodboardPress={handleMoodboardPress}
         onEndReached={onLoadMore}
         isLoading={showLoadingSkeleton}
         isLoadingMore={isLoadingMore}

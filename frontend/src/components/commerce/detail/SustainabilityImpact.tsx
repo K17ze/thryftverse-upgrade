@@ -1,119 +1,184 @@
 /**
- * SustainabilityImpact — sustainability impact section for the product page.
+ * SustainabilityImpact — environmental impact section for the product page.
  *
- * Surfaces the estimated CO2 / water / waste impact of buying this item
- * secondhand instead of new. Reuses the canonical `SustainabilityBadge`
- * (detailed variant) for the grade breakdown so the heuristic stays
- * truthfully labelled "Estimated impact" per AGENTS.md §11.
+ * Fetches real impact data from the backend (`fetchListingImpact`) and
+ * surfaces it with full methodology disclosure per AGENTS.md §11 (truthful
+ * UI). Fail-closed: renders nothing when the backend reports no data.
  *
- * Per AGENTS.md §4: flat canvas section, hairline divider, no nested
- * card. Stat cells are flat with hairline separators — not bordered
- * tiles. The detailed badge is the one permitted contained surface.
+ * Per AGENTS.md §4: flat canvas section, hairline dividers, no card-on-card.
+ * The methodology disclosure is a simple expandable Pressable — the one
+ * permitted contained interaction.
  */
-import React from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, Text, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../../theme/designTokens';
-import { SustainabilityBadge } from '../../product/SustainabilityBadge';
-import type { SustainabilityScore } from '../../../utils/sustainabilityScore';
+import { Space, Radius, Type, Typography, Stroke } from '../../../theme/designTokens';
+import { fetchListingImpact, type ListingImpactResponse } from '../../../services/impactApi';
 
 export interface SustainabilityImpactProps {
-  score: SustainabilityScore | null;
+  listingId: string;
 }
 
-interface ImpactStat {
-  icon: keyof typeof Ionicons.glyphMap;
-  value: string;
-  label: string;
-}
-
-export function SustainabilityImpact({ score }: SustainabilityImpactProps) {
+export function SustainabilityImpact({ listingId }: SustainabilityImpactProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  if (!score) return null;
+  const [data, setData] = useState<ListingImpactResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
-  // ── Stat cells — truthful, derived from the heuristic score ──
-  const stats: ImpactStat[] = [
-    {
-      icon: 'cloud-outline',
-      value: `~${score.co2SavedKg} kg`,
-      label: 'CO₂e saved',
-    },
-    {
-      icon: 'water-outline',
-      value: `~${score.waterSavedL.toLocaleString('en-GB')} L`,
-      label: 'Water saved',
-    },
-    {
-      icon: 'trash-outline',
-      // Buying any secondhand item diverts it from landfill — truthful,
-      // qualitative (no fabricated weight).
-      value: '1 item',
-      label: 'Waste diverted',
-    },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchListingImpact(listingId)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.available) setData(res);
+        else setData(null);
+      })
+      .catch(() => {
+        if (!cancelled) setData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [listingId]);
 
-  // ── Inline sustainability tags — derived from positive factors ──
-  const tags = score.factors.filter((f) => f.positive).map((f) => f.label);
+  const toggleExpanded = useCallback(() => {
+    setExpanded((prev) => !prev);
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingRow}>
+          <ActivityIndicator size="small" color={colors.textMuted} />
+          <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+            Loading environmental impact…
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (!data) return null;
+
+  const isNetPositive = data.co2eAvoidedKg > 0;
+  const summaryLine = isNetPositive
+    ? `Estimated ${data.co2eAvoidedKg} kg CO₂e avoided by buying this pre-owned item`
+    : `Shipping this item produces ${Math.abs(data.co2eAvoidedKg)} kg CO₂e more than resale avoids`;
+
+  const waterSuffix = data.waterSavedL > 0
+    ? ` · ${data.waterSavedL} L water saved`
+    : '';
 
   return (
     <View style={styles.container}>
       <Text
-        style={styles.sectionLabel}
+        style={[styles.header, { color: colors.textPrimary }]}
         accessibilityRole="header"
-        accessibilityLabel="Sustainability Impact"
       >
-        Sustainability Impact
+        Environmental impact
       </Text>
 
-      {/* Hero message */}
-      <Text style={[styles.heroMessage, { color: colors.textPrimary }]}>
-        By buying secondhand, you save ~{score.co2SavedKg} kg CO₂ vs buying new.
+      <Text style={[styles.summary, { color: colors.textPrimary }]}>
+        {summaryLine}
+        {waterSuffix}
       </Text>
 
-      {/* Stat cells — flat, hairline-separated */}
-      <View style={[styles.statRow, { borderTopColor: colors.borderSubtle, borderBottomColor: colors.borderSubtle }]}>
-        {stats.map((stat, i) => (
-          <React.Fragment key={stat.label}>
-            <View style={styles.statCell}>
-              <Ionicons name={stat.icon} size={18} color={colors.success} />
-              <Text style={[styles.statValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                {stat.value}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]} numberOfLines={1}>
-                {stat.label}
-              </Text>
-            </View>
-            {i < stats.length - 1 ? (
-              <View style={[styles.statDivider, { backgroundColor: colors.borderSubtle }]} />
-            ) : null}
-          </React.Fragment>
-        ))}
-      </View>
+      {/* Methodology disclosure — expandable */}
+      <Pressable
+        onPress={toggleExpanded}
+        style={({ pressed }) => [
+          styles.disclosureTrigger,
+          pressed && { opacity: 0.6 },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={expanded ? 'Hide methodology' : 'Show methodology'}
+      >
+        <Text style={[styles.disclosureLabel, { color: colors.textSecondary }]}>
+          Methodology
+        </Text>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={14}
+          color={colors.textSecondary}
+        />
+      </Pressable>
 
-      {/* Inline sustainability tags */}
-      {tags.length > 0 ? (
-        <View style={styles.tagsRow}>
-          {tags.map((tag) => (
-            <View key={tag} style={[styles.tag, { backgroundColor: `${colors.success}14` }]}>
-              <Ionicons name="checkmark-circle" size={11} color={colors.success} />
-              <Text style={[styles.tagText, { color: colors.success }]} numberOfLines={1}>
-                {tag}
-              </Text>
-            </View>
-          ))}
+      {expanded ? (
+        <View
+          style={[
+            styles.methodology,
+            {
+              borderTopColor: colors.borderSubtle,
+              borderBottomColor: colors.borderSubtle,
+            },
+          ]}
+        >
+          <MethodRow label="Production avoided" value={`${data.co2eProductionAvoidedKg} kg CO₂e`} colors={colors} styles={styles} />
+          <MethodRow label="End-of-life avoided" value={`${data.co2eEolAvoidedKg} kg CO₂e`} colors={colors} styles={styles} />
+          <MethodRow
+            label="Shipping"
+            value={`${data.co2eShippingKg} kg CO₂e (${data.distanceKm} km, ${data.carrierMode})`}
+            colors={colors}
+            styles={styles}
+          />
+          <MethodRow label="Packaging" value={`${data.co2ePackagingKg} kg CO₂e`} colors={colors} styles={styles} />
+          <MethodRow
+            label="Displacement rate"
+            value={data.displacementRate.toString()}
+            colors={colors}
+            styles={styles}
+            hint="applied to avoided emissions"
+          />
+          <MethodRow
+            label="Rebound effect"
+            value={data.reboundEffect.toString()}
+            colors={colors}
+            styles={styles}
+            hint="accounted for in net figure"
+          />
+          <MethodRow label="Methodology version" value={data.methodologyVersion} colors={colors} styles={styles} />
+          <MethodRow label="Data sources" value={data.factorSources.join(', ')} colors={colors} styles={styles} />
         </View>
       ) : null}
 
-      {/* Detailed grade breakdown — the one permitted contained surface */}
-      <View style={styles.badgeWrap}>
-        <SustainabilityBadge score={score} variant="detailed" />
-      </View>
-
       <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
-        Estimates based on industry averages. Not a precise measurement.
+        Estimate based on material composition and verified emissions factors. Not a precise measurement.
+      </Text>
+    </View>
+  );
+}
+
+function MethodRow({
+  label,
+  value,
+  hint,
+  colors,
+  styles,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={[styles.methodRow, { borderBottomColor: colors.borderSubtle }]}>
+      <Text style={[styles.methodLabel, { color: colors.textSecondary }]}>
+        {label}
+        {hint ? <Text style={styles.methodHint}> ({hint})</Text> : null}
+      </Text>
+      <Text
+        style={[styles.methodValue, { color: colors.textPrimary }]}
+        numberOfLines={2}
+      >
+        {value}
       </Text>
     </View>
   );
@@ -127,66 +192,68 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.sm,
       gap: Space.sm,
     },
-    sectionLabel: {
+    loadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.xs,
+    },
+    loadingText: {
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      fontFamily: Typography.family.regular,
+    },
+    header: {
       fontSize: Type.bodyStrong.size,
       lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
     },
-    heroMessage: {
+    summary: {
       fontSize: Type.body.size,
       lineHeight: Type.body.lineHeight + 2,
       fontFamily: Typography.family.medium,
     },
-    statRow: {
-      flexDirection: 'row',
-      alignItems: 'stretch',
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      paddingVertical: Space.md,
-    },
-    statCell: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.xs,
-    },
-    statValue: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
-    statLabel: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: Typography.family.regular,
-    },
-    statDivider: {
-      width: StyleSheet.hairlineWidth,
-      alignSelf: 'stretch',
-    },
-    tagsRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.xs,
-    },
-    tag: {
+    disclosureTrigger: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs + 1,
-      borderRadius: Radius.md,
+      justifyContent: 'space-between',
+      paddingVertical: Space.xs,
     },
-    tagText: {
+    disclosureLabel: {
       fontSize: Type.caption.size,
       lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.semibold,
     },
-    badgeWrap: {
-      marginTop: Space.xs,
+    methodology: {
+      borderTopWidth: Stroke.hairline,
+      borderBottomWidth: Stroke.hairline,
+      paddingVertical: Space.xs,
+    },
+    methodRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: Space.sm,
+      paddingVertical: Space.sm - 2,
+      borderBottomWidth: Stroke.hairline,
+    },
+    methodLabel: {
+      flexShrink: 1,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      fontFamily: Typography.family.regular,
+    },
+    methodHint: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+    },
+    methodValue: {
+      flexShrink: 0,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      fontFamily: Typography.family.medium,
+      textAlign: 'right',
+      fontVariant: ['tabular-nums'],
     },
     disclaimer: {
       fontSize: Type.meta.size,

@@ -19,6 +19,7 @@ import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsAp
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { t } from '../i18n';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -45,6 +46,7 @@ const TABS: TabConfig[] = [
 function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => void }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
 
   const statusColor =
     item.status === 'active' ? colors.success
@@ -62,7 +64,7 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
       style={styles.row}
       onPress={onPress}
       activeOpacity={0.85}
-      accessibilityLabel={`${item.title}, £${item.priceGbp.toFixed(2)}, status: ${item.status}${views > 0 ? `, ${views} views` : ''}`}
+      accessibilityLabel={`${item.title}, ${currencySymbol}${item.priceGbp.toFixed(2)}, status: ${item.status}${views > 0 ? `, ${views} views` : ''}`}
       accessibilityRole="button"
       accessibilityHint="Tap to view listing details"
     >
@@ -75,7 +77,7 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
       )}
       <View style={styles.rowBody}>
         <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.rowPrice}>£{item.priceGbp.toFixed(2)}</Text>
+        <Text style={styles.rowPrice}>{formatFromFiat(item.priceGbp, currencyCode)}</Text>
         <View style={styles.rowMeta}>
           {/* Status pill — only visible containment on this row (status boundary) */}
           <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '40' }]}>
@@ -135,6 +137,7 @@ export default function MyListingsScreen() {
   const currentUser = useStore((s) => s.currentUser);
   const filterType = route.params?.type;
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -252,12 +255,12 @@ export default function MyListingsScreen() {
           <StatCard
             icon="cash-outline"
             label="Avg price"
-            value={`£${analytics.avgActivePrice.toFixed(0)}`}
+            value={formatFromFiat(analytics.avgActivePrice, currencyCode)}
           />
           <StatCard
             icon="trending-up-outline"
             label="Active value"
-            value={`£${analytics.totalActiveValue.toFixed(0)}`}
+            value={formatFromFiat(analytics.totalActiveValue, currencyCode)}
           />
         </View>
 

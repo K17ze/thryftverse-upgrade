@@ -26,6 +26,8 @@ import {
   processRetentionSweep,
   aggregateAnalyticsDaily,
   sweepScheduledPublications,
+  processBackupExpiryCheck,
+  processDsarExport,
 } from './handlers/index.js';
 
 /**
@@ -120,6 +122,12 @@ async function main(): Promise<void> {
       },
       handleScheduledPublicationSweepJob: async ({ reason }) => {
         await sweepScheduledPublications(reason);
+      },
+      handleBackupExpiryJob: async ({ reason }) => {
+        await processBackupExpiryCheck({ reason });
+      },
+      handleDsarExportJob: async ({ requestId, userId, reason }) => {
+        await processDsarExport({ requestId, userId, reason });
       },
     },
     logger,

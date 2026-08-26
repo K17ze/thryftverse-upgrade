@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Space, Type, Typography, Radius, Stroke, Control } from '../theme/designTokens';
 import {
   AnimatedPressable,
@@ -21,8 +21,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { CURRENCIES, DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { useToast } from '../context/ToastContext';
+import { useA11yAudit } from '../hooks/useA11yAudit';
 import {
   calculateOfferSummaryFromDisplay,
   convertGbpToDisplayAmount,
@@ -35,9 +35,12 @@ import { fetchListingByIdFromApi } from '../services/listingsApi';
 import {
   counterListingOfferOnApi,
   createListingOfferOnApi,
+  lookupOfferByIdempotencyKey,
+  type ListingOffer,
 } from '../services/listingOffersApi';
 import { haptics } from '../utils/haptics';
 import { createStableId } from '../utils/createStableId';
+import { useUnknownOutcomeReconciliation } from '../hooks/useUnknownOutcomeReconciliation';
 import { track } from '../analytics';
 import { t } from '../i18n';
 
@@ -45,14 +48,15 @@ import { t } from '../i18n';
 type Props = NativeStackScreenProps<RootStackParamList, 'MakeOffer'>;
 
 export default function MakeOfferScreen({ navigation, route }: Props) {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'MakeOfferScreen');
   const { itemId, price, title } = route.params;
   const { colors } = useAppTheme();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencySymbol, formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
-  const currencySymbol = CURRENCIES[currencyCode].symbol;
   const [offerPrice, setOfferPrice] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [listing, setListing] = useState<any>(null);
@@ -65,6 +69,13 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const counterRound = route.params.counterRound ?? 0;
   const parentOfferId = route.params.parentOfferId;
   const idempotencyKeyRef = React.useRef<string | null>(null);
+  const isMountedRef = useRef(true);
+  const { reconcile } = useUnknownOutcomeReconciliation();
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   React.useEffect(() => {
     let mounted = true;
@@ -119,7 +130,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     }
     const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
     if (sellerMinOffer > 0 && numericOfferGbp < sellerMinOffer) {
-      return t('makeOffer.error.sellerMinOffer', { amount: formatFromFiat(sellerMinOffer, DEFAULT_CURRENCY_CODE) });
+      return t('makeOffer.error.sellerMinOffer', { amount: formatFromFiat(sellerMinOffer, currencyCode) });
     }
     if (!listing?.sellerId) {
       return t('makeOffer.error.couldNotLoadSeller');
@@ -178,8 +189,8 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       track('offer_submitted', { item_id: itemId, offer_amount: numericOfferGbp });
 
       const offerText = isCounterOffer
-        ? t('makeOffer.chat.counterOfferText', { amount: formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE), previousAmount: formatFromFiat(previousOffer ?? 0, DEFAULT_CURRENCY_CODE), hours: expiryHours })
-        : t('makeOffer.chat.offerText', { amount: formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE), title, hours: expiryHours });
+        ? t('makeOffer.chat.counterOfferText', { amount: formatFromFiat(numericOfferGbp, currencyCode), previousAmount: formatFromFiat(previousOffer ?? 0, currencyCode), hours: expiryHours })
+        : t('makeOffer.chat.offerText', { amount: formatFromFiat(numericOfferGbp, currencyCode), title, hours: expiryHours });
 
       navigation.navigate('Chat', {
         conversationId: `offer_${listing.sellerId}_${itemId}`,
@@ -196,6 +207,49 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       show(t('makeOffer.toast.openingChat'), 'info');
     } catch (err) {
       const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+
+      if (isNetworkError && idempotencyKeyRef.current) {
+        // Lost response during offer submission — the server may have
+        // committed. Poll for the authoritative status instead of telling
+        // the user the offer failed (which invites an unsafe retry).
+        setErrorMsg(t('makeOffer.error.checking'));
+        const idempotencyKey = idempotencyKeyRef.current;
+        const result = await reconcile<ListingOffer>({
+          lookup: () => lookupOfferByIdempotencyKey(idempotencyKey),
+          onAcknowledged: (offer) => {
+            idempotencyKeyRef.current = null;
+            const offerText = isCounterOffer
+              ? t('makeOffer.chat.counterOfferText', { amount: formatFromFiat(numericOfferGbp, currencyCode), previousAmount: formatFromFiat(previousOffer ?? 0, currencyCode), hours: expiryHours })
+              : t('makeOffer.chat.offerText', { amount: formatFromFiat(numericOfferGbp, currencyCode), title, hours: expiryHours });
+            navigation.navigate('Chat', {
+              conversationId: `offer_${listing.sellerId}_${itemId}`,
+              focusQuery: offerText,
+              partnerUserId: listing.sellerId,
+              offerPayload: {
+                offerId: offer.id,
+                price: numericOfferGbp,
+                originalPrice: price,
+                expiresAt: offer.expiresAt,
+                counterRound: offer.counterRound,
+              },
+            });
+            show(t('makeOffer.toast.openingChat') as string, 'info');
+          },
+          onSafeToRetry: () => {
+            idempotencyKeyRef.current = null;
+            setErrorMsg('');
+            show(t('makeOffer.error.noOfferCreated'), 'info');
+          },
+          onUnresolved: () => {
+            setErrorMsg(t('makeOffer.error.checkHistory'));
+          },
+          shouldContinue: () => isMountedRef.current,
+        });
+        if (result.outcome === 'acknowledged' || result.outcome === 'safe_to_retry' || result.outcome === 'unresolved') {
+          return;
+        }
+      }
+
       const message = isNetworkError
         ? t('makeOffer.error.offline')
         : err instanceof Error ? err.message : t('makeOffer.error.couldNotSubmit');
@@ -232,6 +286,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 
   return (
     <FlagshipScreen
+      ref={a11yRef}
       header={
         <FlagshipHeader
           title={isCounterOffer ? t('makeOffer.header.counterOffer') : t('makeOffer.header.makeOffer')}
@@ -270,7 +325,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               {title}
             </Text>
             <Text style={[styles.itemListingPrice, { color: colors.textSecondary }]}>
-              {t('makeOffer.item.listedAt', { amount: formatFromFiat(price, DEFAULT_CURRENCY_CODE) })}
+              {t('makeOffer.item.listedAt', { amount: formatFromFiat(price, currencyCode) })}
             </Text>
           </View>
         </View>
@@ -373,7 +428,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                   {t('makeOffer.counter.previousOffer')}
                 </Text>
                 <Text style={[styles.counterCompareValue, { color: colors.textSecondary }]}>
-                  {formatFromFiat(previousOffer, DEFAULT_CURRENCY_CODE)}
+                  {formatFromFiat(previousOffer, currencyCode)}
                 </Text>
               </View>
               <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
@@ -382,7 +437,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                   {t('makeOffer.counter.yourCounter')}
                 </Text>
                 <Text style={[styles.counterCompareValue, { color: colors.brand }]}>
-                  {numericOfferGbp > 0 ? formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE) : '—'}
+                  {numericOfferGbp > 0 ? formatFromFiat(numericOfferGbp, currencyCode) : '—'}
                 </Text>
               </View>
             </View>
@@ -396,7 +451,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               <View style={styles.contextRow}>
                 <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
                 <Text style={[styles.contextText, { color: colors.textSecondary }]}>
-                  {t('makeOffer.sellerMinOffer.label', { amount: formatFromFiat(sellerMinOffer, DEFAULT_CURRENCY_CODE) })}
+                  {t('makeOffer.sellerMinOffer.label', { amount: formatFromFiat(sellerMinOffer, currencyCode) })}
                 </Text>
               </View>
             );
@@ -457,7 +512,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               Your offer
             </Text>
             <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-              {formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)}
+              {formatFromFiat(numericOfferGbp, currencyCode)}
             </Text>
           </View>
           <View style={[styles.summaryRow, { borderBottomColor: colors.borderSubtle }]}>
@@ -468,7 +523,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               </Text>
             </View>
             <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-              {formatFromFiat(platformChargeGbp, DEFAULT_CURRENCY_CODE)}
+              {formatFromFiat(platformChargeGbp, currencyCode)}
             </Text>
           </View>
           <View style={styles.totalRow}>
@@ -476,7 +531,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               Total
             </Text>
             <Text style={[styles.totalValue, { color: colors.brand }]}>
-              {formatFromFiat(total, DEFAULT_CURRENCY_CODE)}
+              {formatFromFiat(total, currencyCode)}
             </Text>
           </View>
         </View>
@@ -571,7 +626,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                   {title}
                 </Text>
                 <Text style={[styles.reviewItemPrice, { color: colors.textSecondary }]}>
-                  Listed at {formatFromFiat(price, DEFAULT_CURRENCY_CODE)}
+                  Listed at {formatFromFiat(price, currencyCode)}
                 </Text>
               </View>
             </View>
@@ -582,7 +637,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                 {isCounterOffer ? 'Counter-offer amount' : 'Offer amount'}
               </Text>
               <Text style={[styles.reviewAmountValue, { color: colors.brand }]}>
-                {formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)}
+                {formatFromFiat(numericOfferGbp, currencyCode)}
               </Text>
               {isCounterOffer && previousOffer != null && (
                 <View style={[styles.reviewCompareRow, { borderTopColor: colors.borderSubtle }]}>
@@ -591,7 +646,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                       Previous
                     </Text>
                     <Text style={[styles.reviewCompareValue, { color: colors.textSecondary }]}>
-                      {formatFromFiat(previousOffer, DEFAULT_CURRENCY_CODE)}
+                      {formatFromFiat(previousOffer, currencyCode)}
                     </Text>
                   </View>
                   <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
@@ -600,7 +655,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                       New offer
                     </Text>
                     <Text style={[styles.reviewCompareValue, { color: colors.brand }]}>
-                      {formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)}
+                      {formatFromFiat(numericOfferGbp, currencyCode)}
                     </Text>
                   </View>
                 </View>
@@ -616,7 +671,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                 Platform charge
               </Text>
               <Text style={[styles.reviewSummaryValue, { color: colors.textPrimary }]}>
-                {formatFromFiat(platformChargeGbp, DEFAULT_CURRENCY_CODE)}
+                {formatFromFiat(platformChargeGbp, currencyCode)}
               </Text>
             </View>
             <View style={styles.reviewTotalRow}>
@@ -624,7 +679,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                 Total
               </Text>
               <Text style={[styles.reviewTotalValue, { color: colors.brand }]}>
-                {formatFromFiat(total, DEFAULT_CURRENCY_CODE)}
+                {formatFromFiat(total, currencyCode)}
               </Text>
             </View>
 
@@ -670,14 +725,14 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
               <AppButton
                 style={styles.reviewConfirmBtn}
                 title={isSubmitting ? 'Sending…' : 'Confirm & send'}
-                subtitle={formatFromFiat(total, DEFAULT_CURRENCY_CODE)}
+                subtitle={formatFromFiat(total, currencyCode)}
                 icon={isSubmitting ? undefined : <Ionicons name="paper-plane-outline" size={16} color={colors.textInverse} />}
                 variant="primary"
                 size="lg"
                 onPress={handleSendOffer}
                 disabled={isSubmitting}
                 loading={isSubmitting}
-                accessibilityLabel={`Confirm ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)} on ${title}`}
+                accessibilityLabel={`Confirm ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, currencyCode)} on ${title}`}
               />
             </View>
           </View>
@@ -702,14 +757,14 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             <AppButton
               style={styles.sendBtn}
               title={isCounterOffer ? 'Review counter-offer' : 'Review offer'}
-              subtitle={formatFromFiat(total, DEFAULT_CURRENCY_CODE)}
+              subtitle={formatFromFiat(total, currencyCode)}
               icon={<Ionicons name="arrow-forward-outline" size={16} color={colors.textInverse} />}
               variant="primary"
               size="lg"
               onPress={handleReviewOffer}
               disabled={numericOffer <= 0 || isSubmitting}
               loading={isSubmitting}
-              accessibilityLabel={`Review ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, DEFAULT_CURRENCY_CODE)} on ${title}`}
+              accessibilityLabel={`Review ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, currencyCode)} on ${title}`}
             />
           )}
         </View>

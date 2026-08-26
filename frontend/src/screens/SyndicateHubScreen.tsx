@@ -38,7 +38,6 @@ import {
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type SortOption = 'progress' | 'closing' | 'roi';
@@ -123,7 +122,7 @@ export default function CoOwnHubScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { show } = useToast();
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -366,7 +365,7 @@ export default function CoOwnHubScreen() {
   );
 
   const formatLocal = React.useCallback((valueGbp: number) => (
-    formatFromFiat(valueGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat', fiatFractionDigits: 2 })
+    formatFromFiat(valueGbp, currencyCode, { displayMode: 'fiat', fiatFractionDigits: 2 })
   ), [formatFromFiat]);
 
   const highlightAssets = React.useMemo(() => {

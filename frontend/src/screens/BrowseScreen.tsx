@@ -43,8 +43,6 @@ import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 
-import { isSustainableGrade } from '../utils/sustainabilityScore';
-
 import { Space, Radius, Elevation, Type, Typography, AspectRatio, Control } from '../theme/designTokens';
 const GRID_SPACING = 16;
 
@@ -634,18 +632,11 @@ export default function BrowseScreen() {
       if (browseFilters.priceMin != null && listing.price < browseFilters.priceMin) return false;
       if (browseFilters.priceMax != null && listing.price > browseFilters.priceMax) return false;
 
-      // Sustainable — fail-closed: returns false in production (no real
-      // data), so the filter yields no results until a backend impact
-      // service or seller tags exist.
+      // Sustainable — fail-closed: when the backend has no emissions data
+      // the grade is null, so the item does not pass the sustainable filter.
       if (
         browseFilters.sustainableOnly &&
-        !isSustainableGrade({
-          condition: listing.condition,
-          category: listing.category,
-          subcategory: listing.subcategory,
-          brand: listing.brand,
-          sellerLocation: listing.seller?.location ?? null,
-        })
+        !(listing.sustainabilityGrade === 'A' || listing.sustainabilityGrade === 'B')
       ) {
         return false;
       }
@@ -700,13 +691,7 @@ export default function BrowseScreen() {
     const base = dataToRender;
     if (!browseFilters.sustainableOnly) return base;
     return base.filter((listing) =>
-      isSustainableGrade({
-        condition: listing.condition,
-        category: listing.category,
-        subcategory: listing.subcategory,
-        brand: listing.brand,
-        sellerLocation: listing.seller?.location ?? null,
-      }),
+      listing.sustainabilityGrade === 'A' || listing.sustainabilityGrade === 'B',
     );
   }, [backendListings, dataToRender, browseFilters.sustainableOnly]);
   const displayCount = displayListings.length;

@@ -7,9 +7,7 @@ import {
   Pressable,
   Dimensions,
   Image,
-  Modal,
 } from 'react-native';
-import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,28 +28,25 @@ import { useSellerTrust } from '../platform/product';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useToast } from '../context/ToastContext';
+import { useA11yAudit } from '../hooks/useA11yAudit';
+import { DebouncedTextInput } from '../components/ui/DebouncedTextInput';
 import { sanitizeDecimalInput, calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
 import {
-  resolvePublishedMedia,
   getPickerOptionsForMode,
   computeCoOwnPricing,
   evaluatePriceVsMarket,
   computeDiscount,
-  buildPublishErrors,
   buildContextualPhotoPrompts,
   formatShippingSummary,
   formatReviewSummary,
   sanitizeShareCountInput,
   type PickerMode,
 } from '../utils/sellScreenLogic';
-import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { haptics } from '../utils/haptics';
-import { makeStableId } from '../utils/createStableId';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import type { MediaUploadAsset } from '../utils/mediaUploadAsset';
 import { uploadMedia } from '../services/mediaUpload';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
-import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { EmptyState } from '../components/EmptyState';
 import { ListingModeSelector, ListingMode, getListingModeFromLabel, getListingModeLabel } from '../components/listing/ListingModeSelector';
@@ -60,25 +55,31 @@ import { useListingAutofill } from '../hooks/useListingAutofill';
 import { useSoldComps } from '../hooks/useSoldComps';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useBackendData } from '../context/BackendDataContext';
-import { useFeatureFlag } from '../analytics';
-import { track, trackFunnelStep } from '../analytics';
+import { useTaxonomy } from '../context/TaxonomyContext';
+import { useFeatureFlag, trackFunnelStep } from '../analytics';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
-import {
-  fetchAutocompleteSuggestions,
-  type AutocompleteSuggestion,
-} from '../services/searchAutocompleteApi';
+import type { AutocompleteSuggestion } from '../services/searchAutocompleteApi';
 import {
   evaluateListingCompleteness,
   type ListingFieldValues,
   type ListingFieldKey,
 } from '../contracts/listingCategoryPolicy';
 import { t } from '../i18n';
+import { useSellFormState } from '../hooks/sell/useSellFormState';
+import { useListingPublishPipeline } from '../hooks/sell/useListingPublishPipeline';
+import { useSellDraftPersistence } from '../hooks/sell/useSellDraftPersistence';
+import { useTagAutocomplete } from '../hooks/sell/useTagAutocomplete';
+import AuctionFieldsSection from '../components/sell/AuctionFieldsSection';
+import PhotoGuideCollapse from '../components/sell/PhotoGuideCollapse';
+import SellerTipsBanner from '../components/sell/SellerTipsBanner';
+import ShippingPickerSheet from '../components/sell/ShippingPickerSheet';
+import TagInputWithSuggestions from '../components/sell/TagInputWithSuggestions';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-const AUCTION_DURATIONS = [24, 48, 72, 168];
-
 export default function SellScreen() {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'SellScreen');
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { colors, isDark } = useAppTheme();
@@ -127,9 +128,6 @@ export default function SellScreen() {
     togglePillActive: { backgroundColor: colors.brand, borderColor: colors.brand },
     toggleText: { color: colors.textPrimary },
     toggleTextActive: { color: colors.textInverse },
-    tagChip: { backgroundColor: colors.surface, borderColor: colors.border },
-    tagText: { color: colors.brand },
-    tagInput: { color: colors.textPrimary },
     authThumb: { backgroundColor: colors.surfaceAlt },
     authAddBtn: { borderColor: colors.border, backgroundColor: colors.surface },
     inlineErrorText: { color: colors.danger },
@@ -141,9 +139,6 @@ export default function SellScreen() {
     priceNoCompsHint: { color: colors.textMuted },
     charCountWarn: { color: colors.warning },
     fieldRequiredHint: { color: colors.textMuted },
-    photoGuideTitle: { color: colors.textSecondary },
-    photoGuideMin: { color: colors.textMuted },
-    photoGuideTip: { color: colors.textMuted },
     autofillCard: { backgroundColor: `${colors.brand}08` },
     autofillTitle: { color: colors.textPrimary },
     autofillChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
@@ -152,59 +147,34 @@ export default function SellScreen() {
     autofillApplyBtn: { borderColor: `${colors.brand}30`, backgroundColor: `${colors.brand}08` },
   }), [colors]);
 
-  const sellDraft = useStore((s) => s.sellDraft);
   const updateSellDraft = useStore((s) => s.updateSellDraft);
-  const clearSellDraft = useStore((s) => s.clearSellDraft);
   const currentUser = useStore((s) => s.currentUser);
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
 
   const [photos, setPhotos] = useState<string[]>([]);
-  const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
-  const [price, setPrice] = useState('');
-  const [originalPrice, setOriginalPrice] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState('');
-  const [tagSuggestions, setTagSuggestions] = useState<AutocompleteSuggestion[]>([]);
-  const [tagSuggestionsVisible, setTagSuggestionsVisible] = useState(false);
-  const tagDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [category, setCategory] = useState<string>('');
-  const [brand, setBrand] = useState('');
-  const [size, setSize] = useState('');
-  const [condition, setCondition] = useState('');
-  const [shippingMethod, setShippingMethod] = useState<'standard' | 'express' | null>(null);
-  const [shippingPayer, setShippingPayer] = useState<'buyer' | 'seller' | null>(null);
-  const [shippingSheetOpen, setShippingSheetOpen] = useState(false);
 
-  // ── Transient "Saved" indicator ──
-  // Per audit 04: "visible 'Saved' only briefly; never spam toasts on every
-  // field." A subtle checkmark that appears for 1.5s after a draft save,
-  // then fades. Not a permanent text label.
-  const [draftSavedVisible, setDraftSavedVisible] = useState(false);
-  const draftSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { values, setters } = useSellFormState();
+  const {
+    title, desc, price, originalPrice, tags, tagInput, category, brand, size, condition,
+    shippingMethod, shippingPayer, shippingSheetOpen, listingMode, coOwnEnabled,
+    shareCountInput, sharePriceInput, offeringWindowHours, authPhotos,
+    startingBid, reservePrice, auctionDurationHours,
+  } = values;
+  const {
+    setTitle, setDesc, setPrice, setOriginalPrice, setTags, setTagInput, setCategory,
+    setBrand, setSize, setCondition, setShippingMethod, setShippingPayer, setShippingSheetOpen,
+    setListingMode, setCoOwnEnabled, setShareCountInput, setSharePriceInput, setOfferingWindowHours,
+    setAuthPhotos, setStartingBid, setReservePrice, setAuctionDurationHours,
+  } = setters;
 
-  const [listingMode, setListingMode] = useState<ListingMode>('sell_now');
-
-  const [coOwnEnabled, setCoOwnEnabled] = useState(false);
-  const [shareCountInput, setShareCountInput] = useState('');
-  const [sharePriceInput, setSharePriceInput] = useState('');
-  const [offeringWindowHours, setOfferingWindowHours] = useState(48);
-  const [authPhotos, setAuthPhotos] = useState<string[]>([]);
-
-  const [startingBid, setStartingBid] = useState('');
-  const [reservePrice, setReservePrice] = useState('');
-  const [auctionDurationHours, setAuctionDurationHours] = useState(48);
+  const {
+    tagSuggestions, tagSuggestionsVisible, setTagSuggestionsVisible, setTagSuggestions,
+  } = useTagAutocomplete(tagInput);
 
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isPublishing, setIsPublishing] = useState(false);
-  // Ref guard prevents double-tap publish before state update propagates (§13).
-  const isPublishingRef = useRef(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [publicationStage, setPublicationStage] = useState<'idle' | 'uploading_media' | 'creating_listing' | 'attaching_media' | 'completed' | 'failed_recoverable'>('idle');
-  const publishedListingIdRef = useRef<string | null>(null);
-  const uploadedUrlsRef = useRef<string[]>([]);
 
   const [mediaDraftItems, setMediaDraftItems] = useState<ListingMediaDraftItem[]>([]);
 
@@ -218,6 +188,15 @@ export default function SellScreen() {
   const currency = useCurrencyPref();
   const currencySymbol = CURRENCIES[currency.currencyCode].symbol;
   const { isOffline } = useConnectivity();
+
+  // ── Draft persistence (restore on mount, persist on change) ──
+  // Owns the transient "Saved" indicator state and the draft save/load
+  // effects. Restores any persisted draft from the store on mount, then
+  // persists on every change with a subtle 1.5s "Saved" flash.
+  const { draftSavedVisible } = useSellDraftPersistence(
+    { photos, mediaDraftItems, ...values },
+    { setMediaDraftItems, setPhotos, ...setters },
+  );
 
   // AI autofill suggestions from first photo filename
   const autofillSuggestion = useListingAutofill(mediaDraftItems);
@@ -262,93 +241,19 @@ export default function SellScreen() {
   const { listings: backendListings } = useBackendData();
   const soldComps = useSoldComps(backendListings, category || undefined, brand || undefined);
 
-  /* -- draft sync on mount -- */
-  useEffect(() => {
-    if (sellDraft.mediaDraftItems && sellDraft.mediaDraftItems.length > 0) {
-      setMediaDraftItems(sellDraft.mediaDraftItems);
-      setPhotos(sellDraft.mediaDraftItems.map((m) => m.publicUrl || m.uri));
-    } else if (sellDraft.photos) {
-      setPhotos(sellDraft.photos);
-      setMediaDraftItems(
-        sellDraft.photos.map((uri) => ({
-          id: makeStableId('draft'),
-          uri,
-          kind: 'image' as const,
-          source: uri.startsWith('http') ? ('remote' as const) : ('local' as const),
-          status: uri.startsWith('http') ? ('uploaded' as const) : ('draft' as const),
-          publicUrl: uri.startsWith('http') ? uri : undefined,
-        }))
-      );
-    }
-    if (sellDraft.title) setTitle(sellDraft.title);
-    if (sellDraft.description) setDesc(sellDraft.description);
-    if (sellDraft.price) setPrice(sellDraft.price);
-    if (sellDraft.originalPrice) setOriginalPrice(sellDraft.originalPrice);
-    if (sellDraft.brand) setBrand(sellDraft.brand);
-    if (sellDraft.size) setSize(sellDraft.size);
-    if (sellDraft.condition) setCondition(sellDraft.condition);
-    if (sellDraft.categoryId) setCategory(sellDraft.categoryId);
-    if (sellDraft.tags) setTags(sellDraft.tags);
-    if (sellDraft.listingMode) setListingMode(sellDraft.listingMode);
-    if (sellDraft.shippingMethod) setShippingMethod(sellDraft.shippingMethod);
-    if (sellDraft.shippingPayer) setShippingPayer(sellDraft.shippingPayer);
-    if (sellDraft.startingBid) setStartingBid(sellDraft.startingBid);
-    if (sellDraft.reservePrice) setReservePrice(sellDraft.reservePrice);
-    if (sellDraft.auctionDurationHours) setAuctionDurationHours(sellDraft.auctionDurationHours);
-    if (sellDraft.coOwnEnabled !== undefined) setCoOwnEnabled(sellDraft.coOwnEnabled);
-    if (sellDraft.shareCountInput) setShareCountInput(sellDraft.shareCountInput);
-    if (sellDraft.sharePriceInput) setSharePriceInput(sellDraft.sharePriceInput);
-    if (sellDraft.offeringWindowHours) setOfferingWindowHours(sellDraft.offeringWindowHours);
-    if (sellDraft.authPhotos) setAuthPhotos(sellDraft.authPhotos);
-  }, []);
-
-  /* -- persist draft on change -- */
-  // Per audit 04: "save automatically; visible 'Saved' only briefly;
-  // never spam toasts on every field." The draft persists on every change,
-  // but the "Saved" indicator only flashes for 1.5s then fades — no toast.
-  const isInitialMountRef = useRef(true);
-  useEffect(() => {
-    updateSellDraft({
-      photos,
-      mediaDraftItems,
-      title,
-      description: desc,
-      price,
-      originalPrice,
-      brand,
-      size,
-      condition,
-      categoryId: category,
-      tags,
-      listingMode,
-      shippingMethod,
-      shippingPayer,
-      startingBid,
-      reservePrice,
-      auctionDurationHours,
-      coOwnEnabled,
-      shareCountInput,
-      sharePriceInput,
-      offeringWindowHours,
-      authPhotos,
-    });
-    // Skip the transient flash on initial mount (draft restore) — only
-    // show "Saved" when the user actually edits a field.
-    if (isInitialMountRef.current) {
-      isInitialMountRef.current = false;
-      return;
-    }
-    setDraftSavedVisible(true);
-    if (draftSavedTimerRef.current) clearTimeout(draftSavedTimerRef.current);
-    draftSavedTimerRef.current = setTimeout(() => setDraftSavedVisible(false), 1500);
-  }, [photos, mediaDraftItems, title, desc, price, originalPrice, brand, size, condition, category, tags, listingMode, shippingMethod, shippingPayer, startingBid, reservePrice, auctionDurationHours, coOwnEnabled, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, updateSellDraft]);
-
-  // Cleanup the transient timer on unmount
-  useEffect(() => {
-    return () => {
-      if (draftSavedTimerRef.current) clearTimeout(draftSavedTimerRef.current);
-    };
-  }, []);
+  // Taxonomy — single source of truth for category/brand/size/condition
+  // picker vocabulary. Replaces the per-screen hard-coded arrays that had
+  // diverged from the canonical set (audit P2 #25).
+  const { categories, conditions, sizes, brands } = useTaxonomy();
+  const pickerTaxonomy = useMemo(
+    () => ({
+      category: categories.filter((n) => n.parentId === null).map((n) => n.name),
+      brand: brands.map((n) => n.name),
+      size: sizes.map((n) => n.name),
+      condition: conditions.map((n) => n.name),
+    }),
+    [categories, conditions, sizes, brands],
+  );
 
   /* -- co-own bidirectional math -- */
   useEffect(() => {
@@ -461,23 +366,6 @@ export default function SellScreen() {
     setTags((prev) => prev.filter((x) => x !== tag));
   }, []);
 
-  useEffect(() => {
-    const trimmed = tagInput.trim();
-    if (tagDebounceRef.current) clearTimeout(tagDebounceRef.current);
-    if (trimmed.length < 2) {
-      setTagSuggestions([]);
-      return;
-    }
-    tagDebounceRef.current = setTimeout(() => {
-      fetchAutocompleteSuggestions(trimmed, undefined, 5).then((res) => {
-        setTagSuggestions(res.suggestions.slice(0, 5));
-      });
-    }, 300);
-    return () => {
-      if (tagDebounceRef.current) clearTimeout(tagDebounceRef.current);
-    };
-  }, [tagInput]);
-
   const handleTagSuggestionPick = useCallback((suggestion: AutocompleteSuggestion) => {
     const raw = suggestion.query.trim().toLowerCase();
     if (!raw) return;
@@ -488,23 +376,6 @@ export default function SellScreen() {
     setTagSuggestionsVisible(false);
     haptics.tap();
   }, []);
-
-  const renderTagSuggestion: ListRenderItem<AutocompleteSuggestion> = useCallback(
-    ({ item }) => (
-      <Pressable
-        style={({ pressed }) => [styles.tagSuggestionRow, pressed && { opacity: 0.6 }]}
-        onPress={() => handleTagSuggestionPick(item)}
-        accessibilityRole="button"
-        accessibilityLabel={`Add tag ${item.query}`}
-      >
-        <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} aria-hidden={true} />
-        <Text style={[styles.tagSuggestionText, { color: colors.textPrimary }]} numberOfLines={1}>
-          {item.query}
-        </Text>
-      </Pressable>
-    ),
-    [handleTagSuggestionPick, colors],
-  );
 
   /* -- photo handling -- */
   const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
@@ -680,289 +551,41 @@ export default function SellScreen() {
     setShareCountInput(sanitizeShareCountInput(value));
   }, []);
 
-  /* -- publish -- */
-  const handlePublish = useCallback(async () => {
-    const trimmedTitle = title.trim();
-    const trimmedDescription = desc.trim();
-    const numericPrice = Number(sanitizeDecimalInput(price));
-
-    const nextErrors = buildPublishErrors({
-      missingRequired: completeness.missingRequired,
-      listingMode,
-      trimmedDescription,
-      numericPrice,
-      shareCountInput,
-      sharePriceInput,
-      authPhotosLength: authPhotos.length,
-      startingBid,
-    });
-
-    if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors);
-      setErrorMsg('Fix the errors above before publishing.');
-      haptics.error();
-      return;
-    }
-
-    setErrors({});
-    trackFunnelStep('listing_creation', 'listing_submitted', { mode: listingMode });
-
-    // Performance mark: listing creation flow start (validation passed).
-    performance.mark('listing:create:start');
-
-    if (listingMode === 'co_own') {
-      const prefillResult = buildCreateCoOwnPrefillFromSell({
-        shareCountInput,
-        sharePriceInput,
-        offeringWindowHours,
-        authPhotos,
-      });
-
-      if (!prefillResult.ok) {
-        setErrorMsg(prefillResult.error ?? 'Unable to prepare co-own listing.');
-        haptics.error();
-        return;
-      }
-
-      setErrorMsg(null);
-      haptics.success();
-      navigation.replace('CreateCoOwn', prefillResult.params);
-      return;
-    }
-
-    if (listingMode === 'auction') {
-      if (!currentUser?.id) {
-        setErrorMsg('Sign in to publish a listing.');
-        haptics.error();
-        return;
-      }
-      setErrorMsg(null);
-      setIsPublishing(true);
-      try {
-        const queue = uploadQueueRef.current;
-        const itemsToUpload = mediaDraftItems.filter((m) => m.source === 'local' && m.status !== 'uploaded');
-        if (itemsToUpload.length > 0) {
-          queue.addAssets(
-            itemsToUpload.map((m) => ({
-              id: m.id,
-              uri: m.uri,
-              fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
-              mimeType: m.mimeType || 'image/jpeg',
-              kind: m.kind,
-              width: m.width,
-              height: m.height,
-            }))
-          );
-          await queue.run();
-          const queueItems = queue.getItems();
-          setMediaDraftItems((prev) =>
-            prev.map((m) => {
-              const qi = queueItems.find((q) => q.id === m.id);
-              if (!qi) return m;
-              return { ...m, status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status, publicUrl: qi.publicUrl || m.publicUrl, error: qi.error || m.error };
-            })
-          );
-        }
-        const uploadedMedia = resolvePublishedMedia(mediaDraftItems, queue);
-        const uploadedUrls = uploadedMedia.map((item) => item.url);
-        const verifiedQueueItems = queue.getItems();
-        const coverUpload = verifiedQueueItems.find(
-          (item) => item.state === 'uploaded'
-            && item.asset.kind === 'image'
-            && item.publicUrl
-            && item.finalizationId,
-        );
-        if (!coverUpload) {
-          throw new Error('A verified cover image is required before creating an auction.');
-        }
-        const coverImage = coverUpload.publicUrl!;
-        const listingId = makeStableId('listing');
-        await createListingOnApi({
-          id: listingId,
-          sellerId: currentUser.id,
-          title: trimmedTitle,
-          description: trimmedDescription,
-          priceGbp: numericPrice,
-          imageUrl: coverImage,
-          coverFinalizationId: coverUpload.finalizationId!,
-          status: 'active',
-          category,
-          brand: brand || undefined,
-          size,
-          condition,
-          originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-          shippingMethod: shippingMethod || undefined,
-          shippingPayer: shippingPayer || undefined,
-        });
-        for (let i = 0; i < uploadedUrls.length; i++) {
-          const verifiedUpload = verifiedQueueItems.find(
-            (item) => item.publicUrl === uploadedUrls[i] && item.finalizationId,
-          );
-          if (!verifiedUpload) {
-            throw new Error('Every auction media item must be verified before attachment.');
-          }
-          await createListingImageOnApi({
-            id: `${listingId}_img_${i}`,
-            listingId,
-            imageUrl: uploadedUrls[i],
-            sortOrder: i,
-            mediaWidth: uploadedMedia[i]?.width,
-            mediaHeight: uploadedMedia[i]?.height,
-            finalizationId: verifiedUpload.finalizationId!,
-          });
-        }
-        clearSellDraft();
-        setMediaDraftItems([]);
-        queue.reset();
-        haptics.success();
-        // Performance mark: listing creation complete (auction path).
-        performance.mark('listing:create:complete');
-        navigation.replace('CreateAuction', { listingId });
-      } catch (e: unknown) {
-        const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to prepare auction. Try again.';
-        setErrorMsg(msg);
-        haptics.error();
-      } finally {
-        isPublishingRef.current = false;
-        setIsPublishing(false);
-      }
-      return;
-    }
-
-    if (!currentUser?.id) {
-      setErrorMsg('Sign in to publish a listing.');
-      haptics.error();
-      return;
-    }
-
-    if (isPublishing || isPublishingRef.current) return;
-    isPublishingRef.current = true;
-    setIsPublishing(true);
-    setErrorMsg(null);
-    setPublicationStage('uploading_media');
-
-    try {
-      const queue = uploadQueueRef.current;
-      const itemsToUpload = mediaDraftItems.filter((m) => m.source === 'local' && m.status !== 'uploaded');
-      if (itemsToUpload.length > 0) {
-        const assets = itemsToUpload.map((m) => ({
-          id: m.id,
-          uri: m.uri,
-          fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
-          mimeType: m.mimeType || 'image/jpeg',
-          kind: m.kind,
-          width: m.width,
-          height: m.height,
-        }));
-        queue.addAssets(assets);
-        await queue.run();
-        const queueItems = queue.getItems();
-        setMediaDraftItems((prev) =>
-          prev.map((m) => {
-            const qi = queueItems.find((q) => q.id === m.id);
-            if (!qi) return m;
-            return {
-              ...m,
-              status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status,
-              publicUrl: qi.publicUrl || m.publicUrl,
-              error: qi.error || m.error,
-            };
-          })
-        );
-      }
-
-      const uploadedMedia = resolvePublishedMedia(mediaDraftItems, queue);
-      const uploadedUrls = uploadedMedia.map((item) => item.url);
-      const verifiedQueueItems = queue.getItems();
-      const coverUpload = verifiedQueueItems.find(
-        (item) => item.state === 'uploaded'
-          && item.asset.kind === 'image'
-          && item.publicUrl
-          && item.finalizationId,
-      );
-      if (!coverUpload) {
-        throw new Error('A verified cover image is required before publishing.');
-      }
-      const coverImage = coverUpload.publicUrl!;
-      let listingId = publishedListingIdRef.current;
-
-      if (!listingId) {
-        setPublicationStage('creating_listing');
-        listingId = makeStableId('listing');
-        await createListingOnApi({
-          id: listingId,
-          sellerId: currentUser.id,
-          title: trimmedTitle,
-          description: trimmedDescription,
-          priceGbp: numericPrice,
-          imageUrl: coverImage,
-          coverFinalizationId: coverUpload.finalizationId!,
-          status: 'active',
-          category,
-          brand: brand || undefined,
-          size,
-          condition,
-          originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-          shippingMethod: shippingMethod || undefined,
-          shippingPayer: shippingPayer || undefined,
-        });
-        publishedListingIdRef.current = listingId;
-      }
-
-      setPublicationStage('attaching_media');
-      for (let i = 0; i < uploadedUrls.length; i++) {
-        const verifiedUpload = verifiedQueueItems.find(
-          (item) => item.publicUrl === uploadedUrls[i] && item.finalizationId,
-        );
-        if (!verifiedUpload) {
-          throw new Error('Every listing media item must be verified before attachment.');
-        }
-        await createListingImageOnApi({
-          id: `${listingId}_img_${i}`,
-          listingId,
-          imageUrl: uploadedUrls[i],
-          sortOrder: i,
-          mediaWidth: uploadedMedia[i]?.width,
-          mediaHeight: uploadedMedia[i]?.height,
-          finalizationId: verifiedUpload.finalizationId!,
-        });
-      }
-
-      setPublicationStage('completed');
-      clearSellDraft();
-      setMediaDraftItems([]);
-      queue.reset();
-      publishedListingIdRef.current = null;
-      haptics.success();
-      // Performance mark: listing creation complete (standard path).
-      performance.mark('listing:create:complete');
-      track('listing_created', { category, price_range: numericPrice <= 20 ? 'low' : numericPrice <= 50 ? 'mid' : numericPrice <= 100 ? 'high' : 'premium' });
-      navigation.replace('ListingSuccess', {
-        listingId,
-        title: trimmedTitle,
-        price: numericPrice,
-        categoryId: category,
-        photoUri: coverImage,
-      });
-    } catch (e: unknown) {
-      const isNetworkError = isOffline || (typeof e === 'object' && e !== null && 'code' in e && (e as { code?: string }).code === 'NETWORK_ERROR');
-      const rawMsg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Try again.';
-      const msg = isNetworkError ? 'You appear to be offline. Check your connection and try again.' : rawMsg;
-      const hasListing = !!publishedListingIdRef.current;
-      const hasMedia = mediaDraftItems.some((m) => m.status === 'uploaded');
-      setPublicationStage('failed_recoverable');
-      setErrorMsg(hasListing ? `${msg} -- your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} -- some media uploaded. Tap Publish to retry.` : msg);
-      haptics.error();
-    } finally {
-      isPublishingRef.current = false;
-      setIsPublishing(false);
-    }
-  }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline, completeness]);
+  /* -- publish pipeline (media-upload → create-listing → attach-media) -- */
+  const { isPublishing, publicationStage, handlePublish } = useListingPublishPipeline({
+    listingMode,
+    title,
+    desc,
+    price,
+    originalPrice,
+    category,
+    brand,
+    size,
+    condition,
+    startingBid,
+    shareCountInput,
+    sharePriceInput,
+    offeringWindowHours,
+    authPhotos,
+    shippingMethod,
+    shippingPayer,
+    photos,
+    mediaDraftItems,
+    completeness,
+    isOffline,
+    currentUser,
+    navigation,
+    uploadQueueRef,
+    setMediaDraftItems,
+    setPhotos,
+    setErrors,
+    setErrorMsg,
+  });
 
   /* -- picker helpers -- */
   const getPickerOptions = useCallback(() => {
-    return getPickerOptionsForMode(pickerMode);
-  }, [pickerMode]);
+    return getPickerOptionsForMode(pickerMode, pickerTaxonomy);
+  }, [pickerMode, pickerTaxonomy]);
 
   const getPickerSelected = useCallback(() => {
     switch (pickerMode) {
@@ -1022,7 +645,7 @@ export default function SellScreen() {
   }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, navigation]);
 
   return (
-    <SafeAreaView style={[styles.root, themed.root]} edges={['top']}>
+    <SafeAreaView ref={a11yRef} style={[styles.root, themed.root]} edges={['top']}>
         {/* -- 1. COMPACT NAVIGATION HEADER -- */}
         <View style={[styles.navHeader, themed.navHeader, { paddingTop: 0 }]}>
           <Pressable
@@ -1145,43 +768,7 @@ export default function SellScreen() {
               Dismissible, only shows when isNewSeller and not dismissed.
               Flat inline — no card chrome (§4 surface budget). */}
           {isNewSeller && !sellerTipsDismissed && !hasDraftContent && (
-            <View style={styles.sellerTipsSection}>
-              <View style={styles.sellerTipsHeader}>
-                <Ionicons name="bulb-outline" size={16} color={colors.brand} aria-hidden={true} />
-                <Text style={[styles.sellerTipsTitle, { color: colors.textPrimary }]}>
-                  {t('listing.create.sellingTips')}
-                </Text>
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => setSellerTipsDismissed(true)}
-                  style={({ pressed }) => pressed && { opacity: 0.5 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Dismiss selling tips"
-                >
-                  <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
-                </Pressable>
-              </View>
-              <View style={styles.sellerTipsBody}>
-                <View style={styles.sellerTipRow}>
-                  <Ionicons name="camera-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
-                    {t('listing.create.sellingTipLighting')}
-                  </Text>
-                </View>
-                <View style={styles.sellerTipRow}>
-                  <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
-                    {t('listing.create.sellingTipPricing')}
-                  </Text>
-                </View>
-                <View style={styles.sellerTipRow}>
-                  <Ionicons name="chatbubble-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
-                    {t('listing.create.sellingTipRespond')}
-                  </Text>
-                </View>
-              </View>
-            </View>
+            <SellerTipsBanner onDismiss={() => setSellerTipsDismissed(true)} />
           )}
           {/* -- 2. LARGE LISTING MEDIA STUDIO -- */}
           {mediaDraftItems.length === 0 ? (
@@ -1224,33 +811,10 @@ export default function SellScreen() {
           )}
 
           {/* -- 2a. PHOTO UPLOAD GUIDANCE (contextual, collapsible) -- */}
-          <Pressable
-            style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.6 }]}
-            onPress={() => setPhotoGuideCollapsed((v) => !v)}
-            accessibilityRole="button"
-            accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
-          >
-            <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
-            <Text style={[styles.photoGuideTitle, themed.photoGuideTitle]}>{t('listing.create.photoTips')}</Text>
-            <Text style={[styles.photoGuideMin, themed.photoGuideMin]}>{t('listing.create.photoTipsMin')}</Text>
-            <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color={colors.textMuted} aria-hidden={true} />
-          </Pressable>
-          {!photoGuideCollapsed && (
-            <View style={styles.photoGuideTips}>
-              <View style={styles.photoGuideTipRow}>
-                <Ionicons name="sunny-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipLighting')}</Text>
-              </View>
-              <View style={styles.photoGuideTipRow}>
-                <Ionicons name="cube-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipAngles')}</Text>
-              </View>
-              <View style={styles.photoGuideTipRow}>
-                <Ionicons name="leaf-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipBackground')}</Text>
-              </View>
-            </View>
-          )}
+          <PhotoGuideCollapse
+            collapsed={photoGuideCollapsed}
+            onToggle={() => setPhotoGuideCollapsed((v) => !v)}
+          />
 
           {/* -- 2a-2. CONTEXTUAL AUTHENTICITY PROMPTS -- */}
           {/* Per audit 04 P1: "Contextual authenticity prompts by category/value."
@@ -1294,10 +858,12 @@ export default function SellScreen() {
                   <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
               </View>
-              <TextInput
+              <DebouncedTextInput
                 style={[styles.fieldInput, themed.fieldInput]}
                 value={title}
-                onChangeText={(t) => { setTitle(t); if (errors.title) setErrors((p) => ({ ...p, title: '' })); }}
+                debounceMs={300}
+                onImmediateChange={() => { if (errors.title) setErrors((p) => ({ ...p, title: '' })); }}
+                onChangeText={setTitle}
                 placeholder={t('listing.create.titlePlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 returnKeyType="next"
@@ -1347,19 +913,19 @@ export default function SellScreen() {
               {autofillSuggestion.title && (
                 <View style={styles.autofillRow}>
                   <Text style={[styles.autofillRowLabel, themed.autofillChipLabel]}>{t('listing.create.listingTitle')}</Text>
-                  <Text style={[styles.autofillRowValue, themed.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.title}</Text>
+                  <Text style={[styles.autofillRowValue, themed.autofillChipValue]} numberOfLines={2}>{autofillSuggestion.title}</Text>
                 </View>
               )}
               {autofillSuggestion.brand && (
                 <View style={styles.autofillRow}>
                   <Text style={[styles.autofillRowLabel, themed.autofillChipLabel]}>{t('listing.create.brand')}</Text>
-                  <Text style={[styles.autofillRowValue, themed.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.brand}</Text>
+                  <Text style={[styles.autofillRowValue, themed.autofillChipValue]} numberOfLines={2}>{autofillSuggestion.brand}</Text>
                 </View>
               )}
               {autofillSuggestion.category && (
                 <View style={styles.autofillRow}>
                   <Text style={[styles.autofillRowLabel, themed.autofillChipLabel]}>{t('listing.create.category')}</Text>
-                  <Text style={[styles.autofillRowValue, themed.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.category}</Text>
+                  <Text style={[styles.autofillRowValue, themed.autofillChipValue]} numberOfLines={2}>{autofillSuggestion.category}</Text>
                 </View>
               )}
               <Pressable
@@ -1637,89 +1203,18 @@ export default function SellScreen() {
             )}
 
             {listingMode === 'auction' && (
-              <>
-                <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Starting bid</Text>
-                  <View style={styles.priceInputRow}>
-                    <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
-                    <TextInput
-                      style={[styles.priceInput, themed.priceInput]}
-                      placeholder="0"
-                      placeholderTextColor={colors.textMuted}
-                      keyboardType="decimal-pad"
-                      value={startingBid}
-                      onChangeText={(t) => { setStartingBid(sanitizeDecimalInput(t)); setErrors((p) => ({ ...p, startingBid: '' })); }}
-                      maxLength={8}
-                    />
-                  </View>
-                  {errors.startingBid ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.startingBid}</Text> : null}
-
-                  {/* ── Seller proceeds estimate (auction) ──
-                      Per audit 04 P1: "Add seller-proceeds preview beside price."
-                      For auctions, shows the minimum proceeds from the starting
-                      bid so sellers understand their floor payout. */}
-                  {hasValidStartingBid && numericStartingBid > 0 && (
-                    <View style={styles.proceedsRow}>
-                      <View style={styles.proceedsLeft}>
-                        <Ionicons name="wallet-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
-                        <Text style={[styles.proceedsLabel, themed.fieldHelper]}>
-                          You receive (from starting bid)
-                        </Text>
-                      </View>
-                      <View style={styles.proceedsRight}>
-                        <Text style={[styles.proceedsAmount, { color: colors.success }]}>
-                          {currencySymbol}{(numericStartingBid - calculatePlatformChargeGbp(numericStartingBid)).toFixed(2)}
-                        </Text>
-                        <Text style={[styles.proceedsFeeHint, themed.fieldHelper]}>
-                          after {currencySymbol}{calculatePlatformChargeGbp(numericStartingBid).toFixed(2)} fee
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-
-                  <View style={[styles.hairline, themed.hairline]} />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Reserve price (optional)</Text>
-                  <View style={styles.priceInputRow}>
-                    <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
-                    <TextInput
-                      style={[styles.priceInput, themed.priceInput]}
-                      placeholder="0"
-                      placeholderTextColor={colors.textMuted}
-                      keyboardType="decimal-pad"
-                      value={reservePrice}
-                      onChangeText={(t) => setReservePrice(sanitizeDecimalInput(t))}
-                      maxLength={8}
-                    />
-                  </View>
-                  <View style={[styles.hairline, themed.hairline]} />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Duration</Text>
-                  <View style={styles.toggleRow}>
-                    {AUCTION_DURATIONS.map((h) => {
-                      const active = auctionDurationHours === h;
-                      return (
-                        <Pressable
-                          key={h}
-                          style={({ pressed }) => [styles.togglePill, themed.togglePill, active && styles.togglePillActive, active && themed.togglePillActive, pressed && { opacity: 0.7 }]}
-                          onPress={() => setAuctionDurationHours(h)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Set duration to ${h} hours`}
-                        >
-                          <Text style={[styles.toggleText, themed.toggleText, active && styles.toggleTextActive, active && themed.toggleTextActive]}>
-                            {h < 72 ? `${h}h` : `${h / 24}d`}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  <View style={[styles.hairline, themed.hairline]} />
-                </View>
-              </>
+              <AuctionFieldsSection
+                currencySymbol={currencySymbol}
+                startingBid={startingBid}
+                onStartingBidChange={(t) => { setStartingBid(sanitizeDecimalInput(t)); setErrors((p) => ({ ...p, startingBid: '' })); }}
+                reservePrice={reservePrice}
+                onReservePriceChange={(t) => setReservePrice(sanitizeDecimalInput(t))}
+                auctionDurationHours={auctionDurationHours}
+                onAuctionDurationHoursChange={setAuctionDurationHours}
+                errors={errors}
+                hasValidStartingBid={hasValidStartingBid}
+                numericStartingBid={numericStartingBid}
+              />
             )}
 
             {listingMode === 'co_own' && (
@@ -1819,10 +1314,12 @@ export default function SellScreen() {
                   <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
                 )}
               </View>
-              <TextInput
+              <DebouncedTextInput
                 style={[styles.fieldInput, themed.fieldInput, styles.fieldInputMultiline]}
                 value={desc}
-                onChangeText={(t) => { setDesc(t); setErrors((p) => ({ ...p, description: '' })); }}
+                debounceMs={400}
+                onImmediateChange={() => { if (errors.description) setErrors((p) => ({ ...p, description: '' })); }}
+                onChangeText={setDesc}
                 placeholder="Describe the fit, fabric, flaws, and why you love it..."
                 placeholderTextColor={colors.textMuted}
                 multiline
@@ -1836,47 +1333,18 @@ export default function SellScreen() {
             </View>
 
             <Text style={[styles.fieldLabel, themed.fieldLabel]}>Tags</Text>
-            <View style={styles.tagAutocompleteWrap}>
-              <View style={styles.tagWrap}>
-                {tags.map((tag) => (
-                  <View key={tag} style={[styles.tagChip, themed.tagChip]}>
-                    <Text style={[styles.tagText, themed.tagText]}>#{tag}</Text>
-                    <Pressable onPress={() => removeTag(tag)} hitSlop={8} style={({ pressed }) => pressed && { opacity: 0.5 }} accessibilityRole="button" accessibilityLabel={`Remove tag ${tag}`}>
-                      <Ionicons name="close" size={12} color={colors.textMuted} aria-hidden={true} />
-                    </Pressable>
-                  </View>
-                ))}
-                <TextInput
-                  style={[styles.tagInput, themed.tagInput]}
-                  placeholder={tags.length === 0 ? 'vintage, denim, oversized...' : ''}
-                  placeholderTextColor={colors.textMuted}
-                  value={tagInput}
-                  onChangeText={setTagInput}
-                  onFocus={() => setTagSuggestionsVisible(true)}
-                  onBlur={() => {
-                    setTimeout(() => setTagSuggestionsVisible(false), 150);
-                  }}
-                  onSubmitEditing={() => {
-                    handleTagSubmit();
-                    setTagSuggestions([]);
-                    setTagSuggestionsVisible(false);
-                  }}
-                  blurOnSubmit={false}
-                  returnKeyType="done"
-                />
-              </View>
-              {tagSuggestionsVisible && tagSuggestions.length > 0 && (
-                <View style={[styles.tagSuggestionDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <FlashList
-                    data={tagSuggestions}
-                    keyExtractor={(item) => `${item.query}_${item.type}`}
-                    scrollEnabled={false}
-                    drawDistance={7}
-                    renderItem={renderTagSuggestion}
-                  />
-                </View>
-              )}
-            </View>
+            <TagInputWithSuggestions
+              tags={tags}
+              tagInput={tagInput}
+              onTagInputChange={setTagInput}
+              onTagSubmit={handleTagSubmit}
+              onRemoveTag={removeTag}
+              tagSuggestions={tagSuggestions}
+              tagSuggestionsVisible={tagSuggestionsVisible}
+              onSuggestionsVisibleChange={setTagSuggestionsVisible}
+              onSuggestionsClear={() => setTagSuggestions([])}
+              onSuggestionPick={handleTagSuggestionPick}
+            />
             <Text style={[styles.fieldHelper, themed.fieldHelper]}>Press space or comma to add. Up to 8 tags.</Text>
             {tags.length > 0 && tags.length < 3 && (
               <Text style={[styles.fieldHelper, themed.fieldHelper]}>Add {3 - tags.length} more tag{3 - tags.length > 1 ? 's' : ''} to improve discovery</Text>
@@ -1921,84 +1389,14 @@ export default function SellScreen() {
           </View>
 
           {/* -- SHIPPING BOTTOM SHEET -- */}
-          <Modal
+          <ShippingPickerSheet
             visible={shippingSheetOpen}
-            animationType="slide"
-            transparent={true}
-            onRequestClose={() => setShippingSheetOpen(false)}
-          >
-            <Pressable style={[styles.shippingSheetBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShippingSheetOpen(false)} accessibilityRole="button" accessibilityLabel="Close shipping options">
-              <Pressable
-                style={[styles.shippingSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + Space.md }]}
-                onPress={(e) => { e.stopPropagation(); }}
-              accessibilityRole="button"
-              >
-                {/* Header */}
-                <View style={styles.shippingSheetHeader}>
-                  <View style={[styles.shippingSheetHandle, { backgroundColor: colors.border }]} />
-                  <View style={styles.shippingSheetTitleRow}>
-                    <Text style={[styles.shippingSheetTitle, { color: colors.textPrimary }]}>Delivery</Text>
-                    <Pressable
-                      hitSlop={Control.hit}
-                      onPress={() => { setShippingSheetOpen(false); haptics.tap(); }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Close delivery options"
-                    >
-                      <Ionicons name="close" size={22} color={colors.textMuted} aria-hidden={true} />
-                    </Pressable>
-                  </View>
-                </View>
-
-                {/* Shipping method section */}
-                <Text style={[styles.shippingSheetSectionLabel, { color: colors.textMuted }]}>Shipping method</Text>
-                {(['standard', 'express'] as const).map((m) => {
-                  const active = shippingMethod === m;
-                  return (
-                    <Pressable
-                      key={m}
-                      style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
-                      onPress={() => { setShippingMethod(m); haptics.selection(); }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Set shipping method to ${m}`}
-                      accessibilityState={{ selected: active }}
-                    >
-                      <Ionicons name={m === 'standard' ? 'cube-outline' : 'flash-outline'} size={22} color={colors.textPrimary} style={{ marginRight: Space.md }} aria-hidden={true} />
-                      <Text style={[styles.shippingSheetRowLabel, { color: colors.textPrimary }]}>
-                        {m === 'standard' ? 'Standard' : 'Express'}
-                      </Text>
-                      <View style={[styles.shippingSheetRadioOuter, { borderColor: active ? colors.brand : colors.border }]}>
-                        {active && <View style={[styles.shippingSheetRadioInner, { backgroundColor: colors.brand }]} />}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-
-                {/* Who pays section */}
-                <Text style={[styles.shippingSheetSectionLabel, { color: colors.textMuted, marginTop: Space.lg }]}>Who pays</Text>
-                {(['buyer', 'seller'] as const).map((p) => {
-                  const active = shippingPayer === p;
-                  return (
-                    <Pressable
-                      key={p}
-                      style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
-                      onPress={() => { setShippingPayer(p); haptics.selection(); }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Set shipping payer to ${p}`}
-                      accessibilityState={{ selected: active }}
-                    >
-                      <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={22} color={colors.textPrimary} style={{ marginRight: Space.md }} aria-hidden={true} />
-                      <Text style={[styles.shippingSheetRowLabel, { color: colors.textPrimary }]}>
-                        {p === 'buyer' ? 'Buyer pays' : 'I pay (free)'}
-                      </Text>
-                      <View style={[styles.shippingSheetRadioOuter, { borderColor: active ? colors.brand : colors.border }]}>
-                        {active && <View style={[styles.shippingSheetRadioInner, { backgroundColor: colors.brand }]} />}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </Pressable>
-            </Pressable>
-          </Modal>
+            onClose={() => setShippingSheetOpen(false)}
+            shippingMethod={shippingMethod}
+            shippingPayer={shippingPayer}
+            onSetShippingMethod={setShippingMethod}
+            onSetShippingPayer={setShippingPayer}
+          />
 
           {/* -- CO-OWN AUTHENTICATION MEDIA -- */}
           {listingMode === 'co_own' && (
@@ -2416,70 +1814,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
   },
 
-  /* -- tags -- */
-  tagWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs + 2,
-    alignItems: 'center',
-    marginTop: Space.xs,
-  },
-  tagChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 2,
-    borderRadius: RadiusRoleValue.compactControl,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  tagText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  tagInput: {
-    flex: 1,
-    minWidth: Space.xxl + Space.lg,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.body.letterSpacing,
-    paddingVertical: Space.xs,
-  },
-  tagAutocompleteWrap: {
-    position: 'relative',
-  },
-  tagSuggestionDropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    marginTop: Space.xs,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    zIndex: 1000,
-    elevation: 1000,
-    paddingVertical: Space.xs,
-  },
-  tagSuggestionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 44,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.sm,
-  },
-  tagSuggestionText: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-
   /* -- co-own auth photos -- */
   authPhotoRow: {
     flexDirection: 'row',
@@ -2545,47 +1879,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-
-  /* -- photo guidance (flat inline, no card chrome per §4 surface budget) -- */
-  photoGuideHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    minHeight: Control.hit,
-  },
-  photoGuideTitle: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  photoGuideMin: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  photoGuideTips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm + 2,
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
-  photoGuideTipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  photoGuideTip: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
 
@@ -2732,76 +2025,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     lineHeight: Type.caption.lineHeight,
   },
-  shippingSheetBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'transparent',
-  },
-  shippingSheet: {
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    paddingTop: Space.xs,
-    paddingHorizontal: Space.md,
-  },
-  shippingSheetHeader: {
-    alignItems: 'center',
-    paddingBottom: Space.sm,
-  },
-  shippingSheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: Radius.full,
-    backgroundColor: '#00000033', // themed inline below
-    marginBottom: Space.sm,
-  },
-  shippingSheetTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  shippingSheetTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: FontFamily.semibold,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
-  shippingSheetSectionLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: FontFamily.medium,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-    textTransform: 'uppercase',
-    marginBottom: Space.xs,
-  },
-  shippingSheetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.sm + Space.xs,
-    minHeight: Control.hit,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#00000000', // themed inline
-  },
-  shippingSheetRowLabel: {
-    flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: FontFamily.regular,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
-  shippingSheetRadioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    borderWidth: 2,
-    borderColor: '#00000033', // themed inline below
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shippingSheetRadioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: Radius.full,
-  },
-
   /* -- draft hint (flat inline) -- */
   draftHintRow: {
     flexDirection: 'row',
@@ -2871,39 +2094,5 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
-  },
-
-  /* -- new seller tips (flat inline, no card chrome) -- */
-  sellerTipsSection: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.xs + 2,
-  },
-  sellerTipsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-  },
-  sellerTipsTitle: {
-    flex: 1,
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-  },
-  sellerTipsBody: {
-    gap: Space.xs + 1,
-  },
-  sellerTipRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-  },
-  sellerTipText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight + 2,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });

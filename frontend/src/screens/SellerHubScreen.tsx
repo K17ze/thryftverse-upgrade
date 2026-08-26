@@ -28,6 +28,7 @@ import {
   type SellerHubTaskType,
 } from '../services/sellerHubApi';
 import { fetchImportBatches, type BatchSummaryDTO, type CatalogSource } from '../services/catalogImportApi';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { track } from '../analytics';
@@ -49,11 +50,6 @@ const TASK_META: Record<SellerHubTaskType, {
   catalogue_awaiting: { icon: 'download-outline', route: 'CatalogImportProgress' },
   payout_hold: { icon: 'wallet-outline', route: 'Wallet' },
 };
-
-function formatGbp(value: number): string {
-  if (value >= 1000) return `£${(value / 1000).toFixed(1)}k`;
-  return `£${value.toFixed(0)}`;
-}
 
 function formatDueAt(dueAt: string | null): string | null {
   if (!dueAt) return null;
@@ -97,6 +93,14 @@ export default function SellerHubScreen() {
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
+
+  const formatMoney = useCallback((value: number): string => {
+    if (value >= 1000) {
+      return `${formatFromFiat(value, currencyCode, { displayMode: 'fiat', izeFractionDigits: 1 })}k`;
+    }
+    return formatFromFiat(value, currencyCode, { displayMode: 'fiat', izeFractionDigits: 0 });
+  }, [formatFromFiat, currencyCode]);
 
   const [overview, setOverview] = useState<SellerHubOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -310,7 +314,7 @@ export default function SellerHubScreen() {
                 if (topTask.consequence?.kind === 'money' && topTask.consequence.amountGbp) {
                   return (
                     <Text style={[styles.topTaskDue, { color: colors.textMuted }]} numberOfLines={1}>
-                      {formatGbp(topTask.consequence.amountGbp)} at stake
+                      {formatMoney(topTask.consequence.amountGbp)} at stake
                     </Text>
                   );
                 }
@@ -322,27 +326,27 @@ export default function SellerHubScreen() {
         )}
 
         {/* ── Money posture — available, processing, held ──
-            Per Report 17 §6.1: "£428 available £91 processing £35 held"
+            Per Report 17 §6.1: "{currencySymbol}428 available {currencySymbol}91 processing {currencySymbol}35 held"
             Flat metric lines, not cards. One line per state.
             Asking-price inventory value is NOT shown here — it's not money. */}
         {money && (
           <View style={styles.moneySection}>
             <FlagshipMetricLine
               label="Available"
-              value={formatGbp(money.availableGbp)}
+              value={formatMoney(money.availableGbp)}
               subLabel={money.nextPayoutAt ? `Next payout ${new Date(money.nextPayoutAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : undefined}
               emphasis
             />
             <FlagshipMetricLine
               label="Processing"
-              value={formatGbp(money.processingGbp)}
+              value={formatMoney(money.processingGbp)}
               subLabel="Pending escrow release"
               separated
             />
             {money.heldGbp > 0 && (
               <FlagshipMetricLine
                 label="Held in reserve"
-                value={formatGbp(money.heldGbp)}
+                value={formatMoney(money.heldGbp)}
                 subLabel="Rolling reserve"
                 separated
               />
@@ -361,7 +365,7 @@ export default function SellerHubScreen() {
               const subtitleParts: string[] = [];
               if (dueLabel) subtitleParts.push(dueLabel);
               if (task.consequence?.kind === 'money' && task.consequence.amountGbp) {
-                subtitleParts.push(`${formatGbp(task.consequence.amountGbp)} at stake`);
+                subtitleParts.push(`${formatMoney(task.consequence.amountGbp)} at stake`);
               } else if (task.consequence?.kind === 'trust') {
                 subtitleParts.push('Affects seller rating');
               } else if (task.consequence?.kind === 'listing') {
@@ -417,13 +421,13 @@ export default function SellerHubScreen() {
           <FlagshipFormSection variant="flat" title="Last 30 days">
             <FlagshipMetricLine
               label="Gross sales"
-              value={formatGbp(businessPulse.grossSalesGbp)}
+              value={formatMoney(businessPulse.grossSalesGbp)}
               subLabel={`${businessPulse.orders} order${businessPulse.orders === 1 ? '' : 's'}`}
             />
             {businessPulse.refundsGbp > 0 && (
               <FlagshipMetricLine
                 label="Refunds"
-                value={`-${formatGbp(businessPulse.refundsGbp)}`}
+                value={`-${formatMoney(businessPulse.refundsGbp)}`}
                 danger
                 separated
               />
@@ -431,14 +435,14 @@ export default function SellerHubScreen() {
             {businessPulse.feesGbp > 0 && (
               <FlagshipMetricLine
                 label="Fees"
-                value={`-${formatGbp(businessPulse.feesGbp)}`}
+                value={`-${formatMoney(businessPulse.feesGbp)}`}
                 muted
                 separated
               />
             )}
             <FlagshipMetricLine
               label="Net sales"
-              value={formatGbp(businessPulse.netSalesGbp)}
+              value={formatMoney(businessPulse.netSalesGbp)}
               success={businessPulse.netSalesGbp > 0}
               emphasis
               separated
@@ -533,7 +537,7 @@ export default function SellerHubScreen() {
           <FlagshipMetricLine label="Paused" value={String(inventory.paused)} separated />
           <FlagshipMetricLine
             label="Listed value"
-            value={formatGbp(inventory.listedValueGbp)}
+            value={formatMoney(inventory.listedValueGbp)}
             subLabel="Asking price, not revenue"
             separated
           />

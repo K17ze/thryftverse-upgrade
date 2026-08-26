@@ -23,6 +23,7 @@ import { View, Text, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import {
   Space,
   Radius,
@@ -59,6 +60,7 @@ export function ListingPreviewCard({
   sellerAvatar,
 }: ListingPreviewCardProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const hasPhoto = Boolean(coverPhotoUri);
@@ -120,7 +122,7 @@ export function ListingPreviewCard({
           </Text>
           <View style={styles.priceRow}>
             <Text style={styles.priceHero}>
-              {price > 0 ? `£${price.toFixed(2)}` : '£—'}
+              {price > 0 ? `${currencySymbol}${price.toFixed(2)}` : `${currencySymbol}—`}
             </Text>
           </View>
 

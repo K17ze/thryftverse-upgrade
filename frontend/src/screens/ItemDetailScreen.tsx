@@ -80,6 +80,7 @@ import {
   CommerceDetailOfflineBanner,
   SellerInfoCard,
   ShippingReturnsInfo,
+  SustainabilityImpact,
   MakeOfferSheet,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
@@ -1363,8 +1364,8 @@ export default function ItemDetailScreen() {
             />
             <ShippingReturnsInfo
               commerce={commerce}
-              carbonNeutral={commerce.shippingPayer === 'seller'}
             />
+            <SustainabilityImpact listingId={item.id} />
           </CommerceDetailSection>
         ) : null}
 

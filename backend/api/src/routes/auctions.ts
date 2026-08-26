@@ -2975,6 +2975,65 @@ app.get('/users/me/auction-bids', async (request, reply) => {
   return { ok: true, items: filtered, nextCursor };
 });
 
+// ── Unknown-outcome reconciliation for auction bids ────────────────
+//
+// GET /users/me/auction-bids/lookup-by-key/:idempotencyKey
+//
+// When a client sends POST /auctions/:auctionId/bids but the response is
+// lost (network timeout), the outcome is ambiguous — the bid may or may
+// not have been placed. This endpoint resolves the ambiguity by looking
+// up the bid by its idempotency key. Returns:
+//   - 200 { ok: true, status: 'acknowledged', bid }
+//   - 404 { ok: false, status: 'safe_to_retry' }
+app.get('/users/me/auction-bids/lookup-by-key/:idempotencyKey', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const bidderId = request.authUser.userId;
+  const { idempotencyKey } = z.object({
+    idempotencyKey: z.string().min(2).max(200),
+  }).parse(request.params);
+
+  const result = await db.query<{
+    id: number;
+    auction_id: string;
+    bidder_id: string;
+    amount_gbp: number | string;
+    is_proxy: boolean;
+    max_bid_gbp: number | string | null;
+    idempotency_key: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, auction_id, bidder_id, amount_gbp,
+            is_proxy, max_bid_gbp, idempotency_key, created_at
+     FROM auction_bids
+     WHERE bidder_id = $1 AND idempotency_key = $2
+     LIMIT 1`,
+    [bidderId, idempotencyKey],
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, status: 'safe_to_retry' as const };
+  }
+
+  const row = result.rows[0];
+  return {
+    ok: true as const,
+    status: 'acknowledged' as const,
+    bid: {
+      id: row.id,
+      auctionId: row.auction_id,
+      amountGbp: Number(row.amount_gbp),
+      isProxy: row.is_proxy,
+      maxBidGbp: row.max_bid_gbp !== null ? Number(row.max_bid_gbp) : null,
+      createdAt: row.created_at,
+    },
+  };
+});
+
 // ── T20: Seller cancellation ──────────────────────────────────────
 // Allows a seller to cancel an auction that is not yet terminal.
 // Notifies all bidders and reactivates the listing.

@@ -1,27 +1,25 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
-  ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useBackendData } from '../context/BackendDataContext';
 import { useStore } from '../store/useStore';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { ProductCardV2 } from '../components/ProductCardV2';
-import { MasonryGrid } from '../components/ProductCardV2';
+import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { useToast } from '../context/ToastContext';
 import { fetchFilteredListings } from '../services/listingsApi';
+import { mapListingToDiscoverySummary } from '../contracts/DiscoveryListingSummary';
 import type { Listing } from '../domain';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 
@@ -34,10 +32,9 @@ export default function ExploreCollectionScreen() {
   const route = useRoute<RouteT>();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { show } = useToast();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { listings, isSyncing, lastError, refreshListings } = useBackendData();
+  const { listings, isSyncing, refreshListings } = useBackendData();
   const savedProducts = useStore((state) => state.savedProducts);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
 
@@ -98,7 +95,7 @@ export default function ExploreCollectionScreen() {
           return db - da;
         });
         break;
-      case 'saved_affinity':
+      case 'closet_affinity':
         if (savedProducts.length > 0) {
           const savedSet = new Set(savedProducts);
           result = result.filter((l) => savedSet.has(l.id));
@@ -111,17 +108,48 @@ export default function ExploreCollectionScreen() {
     return result;
   }, [backendListings, listings, source, savedProducts]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     await refreshListings();
-  };
+  }, [refreshListings]);
 
-  const renderHeader = () => (
-    <View style={styles.headerInfo}>
-      {subtitle ? (
-        <Text style={styles.headerSubtitle}>{subtitle}</Text>
-      ) : null}
-      <Text style={styles.headerCount}>{filteredListings.length} items</Text>
-    </View>
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await handleRefresh();
+    setIsRefreshing(false);
+  }, [handleRefresh]);
+
+  const handleItemPress = useCallback(
+    (item: Listing) => {
+      haptic.light();
+      ProductAnalytics.itemView(item.id);
+      navigation.push('ItemDetail', { itemId: item.id });
+    },
+    [haptic, navigation],
+  );
+
+  const handleSaveToggle = useCallback(
+    (listing: ReturnType<typeof mapListingToDiscoverySummary>) => {
+      toggleSavedProduct(listing.id);
+    },
+    [toggleSavedProduct],
+  );
+
+  const isItemSaved = useCallback(
+    (listingId: string) => savedProducts.includes(listingId),
+    [savedProducts],
+  );
+
+  const listHeader = useMemo(
+    () => (
+      <View style={styles.headerInfo}>
+        {subtitle ? (
+          <Text style={styles.headerSubtitle}>{subtitle}</Text>
+        ) : null}
+        <Text style={styles.headerCount}>{filteredListings.length} items</Text>
+      </View>
+    ),
+    [subtitle, filteredListings.length, styles],
   );
 
   if ((isSyncing || isFetching) && filteredListings.length === 0) {
@@ -171,27 +199,26 @@ export default function ExploreCollectionScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
       header={<FlagshipHeader title={title} onBack={() => navigation.goBack()} />}
     >
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {renderHeader()}
-        <MasonryGrid
-          items={filteredListings}
-          onPressItem={(item) => {
-            haptic.light();
-            ProductAnalytics.itemView(item.id);
-            navigation.push('ItemDetail', { itemId: item.id });
-          }}
-          showSaveButton
-        />
-      </ScrollView>
+      <PinterestMasonryGrid
+        items={filteredListings}
+        onPressItem={handleItemPress}
+        onItemSaveToggle={handleSaveToggle}
+        isItemSaved={isItemSaved}
+        listHeaderComponent={listHeader}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brand}
+          />
+        }
+      />
     </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    scrollContent: {
-      paddingBottom: Space.xl,
-    },
     headerInfo: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.sm,

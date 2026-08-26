@@ -60,6 +60,8 @@ export interface BarChartProps {
   error?: string | null;
   /** Optional empty-state message override. */
   emptyMessage?: string;
+  /** Screen-reader summary of the chart data (e.g. "Views over 7 days, peak 340 on Saturday, total 1,420"). Required for WCAG 1.1.1 — the Skia canvas is invisible to assistive tech. */
+  accessibilitySummary?: string;
 }
 
 // ============================================================================
@@ -162,6 +164,7 @@ export function BarChart({
   loading = false,
   error = null,
   emptyMessage = 'No data available',
+  accessibilitySummary,
 }: BarChartProps): React.ReactElement {
   const appTheme = useChartTheme();
   const theme = useMemo(
@@ -274,6 +277,13 @@ export function BarChart({
       style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
       onLayout={onLayout}
     >
+      {/* Off-screen text for screen readers — the Skia canvas is invisible
+          to VoiceOver/TalkBack, so we expose a textual summary (WCAG 1.1.1). */}
+      <Text
+        accessibilityLabel={accessibilitySummary ?? `${chartData.length} data points`}
+        accessibilityRole="text"
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      />
       <CartesianChart
         data={chartData}
         xKey="x"

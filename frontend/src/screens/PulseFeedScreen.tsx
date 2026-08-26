@@ -22,6 +22,7 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCountdown } from '../data/tradeHub';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -134,6 +135,7 @@ export default function PulseFeedScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { listings, isSyncing, refreshListings } = useBackendData();
   const { isOffline } = useConnectivity();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const customAuctions = useStore((state) => state.customAuctions);
   const now = Date.now();
 
@@ -149,7 +151,7 @@ export default function PulseFeedScreen() {
           id: `auction_${a.id}`,
           type: 'auction_live',
           title: a.title,
-          subtitle: `Current bid · £${a.currentBid}`,
+          subtitle: `Current bid · ${formatFromFiat(a.currentBid, currencyCode)}`,
           image: a.image,
           meta: `Ends ${formatCountdown(Math.max(0, endsAtMs - now))}`,
           metaAccent: true,
@@ -174,7 +176,7 @@ export default function PulseFeedScreen() {
         title: l.title ?? 'New Listing',
         subtitle: l.brand ?? 'ThryftVerse',
         image: l.images?.[0] ?? '',
-        meta: `£${l.price}`,
+        meta: formatFromFiat(l.price, currencyCode),
         routeId: l.id,
         timestamp: l.createdAt ? Date.parse(l.createdAt) : now,
       });
@@ -192,7 +194,7 @@ export default function PulseFeedScreen() {
           title: l.title ?? 'Item',
           subtitle: l.brand ?? 'ThryftVerse',
           image: l.images?.[0] ?? '',
-          meta: `Down ${dropPct}% · Now £${l.price}`,
+          meta: `Down ${dropPct}% · Now ${formatFromFiat(l.price, currencyCode)}`,
           metaAccent: true,
           routeId: l.id,
           timestamp: now - 3600000, // Approximate recent
@@ -202,7 +204,7 @@ export default function PulseFeedScreen() {
     // Sort by recency
     items.sort((a, b) => b.timestamp - a.timestamp);
     return items;
-  }, [customAuctions, listings, now]);
+  }, [customAuctions, listings, now, formatFromFiat, currencyCode]);
 
   const renderEventCard = useCallback(
     ({ item, index }: { item: FeedEvent; index: number }) => (

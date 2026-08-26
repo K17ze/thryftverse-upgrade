@@ -17,6 +17,7 @@ import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { Space, Radius, Type, Typography, LetterSpacing, Stroke, Control } from '../theme/designTokens';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InviteFriends'>;
 
@@ -45,6 +46,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
 
   const ACCENT = colors.brand;
   const CARD = colors.surface;
@@ -299,7 +301,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCell}>
-              <Text style={[styles.statValue, { color: ACCENT }]}>£{referralStats.creditsBalance}</Text>
+              <Text style={[styles.statValue, { color: ACCENT }]}>{formatFromFiat(referralStats.creditsBalance, currencyCode)}</Text>
               <Text style={styles.statLabel}>Credits</Text>
             </View>
           </View>

@@ -3,9 +3,8 @@
  *
  * Sustainability tags shown where relevant to listing. This selector lets
  * a seller tag a listing with eco-attributes (Pre-loved, Vintage,
- * Sustainable brand, Upcycled, Carbon-neutral shipping, Plastic-free
- * packaging) and surfaces a short "Sustainability impact" summary when
- * tags are active.
+ * Sustainable brand, Upcycled, Plastic-free packaging) and surfaces a
+ * short "Sustainability impact" summary when tags are active.
  *
  * Design (AGENTS.md §4):
  *   - Chip layout with icon + label; selected = filled brand, unselected = outlined.
@@ -73,12 +72,6 @@ const TAG_DEFINITIONS: SustainabilityTagDef[] = [
     label: 'Upcycled',
     icon: 'construct-outline',
     impact: 'Modified from its original form into something new.',
-  },
-  {
-    id: 'carbon-neutral-shipping',
-    label: 'Carbon-neutral shipping',
-    icon: 'cloud-outline',
-    impact: 'You offset the carbon cost of shipping.',
   },
   {
     id: 'plastic-free-packaging',

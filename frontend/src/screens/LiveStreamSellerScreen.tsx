@@ -29,6 +29,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Space, Radius, Type, Control, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
 import {
   LIVE_SHOPPING_DEMO_MODE,
@@ -69,7 +70,7 @@ const DEMO_LOTS: LotItem[] = [
 
 type LiveStreamSellerRoute = RouteProp<RootStackParamList, 'LiveStreamSeller'>;
 
-function sellerLotStatusLabel(status: LotStatus, soldAmount: number | null): string {
+function sellerLotStatusLabel(status: LotStatus, soldAmount: number | null, currencySymbol: string): string {
   switch (status) {
     case 'scheduled':
       return 'Scheduled';
@@ -78,7 +79,7 @@ function sellerLotStatusLabel(status: LotStatus, soldAmount: number | null): str
     case 'closing':
       return 'Closing soon';
     case 'sold':
-      return soldAmount != null ? `Sold for \u00A3${soldAmount}` : 'Sold';
+      return soldAmount != null ? `Sold for ${currencySymbol}${soldAmount}` : 'Sold';
     case 'passed':
       return 'Passed';
     case 'cancelled':
@@ -138,6 +139,7 @@ export function LiveStreamSellerScreen() {
   const route = useRoute<LiveStreamSellerRoute>();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -429,7 +431,7 @@ export function LiveStreamSellerScreen() {
                       <Image source={{ uri: item.imageUri }} style={styles.lotImage} />
                       <View style={styles.lotInfo}>
                         <Text style={[styles.lotTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-                        <Text style={[styles.lotPrice, { color: colors.textSecondary }]}>Start: £{item.startingPrice}</Text>
+                        <Text style={[styles.lotPrice, { color: colors.textSecondary }]}>Start: {currencySymbol}{item.startingPrice}</Text>
                       </View>
                       <Ionicons name="reorder-three-outline" size={20} color={colors.textMuted} />
                     </View>
@@ -524,7 +526,7 @@ export function LiveStreamSellerScreen() {
             <Image source={{ uri: currentLot?.imageUri }} style={styles.sellerLotImage} />
             <View style={styles.sellerLotInfo}>
               <Text style={styles.sellerLotTitle} numberOfLines={1}>{currentLot?.title}</Text>
-              <Text style={styles.sellerLotPrice}>£{currentLot?.startingPrice}</Text>
+              <Text style={styles.sellerLotPrice}>{formatFromFiat(currentLot?.startingPrice ?? 0, currencyCode)}</Text>
               <View
                 style={[
                   styles.sellerLotStatusBadge,
@@ -532,7 +534,7 @@ export function LiveStreamSellerScreen() {
                 ]}
               >
                 <Text style={[styles.sellerLotStatusText, { color: sellerLotStatusFg(currentLotStatus, colors) }]}>
-                  {sellerLotStatusLabel(currentLotStatus, soldAmount)}
+                  {sellerLotStatusLabel(currentLotStatus, soldAmount, currencySymbol)}
                 </Text>
               </View>
             </View>
@@ -648,7 +650,7 @@ export function LiveStreamSellerScreen() {
               <View style={styles.upcomingLotRow}>
                 <Image source={{ uri: item.imageUri }} style={styles.upcomingLotImage} />
                 <Text style={styles.upcomingLotTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.upcomingLotPrice}>£{item.startingPrice}</Text>
+                <Text style={styles.upcomingLotPrice}>{formatFromFiat(item.startingPrice, currencyCode)}</Text>
               </View>
             )}
             scrollEnabled={false}
@@ -695,7 +697,7 @@ export function LiveStreamSellerScreen() {
             </View>
             <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.summaryStatItem}>
-              <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>£{totalSales}</Text>
+              <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{formatFromFiat(totalSales, currencyCode)}</Text>
               <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Total Sales</Text>
             </View>
           </View>

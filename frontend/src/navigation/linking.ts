@@ -1,5 +1,37 @@
 import type { LinkingOptions } from '@react-navigation/native';
+import { getStateFromPath as defaultGetStateFromPath } from '@react-navigation/core';
 import type { RootStackParamList } from './types';
+
+/**
+ * Legacy deep-link path → converged path rewrites.
+ *
+ * Routes removed during IA convergence (item-26) are kept reachable via
+ * their original public URLs. React Navigation v7's dynamic linking config
+ * maps one path per screen, so we rewrite legacy paths before the default
+ * parser sees them. This preserves external bookmarks, push-notification
+ * URLs, and shared links without keeping dead routes in the navigator.
+ *
+ * | Legacy path       | Converged path  | Reason                          |
+ * |-------------------|-----------------|---------------------------------|
+ * | wallet/activity   | wallet/history  | WalletActivity → WalletHistory  |
+ * | auctions/all      | auctions        | Auctions → AuctionHome          |
+ *
+ * Deep-link paths for Galleria ('galleria'), PulseFeed ('pulse'), and
+ * ConversationalSearch ('ai-search') were moved from the Home tab to the
+ * Explore tab during IA convergence (item-26 Phase 3). The paths themselves
+ * are unchanged — only the tab resolution changed — so no rewrite is needed.
+ */
+const LEGACY_PATH_REWRITES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^wallet\/activity$/, 'wallet/history'],
+  [/^auctions\/all$/, 'auctions'],
+];
+
+function rewriteLegacyPath(path: string): string {
+  for (const [pattern, replacement] of LEGACY_PATH_REWRITES) {
+    if (pattern.test(path)) return replacement;
+  }
+  return path;
+}
 
 /**
  * URL prefixes that the navigation container will accept as deep links.
@@ -40,6 +72,11 @@ export const linking: LinkingOptions<RootStackParamList> = {
   // to resolve them to a screen and keeps the existing invite flow intact.
   filter: (url: string) => !/group-invite/i.test(url),
 
+  // Rewrite legacy deep-link paths before parsing so external URLs that
+  // reference removed routes still land on their converged destination.
+  getStateFromPath: (path, options) =>
+    defaultGetStateFromPath(rewriteLegacyPath(path), options),
+
   config: {
     screens: {
       // Root stack — tab navigator. Each tab wraps a native-stack
@@ -52,14 +89,11 @@ export const linking: LinkingOptions<RootStackParamList> = {
           Home: {
             screens: {
               Home: 'home',
-              PulseFeed: 'pulse',
               LookDetail: 'looks/:lookId',
-              Galleria: 'galleria',
               GalleriaCollectionDetail: 'galleria/collections/:collectionId',
               MoodboardHome: 'moodboards',
               YourAlgorithm: 'algorithm',
               StyleQuiz: 'style-quiz',
-              ConversationalSearch: 'ai-search',
             },
           },
           Explore: {
@@ -68,6 +102,12 @@ export const linking: LinkingOptions<RootStackParamList> = {
               CategoryDetail: 'category/:categoryId',
               CollectionDetail: 'collection/:collectionId',
               SavedSearches: 'saved-searches',
+              // Discovery surfaces — moved from HomeStack during IA convergence (item-26 Phase 3).
+              // Backward-compat: old deep-link paths (pulse, galleria, ai-search)
+              // are preserved so external URLs continue to resolve.
+              PulseFeed: 'pulse',
+              Galleria: 'galleria',
+              ConversationalSearch: 'ai-search',
             },
           },
           Inbox: 'inbox',
@@ -104,7 +144,6 @@ export const linking: LinkingOptions<RootStackParamList> = {
 
       // Auctions
       AuctionHome: 'auctions',
-      Auctions: 'auctions/all',
       AuctionDetail: 'auction/:auctionId',
       MyBids: 'auctions/my-bids',
 
@@ -130,9 +169,12 @@ export const linking: LinkingOptions<RootStackParamList> = {
       BalanceHistory: 'wallet/balance',
       Withdraw: 'wallet/withdraw',
       SellerEarnings: 'wallet/earnings',
-      WalletActivity: 'wallet/activity',
+      WalletHistory: 'wallet/history',
       WalletConvert: 'wallet/convert',
       AddBankAccount: 'wallet/bank-account',
+
+      // Agent ledger — transparent record of agent actions and approvals
+      AgentLedger: 'agent-ledger',
 
       // Seller tools
       SellerHub: 'seller-hub',

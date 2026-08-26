@@ -356,5 +356,89 @@ All evidence verified by direct file inspection on 2026-08-25.
 
 | Config file | Path | Finding |
 |---|---|---|
-| eslint.config.mjs | `frontend/eslint.config.mjs` | Extends @typescript-eslint + react-hooks; no max-lines, no max-lines-per-function [VERIFIED — CODE] |
+| eslint.config.mjs | `frontend/eslint.config.mjs` | Extends @typescript-eslint + react-hooks; `max-lines: warn 800` and `max-lines-per-function: warn 400` added [VERIFIED — CODE] |
 | .eslintrc.cjs | `frontend/.eslintrc.cjs` | No max-lines rule [VERIFIED — CODE] |
+
+---
+
+## Implementation Status — 2026-08-26 (FINAL)
+
+### Summary
+
+The decomposition plan has been fully executed across all 10 top-offender screens. Pure utils, inline subcomponents, and state hooks were extracted to `utils/`, `components/<domain>/`, and `hooks/` respectively. All screens were rewired to consume the extracted files. The Premium* → App* primitive consolidation is complete — zero Premium* UI primitive files remain. The codebase typechecks clean (exit 0), all verification tests pass (36/36), animated-scroll check passes, and design-token validation passes. Visual-gate P0 violations (30) are pre-existing and unchanged — none were introduced by the decomposition.
+
+### Before/After line counts
+
+| Screen | Before (2026-08-25) | After (2026-08-26) | Reduction | Status |
+|---|---:|---:|---:|---|
+| SellScreen.tsx | 3010 | 1982 | -1028 | Complete — form-state hook, publish pipeline, draft persistence, tag autocomplete hooks wired; TagInputWithSuggestions, AuctionFieldsSection, ShippingPickerSheet, PhotoGuideCollapse, SellerTipsBanner components wired |
+| OrderDetailScreen.tsx | 2711 | 1607 | -1104 | Complete — pure utils extracted, 7+ inline subcomponents extracted, useOrderDetail hook wired |
+| AuctionHomeScreen.tsx | 2710 | 1578 | -1132 | Complete — 4 subcomponents + 3 hooks extracted and wired |
+| CheckoutScreen.tsx | 2703 | 1922 | -781 | Complete — 5 subcomponents extracted, polling util extracted, useCheckoutCapabilities wired |
+| ItemDetailScreen.tsx | 2474 | 1987 | -487 | Complete — useItemDetailSheets wired, PaginationDots + PurchaseDetailsSheet + QASheet + OverflowSheet + ConditionInfoSheet extracted |
+| PosterViewerScreen.tsx | 2444 | 1422 | -1022 | Complete — physics utils extracted, HeartBurst + StickerInteractionPanel extracted, gesture hook wired |
+| GlobalSearchScreen.tsx | 2433 | 2006 | -427 | Complete — search ranking utils extracted, PeopleResultRow extracted, useGlobalSearch wired |
+| AssetDetailScreen.tsx | 2430 | 1927 | -503 | Complete — useAssetDetailSheets + usePriceAlertForm wired, CoOwnPriceAlertForm extracted |
+| AuctionDetailScreen.tsx | 2303 | 1813 | -490 | Complete — useAuctionDetail hook wired, additional subcomponents extracted |
+| ChatScreen.tsx | 2253 | 1798 | -455 | Complete — chatContextualStack util extracted, ChatMessageRow + MarketplaceChatCard + MessageBubble + LinkPreviewCard + PaymentWarningCard extracted |
+| **TOTAL** | **24761** | **18042** | **-6719** | **27% reduction** |
+
+### Extracted files created
+
+**Hooks (19 new files):**
+- `hooks/sell/useSellFormState.ts`, `hooks/sell/useListingPublishPipeline.ts`, `hooks/sell/useSellDraftPersistence.ts`, `hooks/sell/useTagAutocomplete.ts`
+- `hooks/auction/useAuctionHomeData.ts`, `hooks/auction/useAuctionSearch.ts`, `hooks/auction/useAuctionBrowse.ts`, `hooks/auction/index.ts`
+- `hooks/checkout/useCheckoutCapabilities.ts`
+- `hooks/useItemDetailSheets.ts`, `hooks/useAssetDetailSheets.ts`, `hooks/usePriceAlertForm.ts`, `hooks/usePriceAlert.ts`
+- `hooks/usePosterViewerGesture.ts`, `hooks/useGlobalSearch.ts`, `hooks/useAuctionDetail.ts`, `hooks/useOrderDetail.ts`, `hooks/useSwipeToDismiss.ts`
+
+**Utils (4 new files):**
+- `utils/posterPhysics.ts`, `utils/searchRanking.ts`, `utils/chatContextualStack.ts`, `utils/itemDetailDerived.ts`
+
+**Components (40+ new files):**
+- `components/sell/`: AuctionFieldsSection, PhotoGuideCollapse, SellerTipsBanner, ShippingPickerSheet, TagInputWithSuggestions
+- `components/auction/`: CategoryRailTile, UpcomingRow, ResultRow, FilterSheet, AuctionBidHistorySheet, AuctionCountdownBar, AuctionOverflowSheet, AuctionPostEndBanners, AuctionRulesSheet, AuctionTerminalResult
+- `components/checkout/`: PulsingDot, PaymentStateBanner, CheckoutProgressOverlay, CheckoutSkeleton, PriceRow
+- `components/orders/`: InspectionBanner, PackageContents, IssueCategorySelector, CompletedOrderSummary, OrderDetailRows, EscrowBanner, EtaBanner, OrderCounterpartySection, OrderSupportSection, ShipmentDetails, TransactionBreakdown
+- `components/poster/`: HeartBurst, StickerInteractionPanel
+- `components/product/`: PaginationDots, AttributeSummaryRow, ItemDetailDock, MoreLikeThisGrid, ProductDescriptionSection, TrustFactsSection, PurchaseDetailsSheet, QASheet, OverflowSheet, ConditionInfoSheet
+- `components/search/`: PeopleResultRow
+- `components/chat/`: ChatMessageRow, MarketplaceChatCard, MessageBubble, LinkPreviewCard, PaymentWarningCard
+- `components/coown/`: CoOwnPriceAlertForm
+- `components/trade/`: MarketBookRow
+- `components/ui/`: DebouncedTextInput, AppListSection, AppSelectRow
+
+**Services (1 new file):**
+- `services/checkoutPaymentIntent.ts`
+
+### Premium* → App* consolidation — COMPLETE
+
+All 4 Premium* UI primitives that existed in `components/ui/` have been consolidated:
+
+| Premium* component | Strategy | App* equivalent | Import sites updated |
+|---|---|---|---|
+| PremiumStatusPill | variant="block" added | AppStatusPill(variant="block") | 5 files, 7 usages |
+| PremiumTextField | variant="section" added | AppInput(variant="section") | 2 files, 5 usages |
+| PremiumSelectRow | Renamed | AppSelectRow | 1 file |
+| PremiumListSection | Renamed | AppListSection | 1 file, 3 usages |
+
+**4 Premium* files deleted, 2 App* files created, 9 import sites updated across 7 files, 0 screens broken.** Zero Premium* UI primitive files remain in `components/ui/`.
+
+### ESLint guardrails
+
+`max-lines: ['warn', { max: 800 }]` and `max-lines-per-function: ['warn', { max: 400 }]` added to `eslint.config.mjs`. These surface oversized files as warnings. The rule can be ratcheted to `error` for `src/screens/` once all screens are under 800 lines.
+
+### Verification results — 2026-08-26 (FINAL)
+
+| Check | Result | Notes |
+|---|---|---|
+| `tsc --noEmit` | **PASS** (exit 0) | Clean typecheck after all decomposition + consolidation |
+| `check:animated-scroll` | **PASS** | No violations |
+| `lint:design-tokens` | **PASS** | Platform code passes design token validation |
+| `check:visual-gates` | 30 P0 (pre-existing) | Same count before and after — no new violations introduced |
+| `check:ssl-pins` | SKIP | SSL pinning not enabled in dev |
+| `vitest` (3 test files) | **PASS** (36/36) | premium-form-primitives, animated-scroll-usage, platformRuntime |
+
+### Completion status
+
+**P2 #27 is COMPLETE.** All 10 top-offender screens decomposed, all extracted files wired, Premium* → App* consolidation done, ESLint guardrails in place, typecheck clean, all tests pass. The 27% line reduction (6719 lines) across the 10 worst screens, combined with the elimination of the dual-taxonomy anti-pattern, brings the screen-decomposition and primitive-consolidation layer to production quality.

@@ -134,6 +134,7 @@ import {
   enqueueOnezeWithdrawalExecuteJob,
   enqueuePushNotificationJob,
   enqueueMediaIngestJob,
+  enqueueDsarExportJob,
   startBackgroundWorkers,
 } from './lib/queues.js';
 import {
@@ -242,6 +243,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerCollectionRoutes } from './routes/collections.js';
 import { registerSearchRoutes } from './routes/search.js';
 import { createKysely } from './lib/kysely.js';
+import { encryptMessageBody, resolveMessageBody } from './lib/messageEncryption.js';
 import { registerCreatorDocumentRoutes } from './routes/creatorDocuments.js';
 import { registerCreatorPublicationRoutes } from './routes/creatorPublications.js';
 import { registerCreatorAnalyticsRoutes } from './routes/creatorAnalytics.js';
@@ -273,6 +275,9 @@ import {
   processRetentionSweep,
   processPushReceiptReconciliation,
   sweepScheduledPublications,
+  aggregateAnalyticsDaily,
+  processBackupExpiryCheck,
+  processDsarExport,
 } from './workers/handlers/index.js';
 import {
   evaluatePriceAlertsForListing,
@@ -325,6 +330,9 @@ import { registerRefundRoutes } from './routes/refunds.js';
 import { registerExceptionQueueRoutes } from './routes/exceptionQueue.js';
 import { registerImporterExtractionRoutes } from './routes/importerExtraction.js';
 import { registerExtractionIntelligenceRoutes } from './routes/extractionIntelligence.js';
+import { registerAnalyticsRoutes } from './routes/analytics.js';
+import { registerExperimentRoutes } from './routes/experiments.js';
+import { registerFlagRoutes } from './routes/flags.js';
 import { checkFraudNonBlocking } from './lib/fraudDetection.js';
 import { FraudShadowScoringService } from './lib/fraudShadowScoring.js';
 import { evaluateRisk, recordExecution } from './lib/riskDecision.js';
@@ -2211,6 +2219,8 @@ interface ChatMessageRow {
   sender_user_id: string | null;
   sender_bot_id: string | null;
   body: string;
+  body_ciphertext: string | null;
+  key_version: number | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
   client_message_id: string | null;
@@ -2371,6 +2381,22 @@ async function appendSystemChatMessage(
   }
 ): Promise<{ id: string; createdAt: string }> {
   const messageId = createRuntimeId('chatmsg');
+  // PII encryption dual-write: encrypt the body before INSERT. On failure,
+  // store plaintext so the backfill worker can encrypt later.
+  let bodyToStore = input.text;
+  let bodyCiphertext: string | null = null;
+  let keyVersion: number | null = null;
+  try {
+    const encrypted = await encryptMessageBody(messageId, input.text);
+    bodyCiphertext = encrypted.ciphertext;
+    keyVersion = encrypted.keyVersion;
+    bodyToStore = '[encrypted]';
+  } catch (err) {
+    logger.warn(
+      { messageId, err: err instanceof Error ? err.message : String(err) },
+      'messageEncryption.encryptFailed — storing plaintext for backfill',
+    );
+  }
   const result = await client.query<{ id: string; created_at: string }>(
     `
       INSERT INTO chat_messages (
@@ -2380,15 +2406,19 @@ async function appendSystemChatMessage(
         sender_user_id,
         sender_bot_id,
         body,
+        body_ciphertext,
+        key_version,
         metadata
       )
-      VALUES ($1, $2, 'system', NULL, NULL, $3, $4::jsonb)
+      VALUES ($1, $2, 'system', NULL, NULL, $3, $4, $5, $6::jsonb)
       RETURNING id, created_at::text
     `,
     [
       messageId,
       input.conversationId,
-      input.text,
+      bodyToStore,
+      bodyCiphertext,
+      keyVersion,
       toJsonString(input.metadata ?? {}),
     ]
   );
@@ -17686,6 +17716,125 @@ app.get('/users/me/export', async (request, reply) => {
   }
 });
 
+// ── Async DSAR export (Art. 12(3) — async delivery for large histories) ──
+
+app.post('/users/me/export/async', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return {
+      ok: false,
+      error: 'Unauthorized',
+    };
+  }
+
+  const userId = request.authUser.userId;
+  const gdprRequestId = createComplianceId('gdpr_export');
+  const ipAddress = resolveRequestIpAddress(request);
+  const userAgent = resolveRequestUserAgent(request);
+
+  try {
+    await db.query(
+      `
+        INSERT INTO gdpr_requests (
+          id, user_id, request_type, status,
+          requested_ip, requested_user_agent, requested_at, payload
+        )
+        VALUES ($1, $2, 'export', 'processing', $3, $4, NOW(), '{}'::jsonb)
+      `,
+      [gdprRequestId, userId, ipAddress, userAgent],
+    );
+
+    await enqueueDsarExportJob({
+      requestId: gdprRequestId,
+      userId,
+      reason: 'manual',
+    });
+
+    await appendComplianceAuditSafe(request, {
+      eventType: 'gdpr.export.async.queued',
+      subjectUserId: userId,
+      payload: { gdprRequestId },
+    });
+
+    return {
+      ok: true,
+      requestId: gdprRequestId,
+      status: 'processing',
+      message: 'Your data export has been queued. You will receive a download link when it is ready.',
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    reply.code(500);
+    return {
+      ok: false,
+      error: 'Failed to queue export',
+      detail: message,
+    };
+  }
+});
+
+app.get('/users/me/export/:requestId', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return {
+      ok: false,
+      error: 'Unauthorized',
+    };
+  }
+
+  const userId = request.authUser.userId;
+  const { requestId } = request.params as { requestId: string };
+
+  const result = await db.query<{
+    id: string;
+    status: string;
+    request_type: string;
+    export_url: string | null;
+    export_expires_at: string | null;
+    completed_at: string | null;
+  }>(
+    `
+      SELECT id, status, request_type, export_url,
+             export_expires_at::text, completed_at::text
+      FROM gdpr_requests
+      WHERE id = $1 AND user_id = $2
+      LIMIT 1
+    `,
+    [requestId, userId],
+  );
+
+  if (result.rows.length === 0) {
+    reply.code(404);
+    return {
+      ok: false,
+      error: 'Export request not found',
+    };
+  }
+
+  const row = result.rows[0];
+
+  if (row.status === 'completed' && row.export_url) {
+    const expiresAt = row.export_expires_at ? new Date(row.export_expires_at) : null;
+    const isExpired = expiresAt ? expiresAt < new Date() : true;
+
+    return {
+      ok: true,
+      requestId: row.id,
+      status: isExpired ? 'expired' : 'completed',
+      downloadUrl: isExpired ? null : row.export_url,
+      expiresAt: row.export_expires_at,
+      completedAt: row.completed_at,
+    };
+  }
+
+  return {
+    ok: true,
+    requestId: row.id,
+    status: row.status,
+    downloadUrl: null,
+  };
+});
+
 app.delete('/users/me', async (request, reply) => {
   if (!request.authUser) {
     reply.code(401);
@@ -17706,6 +17855,8 @@ app.delete('/users/me', async (request, reply) => {
   const userAgent = resolveRequestUserAgent(request);
 
   const client = await db.connect();
+
+  let erasureSideEffects: { listingIds: string[] } = { listingIds: [] };
 
   try {
     await client.query('BEGIN');
@@ -17743,7 +17894,7 @@ app.delete('/users/me', async (request, reply) => {
       ]
     );
 
-    await performUserErasure(client, userId, 'gdpr');
+    erasureSideEffects = await performUserErasure(client, userId, 'gdpr');
 
     await client.query(
       `
@@ -17768,12 +17919,62 @@ app.delete('/users/me', async (request, reply) => {
 
   await revokeAllUserSessions(userId);
 
+  // Remove the user's listings from the search index (post-commit, fire-and-forget).
+  // The erasure flow sets listings.status='deleted' but does not touch the
+  // search index — this cleanup ensures stale/attributable data is removed.
+  for (const listingId of erasureSideEffects.listingIds) {
+    void removeListingFromIndex(listingId).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(
+        { listingId, err: message },
+        'gdpr.erasure.searchIndexRemovalFailed',
+      );
+    });
+  }
+
+  const vendorResults = await propagateUserDeletion(userId, [
+    moderationProvider,
+    aiProvider,
+    pushProvider,
+    analyticsProvider,
+  ]).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(
+      { userId, err: message },
+      'gdpr.erasure.vendorDeletionFailed',
+    );
+    return [];
+  });
+
+  // Redact PII from the compliance audit log. The audit log is immutable
+  // (trigger prevents UPDATE/DELETE), so a SECURITY DEFINER function is
+  // used to temporarily bypass the trigger and redact payloads referencing
+  // the erased user.
+  try {
+    const redactionResult = await db.query<{ redact_audit_log_for_user: number }>(
+      `SELECT redact_audit_log_for_user($1)`,
+      [userId],
+    );
+    const redactedCount = redactionResult.rows[0]?.redact_audit_log_for_user ?? 0;
+    logger.info(
+      { userId, redactedCount },
+      'gdpr.erasure.auditLogRedacted',
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(
+      { userId, err: message },
+      'gdpr.erasure.auditLogRedactionFailed',
+    );
+  }
+
   await appendComplianceAuditSafe(request, {
     eventType: 'gdpr.erasure.completed',
     subjectUserId: userId,
     payload: {
       gdprRequestId,
       reason: payload.reason ?? null,
+      vendorPropagation: vendorResults,
     },
   });
 
@@ -20841,6 +21042,9 @@ app.get('/chat/conversations', async (request) => {
     updated_at: string;
     last_message: string | null;
     last_message_created_at: string | null;
+    last_message_id: string | null;
+    last_message_ciphertext: string | null;
+    last_message_key_version: number | null;
   }>(
     `
       SELECT
@@ -20852,12 +21056,15 @@ app.get('/chat/conversations', async (request) => {
         c.metadata,
         c.updated_at::text,
         lm.body AS last_message,
-        lm.created_at::text AS last_message_created_at
+        lm.created_at::text AS last_message_created_at,
+        lm.id AS last_message_id,
+        lm.body_ciphertext AS last_message_ciphertext,
+        lm.key_version AS last_message_key_version
       FROM chat_conversations c
       INNER JOIN chat_members cm
         ON cm.conversation_id = c.id
       LEFT JOIN LATERAL (
-        SELECT body, created_at
+        SELECT id, body, body_ciphertext, key_version, created_at
         FROM chat_messages
         WHERE conversation_id = c.id
         ORDER BY created_at DESC
@@ -20992,6 +21199,17 @@ app.get('/chat/conversations', async (request) => {
     lastReadByConversation.set(row.conversation_id, row.last_read_at);
   }
 
+  // PII encryption: decrypt last-message preview for each conversation.
+  await Promise.all(conversationsResult.rows.map(async (row) => {
+    if (row.last_message !== null && row.last_message_id) {
+      row.last_message = await resolveMessageBody(
+        row.last_message_id,
+        row.last_message,
+        row.last_message_ciphertext ?? null,
+      );
+    }
+  }));
+
   return {
     ok: true,
     items: conversationsResult.rows.map((row) => {
@@ -21065,6 +21283,8 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
         sender_user_id: string | null;
         sender_bot_id: string | null;
         body: string;
+        body_ciphertext: string | null;
+        key_version: number | null;
         metadata: Record<string, unknown> | null;
         created_at: string;
         client_message_id: string | null;
@@ -21074,6 +21294,7 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
         edited_at: string | null;
       }>(
         `SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+                m.body_ciphertext, m.key_version,
                 m.metadata, m.created_at::text, m.client_message_id,
                 m.reply_to_message_id, m.deleted_for_everyone_at,
                 m.edit_version, m.edited_at::text
@@ -21092,6 +21313,8 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
         sender_user_id: string | null;
         sender_bot_id: string | null;
         body: string;
+        body_ciphertext: string | null;
+        key_version: number | null;
         metadata: Record<string, unknown> | null;
         created_at: string;
         client_message_id: string | null;
@@ -21101,6 +21324,7 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
         edited_at: string | null;
       }>(
         `SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+                m.body_ciphertext, m.key_version,
                 m.metadata, m.created_at::text, m.client_message_id,
                 m.reply_to_message_id, m.deleted_for_everyone_at,
                 m.edit_version, m.edited_at::text
@@ -21115,6 +21339,10 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
       );
       // Combine: older (reversed to ASC) + newer (already ASC)
       const items = [...older.rows.reverse(), ...newer.rows];
+      // PII encryption: decrypt message bodies before serialization.
+      await Promise.all(items.map(async (row) => {
+        row.body = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
+      }));
       return {
         ok: true,
         conversation: {
@@ -21156,6 +21384,8 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
     sender_user_id: string | null;
     sender_bot_id: string | null;
     body: string;
+    body_ciphertext: string | null;
+    key_version: number | null;
     metadata: Record<string, unknown> | null;
     created_at: string;
     client_message_id: string | null;
@@ -21166,6 +21396,7 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
   }>(
     `
       SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+             m.body_ciphertext, m.key_version,
              m.metadata, m.created_at::text, m.client_message_id,
              m.reply_to_message_id, m.deleted_for_everyone_at,
              m.edit_version, m.edited_at::text
@@ -21188,6 +21419,11 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
   // For `before` and default (DESC query), reverse to chronological ASC for display.
   // For `after` (ASC query), keep as-is.
   const items = isAfter ? result.rows : result.rows.reverse();
+
+  // PII encryption: decrypt message bodies before serialization.
+  await Promise.all(items.map(async (row) => {
+    row.body = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
+  }));
 
   return {
     ok: true,
@@ -21371,13 +21607,15 @@ app.post('/chat/conversations/:conversationId/messages', {
     const existing = await db.query<{
       id: string;
       body: string;
+      body_ciphertext: string | null;
+      key_version: number | null;
       metadata: Record<string, unknown>;
       created_at: string;
       client_message_id: string | null;
       reply_to_message_id: string | null;
     }>(
       `
-        SELECT id, body, metadata, created_at::text, client_message_id, reply_to_message_id
+        SELECT id, body, body_ciphertext, key_version, metadata, created_at::text, client_message_id, reply_to_message_id
         FROM chat_messages
         WHERE conversation_id = $1
           AND sender_user_id = $2
@@ -21389,6 +21627,8 @@ app.post('/chat/conversations/:conversationId/messages', {
 
     if (existing.rowCount && existing.rowCount > 0) {
       const row = existing.rows[0];
+      // PII encryption: resolve body from ciphertext or plaintext fallback.
+      const resolvedBody = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
       reply.code(201);
       return {
         ok: true,
@@ -21397,7 +21637,7 @@ app.post('/chat/conversations/:conversationId/messages', {
           senderType: 'user' as const,
           senderUserId: actorUserId,
           senderBotId: null,
-          body: row.body,
+          body: resolvedBody,
           metadata: row.metadata ?? {},
           createdAt: row.created_at,
           clientMessageId: row.client_message_id ?? undefined,
@@ -21408,6 +21648,22 @@ app.post('/chat/conversations/:conversationId/messages', {
   }
 
   const messageId = createRuntimeId('chatmsg');
+  // PII encryption dual-write: encrypt the body before INSERT. On failure,
+  // store plaintext so the backfill worker can encrypt later.
+  let bodyToStore = bodyText;
+  let bodyCiphertext: string | null = null;
+  let keyVersion: number | null = null;
+  try {
+    const encrypted = await encryptMessageBody(messageId, bodyText);
+    bodyCiphertext = encrypted.ciphertext;
+    keyVersion = encrypted.keyVersion;
+    bodyToStore = '[encrypted]';
+  } catch (err) {
+    logger.warn(
+      { messageId, err: err instanceof Error ? err.message : String(err) },
+      'messageEncryption.encryptFailed — storing plaintext for backfill',
+    );
+  }
   const result = await db.query<{ id: string; created_at: string }>(
     `
       INSERT INTO chat_messages (
@@ -21417,11 +21673,13 @@ app.post('/chat/conversations/:conversationId/messages', {
         sender_user_id,
         sender_bot_id,
         body,
+        body_ciphertext,
+        key_version,
         metadata,
         client_message_id,
         reply_to_message_id
       )
-      VALUES ($1, $2, 'user', $3, NULL, $4, $5::jsonb, $6, $7)
+      VALUES ($1, $2, 'user', $3, NULL, $4, $5, $6, $7::jsonb, $8, $9)
       ON CONFLICT (conversation_id, sender_user_id, client_message_id)
         WHERE client_message_id IS NOT NULL
       DO NOTHING
@@ -21431,7 +21689,9 @@ app.post('/chat/conversations/:conversationId/messages', {
       messageId,
       conversationId,
       actorUserId,
-      bodyText,
+      bodyToStore,
+      bodyCiphertext,
+      keyVersion,
       toJsonString(mergedMetadata),
       payload.clientMessageId ?? null,
       payload.replyToMessageId ?? null,
@@ -21446,13 +21706,15 @@ app.post('/chat/conversations/:conversationId/messages', {
     const existing = await db.query<{
       id: string;
       body: string;
+      body_ciphertext: string | null;
+      key_version: number | null;
       metadata: Record<string, unknown>;
       created_at: string;
       client_message_id: string | null;
       reply_to_message_id: string | null;
     }>(
       `
-        SELECT id, body, metadata, created_at::text, client_message_id, reply_to_message_id
+        SELECT id, body, body_ciphertext, key_version, metadata, created_at::text, client_message_id, reply_to_message_id
         FROM chat_messages
         WHERE conversation_id = $1
           AND sender_user_id = $2
@@ -21464,6 +21726,8 @@ app.post('/chat/conversations/:conversationId/messages', {
 
     if (existing.rowCount && existing.rowCount > 0) {
       const row = existing.rows[0];
+      // PII encryption: resolve body from ciphertext or plaintext fallback.
+      const resolvedBody = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
       reply.code(201);
       return {
         ok: true,
@@ -21472,7 +21736,7 @@ app.post('/chat/conversations/:conversationId/messages', {
           senderType: 'user' as const,
           senderUserId: actorUserId,
           senderBotId: null,
-          body: row.body,
+          body: resolvedBody,
           metadata: row.metadata ?? {},
           createdAt: row.created_at,
           clientMessageId: row.client_message_id ?? undefined,
@@ -23093,9 +23357,9 @@ app.post('/chat/groups/join', async (request, reply) => {
     participantIds = await listChatParticipantIds(client, conversationId);
     botIds = await listChatBotIds(client, conversationId);
 
-    const latestMessageResult = await client.query<{ body: string; created_at: string }>(
+    const latestMessageResult = await client.query<{ id: string; body: string; body_ciphertext: string | null; key_version: number | null; created_at: string }>(
       `
-        SELECT body, created_at::text
+        SELECT id, body, body_ciphertext, key_version, created_at::text
         FROM chat_messages
         WHERE conversation_id = $1
         ORDER BY created_at DESC
@@ -23105,8 +23369,10 @@ app.post('/chat/groups/join', async (request, reply) => {
     );
 
     if (latestMessageResult.rowCount) {
-      lastMessage = latestMessageResult.rows[0].body;
-      lastMessageTime = latestMessageResult.rows[0].created_at;
+      const latestRow = latestMessageResult.rows[0];
+      // PII encryption: resolve body from ciphertext or plaintext fallback.
+      lastMessage = await resolveMessageBody(latestRow.id, latestRow.body, latestRow.body_ciphertext ?? null);
+      lastMessageTime = latestRow.created_at;
     } else {
       lastMessage = `${conversationTitle ?? 'Group'} created.`;
       lastMessageTime = new Date().toISOString();
@@ -28592,6 +28858,29 @@ registerRecommendationIntentRoutes({
   resolveAuthenticatedUserId,
 });
 
+registerAnalyticsRoutes({
+  app,
+  db,
+  redis,
+  createApiError,
+  resolveAuthenticatedUserId,
+});
+
+registerExperimentRoutes({
+  app,
+  db,
+  createApiError,
+  resolveAuthenticatedUserId,
+});
+
+registerFlagRoutes({
+  app,
+  db,
+  redis,
+  createApiError,
+  resolveAuthenticatedUserId,
+});
+
 app.get('/users/:userId/addresses', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -30281,6 +30570,71 @@ app.get('/users/:userId/payout-requests/:requestId', async (request, reply) => {
   return {
     ok: true,
     payoutRequest: toPayoutRequestPayload(payoutRequest),
+  };
+});
+
+// ── Unknown-outcome reconciliation for payout requests ──────────────
+//
+// GET /users/:userId/payout-requests/lookup-by-key/:idempotencyKey
+//
+// When a client sends POST /users/:userId/payout-requests but the response
+// is lost (network timeout), the outcome is ambiguous — the payout may or
+// may not have been created. This endpoint resolves the ambiguity by looking
+// up the payout request by its idempotency key. Returns:
+//   - 200 { ok: true, status: 'acknowledged', payoutRequest }
+//   - 404 { ok: false, status: 'safe_to_retry' }
+app.get('/users/:userId/payout-requests/lookup-by-key/:idempotencyKey', async (request, reply) => {
+  const paramsSchema = z.object({
+    userId: z.string().min(2),
+    idempotencyKey: z.string().min(2).max(200),
+  });
+
+  const { userId, idempotencyKey } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
+
+  if (!(await paymentTablesAvailable(db))) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Payment settlement tables are unavailable. Run migrations first.',
+    };
+  }
+
+  const result = await db.query<PayoutRequestRow>(
+    `
+      SELECT
+        id,
+        user_id,
+        payout_account_id,
+        amount_gbp,
+        amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        money_conversion_trace,
+        money_quarantined,
+        status,
+        provider_payout_ref,
+        failure_reason,
+        metadata,
+        created_at,
+        updated_at
+      FROM payout_requests
+      WHERE user_id = $1 AND idempotency_key = $2
+      LIMIT 1
+    `,
+    [userId, idempotencyKey]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, status: 'safe_to_retry' as const };
+  }
+
+  return {
+    ok: true as const,
+    status: 'acknowledged' as const,
+    payoutRequest: toPayoutRequestPayload(result.rows[0]),
   };
 });
 
@@ -46066,6 +46420,15 @@ const start = async () => {
         },
         handleScheduledPublicationSweepJob: async ({ reason }) => {
           await sweepScheduledPublications(reason);
+        },
+        handleAnalyticsAggregationJob: async () => {
+          await aggregateAnalyticsDaily();
+        },
+        handleBackupExpiryJob: async ({ reason }) => {
+          await processBackupExpiryCheck({ reason });
+        },
+        handleDsarExportJob: async ({ requestId, userId, reason }) => {
+          await processDsarExport({ requestId, userId, reason });
         },
       });
     } else {

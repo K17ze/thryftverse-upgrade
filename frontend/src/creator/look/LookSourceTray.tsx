@@ -24,6 +24,7 @@ import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTo
 import { IconGrammar } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useStore } from '../../store/useStore';
@@ -140,6 +141,7 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
   colors,
   onCanvas,
 }: DraggableProductCardProps) {
+  const { currencySymbol } = useFormattedPrice();
   const tapGesture = useMemo(
     () =>
       Gesture.Tap().onEnd(() => {
@@ -209,7 +211,7 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
         </Text>
         {item.priceGbp !== undefined && (
           <Text style={[styles.itemPrice, { color: onCanvas ? colors.textMuted : colors.brand }]}>
-            £{item.priceGbp.toFixed(0)}
+            {currencySymbol}{item.priceGbp.toFixed(0)}
           </Text>
         )}
       </View>
@@ -229,6 +231,7 @@ export function LookSourceTray({
   onCanvasListingIds,
 }: LookSourceTrayProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
   const motionConfig = useMotionConfig();
   const currentUser = useStore((state) => state.currentUser);
@@ -693,7 +696,7 @@ export function LookSourceTray({
         </Text>
         {draggingItem?.priceGbp !== undefined && (
           <Text style={[styles.previewPrice, { color: colors.brand }]}>
-            £{draggingItem.priceGbp.toFixed(0)}
+            {currencySymbol}{draggingItem.priceGbp.toFixed(0)}
           </Text>
         )}
       </Reanimated.View>

@@ -1121,6 +1121,36 @@ export async function getMyAuctionBids(
   return { items: payload.items, nextCursor: payload.nextCursor };
 }
 
+// ── Unknown-outcome reconciliation ──────────────────────────────────
+//
+// When a POST /auctions/:auctionId/bids response is lost (network
+// timeout), the client cannot tell whether the bid was placed. This
+// lookup resolves the ambiguity by querying the backend by idempotency key.
+//
+// Returns one of three states:
+//   - 'acknowledged': the bid exists, body contains the bid
+//   - 'processing': the server returned a transient error (retry)
+//   - 'safe_to_retry': no bid with this key exists (may resubmit)
+
+import type { LookupResult } from '../hooks/useUnknownOutcomeReconciliation';
+
+export async function lookupAuctionBidByIdempotencyKey(
+  idempotencyKey: string,
+): Promise<LookupResult<MarketAuctionBid>> {
+  try {
+    const payload = await fetchJson<{ ok: true; status: 'acknowledged'; bid: MarketAuctionBid }>(
+      `/users/me/auction-bids/lookup-by-key/${encodeURIComponent(idempotencyKey)}`,
+    );
+    return { status: 'acknowledged', value: payload.bid };
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status === 404) {
+      return { status: 'safe_to_retry' };
+    }
+    return { status: 'processing' };
+  }
+}
+
 export async function placeAuctionBid(
   auctionId: string,
   input: PlaceAuctionBidInput

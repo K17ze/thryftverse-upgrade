@@ -6,7 +6,6 @@ import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 export interface BundleUpsellRowProps {
   /** Items from the same seller (typically more_from_seller recommendations) */
@@ -45,7 +44,7 @@ function BundleUpsellRowComponent({
 }: BundleUpsellRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat, displayMode } = useFormattedPrice();
+  const { formatFromFiat, displayMode, currencyCode } = useFormattedPrice();
 
   const bundleItems = items
     .filter((i) => i.id !== currentListingId && !i.isSold)
@@ -55,7 +54,7 @@ function BundleUpsellRowComponent({
 
   const showShippingMessage = shippingPayer === 'buyer';
   const bundleTotal = bundleItems.reduce((sum, i) => sum + i.price, 0);
-  const formattedBundleTotal = formatFromFiat(bundleTotal, DEFAULT_CURRENCY_CODE, { displayMode });
+  const formattedBundleTotal = formatFromFiat(bundleTotal, currencyCode, { displayMode });
 
   return (
     <View style={styles.container}>
@@ -79,7 +78,7 @@ function BundleUpsellRowComponent({
 
       <View style={styles.thumbRow}>
         {bundleItems.map((bundleItem) => {
-          const formattedPrice = formatFromFiat(bundleItem.price, DEFAULT_CURRENCY_CODE, { displayMode });
+          const formattedPrice = formatFromFiat(bundleItem.price, currencyCode, { displayMode });
           return (
             <Pressable
               key={bundleItem.id}

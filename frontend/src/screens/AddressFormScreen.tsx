@@ -17,6 +17,7 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
+import { useA11yAudit } from '../hooks/useA11yAudit';
 import { RootStackParamList } from '../navigation/types';
 import {
   createUserAddress,
@@ -143,6 +144,8 @@ function validateForm(f: FormState): FieldErrors {
 }
 
 export default function AddressFormScreen({ navigation, route }: Props) {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'AddressFormScreen');
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -466,6 +469,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
 
   return (
     <FlagshipScreen
+      ref={a11yRef}
       header={<FlagshipHeader title={isEditing ? 'Edit address' : 'Add address'} onBack={handleCancel} />}
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
@@ -508,6 +512,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={() => streetRef.current?.focus()}
               placeholder="Recipient name"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Full name"
             />
             {errors.name && (
               <View style={styles.errorRow}>
@@ -535,6 +540,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={() => apartmentRef.current?.focus()}
               placeholder="Street address"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Address line 1"
             />
             {errors.streetAddress && (
               <View style={styles.errorRow}>
@@ -557,6 +563,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={() => cityRef.current?.focus()}
               placeholder="Apartment, suite, unit"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Address line 2"
             />
           </View>
 
@@ -577,6 +584,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={() => regionRef.current?.focus()}
               placeholder="City or town"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="City"
             />
             {errors.city && (
               <View style={styles.errorRow}>
@@ -599,6 +607,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={() => postalRef.current?.focus()}
               placeholder="State, county or region"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Region"
             />
           </View>
 
@@ -617,6 +626,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={handleSave}
               placeholder="Postal code"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Postcode"
             />
             {errors.postalCode && (
               <View style={styles.errorRow}>

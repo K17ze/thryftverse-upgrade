@@ -33,8 +33,10 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
+import { useTaxonomy } from '../context/TaxonomyContext';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { haptics } from '../utils/haptics';
 import { makeStableId } from '../utils/createStableId';
 import {
@@ -47,11 +49,6 @@ import {
 import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BulkListing'>;
-
-const CATEGORY_OPTIONS = [
-  'Women', 'Men', 'Kids', 'Home', 'Vintage', 'Accessories', 'Beauty', 'Sportswear', 'Luxury',
-];
-const CONDITION_OPTIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory'];
 
 type ItemStatus = BulkListingItem['status'];
 
@@ -89,6 +86,12 @@ export default function BulkListingScreen({ navigation }: Props) {
   const currentUser = useStore((s) => s.currentUser);
   const { show } = useToast();
   const { isOffline } = useConnectivity();
+  const { categories, conditions } = useTaxonomy();
+  const categoryOptions = useMemo(
+    () => categories.filter((n) => n.parentId === null).map((n) => n.name),
+    [categories],
+  );
+  const conditionOptions = useMemo(() => conditions.map((n) => n.name), [conditions]);
 
   const [items, setItems] = useState<BulkListingItem[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -272,7 +275,7 @@ export default function BulkListingScreen({ navigation }: Props) {
     [expandedId, colors, styles, updateItem, openEditSheet, removeItem],
   );
 
-  const pickerOptions = pickerMode === 'Category' ? CATEGORY_OPTIONS : CONDITION_OPTIONS;
+  const pickerOptions = pickerMode === 'Category' ? categoryOptions : conditionOptions;
   const pickerTitle = pickerMode === 'Category' ? 'Select category' : 'Select condition';
   const pickerSelected = pickerMode === 'Category' ? form.category : form.condition;
 
@@ -454,6 +457,7 @@ const BulkRow = React.memo(function BulkRow({
   onEdit,
   onDelete,
 }: RowProps) {
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const meta = STATUS_META[item.status];
   const statusColor = colors[meta.colorKey];
   const reducedMotion = useReducedMotion();
@@ -498,7 +502,7 @@ const BulkRow = React.memo(function BulkRow({
             />
           </View>
           <View style={styles.rowPriceRow}>
-            <Text style={[styles.pricePrefix, { color: colors.textMuted }]}>£</Text>
+            <Text style={[styles.pricePrefix, { color: colors.textMuted }]}>{formatFromFiat(0, currencyCode).replace(/[0-9.,]/g, '').trim()}</Text>
             <TextInput
               style={[styles.rowPriceInput, { color: colors.textPrimary }]}
               value={item.price > 0 ? String(item.price) : ''}
@@ -605,6 +609,7 @@ function DraftForm({
   onCancel,
   isEditing,
 }: DraftFormProps) {
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const validation = validateBulkListing(form);
 
   return (
@@ -663,7 +668,7 @@ function DraftForm({
 
       <View style={styles.fieldRow}>
         <AppInput
-          label="Price (GBP)"
+          label={`Price (${currencyCode})`}
           value={form.price > 0 ? String(form.price) : ''}
           onChangeText={(text) => {
             const numeric = parseFloat(text.replace(/[^0-9.]/g, ''));
@@ -671,7 +676,7 @@ function DraftForm({
           }}
           placeholder="0.00"
           keyboardType="decimal-pad"
-          prefix="£"
+          prefix={formatFromFiat(0, currencyCode).replace(/[0-9.,]/g, '').trim()}
           containerStyle={[styles.field, { flex: 1 }]}
         />
         <AppInput

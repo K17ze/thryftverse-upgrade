@@ -21,12 +21,11 @@ import type { ThemeColors } from '../theme/ThemeContext';
 import { Typography, Space, Type, Radius, FontSize, Stroke, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
-import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
+import { AppStatusPill } from '../components/ui/AppStatusPill';
 import { fetchListingByIdFromApi } from '../services/listingsApi';
 import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { t } from '../i18n';
 
 
@@ -35,7 +34,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ListingSuccess'>;
 export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
 
@@ -80,7 +79,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
   const listingTitle = backendListing?.title || routeTitle || 'your listing';
   const listingPriceRaw = backendListing?.priceGbp ?? routePrice;
-  const listingPrice = listingPriceRaw != null ? formatFromFiat(listingPriceRaw, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : null;
+  const listingPrice = listingPriceRaw != null ? formatFromFiat(listingPriceRaw, currencyCode, { displayMode: 'fiat' }) : null;
   const listingCategory = backendListing?.category || routeCategory;
   const listingPhoto = backendListing?.imageUrl || routePhoto;
 
@@ -154,7 +153,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
         {/* Published status */}
         <View style={styles.statusRow}>
-          <PremiumStatusPill tone={statusTone} label={statusLabel} icon="checkmark-circle" />
+          <AppStatusPill variant="block" tone={statusTone} label={statusLabel} icon="checkmark-circle" />
           {listingId ? (
             <Text style={styles.idText} numberOfLines={1}>
               {listingId}

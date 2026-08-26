@@ -16,7 +16,6 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'BundleBag'>;
@@ -47,7 +46,7 @@ export default function BundleBagScreen() {
   const route = useRoute<RouteT>();
   const { sellerId, sellerName } = route.params ?? { sellerId: '', sellerName: '' };
   const { listings, isSyncing, refreshListings } = useBackendData();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
   const { show } = useToast();
 
@@ -95,7 +94,7 @@ export default function BundleBagScreen() {
       show('Select at least 2 items to get bundle savings.', 'info');
       return;
     }
-    show(`Bundle checkout for ${selectedItems.length} items — £${total.toFixed(2)} total. Proceeding to checkout.`, 'success');
+    show(`Bundle checkout for ${selectedItems.length} items — ${currencySymbol}${total.toFixed(2)} total. Proceeding to checkout.`, 'success');
     // Navigate to the first item's checkout — in production this would be a multi-item checkout
     navigation.navigate('Checkout', { itemId: selectedItems[0].id });
   };
@@ -123,7 +122,7 @@ export default function BundleBagScreen() {
         )}
         <View style={styles.itemInfo}>
           <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.itemPrice}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+          <Text style={styles.itemPrice}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
           {item.size && <Text style={styles.itemMeta}>Size: {item.size}</Text>}
         </View>
       </AnimatedPressable>
@@ -215,24 +214,24 @@ export default function BundleBagScreen() {
             <View style={styles.footer}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Subtotal ({selectedItems.length} items)</Text>
-                <Text style={styles.summaryValue}>{formatFromFiat(subtotal, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.summaryValue}>{formatFromFiat(subtotal, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
               {discountAmount > 0 && (
                 <View style={styles.summaryRow}>
                   <Text style={[styles.summaryLabel, { color: colors.brand }]}>Bundle discount ({discountPercent}%)</Text>
-                  <Text style={[styles.summaryValue, { color: colors.brand }]}>-{formatFromFiat(discountAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+                  <Text style={[styles.summaryValue, { color: colors.brand }]}>-{formatFromFiat(discountAmount, currencyCode, { displayMode: 'fiat' })}</Text>
                 </View>
               )}
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Combined shipping</Text>
-                <Text style={styles.summaryValue}>{formatFromFiat(combinedShipping, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.summaryValue}>{formatFromFiat(combinedShipping, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>{formatFromFiat(total, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.totalValue}>{formatFromFiat(total, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
               <AppButton
-                title={selectedItems.length < 2 ? 'Select 2+ for bundle savings' : `Checkout bundle · ${formatFromFiat(total, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
+                title={selectedItems.length < 2 ? 'Select 2+ for bundle savings' : `Checkout bundle · ${formatFromFiat(total, currencyCode, { displayMode: 'fiat' })}`}
                 variant="primary"
                 size="lg"
                 style={styles.checkoutBtn}

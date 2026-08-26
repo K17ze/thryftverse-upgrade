@@ -537,6 +537,43 @@ export const registerListingOfferRoutes = ({
     return { ok: true, offers: result.rows.map(mapRow) };
   });
 
+  // ── Unknown-outcome reconciliation ────────────────────────────────
+  //
+  // GET /users/me/offers/lookup-by-key/:idempotencyKey
+  //
+  // When a client sends a POST /listing-offers but the response is lost
+  // (network timeout), the outcome is ambiguous — the offer may or may not
+  // have been created. This endpoint lets the client resolve the ambiguity
+  // by looking up the offer by its idempotency key. Returns:
+  //   - 200 { ok: true, status: 'acknowledged', offer } — the offer exists
+  //   - 404 { ok: false, status: 'safe_to_retry' } — no offer with this key
+  app.get('/users/me/offers/lookup-by-key/:idempotencyKey', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { idempotencyKey } = z.object({
+      idempotencyKey: z.string().min(2).max(200),
+    }).parse(request.params);
+
+    const result = await db.query<ListingOfferRow>(
+      `SELECT id, listing_id, buyer_id, seller_id,
+              offer_price_gbp::text, original_price_gbp::text,
+              counter_round, status, expires_at::text,
+              accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text,
+              conversation_id, parent_offer_id, metadata, offered_by_user_id,
+              created_at::text, updated_at::text
+       FROM listing_offers
+       WHERE offered_by_user_id = $1 AND idempotency_key = $2
+       LIMIT 1`,
+      [actorUserId, idempotencyKey],
+    );
+
+    if (!result.rowCount) {
+      reply.code(404);
+      return { ok: false, status: 'safe_to_retry' as const };
+    }
+
+    return { ok: true as const, status: 'acknowledged' as const, offer: mapRow(result.rows[0]) };
+  });
+
   app.post('/offers/:offerId/accept', async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);
     const { offerId } = offerIdParamsSchema.parse(request.params);

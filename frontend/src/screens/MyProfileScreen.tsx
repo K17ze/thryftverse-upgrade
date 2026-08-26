@@ -54,7 +54,6 @@ import { fetchPosterHighlights, type PosterHighlight } from '../services/posters
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -162,7 +161,7 @@ export default function MyProfileScreen() {
   const { show } = useToast();
   const haptic = useHaptic();
 
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
 
   const { listings } = useBackendData();
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
@@ -883,7 +882,7 @@ export default function MyProfileScreen() {
                             />
                             <View style={styles.heroPriceOverlay} pointerEvents="none">
                               <Text style={[styles.heroPriceText, { color: colors.scrimTextPrimary }]} numberOfLines={1}>
-                                {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+                                {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
                               </Text>
                               {item.brand ? (
                                 <Text style={[styles.heroBrandText, { color: colors.scrimTextSecondary }]} numberOfLines={1}>{item.brand}</Text>
@@ -896,7 +895,7 @@ export default function MyProfileScreen() {
                       {isHero ? null : (
                         <>
                           <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
-                            {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+                            {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
                           </Text>
                           {item.brand ? (
                             <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>

@@ -13,41 +13,34 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
+import { useTaxonomy } from '../context/TaxonomyContext';
 import { Typography, Space, Radius, Type, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 import { VisualCategoryTile } from '../components/discover/VisualCategoryTile';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 
 type RouteT = RouteProp<RootStackParamList, 'CategoryTree'>;
 
-const TREES: Record<string, { title: string; subs: string[] }[]> = {
-  Women: [
-    { title: 'Clothing', subs: ['Dresses', 'Tops & T-Shirts', 'Trousers', 'Jackets & Coats', 'Knitwear'] },
-    { title: 'Shoes', subs: ['Trainers', 'Boots', 'Heels', 'Flats'] },
-    { title: 'Bags', subs: ['Shoulder Bags', 'Tote Bags', 'Crossbody Bags'] },
-    { title: 'Accessories', subs: ['Jewellery', 'Belts', 'Sunglasses'] }
-  ],
-  Men: [
-    { title: 'Clothing', subs: ['T-Shirts', 'Hoodies & Sweatshirts', 'Trousers', 'Jackets & Coats', 'Jeans'] },
-    { title: 'Shoes', subs: ['Trainers', 'Boots', 'Formal Shoes'] },
-    { title: 'Accessories', subs: ['Watches', 'Hats & Caps', 'Belts'] }
-  ],
-  Kids: [
-    { title: 'Girls', subs: ['Clothing', 'Shoes', 'Accessories'] },
-    { title: 'Boys', subs: ['Clothing', 'Shoes', 'Accessories'] },
-    { title: 'Baby', subs: ['0-6 Months', '6-12 Months', '12-24 Months'] }
-  ]
-};
-
 export default function CategoryTreeScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { show } = useToast();
   const { colors, isDark } = useAppTheme();
+  const { categories } = useTaxonomy();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { categoryPrefix } = route.params;
 
-  const resolvedPrefix = TREES[categoryPrefix] ? categoryPrefix : 'Women';
-  const sections = TREES[resolvedPrefix];
+  const tree = useMemo(() => {
+    const topLevel = categories.filter((c) => c.parentId === null);
+    const map: Record<string, { title: string; subs: string[] }[]> = {};
+    for (const top of topLevel) {
+      const children = categories.filter((c) => c.parentId === top.id);
+      map[top.name] = children.map((child) => ({ title: child.name, subs: [] }));
+    }
+    return map;
+  }, [categories]);
+
+  const resolvedPrefix = tree[categoryPrefix] ? categoryPrefix : 'Women';
+  const sections = tree[resolvedPrefix] ?? [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

@@ -51,7 +51,7 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
         fill: colors.success,
         onFill: colors.scrimTextPrimary,
         tint: `${colors.success}22`,
-        label: 'Excellent',
+        label: 'High avoided emissions',
       };
     case 'B':
       // Light green — positive, slightly less.
@@ -59,7 +59,7 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
         fill: `${colors.success}CC`,
         onFill: colors.scrimTextPrimary,
         tint: `${colors.success}14`,
-        label: 'Good',
+        label: 'Medium-high avoided emissions',
       };
     case 'C':
       // Amber — moderate.
@@ -67,7 +67,7 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
         fill: colors.warning,
         onFill: colors.textInverse,
         tint: `${colors.warning}1F`,
-        label: 'Moderate',
+        label: 'Medium avoided emissions',
       };
     case 'D':
     default:
@@ -76,7 +76,7 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
         fill: colors.surfaceAlt,
         onFill: colors.textSecondary,
         tint: colors.surfaceAlt,
-        label: 'Low',
+        label: 'Low avoided emissions',
       };
   }
 }
@@ -128,10 +128,10 @@ export function SustainabilityBadge({
         </View>
         <View style={styles.detailedHeaderText}>
           <Text style={[styles.eyebrow, { color: colors.textMuted }]}>
-            ESTIMATED IMPACT
+            ENVIRONMENTAL IMPACT
           </Text>
           <Text style={[styles.detailedTitle, { color: colors.textPrimary }]}>
-            {meta.label} sustainability
+            {meta.label}
           </Text>
         </View>
       </View>
@@ -169,7 +169,7 @@ export function SustainabilityBadge({
         </View>
       ) : null}
 
-      {/* CO2 + water savings — two stat cells. */}
+      {/* CO2 + water savings — two stat cells (water only if > 0). */}
       <View style={[styles.statRow, { borderTopColor: colors.borderSubtle }]}>
         <View style={styles.statCell}>
           <Ionicons name="cloud-outline" size={16} color={colors.success} />
@@ -180,20 +180,24 @@ export function SustainabilityBadge({
             CO₂e saved
           </Text>
         </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.borderSubtle }]} />
-        <View style={styles.statCell}>
-          <Ionicons name="water-outline" size={16} color={colors.success} />
-          <Text style={[styles.statValue, { color: colors.textPrimary }]}>
-            ~{score.waterSavedL.toLocaleString('en-GB')} L
-          </Text>
-          <Text style={[styles.statCaption, { color: colors.textMuted }]}>
-            Water saved
-          </Text>
-        </View>
+        {score.waterSavedL > 0 ? (
+          <>
+            <View style={[styles.statDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.statCell}>
+              <Ionicons name="water-outline" size={16} color={colors.success} />
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>
+                ~{score.waterSavedL.toLocaleString('en-GB')} L
+              </Text>
+              <Text style={[styles.statCaption, { color: colors.textMuted }]}>
+                Water saved
+              </Text>
+            </View>
+          </>
+        ) : null}
       </View>
 
       <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
-        Estimates based on industry averages. Not a precise measurement.
+        Estimate based on verified emissions factors. Not a precise measurement.
       </Text>
     </View>
   );

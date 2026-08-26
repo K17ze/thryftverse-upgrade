@@ -407,9 +407,9 @@ export const SORT_OPTIONS: { key: AuctionBrowseSort; label: string }[] = [
   { key: 'priceHigh', label: 'Price: high to low' },
 ];
 
-export const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
-  { label: 'Under £50', max: 50 },
-  { label: '£50 – £200', min: 50, max: 200 },
-  { label: '£200 – £500', min: 200, max: 500 },
-  { label: 'Over £500', min: 500 },
+export const PRICE_PRESETS: { min?: number; max?: number }[] = [
+  { max: 50 },
+  { min: 50, max: 200 },
+  { min: 200, max: 500 },
+  { min: 500 },
 ];

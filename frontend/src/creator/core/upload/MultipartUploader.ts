@@ -3,39 +3,39 @@
  *
  * Implements the client side of the S3 multipart upload protocol:
  *
- *   1. Initiate → obtain an `uploadId` from the backend
+ *   1. Initiate → obtain an `uploadId` + `sessionId` from the backend
  *   2. Upload each part → PUT to a per-part presigned URL, capture ETag
- *   3. Complete → send the ETag list to the backend, receive final URL
+ *   3. Complete → send the ETag list to the backend, receive final URL +
+ *      finalizationId
  *   4. Abort → cancel an in-progress multipart upload
  *   5. Resume → skip parts that already have an ETag, upload the rest
  *
- * ## Backend endpoint contract (NOT YET IMPLEMENTED)
+ * ## Backend endpoint contract
  *
- * The backend (`backend/api/src/routes/uploads.ts`) currently exposes
- * only single-PUT presign + finalize. To activate multipart, the
- * following endpoints must be added:
+ * The backend (`backend/api/src/routes/uploads.ts`) exposes:
  *
  * ```
  * POST /uploads/multipart/initiate
- *   body: { key, mimeType, sizeBytes, folder, partCount }
- *   → { uploadId, key, publicUrl }
+ *   body: { fileName, contentType, sizeBytes, partSize, folder }
+ *   → { sessionId, uploadId, objectKey, bucket, publicUrl,
+ *       partSize, partCount, presignedParts, expiresAt }
  *
- * POST /uploads/multipart/part-url
- *   body: { uploadId, key, partNumber, sizeBytes }
- *   → { url, partNumber }
+ * POST /uploads/multipart/:id/parts
+ *   body: { partNumbers: number[] }
+ *   → { presignedParts: [{ url, partNumber, expiresInSeconds }] }
  *
- * POST /uploads/multipart/complete
- *   body: { uploadId, key, parts: [{ partNumber, etag }] }
- *   → { publicUrl }
+ * POST /uploads/multipart/:id/complete
+ *   body: { parts: [{ partNumber, etag }] }
+ *   → { finalizationId, objectKey, publicUrl, sizeBytes, contentType }
  *
- * POST /uploads/multipart/abort
- *   body: { uploadId, key }
+ * POST /uploads/multipart/:id/abort
  *   → { ok: true }
  * ```
  *
- * Until these endpoints exist, `UploadManager` uses the single-PUT
- * transport with real `XMLHttpRequest.upload.onprogress` byte tracking.
- * The multipart code below is complete and ready to activate.
+ * The initiate endpoint returns presigned URLs for the first batch of
+ * parts (up to 100) so the client can start uploading immediately. For
+ * files with more than 100 parts, additional presigned URLs are fetched
+ * via the `/parts` endpoint.
  *
  * ## File chunking
  *
@@ -52,23 +52,36 @@ import { DEFAULT_PART_SIZE } from './UploadTypes';
 
 /** Response shape from `POST /uploads/multipart/initiate`. */
 interface InitiateResponse {
+  ok: boolean;
+  sessionId: string;
   uploadId: string;
-  key: string;
+  objectKey: string;
+  bucket: string;
   publicUrl: string;
+  partSize: number;
+  partCount: number;
+  presignedParts: Array<{ url: string; partNumber: number; expiresInSeconds: number }>;
+  expiresAt: string;
 }
 
-/** Response shape from `POST /uploads/multipart/part-url`. */
-interface PartUrlResponse {
-  url: string;
-  partNumber: number;
+/** Response shape from `POST /uploads/multipart/:id/parts`. */
+interface PartsResponse {
+  ok: boolean;
+  presignedParts: Array<{ url: string; partNumber: number; expiresInSeconds: number }>;
 }
 
-/** Response shape from `POST /uploads/multipart/complete`. */
+/** Response shape from `POST /uploads/multipart/:id/complete`. */
 interface CompleteResponse {
+  ok: boolean;
+  finalizationId: string;
+  objectKey: string;
   publicUrl: string;
+  sizeBytes: number;
+  contentType: string;
+  duplicate?: boolean;
 }
 
-/** Part ETag entry sent to `POST /uploads/multipart/complete`. */
+/** Part ETag entry sent to the complete endpoint. */
 interface CompletedPart {
   partNumber: number;
   etag: string;
@@ -101,7 +114,10 @@ export class MultipartUploader {
 
   /**
    * Initiate a multipart upload. Creates the `UploadSession` with all
-   * parts pre-computed (byte ranges + status `pending`).
+   * parts pre-computed (byte ranges + status `pending`). The backend
+   * returns presigned URLs for the first batch of parts, which are
+   * stored in the session so `uploadPart` can use them without a
+   * second round-trip.
    */
   async initiate(
     filePath: string,
@@ -111,7 +127,7 @@ export class MultipartUploader {
     folder: string,
   ): Promise<UploadSession> {
     const parts = this.computeParts(sizeBytes);
-    const key = this.computeKey(folder, assetId);
+    const fileName = filePath.split('/').pop() ?? assetId;
 
     const response = await fetchJson<InitiateResponse>(
       '/uploads/multipart/initiate',
@@ -119,24 +135,35 @@ export class MultipartUploader {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          key,
-          mimeType,
+          fileName,
+          contentType: mimeType,
           sizeBytes,
+          partSize: this.partSize,
           folder,
-          partCount: parts.length,
         }),
       },
     );
 
+    // Map the presigned URLs from the initiate response to a plain object
+    // so the first batch can be uploaded without fetching URLs. A plain
+    // object (not Map) survives JSON serialisation in AsyncStorage.
+    const presignedUrls: Record<number, string> = {};
+    for (const p of response.presignedParts) {
+      presignedUrls[p.partNumber] = p.url;
+    }
+
     const now = Date.now();
+    const expiresAtMs = new Date(response.expiresAt).getTime();
     return {
       uploadId: response.uploadId,
-      key: response.key,
+      key: response.objectKey,
+      sessionId: response.sessionId,
+      presignedUrls,
       parts,
       totalBytes: sizeBytes,
       uploadedBytes: 0,
       initiatedAt: now,
-      expiresAt: now + 7 * 24 * 60 * 60 * 1000, // 7-day default
+      expiresAt: Number.isFinite(expiresAtMs) ? expiresAtMs : now + 7 * 24 * 60 * 60 * 1000,
       mimeType,
       assetId,
     };
@@ -145,6 +172,10 @@ export class MultipartUploader {
   /**
    * Upload a single part. Reads the byte range from the local file,
    * PUTs it to the presigned URL, and stores the returned ETag.
+   *
+   * If the part's presigned URL is already in the session (from the
+   * initiate response), it is used directly. Otherwise, a batch of
+   * presigned URLs is fetched from the backend.
    *
    * Reports real byte progress via `onProgress`.
    */
@@ -157,27 +188,36 @@ export class MultipartUploader {
   ): Promise<void> {
     part.status = 'uploading';
 
-    // Fetch a presigned URL for this part from the backend.
-    const partUrlRes = await fetchJson<PartUrlResponse>(
-      '/uploads/multipart/part-url',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uploadId: session.uploadId,
-          key: session.key,
-          partNumber: part.partNumber,
-          sizeBytes: part.sizeBytes,
-        }),
-      },
-    );
+    // Use the cached presigned URL if available; otherwise fetch it.
+    let presignedUrl = session.presignedUrls?.[part.partNumber];
+    if (!presignedUrl) {
+      const partUrlRes = await fetchJson<PartsResponse>(
+        `/uploads/multipart/${encodeURIComponent(session.sessionId!)}/parts`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            partNumbers: [part.partNumber],
+          }),
+        },
+      );
+      presignedUrl = partUrlRes.presignedParts[0]?.url;
+      if (!presignedUrl) {
+        throw new Error(`Backend returned no presigned URL for part ${part.partNumber}`);
+      }
+      // Cache for potential retry.
+      if (!session.presignedUrls) {
+        session.presignedUrls = {};
+      }
+      session.presignedUrls[part.partNumber] = presignedUrl;
+    }
 
     // Read the chunk from the local file.
     const chunk = await this.readChunk(filePath, part.startByte, part.endByte);
 
     // Upload the chunk to S3 via XHR for real byte progress.
     const etag = await this.xhrPutChunk(
-      partUrlRes.url,
+      presignedUrl,
       chunk,
       session.mimeType,
       onProgress,
@@ -190,8 +230,12 @@ export class MultipartUploader {
 
   /**
    * Complete the multipart upload. Sends the ETag list to the backend,
-   * which tells S3 to assemble the parts into the final object.
-   * Returns the public URL of the assembled object.
+   * which tells S3 to assemble the parts into the final object and
+   * creates an `upload_finalizations` record.
+   *
+   * Returns the public URL of the assembled object. The `finalizationId`
+   * is stored on the session so the caller can pass it to downstream
+   * consumers (listing publication, media assets).
    */
   async complete(session: UploadSession): Promise<string> {
     const completedParts: CompletedPart[] = session.parts
@@ -208,32 +252,33 @@ export class MultipartUploader {
     completedParts.sort((a, b) => a.partNumber - b.partNumber);
 
     const response = await fetchJson<CompleteResponse>(
-      '/uploads/multipart/complete',
+      `/uploads/multipart/${encodeURIComponent(session.sessionId!)}/complete`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          uploadId: session.uploadId,
-          key: session.key,
           parts: completedParts,
         }),
       },
     );
+
+    // Store the finalizationId on the session so the caller can use it.
+    session.finalizationId = response.finalizationId;
 
     return response.publicUrl;
   }
 
   /** Abort an in-progress multipart upload, freeing S3 part storage. */
   async abort(session: UploadSession): Promise<void> {
+    if (!session.sessionId) return;
     try {
-      await fetchJson<{ ok: boolean }>('/uploads/multipart/abort', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uploadId: session.uploadId,
-          key: session.key,
-        }),
-      });
+      await fetchJson<{ ok: boolean }>(
+        `/uploads/multipart/${encodeURIComponent(session.sessionId)}/abort`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     } catch {
       // Best-effort: if the abort call fails (e.g. network), the S3
       // lifecycle policy will eventually clean up orphaned parts.
@@ -336,12 +381,6 @@ export class MultipartUploader {
       });
     }
     return parts;
-  }
-
-  /** Compute the S3 object key. */
-  private computeKey(folder: string, assetId: string): string {
-    const safeId = assetId.replace(/[^a-zA-Z0-9._-]/g, '_');
-    return `${folder}/${safeId}`;
   }
 
   /**

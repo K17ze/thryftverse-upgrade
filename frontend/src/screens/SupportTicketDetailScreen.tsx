@@ -17,7 +17,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
+import { AppStatusPill } from '../components/ui/AppStatusPill';
 import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { CachedImage } from '../components/CachedImage';
@@ -313,7 +313,8 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
               </Caption>
             </View>
             {config && (
-              <PremiumStatusPill
+              <AppStatusPill
+                variant="block"
                 tone={config.tone}
                 label={config.label}
                 icon={

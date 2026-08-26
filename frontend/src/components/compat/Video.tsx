@@ -9,7 +9,7 @@
  *   `expo-video`, so existing call sites stay unchanged.
  */
 import React, { useEffect, useMemo } from 'react';
-import { StyleProp, StyleSheet, View, ViewStyle, ImageStyle } from 'react-native';
+import { StyleProp, StyleSheet, View, ViewStyle, ImageStyle, AppState, AppStateStatus } from 'react-native';
 import { Image as ExpoImage, ImageContentFit } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
@@ -125,25 +125,69 @@ export const Video: React.FC<VideoProps> = ({
     }
   }, [player, playerRef]);
 
+  // ── Playback status via native timeUpdate event (no JS-thread polling) ──
+  // expo-video emits 'timeUpdate' at a configurable interval. We set
+  // `timeUpdateEventInterval` to 0.2s (matching the legacy 200ms polling) and
+  // subscribe via addListener — the event fires from the native player, not a
+  // JS setInterval. This eliminates per-instance JS-thread timers.
   useEffect(() => {
-    if (!player || !onPlaybackStatusUpdate || !shouldPlay) {
+    if (!player || !onPlaybackStatusUpdate) {
       return;
     }
 
-    const intervalId = setInterval(() => {
+    try {
+      player.timeUpdateEventInterval = shouldPlay ? 0.2 : 0;
+    } catch {
+      // Property may not be writable on all platforms — safe to ignore.
+    }
+
+    if (!shouldPlay) {
+      return;
+    }
+
+    const subscription = player.addListener?.('timeUpdate', (payload: { currentTime?: number }) => {
       try {
         onPlaybackStatusUpdate({
-          positionMillis: (player.currentTime ?? 0) * 1000,
+          positionMillis: (payload?.currentTime ?? player.currentTime ?? 0) * 1000,
           durationMillis: (player.duration ?? 0) * 1000,
-          isPlaying: shouldPlay,
+          isPlaying: true,
         });
       } catch (error) {
         onError?.(error);
       }
-    }, 200);
+    });
 
-    return () => clearInterval(intervalId);
+    return () => {
+      subscription?.remove?.();
+      try {
+        player.timeUpdateEventInterval = 0;
+      } catch {
+        // Player may already be released.
+      }
+    };
   }, [player, shouldPlay, onPlaybackStatusUpdate, onError]);
+
+  // ── AppState listener — pause video when app is backgrounded ──
+  // VideoManager and MediaStage both handle AppState; this shim must too,
+  // since it creates its own useVideoPlayer outside the pool.
+  useEffect(() => {
+    if (!player) {
+      return;
+    }
+
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState !== 'active') {
+        try {
+          player.pause();
+        } catch {
+          // Player may already be released.
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [player]);
 
   useEffect(() => {
     if (!player) {

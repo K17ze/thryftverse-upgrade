@@ -16,7 +16,7 @@ import { useStore } from '../store/useStore';
 import { changePassword } from '../services/authApi';
 import { haptics } from '../utils/haptics';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { PremiumTextField } from '../components/ui/PremiumTextField';
+import { AppInput } from '../components/ui/AppInput';
 import { PasswordStrengthBar } from '../components/settings/PasswordStrengthBar';
 import { FlagshipScreen, FlagshipHeader, FlagshipStickyFooter, FlagshipFormSection } from '../components/flagship';
 import { FlagshipNavigationRow } from '../components/flagship/FlagshipNavigationRow';
@@ -142,7 +142,8 @@ export default function ChangePasswordScreen() {
 
       {/* Flat form — no card wrapper. Fields carry their own boundary. */}
         <FlagshipFormSection variant="flat">
-          <PremiumTextField
+          <AppInput
+            variant="section"
             label="Current password"
             value={currentPassword}
             onChangeText={setCurrentPassword}
@@ -154,7 +155,8 @@ export default function ChangePasswordScreen() {
             textContentType="password"
             onFocus={haptics.tap}
           />
-          <PremiumTextField
+          <AppInput
+            variant="section"
             label="New password"
             value={newPassword}
             onChangeText={setNewPassword}
@@ -171,7 +173,8 @@ export default function ChangePasswordScreen() {
               <PasswordStrengthBar password={newPassword} />
             </View>
           )}
-          <PremiumTextField
+          <AppInput
+            variant="section"
             label="Confirm new password"
             value={confirmPassword}
             onChangeText={setConfirmPassword}

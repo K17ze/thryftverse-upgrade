@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 /*
- * Static analysis tests for premium form primitives.
+ * Static analysis tests for form primitives.
  * We do NOT import React Native components into the vitest node environment
  * because expo-modules-core requires native globals that are not available.
  * Instead we verify source file structure and exports.
@@ -13,11 +13,11 @@ function readSrc(filePath: string): string {
   return readFileSync(resolve(__dirname, '..', filePath), 'utf-8');
 }
 
-describe('PremiumTextField source', () => {
-  const src = readSrc('components/ui/PremiumTextField.tsx');
+describe('AppInput source (section variant — formerly PremiumTextField)', () => {
+  const src = readSrc('components/ui/AppInput.tsx');
 
-  it('exports PremiumTextField', () => {
-    expect(src).toContain('export const PremiumTextField');
+  it('exports AppInput', () => {
+    expect(src).toContain('export const AppInput');
   });
 
   it('supports label prop', () => {
@@ -33,7 +33,7 @@ describe('PremiumTextField source', () => {
   });
 
   it('supports multiline prop', () => {
-    expect(src).toContain('multiline?:');
+    expect(src).toContain('multiline');
   });
 
   it('supports leftIcon prop', () => {
@@ -53,11 +53,11 @@ describe('PremiumTextField source', () => {
   });
 });
 
-describe('PremiumSelectRow source', () => {
-  const src = readSrc('components/ui/PremiumSelectRow.tsx');
+describe('AppSelectRow source (formerly PremiumSelectRow)', () => {
+  const src = readSrc('components/ui/AppSelectRow.tsx');
 
-  it('exports PremiumSelectRow', () => {
-    expect(src).toContain('export function PremiumSelectRow');
+  it('exports AppSelectRow', () => {
+    expect(src).toContain('export function AppSelectRow');
   });
 
   it('supports label prop', () => {

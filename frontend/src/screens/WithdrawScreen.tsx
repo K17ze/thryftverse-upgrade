@@ -16,9 +16,9 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { CURRENCIES, DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { COPY } from '../constants/copy';
 import { useToast } from '../context/ToastContext';
+import { useA11yAudit } from '../hooks/useA11yAudit';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
 import {
@@ -31,6 +31,7 @@ import {
   listPayoutAccounts,
   listPayoutRequests,
   getWalletSnapshot,
+  lookupPayoutByIdempotencyKey,
   PayoutAccountPayload,
   PayoutRequestPayload,
 } from '../services/walletApi';
@@ -54,10 +55,11 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useHaptic } from '../hooks/useHaptic';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { createStableId } from '../utils/createStableId';
+import { useUnknownOutcomeReconciliation } from '../hooks/useUnknownOutcomeReconciliation';
 import { t } from '../i18n';
 
 
-type WithdrawStep = 'form' | 'confirm' | 'success';
+type WithdrawStep = 'form' | 'confirm' | 'success' | 'unknown_outcome';
 
 interface WithdrawSuccessData {
   reference: string;
@@ -114,6 +116,8 @@ function resolvePayoutStatusConfig(status: PayoutStatus): PayoutStatusConfig {
 type WithdrawalsLoadState = 'idle' | 'loading' | 'loaded' | 'error';
 
 export default function WithdrawScreen() {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'WithdrawScreen');
   useScreenCaptureProtection();
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
@@ -124,20 +128,21 @@ export default function WithdrawScreen() {
   const [isHydratingBalance, setIsHydratingBalance] = useState(true);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const idempotencyKeyRef = useRef<string | null>(null);
+  const isMountedRef = useRef(true);
+  const { reconcile } = useUnknownOutcomeReconciliation();
   const [isConnectingPayout, setIsConnectingPayout] = useState(false);
   const [payoutAccount, setPayoutAccount] = useState<PayoutAccountPayload | null>(null);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
   const [successData, setSuccessData] = useState<WithdrawSuccessData | null>(null);
   const [withdrawals, setWithdrawals] = useState<PayoutRequestPayload[]>([]);
   const [withdrawalsLoadState, setWithdrawalsLoadState] = useState<WithdrawalsLoadState>('idle');
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencySymbol, formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates, rateUpdatedAt } = useCurrencyContext();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const currentUser = useStore((state) => state.currentUser);
-  const currencySymbol = CURRENCIES[currencyCode].symbol;
 
   // ── Biometric gate (OWASP M5) ──
   // Withdrawals move money out of the wallet. Require biometric re-authentication
@@ -567,6 +572,48 @@ export default function WithdrawScreen() {
       void loadWithdrawals(currentUser.id);
     } catch (error) {
       const isNetworkError = isOffline || (error instanceof Error && /network|fetch|timeout/i.test(error.message));
+
+      if (isNetworkError && idempotencyKey) {
+        // Lost response during payout submission — the server may have
+        // committed. Show unknown_outcome and poll for the authoritative
+        // status instead of telling the user the payout failed (which
+        // invites an unsafe retry that could create a duplicate).
+        setStep('unknown_outcome');
+        show('We are confirming your withdrawal. Please do not submit again.');
+
+        const result = await reconcile<PayoutRequestPayload>({
+          lookup: () => lookupPayoutByIdempotencyKey(currentUser.id, idempotencyKey),
+          onAcknowledged: (payoutRequest) => {
+            setSuccessData({
+              reference: payoutRequest.providerPayoutRef ?? payoutRequest.id,
+              amountGbp: payoutRequest.amountGbp,
+              payoutCurrency: payoutRequest.amountCurrency,
+              createdAt: payoutRequest.createdAt,
+            });
+            haptic.success();
+            idempotencyKeyRef.current = null;
+            setStep('success');
+            void loadWithdrawals(currentUser.id);
+          },
+          onSafeToRetry: () => {
+            idempotencyKeyRef.current = null;
+            setStep('form');
+            show('No withdrawal was created. Please try again.', 'info');
+          },
+          onUnresolved: () => {
+            // Keep the idempotency key so a manual retry doesn't create
+            // a duplicate. The user can check their withdrawal history.
+            setStep('form');
+            show('We could not confirm your withdrawal. Check your history before retrying.', 'info');
+          },
+          shouldContinue: () => isMountedRef.current,
+        });
+
+        if (result.outcome === 'acknowledged' || result.outcome === 'safe_to_retry' || result.outcome === 'unresolved') {
+          return;
+        }
+      }
+
       const parsed = parseApiError(error, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Unable to submit withdrawal right now.');
       show(parsed.message, 'error');
       setStep('form');
@@ -581,6 +628,11 @@ export default function WithdrawScreen() {
       void biometricGate.authenticate('Authenticate to withdraw funds');
     }
   }, [biometricGate.status, biometricGate.isAuthenticating, biometricGate.authenticate]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   // ── Biometric gate: block the withdrawal form until authenticated ──
   if (biometricGate.status === 'pending' || biometricGate.status === 'locked') {
@@ -623,6 +675,37 @@ export default function WithdrawScreen() {
           <SkeletonLoader width="100%" height={80} borderRadius={Radius.lg} style={{ marginBottom: Space.md }} />
           <SkeletonLoader width="100%" height={56} borderRadius={Radius.md} style={{ marginBottom: Space.sm }} />
           <SkeletonLoader width="100%" height={56} borderRadius={Radius.md} />
+        </View>
+      </FlagshipScreen>
+    );
+  }
+
+  // ── Unknown outcome step ──
+  // The withdrawal response was lost. We are polling the backend to
+  // determine whether the payout was committed. The user must not retry
+  // until the status is resolved.
+  if (step === 'unknown_outcome') {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Checking withdrawal"
+            onBack={() => { /* prevent back — don't abandon reconciliation */ }}
+            backIcon="arrow-back"
+          />
+        }
+        scrollEnabled={false}
+      >
+        <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
+          <Ionicons name="hourglass-outline" size={48} color={colors.textMuted} />
+          <Text style={[styles.unknownTitle, { color: colors.textPrimary }]}>
+            Confirming your request
+          </Text>
+          <Text style={[styles.unknownBody, { color: colors.textSecondary }]}>
+            We lost connection while submitting your withdrawal. We are
+            checking whether it went through. Please do not submit again
+            until we confirm.
+          </Text>
         </View>
       </FlagshipScreen>
     );
@@ -674,14 +757,14 @@ export default function WithdrawScreen() {
               Withdrawal requested
             </Text>
             <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
-              {formatFromFiat(successData.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} is on its way
+              {formatFromFiat(successData.amountGbp, currencyCode, { displayMode: 'fiat' })} is on its way
             </Text>
           </View>
 
           <View>
             <FlagshipFormSection variant="flat" title="Withdrawal details">
               <FlagshipMetricLine label="Reference" value={shortRef} />
-              <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} separated />
+              <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, currencyCode, { displayMode: 'fiat' })} separated />
               <FlagshipMetricLine label="Currency" value={successData.payoutCurrency} separated />
               <FlagshipMetricLine label="Requested" value={formattedDate} separated />
               <FlagshipMetricLine label="Estimated arrival" value="1–3 business days" separated />
@@ -730,7 +813,7 @@ export default function WithdrawScreen() {
               accessibilityLabel={
                 isWithdrawing
                   ? 'Processing withdrawal'
-                  : `Confirm withdrawal of ${formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`
+                  : `Confirm withdrawal of ${formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })}`
               }
               accessibilityHint="Submits your withdrawal request"
             />
@@ -753,9 +836,9 @@ export default function WithdrawScreen() {
         >
           <View>
             <FlagshipFormSection variant="flat" title="Withdrawal summary">
-              <FlagshipMetricLine label="Amount" value={formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} />
-              <FlagshipMetricLine label="Fee" value={formatFromFiat(0, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} separated />
-              <FlagshipMetricLine label="You receive" value={formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} emphasis separated />
+              <FlagshipMetricLine label="Amount" value={formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })} />
+              <FlagshipMetricLine label="Fee" value={formatFromFiat(0, currencyCode, { displayMode: 'fiat' })} separated />
+              <FlagshipMetricLine label="You receive" value={formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })} emphasis separated />
               <FlagshipMetricLine label="Destination" value={destinationLabel} separated />
               <FlagshipMetricLine label="Estimated arrival" value="1–3 business days" separated />
             </FlagshipFormSection>
@@ -784,6 +867,7 @@ export default function WithdrawScreen() {
 
   return (
     <FlagshipScreen
+      ref={a11yRef}
       header={
         <FlagshipHeader
           title="Withdraw Balance"
@@ -818,7 +902,7 @@ export default function WithdrawScreen() {
             style={[styles.primaryBtn, !canWithdraw && styles.primaryBtnDisabled]}
             titleStyle={styles.primaryText}
             accessibilityLabel={
-              `Review withdrawal of ${formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`
+              `Review withdrawal of ${formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })}`
             }
             accessibilityHint="Proceeds to the confirmation step"
           />
@@ -845,7 +929,7 @@ export default function WithdrawScreen() {
           <View style={{ marginTop: Space.md }}>
             <FlagshipMetricLine
               label="Available to withdraw"
-              value={formatFromFiat(availableBalance, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+              value={formatFromFiat(availableBalance, currencyCode, { displayMode: 'fiat' })}
               emphasis
             />
           </View>
@@ -865,7 +949,7 @@ export default function WithdrawScreen() {
               accessibilityHint="Enter the amount to withdraw from your available balance"
             />
           </View>
-          <Text style={styles.availableText}>Available: {formatFromFiat(availableBalance, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+          <Text style={styles.availableText}>Available: {formatFromFiat(availableBalance, currencyCode, { displayMode: 'fiat' })}</Text>
           {policyScopeLabel ? <Text style={styles.policyLabel}>Policy scope: {policyScopeLabel}</Text> : null}
           {payoutPolicyHint ? <Text style={styles.policyHint}>{payoutPolicyHint}</Text> : null}
           {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
@@ -970,14 +1054,14 @@ export default function WithdrawScreen() {
                           styles.withdrawalRow,
                           !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
                         ]}
-                        accessibilityLabel={`Withdrawal of ${formatFromFiat(item.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}, ${statusConfig.label}, ${formattedDate}`}
+                        accessibilityLabel={`Withdrawal of ${formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}, ${statusConfig.label}, ${formattedDate}`}
                       >
                         <View style={styles.withdrawalLeft}>
                           <Text
                             style={[styles.withdrawalAmount, { color: colors.textPrimary }]}
                             numberOfLines={1}
                           >
-                            {formatFromFiat(item.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+                            {formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}
                           </Text>
                           <Text style={[styles.withdrawalDate, { color: colors.textMuted }]}>
                             {formattedDate}
@@ -1016,6 +1100,9 @@ export default function WithdrawScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Space.xl, gap: Space.md },
+  unknownTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, textAlign: 'center' },
+  unknownBody: { fontSize: Type.body.size, fontFamily: Typography.family.regular, textAlign: 'center', lineHeight: Type.body.lineHeight },
   skeletonContainer: { paddingHorizontal: Space.md + Space.xs, paddingTop: Space.md },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, height: Space.xl + Space.xl + 8, borderBottomWidth: Stroke.standard, borderBottomColor: colors.border },
   backBtn: { width: Control.hit, height: Control.hit, justifyContent: 'center', alignItems: 'flex-start' },

@@ -13,6 +13,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useBackendData } from '../../context/BackendDataContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 import type { OutfitTag } from './LookMediaComposer';
@@ -24,6 +25,7 @@ export interface OutfitPieceEditorProps {
 
 export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps) {
   const { colors } = useAppTheme();
+  const { formatFromFiat } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { listings } = useBackendData();
@@ -104,7 +106,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
             )}
             <View style={{ flex: 1, gap: Space.xs / 2 }}>
               <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
-              <Text style={styles.listingPrice}>£{listing.price}</Text>
+              <Text style={styles.listingPrice}>{formatFromFiat(listing.price)}</Text>
             </View>
             <Pressable
               onPress={() => handleLinkListing(tag.id, undefined)}
@@ -162,7 +164,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
                     )}
                     <View style={{ flex: 1, gap: Space.xs / 2 }}>
                       <Text style={styles.searchResultTitle} numberOfLines={1}>{item.title}</Text>
-                      <Text style={styles.searchResultPrice}>£{item.price}</Text>
+                      <Text style={styles.searchResultPrice}>{formatFromFiat(item.price)}</Text>
                     </View>
                     <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
                   </Pressable>

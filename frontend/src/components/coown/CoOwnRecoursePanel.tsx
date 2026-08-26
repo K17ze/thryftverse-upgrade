@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { Space, Type, Typography, Radius } from '../../theme/designTokens';
 import type {
   CoOwnRecourseAgreement,
@@ -38,13 +39,14 @@ export function CoOwnRecoursePanel({
   isIssuer,
 }: CoOwnRecoursePanelProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
 
   const items: Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; positive: boolean; warning?: boolean }> = [];
 
   // ── Recourse agreement status ──
   if (recourseAgreementSigned && agreement) {
     const liabilityStr = agreement.maxLiabilityGbp != null
-      ? ` · £${Math.round(agreement.maxLiabilityGbp).toLocaleString()} liability`
+      ? ` · ${currencySymbol}${Math.round(agreement.maxLiabilityGbp).toLocaleString()} liability`
       : '';
     items.push({
       icon: 'shield-checkmark',
@@ -103,7 +105,7 @@ export function CoOwnRecoursePanel({
       items.push({
         icon: 'cash-outline',
         label: 'Total seller liability',
-        value: `£${Math.round(sellerLiability.totalActiveLiabilityGbp).toLocaleString()} across ${sellerLiability.activeAgreementCount} asset${sellerLiability.activeAgreementCount > 1 ? 's' : ''}`,
+        value: `${currencySymbol}${Math.round(sellerLiability.totalActiveLiabilityGbp).toLocaleString()} across ${sellerLiability.activeAgreementCount} asset${sellerLiability.activeAgreementCount > 1 ? 's' : ''}`,
         positive: false,
       });
     }
@@ -125,7 +127,7 @@ export function CoOwnRecoursePanel({
     items.push({
       icon: 'trending-up-outline',
       label: 'Total traded value',
-      value: `£${Math.round(totalTradedValueGbp).toLocaleString()} traded on this asset`,
+      value: `${currencySymbol}${Math.round(totalTradedValueGbp).toLocaleString()} traded on this asset`,
       positive: false,
     });
   }

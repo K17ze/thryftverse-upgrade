@@ -2,6 +2,7 @@ import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
 import rnA11y from 'eslint-plugin-react-native-a11y';
+import i18nextPlugin from 'eslint-plugin-i18next';
 
 /**
  * ESLint 9 flat configuration. Hook correctness remains blocking; legacy
@@ -54,6 +55,68 @@ export default [
       'react-native-a11y/no-nested-touchables': 'error',
       'react-native-a11y/has-valid-accessibility-role': 'error',
       'react-native-a11y/has-valid-accessibility-state': 'error',
+      'max-lines': ['warn', { max: 800, skipBlankLines: true, skipComments: true }],
+      'max-lines-per-function': ['warn', { max: 400, skipBlankLines: true, skipComments: true, IIFEs: true }],
+    },
+  },
+  // ── i18next no-literal-string ─────────────────────────────────────
+  // Surface untranslated user-facing strings in JSX so they can be
+  // extracted via i18next-parser. Scoped to screens/ and components/
+  // only; test files are excluded. Uses eslint-plugin-i18next which
+  // provides the no-literal-string rule with ESLint 9 flat-config
+  // support. (eslint-plugin-react-i18next is installed as a devDep but
+  // only carries no-parent-prop / require-namespace rules — it does not
+  // ship no-literal-string, so eslint-plugin-i18next is used here.)
+  {
+    files: ['src/screens/**/*.{ts,tsx}', 'src/components/**/*.{ts,tsx}'],
+    ignores: ['**/__tests__/**', '**/*.test.*'],
+    plugins: {
+      i18next: i18nextPlugin,
+    },
+    rules: {
+      'i18next/no-literal-string': [
+        'warn',
+        {
+          mode: 'jsx-only',
+          // JSX attributes whose string values are non-user-facing
+          // (styling, a11y, test hooks, icon names, media sources).
+          'jsx-attributes': {
+            exclude: [
+              // plugin defaults
+              'className',
+              'styleName',
+              'style',
+              'type',
+              'key',
+              'id',
+              'width',
+              'height',
+              // accessibility props
+              'accessibilityLabel',
+              'accessibilityHint',
+              'accessibilityRole',
+              'accessibilityValue',
+              // media / test / icon props
+              'source',
+              'testID',
+              'name',
+            ],
+          },
+          // String-content exclusions: numbers, punctuation, uppercase
+          // identifiers, HTML entities, emojis (defaults) plus URLs and
+          // file-extension paths.
+          words: {
+            exclude: [
+              '[0-9!-/:-@[-`{-~]+',
+              '[A-Z_-]+',
+              '&[a-zA-Z]+;',
+              /^\p{Emoji}+$/u,
+              'https?://\\S+',
+              '\\S+\\.(png|jpe?g|gif|svg|webp|mp4|mov|pdf|json|ts|tsx|js|jsx|mjs|css|html)',
+            ],
+          },
+        },
+      ],
     },
   },
 ];

@@ -64,6 +64,8 @@ export interface LineChartProps {
   error?: string | null;
   /** Optional empty-state message override. */
   emptyMessage?: string;
+  /** Screen-reader summary of the chart data (e.g. "Portfolio value over 30 days, peak £1,240 on day 18, current £1,180"). Required for WCAG 1.1.1 — the Skia canvas is invisible to assistive tech. */
+  accessibilitySummary?: string;
 }
 
 // ============================================================================
@@ -204,6 +206,7 @@ export function LineChart({
   loading = false,
   error = null,
   emptyMessage = 'No data available',
+  accessibilitySummary,
 }: LineChartProps): React.ReactElement {
   const appTheme = useChartTheme();
   const theme = useMemo(
@@ -378,6 +381,13 @@ export function LineChart({
       style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
       onLayout={onLayout}
     >
+      {/* Off-screen text for screen readers — the Skia canvas is invisible
+          to VoiceOver/TalkBack, so we expose a textual summary (WCAG 1.1.1). */}
+      <Text
+        accessibilityLabel={accessibilitySummary ?? `${chartData.length} data points`}
+        accessibilityRole="text"
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      />
       <CartesianChart
         data={chartData}
         xKey="x"

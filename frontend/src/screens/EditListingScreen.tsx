@@ -36,6 +36,7 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useBackendData } from '../context/BackendDataContext';
+import { useTaxonomy } from '../context/TaxonomyContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { useSoldComps } from '../hooks/useSoldComps';
@@ -49,11 +50,6 @@ import {
 import { t } from '../i18n';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-
-const CONDITIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory'];
-const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'One size'];
-const BRANDS = ['Nike', 'Adidas', 'Zara', 'H&M', 'Ralph Lauren', 'Off-White', 'Stone Island', 'Stussy', 'Other'];
-const CATEGORY_OPTIONS = ['Women', 'Men', 'Designer', 'Kids', 'Home', 'Electronics', 'Entertainment', 'Hobbies & collectables', 'Sports'];
 
 type PickerMode = 'Category' | 'Brand' | 'Size' | 'Condition' | null;
 type RouteT = RouteProp<RootStackParamList, 'EditListing'>;
@@ -117,6 +113,15 @@ export default function EditListingScreen() {
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
+
+  const { categories, conditions, sizes, brands } = useTaxonomy();
+  const categoryOptions = useMemo(
+    () => categories.filter((n) => n.parentId === null).map((n) => n.name),
+    [categories],
+  );
+  const conditionOptions = useMemo(() => conditions.map((n) => n.name), [conditions]);
+  const sizeOptions = useMemo(() => sizes.map((n) => n.name), [sizes]);
+  const brandOptions = useMemo(() => brands.map((n) => n.name), [brands]);
 
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -603,13 +608,13 @@ export default function EditListingScreen() {
   /* ── picker helpers ── */
   const getPickerOptions = useCallback(() => {
     switch (pickerMode) {
-      case 'Category': return CATEGORY_OPTIONS;
-      case 'Brand': return BRANDS;
-      case 'Size': return SIZES;
-      case 'Condition': return CONDITIONS;
+      case 'Category': return categoryOptions;
+      case 'Brand': return brandOptions;
+      case 'Size': return sizeOptions;
+      case 'Condition': return conditionOptions;
       default: return [];
     }
-  }, [pickerMode]);
+  }, [pickerMode, categoryOptions, brandOptions, sizeOptions, conditionOptions]);
 
   const getPickerSelected = useCallback(() => {
     switch (pickerMode) {

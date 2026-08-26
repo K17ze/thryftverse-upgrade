@@ -33,6 +33,10 @@ import { BarChart } from '../components/charts/BarChart';
 import type { ChartPoint } from '../components/charts/types';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useHaptic } from '../hooks/useHaptic';
+import { useA11yAudit } from '../hooks/useA11yAudit';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { formatFiatAmount } from '../utils/currency';
+import type { SupportedCurrencyCode } from '../constants/currencies';
 import {
   fetchAnalyticsSummary,
   fetchAnalyticsTimeline,
@@ -79,12 +83,11 @@ function formatDelta(changeRatio: number | null): string {
   return `${sign}${pct.toFixed(1)}%`;
 }
 
-function formatMoney(minor: number): string {
+function formatMoney(minor: number, currencyCode: SupportedCurrencyCode): string {
   const sign = minor < 0 ? '-' : '';
   const abs = Math.abs(minor);
-  const pounds = Math.floor(abs / 100);
-  const pence = abs % 100;
-  return `${sign}£${pounds.toLocaleString()}.${String(pence).padStart(2, '0')}`;
+  const major = abs / 100;
+  return `${sign}${formatFiatAmount(major, currencyCode)}`;
 }
 
 function shortDate(iso: string): string {
@@ -134,10 +137,13 @@ function entryTypeLabel(t: string): string {
 
 // ── Main screen ───────────────────────────────────────────────────────
 export default function CreatorAnalyticsDashboardScreen() {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'CreatorAnalyticsDashboardScreen');
   const { colors } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
+  const { currencyCode } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [period, setPeriod] = useState<PeriodKey>('30d');
@@ -247,6 +253,16 @@ export default function CreatorAnalyticsDashboardScreen() {
       y: p.views,
     }));
   }, [timeline]);
+
+  // ── Derived: chart accessibility summary for screen readers ────────
+  // The Skia canvas is invisible to VoiceOver/TalkBack, so we expose a
+  // textual summary via the BarChart's accessibilityLabel (WCAG 1.1.1).
+  const chartA11ySummary = useMemo(() => {
+    if (chartData.length === 0) return 'No views in this period';
+    const total = chartData.reduce((sum, p) => sum + p.y, 0);
+    const peak = chartData.reduce((best, p) => (p.y > best.y ? p : best), chartData[0]);
+    return `Views over ${chartData.length} ${chartData.length === 1 ? 'day' : 'days'}, peak ${peak.y} on ${peak.x}, total ${total}`;
+  }, [chartData]);
 
   // ── Derived: hero thumbnail (top content) ───────────────────────────
   const heroThumbnail = useMemo(() => {
@@ -402,6 +418,7 @@ export default function CreatorAnalyticsDashboardScreen() {
 
   return (
     <FlagshipScreen
+      ref={a11yRef}
       header={
         <FlagshipHeader
           title="Analytics"
@@ -578,6 +595,7 @@ export default function CreatorAnalyticsDashboardScreen() {
             error={timeline ? null : 'Chart unavailable'}
             emptyMessage="No views in this period"
             valueFormat={formatCount}
+            accessibilitySummary={chartA11ySummary}
           />
         </View>
 
@@ -625,23 +643,23 @@ export default function CreatorAnalyticsDashboardScreen() {
             {/* Available balance — the dominant figure */}
             <FlagshipMetricLine
               label="Available"
-              value={formatMoney(earnings.available.amountMinor)}
+              value={formatMoney(earnings.available.amountMinor, currencyCode)}
               emphasis
               separated
             />
             <FlagshipMetricLine
               label="Estimated"
-              value={formatMoney(earnings.estimated.amountMinor)}
+              value={formatMoney(earnings.estimated.amountMinor, currencyCode)}
               separated
             />
             <FlagshipMetricLine
               label="Finalized"
-              value={formatMoney(earnings.finalized.amountMinor)}
+              value={formatMoney(earnings.finalized.amountMinor, currencyCode)}
               separated
             />
             <FlagshipMetricLine
               label="Paid"
-              value={formatMoney(earnings.paid.amountMinor)}
+              value={formatMoney(earnings.paid.amountMinor, currencyCode)}
               separated
             />
 
@@ -689,7 +707,7 @@ export default function CreatorAnalyticsDashboardScreen() {
                         { color: entry.amountMinor < 0 ? colors.danger : colors.textPrimary },
                       ]}
                     >
-                      {formatMoney(entry.amountMinor)}
+                      {formatMoney(entry.amountMinor, currencyCode)}
                     </Text>
                   </View>
                 ))}

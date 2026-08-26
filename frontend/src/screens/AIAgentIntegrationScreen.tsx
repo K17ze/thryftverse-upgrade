@@ -326,7 +326,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             styles.flatRow,
             { opacity: pressed ? 0.6 : 1 },
           ]}
-          onPress={() => navigation.navigate('AgentActivity')}
+          onPress={() => navigation.navigate('AgentLedger')}
           accessibilityRole="button"
           accessibilityLabel="View agent activity ledger"
         >

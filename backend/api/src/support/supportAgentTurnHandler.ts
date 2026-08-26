@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Pool } from 'pg';
 import { logger } from '../lib/logger.js';
+import { resolveMessageBody } from '../lib/messageEncryption.js';
 import { AI_RATE_LIMITS, computeRetryDelayMs } from '../lib/aiTruth.js';
 import type { SupportKnowledgeSearchResult } from './contracts.js';
 import type { RoutingResult } from './routingService.js';
@@ -41,6 +42,8 @@ interface SupportMessageRow {
   author_id: string | null;
   author_role: string;
   body: string;
+  body_ciphertext: string | null;
+  key_version: number | null;
   citations: unknown[];
   metadata: Record<string, unknown>;
   created_at: string;
@@ -330,6 +333,7 @@ export async function processSupportTurn(
   const messageResult = await db.query<SupportMessageRow>(
     `
       SELECT id, conversation_id, author_id, author_role, body,
+             body_ciphertext, key_version,
              citations, metadata, created_at
       FROM support_messages
       WHERE id = $1 AND conversation_id = $2
@@ -345,7 +349,15 @@ export async function processSupportTurn(
     return emptyResult;
   }
 
-  const customerMessage = messageResult.rows[0];
+  const customerMessageRow = messageResult.rows[0];
+  const customerMessage = {
+    ...customerMessageRow,
+    body: await resolveMessageBody(
+      customerMessageRow.id,
+      customerMessageRow.body,
+      customerMessageRow.body_ciphertext ?? null,
+    ),
+  };
 
   // 3. Check ownership state — only respond if AI is active.
   if (conversation.ownershipState !== 'ai_active') {

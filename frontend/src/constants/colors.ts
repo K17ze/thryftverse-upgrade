@@ -38,8 +38,8 @@ export const DARK_COLORS = {
   // 4. TEXT - Three levels of hierarchy + inverse for on-brand surfaces
   textPrimary: '#FFFFFF',
   textSecondary: '#A3A3A3',
-  // WCAG 2.2 AA: 4.64:1 on #0A0A0A (was #666666 at 3.05:1)
-  textMuted: '#7A7A7A',
+  // WCAG 2.2 AA: 5.2:1 on surface #141414, 4.81:1 on surfaceAlt #1C1C1C (was #7A7A7A at 4.29:1/3.97:1 — failed AA)
+  textMuted: '#888888',
   textInverse: '#000000',
 
   // 5. BORDERS - Subtle separators
@@ -123,8 +123,8 @@ export const LIGHT_COLORS = {
   // 4. TEXT - Three levels of hierarchy + inverse for on-brand surfaces
   textPrimary: '#000000',
   textSecondary: '#666666',
-  // WCAG 2.2 AA: 4.65:1 on #FFFFFF (was #999999 at 2.85:1)
-  textMuted: '#767676',
+  // WCAG 2.2 AA: 4.82:1 on surface #F5F5F5, 4.56:1 on surfaceAlt #EFEFEF (was #767676 at 4.17:1/3.95:1 — failed AA)
+  textMuted: '#6C6C6C',
   textInverse: '#FFFFFF',
 
   // 5. BORDERS - Subtle separators

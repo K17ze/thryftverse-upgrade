@@ -1,15 +1,20 @@
 /**
  * Locale resource loader for the namespace-based i18n system.
  *
- * Imports the structured en.json (with nested groups per namespace) and
- * flattens each top-level namespace into dot-notation keys. This preserves
- * the existing i18next `keySeparator: false` configuration while allowing
- * human-readable nested JSON as the source of truth.
+ * Imports the structured locale JSON files (en/es/fr/de) with nested groups
+ * per namespace and flattens each top-level namespace into dot-notation keys.
+ * This preserves the existing i18next `keySeparator: false` configuration
+ * while allowing human-readable nested JSON as the source of truth.
  *
- * Each top-level key in en.json becomes an i18next namespace. Nested keys
- * within a namespace are flattened to dot notation:
+ * Each top-level key in a locale JSON file becomes an i18next namespace.
+ * Nested keys within a namespace are flattened to dot notation:
  *   { "common": { "buttons": { "save": "Save" } } }
  *   → namespace "common", key "buttons.save" → "Save"
+ *
+ * Per-locale fallback: non-English locale files may be partial. Missing keys
+ * fall through to English at the flattened-key level, so a Spanish file that
+ * only translates `common.buttons.save` will still resolve
+ * `common.buttons.cancel` from the English source.
  *
  * Usage in components:
  *   const { t } = useAppTranslation('home');
@@ -18,6 +23,9 @@
  */
 
 import enJson from './en.json';
+import esJson from './es.json';
+import frJson from './fr.json';
+import deJson from './de.json';
 
 // ── Flatten utility ─────────────────────────────────────────────────
 
@@ -51,9 +59,9 @@ type FlattenedResources = {
   [K in AppNamespace]: Record<string, string>;
 };
 
-function buildFlattenedResources(): FlattenedResources {
+function buildFlattenedResources(json: LocaleNamespaces): FlattenedResources {
   const resources = {} as FlattenedResources;
-  for (const [namespace, content] of Object.entries(enJson)) {
+  for (const [namespace, content] of Object.entries(json)) {
     if (content !== null && typeof content === 'object') {
       resources[namespace as AppNamespace] = flattenObject(content as Record<string, unknown>);
     }
@@ -61,20 +69,51 @@ function buildFlattenedResources(): FlattenedResources {
   return resources;
 }
 
-export const flattenedResources = buildFlattenedResources();
+/** English flattened resources — the source of truth and fallback. */
+export const flattenedResources = buildFlattenedResources(enJson);
+
+/**
+ * Merge a locale's flattened resources over the English base.
+ * Missing keys inherit the English value (per-key fallback).
+ */
+function mergeWithEnglishFallback(
+  localeFlat: Partial<FlattenedResources>,
+): FlattenedResources {
+  const merged = {} as FlattenedResources;
+  for (const ns of Object.keys(enJson) as AppNamespace[]) {
+    merged[ns] = { ...flattenedResources[ns], ...(localeFlat[ns] ?? {}) };
+  }
+  return merged;
+}
+
+const esFlattened = buildFlattenedResources(esJson as LocaleNamespaces);
+const frFlattened = buildFlattenedResources(frJson as LocaleNamespaces);
+const deFlattened = buildFlattenedResources(deJson as LocaleNamespaces);
+
+/** Per-locale flattened namespace resources (with English fallback). */
+export const localeResources: Record<string, FlattenedResources> = {
+  en: flattenedResources,
+  es: mergeWithEnglishFallback(esFlattened),
+  fr: mergeWithEnglishFallback(frFlattened),
+  de: mergeWithEnglishFallback(deFlattened),
+};
 
 // ── i18next resource format ─────────────────────────────────────────
 
 /**
- * Build the i18next resources object in the format:
- *   { en: { common: {...}, home: {...}, ... } }
+ * Build the i18next resources object for all locales in the format:
+ *   { en: { common: {...}, home: {...}, ... },
+ *     es: { common: {...}, ... } }
  */
-export function buildI18nResources(locale: string): Record<string, Record<string, Record<string, string>>> {
-  const namespaces: Record<string, Record<string, string>> = {};
-  for (const [namespace, flatKeys] of Object.entries(flattenedResources)) {
-    namespaces[namespace] = flatKeys;
+export function buildI18nResources(): Record<string, Record<string, Record<string, string>>> {
+  const result: Record<string, Record<string, Record<string, string>>> = {};
+  for (const [locale, flat] of Object.entries(localeResources)) {
+    result[locale] = {};
+    for (const [namespace, keys] of Object.entries(flat)) {
+      result[locale][namespace] = keys;
+    }
   }
-  return { [locale]: namespaces };
+  return result;
 }
 
 // ── Type exports for type-safe translations ─────────────────────────
@@ -85,4 +124,4 @@ export function buildI18nResources(locale: string): Record<string, Record<string
 export type NamespaceKeys<N extends AppNamespace> = keyof FlattenedResources[N];
 
 // Re-export the raw JSON for tooling (e.g. i18n:extract script)
-export { enJson };
+export { enJson, esJson, frJson, deJson };

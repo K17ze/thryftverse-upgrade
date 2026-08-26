@@ -53,6 +53,7 @@ import { useSignupWall } from '../hooks/useSignupWall';
 import { useToast } from '../context/ToastContext';
 import { useFollowMutation } from '../platform/server';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Space, Radius, Type, Control, Typography, Stroke } from '../theme/designTokens';
 import {
   LiveStream,
@@ -144,6 +145,7 @@ export function LiveStreamViewerScreen() {
   const { show } = useToast();
   const { requireAuth } = useSignupWall();
   const reducedMotion = useReducedMotion();
+  const { formatFromFiat, currencyCode, currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const sessionId = route.params.sessionId;
@@ -572,7 +574,7 @@ export function LiveStreamViewerScreen() {
               </View>
               <View style={[styles.endedStatDivider, { backgroundColor: colors.border }]} />
               <View style={styles.endedStatItem}>
-                <Text style={[styles.endedStatValue, { color: colors.textPrimary }]}>£{streamEndSummary.totalSales}</Text>
+                <Text style={[styles.endedStatValue, { color: colors.textPrimary }]}>{formatFromFiat(streamEndSummary.totalSales, currencyCode)}</Text>
                 <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>Total Sales</Text>
               </View>
             </View>
@@ -762,7 +764,7 @@ export function LiveStreamViewerScreen() {
                 <View style={styles.productInfoCompact}>
                   <Text style={styles.productTitleOverlay} numberOfLines={1}>{currentLot.title}</Text>
                   <View style={styles.productPriceRow}>
-                    <Text style={styles.productPriceValue}>£{currentLot.currentPrice}</Text>
+                    <Text style={styles.productPriceValue}>{formatFromFiat(currentLot.currentPrice, currencyCode)}</Text>
                     <Text style={styles.productPriceLabel}>{currentLot.bidCount} bids</Text>
                     {timeRemaining > 0 && (
                       <Text style={[styles.productTimer, { color: timeRemaining <= 10 ? colors.danger : colors.scrimTextSecondary }]}>
@@ -783,7 +785,7 @@ export function LiveStreamViewerScreen() {
                   {bidPending ? (
                     <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
-                    <Text style={styles.bidBtnTextOverlay}>Bid £{minNextBid}+</Text>
+                    <Text style={styles.bidBtnTextOverlay}>Bid {currencySymbol}{minNextBid}+</Text>
                   )}
                 </Pressable>
                 {buyNowPrice > 0 && (
@@ -792,12 +794,12 @@ export function LiveStreamViewerScreen() {
                     disabled={buyNowPending}
                     style={({ pressed }) => [styles.buyNowBtnOverlay, pressed && { opacity: 0.85 }, buyNowPending && { opacity: 0.6 }]}
                     accessibilityRole="button"
-                    accessibilityLabel={`Buy now for £${buyNowPrice}`}
+                    accessibilityLabel={`Buy now for ${currencySymbol}${buyNowPrice}`}
                   >
                     {buyNowPending ? (
                       <ActivityIndicator size="small" color={colors.textPrimary} />
                     ) : (
-                      <Text style={styles.buyNowBtnTextOverlay}>Buy £{buyNowPrice}</Text>
+                      <Text style={styles.buyNowBtnTextOverlay}>Buy {currencySymbol}{buyNowPrice}</Text>
                     )}
                   </Pressable>
                 )}
@@ -894,7 +896,7 @@ export function LiveStreamViewerScreen() {
             <View style={styles.itemSheetPriceRow}>
               <View>
                 <Text style={[styles.bidSheetCurrentLabel, { color: colors.textSecondary }]}>Current bid</Text>
-                <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>£{currentLot.currentPrice}</Text>
+                <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>{formatFromFiat(currentLot.currentPrice, currencyCode)}</Text>
               </View>
               <View style={styles.itemSheetBidCount}>
                 <Ionicons name="pricetag" size={14} color={colors.textSecondary} />
@@ -916,7 +918,7 @@ export function LiveStreamViewerScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Place a bid"
               >
-                <Text style={styles.bidBtnText}>Bid £{minNextBid}+</Text>
+                <Text style={styles.bidBtnText}>Bid {currencySymbol}{minNextBid}+</Text>
               </Pressable>
               {buyNowPrice > 0 && (
                 <Pressable
@@ -924,12 +926,12 @@ export function LiveStreamViewerScreen() {
                   disabled={buyNowPending}
                   style={({ pressed }) => [styles.buyNowBtn, pressed && { opacity: 0.85 }, buyNowPending && { opacity: 0.6 }]}
                   accessibilityRole="button"
-                  accessibilityLabel={`Buy now for £${buyNowPrice}`}
+                  accessibilityLabel={`Buy now for ${currencySymbol}${buyNowPrice}`}
                 >
                   {buyNowPending ? (
                     <ActivityIndicator size="small" color={colors.textPrimary} />
                   ) : (
-                    <Text style={styles.buyNowBtnText}>Buy Now £{buyNowPrice}</Text>
+                    <Text style={styles.buyNowBtnText}>Buy Now {currencySymbol}{buyNowPrice}</Text>
                   )}
                 </Pressable>
               )}
@@ -960,10 +962,10 @@ export function LiveStreamViewerScreen() {
               Current bid
             </Text>
             <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>
-              £{currentLot.currentPrice}
+              {currencySymbol}{currentLot.currentPrice}
             </Text>
             <Text style={[styles.bidSheetMinLabel, { color: colors.textMuted }]}>
-              Minimum next bid £{minNextBid}
+              Minimum next bid {currencySymbol}{minNextBid}
             </Text>
             <View style={styles.quickBidRow}>
               {[minNextBid, minNextBid + 5, minNextBid + 10, minNextBid + 20].map((amount) => (
@@ -978,9 +980,9 @@ export function LiveStreamViewerScreen() {
                     bidPending && { opacity: 0.5 },
                   ]}
                   accessibilityRole="button"
-                  accessibilityLabel={`Bid £${amount}`}
+                  accessibilityLabel={`Bid ${currencySymbol}${amount}`}
                 >
-                  <Text style={[styles.quickBidText, { color: colors.textPrimary }]}>£{amount}</Text>
+                  <Text style={[styles.quickBidText, { color: colors.textPrimary }]}>{formatFromFiat(amount, currencyCode)}</Text>
                 </Pressable>
               ))}
             </View>

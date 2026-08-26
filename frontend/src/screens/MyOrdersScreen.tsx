@@ -30,7 +30,6 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { OrdersTabRail, OrdersTab } from '../components/orders/OrdersTabRail';
 import { OrderLedgerRow, OrderViewModel } from '../components/orders/OrderLedgerRow';
 import { OrderRowSkeleton } from '../components/skeletons/OrderRowSkeleton';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   OrdersFilterSheet,
   FilterClassification,
@@ -86,7 +85,7 @@ export default function MyOrdersScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
   const { isOffline } = useConnectivity();
@@ -305,7 +304,7 @@ export default function MyOrdersScreen() {
     ({ item }: { item: OrderViewModel }) => (
       <OrderLedgerRow
         order={item}
-        formattedTotal={formatFromFiat(item.totalGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+        formattedTotal={formatFromFiat(item.totalGbp, currencyCode, { displayMode: 'fiat' })}
         onPress={() => handleOrderPress(item.id)}
       />
     ),

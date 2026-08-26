@@ -39,6 +39,7 @@ import { TypingIndicator } from '../components/TypingIndicator';
 import { AITrustSignal, type AIConfidence } from '../components/ai/AITrustSignal';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { RootStackParamList } from '../navigation/types';
 import {
@@ -61,6 +62,7 @@ type ConversationRow =
 
 export default function ConversationalSearchScreen({ navigation }: Props) {
   const { colors, isDark } = useAppTheme();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -228,9 +230,9 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       if (filters.priceRange) {
         const { min, max } = filters.priceRange;
         let priceLabel = 'Price: ';
-        if (min !== undefined && max !== undefined) priceLabel += `£${min}–£${max}`;
-        else if (max !== undefined) priceLabel += `under £${max}`;
-        else if (min !== undefined) priceLabel += `over £${min}`;
+        if (min !== undefined && max !== undefined) priceLabel += `${formatFromFiat(min, currencyCode)}–${formatFromFiat(max, currencyCode)}`;
+        else if (max !== undefined) priceLabel += `under ${formatFromFiat(max, currencyCode)}`;
+        else if (min !== undefined) priceLabel += `over ${formatFromFiat(min, currencyCode)}`;
         chips.push({ label: priceLabel, key: 'price' });
       }
       if (filters.sustainableOnly) {
@@ -238,7 +240,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       }
       return chips;
     },
-    [],
+    [formatFromFiat],
   );
 
   // ── Render an assistant message bubble ──

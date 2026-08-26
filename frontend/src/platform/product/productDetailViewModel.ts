@@ -268,14 +268,15 @@ function buildDirectAttributes(
 }
 
 function buildAuctionAttributes(
-  auction: AuctionDetail
+  auction: AuctionDetail,
+  currencySymbol: string = '£',
 ): ProductAttributeRow[] {
   const rows: ProductAttributeRow[] = [];
   if (auction.brand) rows.push({ label: 'Brand', value: auction.brand });
   if (auction.category) rows.push({ label: 'Category', value: auction.category });
   if (auction.conditionLabel) rows.push({ label: 'Condition', value: auction.conditionLabel });
   if (auction.listingPriceGbp != null) {
-    rows.push({ label: 'List price', value: `£${auction.listingPriceGbp.toFixed(2)}` });
+    rows.push({ label: 'List price', value: `${currencySymbol}${auction.listingPriceGbp.toFixed(2)}` });
   }
   return rows;
 }
@@ -458,6 +459,8 @@ export interface AuctionAdapterInput {
   isSavedToCollection?: boolean;
   /** Whether the seller has enabled private offers (authoritative). */
   offersEnabled?: boolean;
+  /** Display currency symbol for attribute formatting. Defaults to '£'. */
+  currencySymbol?: string;
 }
 
 export function buildAuctionViewModel(input: AuctionAdapterInput): ProductDetailViewModel {
@@ -514,7 +517,7 @@ export function buildAuctionViewModel(input: AuctionAdapterInput): ProductDetail
     isLiked,
     isSavedToCollection,
     canReport: !isSeller,
-    attributes: buildAuctionAttributes(auction),
+    attributes: buildAuctionAttributes(auction, input.currencySymbol),
   };
 
   const isTerminal = auction.lifecycle === 'ended' || auction.lifecycle === 'cancelled' || auction.lifecycle === 'settled';

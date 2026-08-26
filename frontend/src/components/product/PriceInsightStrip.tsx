@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 
 export interface PriceInsightStripProps {
@@ -59,6 +60,7 @@ export function PriceInsightStrip({
   priceHistory,
 }: PriceInsightStripProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasDiscount = originalPrice != null && originalPrice > price;
   const discountPercent = hasDiscount && originalPrice
@@ -91,7 +93,7 @@ export function PriceInsightStrip({
     rows.push({
       icon: 'pricetag-outline',
       label: 'Similar sold',
-      value: `£${soldComps.minPrice.toFixed(0)}–£${soldComps.maxPrice.toFixed(0)}`,
+      value: `${currencySymbol}${soldComps.minPrice.toFixed(0)}–${currencySymbol}${soldComps.maxPrice.toFixed(0)}`,
       tone: 'neutral',
     });
   }

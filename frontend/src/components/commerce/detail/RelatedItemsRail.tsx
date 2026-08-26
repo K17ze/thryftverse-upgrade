@@ -28,7 +28,6 @@ import { AnimatedPressable } from '../../AnimatedPressable';
 import { PressPresets } from '../../../hooks/usePremiumPressFeedback';
 import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
 import type { Listing } from '../../../services/listingsApi';
-import { DEFAULT_CURRENCY_CODE } from '../../../constants/currencies';
 
 export interface RelatedItemsRailProps {
   items: Listing[];
@@ -52,7 +51,7 @@ export function RelatedItemsRail({
 }: RelatedItemsRailProps) {
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Portrait card width: ~40% of screen, capped so 2.5 cards are visible.
@@ -63,7 +62,7 @@ export function RelatedItemsRail({
     ({ item }: { item: Listing }) => {
       const imageUri = item.images?.[0];
       const formattedPrice = item.price != null
-        ? formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
+        ? formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })
         : 'Price unavailable';
       return (
         <AnimatedPressable

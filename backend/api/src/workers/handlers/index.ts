@@ -76,3 +76,12 @@ export { aggregateAnalyticsDaily } from './analyticsAggregationHandler.js';
 export type { AnalyticsAggregationHandlerDeps } from './analyticsAggregationHandler.js';
 
 export { sweepScheduledPublications, executeScheduledPublicationViaApp } from './scheduledPublicationHandler.js';
+
+export { processBackupExpiryCheck } from './backupExpiryHandler.js';
+export type { BackupExpiryJobData } from './backupExpiryHandler.js';
+
+export { processMessageEncryptionBackfill } from './messageEncryptionBackfillHandler.js';
+export type { MessageEncryptionBackfillJobData } from './messageEncryptionBackfillHandler.js';
+
+export { processDsarExport, cleanupExpiredDsarExports } from './dsarExportHandler.js';
+export type { DsarExportJobData } from './dsarExportHandler.js';

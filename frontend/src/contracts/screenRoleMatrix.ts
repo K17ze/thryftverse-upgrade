@@ -91,10 +91,9 @@ export const SCREEN_ROLE_MATRIX: ScreenRoleEntry[] = [
 
   // ── Live market ──
   { screen: 'WalletScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
-  { screen: 'WalletActivityScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'WalletHistoryScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'BalanceHistoryScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'SellerEarningsScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
-  { screen: 'AuctionsScreen', role: 'liveMarket', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: true },
   { screen: 'AssetLeaderboardScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'MarketLedgerScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
 
@@ -140,9 +139,6 @@ export const SCREEN_ROLE_MATRIX: ScreenRoleEntry[] = [
   { screen: 'MyProfileScreen', role: 'personalCollection', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
   { screen: 'UserProfileScreen', role: 'personalCollection', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
   { screen: 'EditProfileScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
-  { screen: 'FollowersScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
-  { screen: 'FollowingScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
-
   // ── Group management (denseUtilityList) ──
   { screen: 'CreateGroupChatScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: true, mediaMeetsEdges: false, tabularFigures: false },
   { screen: 'GroupChatInfoScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
@@ -156,7 +152,6 @@ export const SCREEN_ROLE_MATRIX: ScreenRoleEntry[] = [
   { screen: 'EmailNotificationsScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
 
   // ── Trade & syndicate (transactionDecision + liveMarket) ──
-  { screen: 'TradeHubScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'TradeScreen', role: 'transactionDecision', layoutFamily: 'transactionDecision', maxDominantPanelsAboveFold: 1, hasStickyActionDock: true, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'SyndicateHubScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'CreateSyndicateScreen', role: 'transactionDecision', layoutFamily: 'transactionDecision', maxDominantPanelsAboveFold: 1, hasStickyActionDock: true, mediaMeetsEdges: false, tabularFigures: true },

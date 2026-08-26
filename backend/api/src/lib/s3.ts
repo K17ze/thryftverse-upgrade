@@ -1,10 +1,14 @@
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '../config.js';
@@ -162,6 +166,25 @@ export async function deleteObject(key: string): Promise<void> {
   );
 }
 
+/**
+ * Generate a time-limited signed URL for downloading an object from S3.
+ * Used for async DSAR export delivery — the export bundle is uploaded to S3
+ * and the user receives a signed URL valid for a limited period.
+ */
+export async function presignGetObject(
+  key: string,
+  expiresInSeconds: number = 24 * 60 * 60,
+): Promise<string> {
+  return getSignedUrl(
+    signingS3,
+    new GetObjectCommand({
+      Bucket: config.s3Bucket,
+      Key: key,
+    }),
+    { expiresIn: expiresInSeconds },
+  );
+}
+
 export async function getObject(key: string): Promise<Buffer> {
   const result = await internalS3.send(
     new GetObjectCommand({
@@ -192,4 +215,107 @@ export async function putBinaryObject(
     })
   );
   return publicObjectUrl(key);
+}
+
+// ── Multipart upload helpers ───────────────────────────────────────────
+//
+// S3 multipart uploads allow large files (typically video) to be uploaded in
+// independent parts. Each part is presigned so the client uploads directly to
+// S3. The backend tracks the upload session in `upload_multipart_sessions`
+// and finalises by combining the part ETags.
+
+/**
+ * Initiate a multipart upload. Returns the S3 upload id and the object key.
+ * The caller persists the upload id in `upload_multipart_sessions`.
+ */
+export async function createMultipartUpload(
+  key: string,
+  contentType: string,
+): Promise<{ uploadId: string; key: string; bucket: string }> {
+  const policy = assertUploadPolicy(contentType, config.s3MaxVideoUploadBytes);
+  const command = new CreateMultipartUploadCommand({
+    Bucket: config.s3Bucket,
+    Key: key,
+    ContentType: policy.contentType,
+  });
+  const response = await internalS3.send(command);
+  if (!response.UploadId) {
+    throw new Error('S3_CREATE_MULTIPART_UPLOAD_FAILED');
+  }
+  return {
+    uploadId: response.UploadId,
+    key,
+    bucket: config.s3Bucket,
+  };
+}
+
+/**
+ * Presign a single part upload URL. The client PUTs the part bytes directly
+ * to this URL. S3 returns an ETag in the response headers that the client
+ * must capture and send back during completion.
+ */
+export async function presignPartUpload(
+  key: string,
+  uploadId: string,
+  partNumber: number,
+): Promise<{ url: string; partNumber: number; expiresInSeconds: number }> {
+  const command = new UploadPartCommand({
+    Bucket: config.s3Bucket,
+    Key: key,
+    UploadId: uploadId,
+    PartNumber: partNumber,
+  });
+  const url = await getSignedUrl(signingS3, command, {
+    expiresIn: config.s3PresignTtlSeconds,
+  });
+  return {
+    url,
+    partNumber,
+    expiresInSeconds: config.s3PresignTtlSeconds,
+  };
+}
+
+/**
+ * Complete a multipart upload by submitting the list of (partNumber, ETag)
+ * pairs. S3 assembles the final object and returns its location.
+ */
+export async function completeMultipartUpload(
+  key: string,
+  uploadId: string,
+  parts: Array<{ partNumber: number; etag: string }>,
+): Promise<{ location: string; key: string; bucket: string }> {
+  const command = new CompleteMultipartUploadCommand({
+    Bucket: config.s3Bucket,
+    Key: key,
+    UploadId: uploadId,
+    MultipartUpload: {
+      Parts: parts.map((p) => ({
+        PartNumber: p.partNumber,
+        ETag: p.etag,
+      })),
+    },
+  });
+  const response = await internalS3.send(command);
+  return {
+    location: response.Location ?? publicObjectUrl(key),
+    key,
+    bucket: config.s3Bucket,
+  };
+}
+
+/**
+ * Abort a multipart upload. Frees storage consumed by uploaded parts on S3.
+ * Called when the client cancels or when the session expires.
+ */
+export async function abortMultipartUpload(
+  key: string,
+  uploadId: string,
+): Promise<void> {
+  await internalS3.send(
+    new AbortMultipartUploadCommand({
+      Bucket: config.s3Bucket,
+      Key: key,
+      UploadId: uploadId,
+    }),
+  );
 }

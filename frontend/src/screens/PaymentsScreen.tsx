@@ -25,7 +25,7 @@ import { useToast } from '../context/ToastContext';
 import { AppButton } from '../components/ui/AppButton';
 import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { PremiumListSection } from '../components/ui/PremiumListSection';
+import { AppListSection } from '../components/ui/AppListSection';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
@@ -360,7 +360,7 @@ export default function PaymentsScreen({ navigation }: Props) {
               the user's region and the platform supports it. */}
           {(allowApplePay || allowGooglePay) && (
             <View>
-              <PremiumListSection title={t('payments.section.digitalWallets')}>
+              <AppListSection title={t('payments.section.digitalWallets')}>
                 {allowApplePay && Platform.OS === 'ios' && (
                   <View style={styles.walletRow}>
                     <View style={[styles.walletIcon, { backgroundColor: colors.textPrimary }]}>
@@ -391,7 +391,7 @@ export default function PaymentsScreen({ navigation }: Props) {
                     </View>
                   </View>
                 )}
-              </PremiumListSection>
+              </AppListSection>
             </View>
           )}
 
@@ -462,7 +462,7 @@ export default function PaymentsScreen({ navigation }: Props) {
 
           {/* Preferences */}
           <View>
-            <PremiumListSection title={t('payments.section.preferences')}>
+            <AppListSection title={t('payments.section.preferences')}>
               <SettingsCell
                 icon="wallet-outline"
                 iconColor={colors.brand}
@@ -474,12 +474,12 @@ export default function PaymentsScreen({ navigation }: Props) {
                 isFirst
                 isLast
               />
-            </PremiumListSection>
+            </AppListSection>
           </View>
 
           {/* Cards */}
           <View>
-            <PremiumListSection title={t('payments.section.cards')}>
+            <AppListSection title={t('payments.section.cards')}>
               {renderPaymentMethodRows(
                 cardMethods,
                 allowCards,
@@ -504,7 +504,7 @@ export default function PaymentsScreen({ navigation }: Props) {
                   accessibilityHint={t('payments.cards.a11y.opensCardSetup')}
                 />
               ) : null}
-            </PremiumListSection>
+            </AppListSection>
           </View>
 
           {/* Security note — retained below for detailed disclosure, but the

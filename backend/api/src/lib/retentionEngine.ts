@@ -1,7 +1,31 @@
+/**
+ * Centralised retention enforcement engine.
+ *
+ * Reads declarative retention policies from the `retention_policy` table and
+ * enforces them by deleting or anonymising rows older than the configured TTL.
+ * Each enforcement batch is recorded in `retention_enforcement_log` for
+ * Art. 30 (records of processing) compliance.
+ *
+ * Design principles:
+ * - **Declarative.** Policies are data, not code. Adding a new data class
+ *   requires a new row in `retention_policy` and a mapping in
+ *   `DATA_CLASS_MAP` — no new code paths.
+ * - **Auditable.** Every enforcement batch writes to
+ *   `retention_enforcement_log` with the batch ID, data class, rows
+ *   affected, and duration.
+ * - **Idempotent.** Running the sweep twice in the same hour is safe —
+ *   rows that have already been purged will not match the TTL predicate
+ *   again.
+ * - **Parameterised.** TTL values are passed as query parameters, not
+ *   string-interpolated, to eliminate SQL injection surface.
+ */
+
 import type { Pool } from 'pg';
+import { randomUUID } from 'node:crypto';
 import { logger } from './logger.js';
 
 export interface RetentionPolicy {
+  id: string;
   dataClass: string;
   ttlDays: number;
   action: 'anonymise' | 'delete';
@@ -11,7 +35,11 @@ export interface RetentionPolicy {
 interface DataClassMapping {
   table: string;
   timestampColumn: string;
+  /** For anonymise actions: the SET clause (column = value pairs). */
   anonymiseColumns?: string;
+  /** Optional WHERE clause filter appended to the TTL predicate. */
+  extraFilter?: string;
+  /** Whether the table is partitioned (uses DROP TABLE instead of DELETE). */
   partitioned?: boolean;
 }
 
@@ -29,6 +57,11 @@ const DATA_CLASS_MAP: Record<string, DataClassMapping> = {
   support_agent_runs: {
     table: 'support_agent_runs',
     timestampColumn: 'created_at',
+  },
+  support_cases: {
+    table: 'support_cases',
+    timestampColumn: 'updated_at',
+    extraFilter: `AND operational_state = 'closed'`,
   },
   ai_usage_events: {
     table: 'ai_usage_events',
@@ -55,19 +88,31 @@ const DATA_CLASS_MAP: Record<string, DataClassMapping> = {
     table: 'catalog_import_items',
     timestampColumn: 'created_at',
   },
+  listings_soft_deleted: {
+    table: 'listings',
+    timestampColumn: 'updated_at',
+    extraFilter: `AND status = 'deleted'`,
+  },
+  media_assets_deleted: {
+    table: 'media_assets',
+    timestampColumn: 'updated_at',
+    extraFilter: `AND status IN ('deleted', 'revoked')`,
+  },
 };
 
 export async function getRetentionPolicies(db: Pool): Promise<RetentionPolicy[]> {
   const result = await db.query<{
+    id: string;
     data_class: string;
     ttl_days: number;
     action: 'anonymise' | 'delete';
     legal_basis: string | null;
   }>(
-    `SELECT data_class, ttl_days, action, legal_basis FROM retention_policy ORDER BY data_class`,
+    `SELECT id, data_class, ttl_days, action, legal_basis FROM retention_policy ORDER BY data_class`,
   );
 
   return result.rows.map((row) => ({
+    id: row.id,
     dataClass: row.data_class,
     ttlDays: row.ttl_days,
     action: row.action,
@@ -115,11 +160,71 @@ async function sweepPartitionedAnalytics(
   return dropped;
 }
 
+/**
+ * Write an enforcement log entry for audit traceability.
+ */
+async function writeEnforcementLog(
+  db: Pool,
+  batchId: string,
+  policy: RetentionPolicy,
+  rowsAffected: number,
+  action: string,
+  durationMs: number,
+  error?: string,
+): Promise<void> {
+  try {
+    await db.query(
+      `
+        INSERT INTO retention_enforcement_log (
+          id, batch_id, data_class, policy_id, rows_affected, action,
+          duration_ms, error
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `,
+      [
+        randomUUID(),
+        batchId,
+        policy.dataClass,
+        policy.id,
+        rowsAffected,
+        action,
+        durationMs,
+        error ?? null,
+      ],
+    );
+  } catch (logError) {
+    // Logging is best-effort — a log write failure should not abort the sweep.
+    const message = logError instanceof Error ? logError.message : String(logError);
+    logger.error(
+      { batchId, dataClass: policy.dataClass, err: message },
+      'retentionEngine.enforcementLog.failed',
+    );
+  }
+}
+
+export interface RetentionSweepResult {
+  dataClass: string;
+  rowsAffected: number;
+  action: string;
+  error?: string;
+}
+
+/**
+ * Run a full retention sweep across all configured policies.
+ *
+ * Returns per-data-class results and writes an enforcement log entry for
+ * each policy execution.
+ */
 export async function runRetentionSweep(
   db: Pool,
-): Promise<{ dataClass: string; rowsAffected: number; action: string }[]> {
+): Promise<RetentionSweepResult[]> {
   const policies = await getRetentionPolicies(db);
-  const results: { dataClass: string; rowsAffected: number; action: string }[] = [];
+  const batchId = randomUUID();
+  const results: RetentionSweepResult[] = [];
+
+  logger.info(
+    { batchId, policyCount: policies.length },
+    'retentionEngine.sweep.start',
+  );
 
   for (const policy of policies) {
     const mapping = DATA_CLASS_MAP[policy.dataClass];
@@ -128,20 +233,33 @@ export async function runRetentionSweep(
         { dataClass: policy.dataClass },
         'retentionEngine.sweep.noMapping',
       );
+      results.push({
+        dataClass: policy.dataClass,
+        rowsAffected: 0,
+        action: 'skipped',
+        error: 'no mapping configured',
+      });
       continue;
     }
 
+    const startedAt = Date.now();
+
     try {
       let rowsAffected = 0;
+      let actionLabel: string = policy.action;
 
       if (mapping.partitioned) {
         rowsAffected = await sweepPartitionedAnalytics(db, policy.ttlDays);
+        actionLabel = 'drop_partition';
       } else {
-        const intervalLiteral = `${policy.ttlDays} days`;
+        const extraFilter = mapping.extraFilter ?? '';
 
         if (policy.action === 'delete') {
           const result = await db.query(
-            `DELETE FROM ${mapping.table} WHERE ${mapping.timestampColumn} < NOW() - INTERVAL '${intervalLiteral}'`,
+            `DELETE FROM ${mapping.table}
+             WHERE ${mapping.timestampColumn} < NOW() - ($1 || ' days')::interval
+             ${extraFilter}`,
+            [String(policy.ttlDays)],
           );
           rowsAffected = result.rowCount ?? 0;
         } else {
@@ -150,43 +268,85 @@ export async function runRetentionSweep(
               { dataClass: policy.dataClass },
               'retentionEngine.sweep.noAnonymiseColumns',
             );
+            results.push({
+              dataClass: policy.dataClass,
+              rowsAffected: 0,
+              action: 'skipped',
+              error: 'no anonymise columns configured',
+            });
             continue;
           }
 
           const result = await db.query(
-            `UPDATE ${mapping.table} SET ${mapping.anonymiseColumns} WHERE ${mapping.timestampColumn} < NOW() - INTERVAL '${intervalLiteral}'`,
+            `UPDATE ${mapping.table}
+             SET ${mapping.anonymiseColumns}
+             WHERE ${mapping.timestampColumn} < NOW() - ($1 || ' days')::interval
+             ${extraFilter}`,
+            [String(policy.ttlDays)],
           );
           rowsAffected = result.rowCount ?? 0;
         }
       }
 
+      const durationMs = Date.now() - startedAt;
+
       results.push({
         dataClass: policy.dataClass,
         rowsAffected,
-        action: policy.action,
+        action: actionLabel,
       });
+
+      await writeEnforcementLog(
+        db,
+        batchId,
+        policy,
+        rowsAffected,
+        actionLabel,
+        durationMs,
+      );
 
       logger.info(
         {
+          batchId,
           dataClass: policy.dataClass,
           rowsAffected,
-          action: policy.action,
+          action: actionLabel,
+          durationMs,
         },
         'retentionEngine.sweep.complete',
       );
     } catch (error) {
+      const durationMs = Date.now() - startedAt;
       const message = error instanceof Error ? error.message : String(error);
+
       logger.error(
-        { dataClass: policy.dataClass, err: message },
+        { batchId, dataClass: policy.dataClass, err: message },
         'retentionEngine.sweep.failed',
       );
+
       results.push({
         dataClass: policy.dataClass,
         rowsAffected: 0,
         action: policy.action,
+        error: message,
       });
+
+      await writeEnforcementLog(
+        db,
+        batchId,
+        policy,
+        0,
+        policy.action,
+        durationMs,
+        message,
+      );
     }
   }
+
+  logger.info(
+    { batchId, resultCount: results.length },
+    'retentionEngine.sweep.batchComplete',
+  );
 
   return results;
 }

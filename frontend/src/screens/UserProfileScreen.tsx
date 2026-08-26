@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { FlashList } from '@shopify/flash-list';
+import { useVisuallyComplete } from '../performance/visuallyComplete';
 import * as Clipboard from 'expo-clipboard';
 import Reanimated, {
   useSharedValue,
@@ -121,6 +122,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const { requireAuth } = useSignupWall();
   const { colors, isDark } = useAppTheme();
   const haptic = useHaptic();
+  useVisuallyComplete('UserProfile');
 
   // Themed color aliases - keep JSX readable, match old module-level consts
   const BG = colors.background;

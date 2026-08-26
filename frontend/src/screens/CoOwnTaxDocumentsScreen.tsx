@@ -30,12 +30,13 @@ import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
 import { fetchCoOwnTaxDocument, type CoOwnTaxDocument } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnTaxDocuments'>;
 
-function formatGbp(minor: number): string {
+function formatGbp(minor: number, currencySymbol: string): string {
   const sign = minor < 0 ? '-' : '';
-  return `${sign}£${Math.abs(minor / 100).toFixed(2)}`;
+  return `${sign}${currencySymbol}${Math.abs(minor / 100).toFixed(2)}`;
 }
 
 function formatDate(iso: string): string {
@@ -47,6 +48,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const { currencySymbol } = useFormattedPrice();
 
   const [doc, setDoc] = React.useState<CoOwnTaxDocument | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -73,7 +75,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
   const handleShare = async () => {
     if (!doc) return;
     haptic.light();
-    const summary = `ThryftVerse Tax Statement ${doc.taxYear}\n\nPurchases: ${formatGbp(doc.summary.totalPurchasesGbpMinor)}\nSales: ${formatGbp(doc.summary.totalSalesGbpMinor)}\nDistributions: ${formatGbp(doc.summary.totalDistributionsGbpMinor)}\nRealized P&L: ${formatGbp(doc.summary.realizedPnlGbpMinor)}\n\nGenerated: ${formatDate(doc.generatedAt)}`;
+    const summary = `ThryftVerse Tax Statement ${doc.taxYear}\n\nPurchases: ${formatGbp(doc.summary.totalPurchasesGbpMinor, currencySymbol)}\nSales: ${formatGbp(doc.summary.totalSalesGbpMinor, currencySymbol)}\nDistributions: ${formatGbp(doc.summary.totalDistributionsGbpMinor, currencySymbol)}\nRealized P&L: ${formatGbp(doc.summary.realizedPnlGbpMinor, currencySymbol)}\n\nGenerated: ${formatDate(doc.generatedAt)}`;
     try {
       await Share.share({ message: summary, title: `ThryftVerse Tax Statement ${doc.taxYear}` });
     } catch {
@@ -149,7 +151,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
               <View style={styles.heroPnlWrap}>
                 <Text style={styles.heroPnlLabel}>Realized P&L</Text>
                 <Text style={[styles.heroPnlValue, { color: pnlPositive ? colors.success : colors.danger }]}>
-                  {formatGbp(doc.summary.realizedPnlGbpMinor)}
+                  {formatGbp(doc.summary.realizedPnlGbpMinor, currencySymbol)}
                 </Text>
                 <View style={[styles.heroPnlBadge, { backgroundColor: (pnlPositive ? colors.success : colors.danger) + '18' }]}>
                   <Ionicons
@@ -175,21 +177,21 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                     <Ionicons name="add-circle-outline" size={18} color={colors.textSecondary} />
                   </View>
                   <Text style={styles.summaryLabel}>Total purchases</Text>
-                  <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalPurchasesGbpMinor)}</Text>
+                  <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalPurchasesGbpMinor, currencySymbol)}</Text>
                 </View>
                 <View style={[styles.summaryRow, styles.summaryRowBorder, { borderBottomColor: colors.borderSubtle }]}>
                   <View style={styles.summaryIconWrap}>
                     <Ionicons name="remove-circle-outline" size={18} color={colors.textSecondary} />
                   </View>
                   <Text style={styles.summaryLabel}>Total sales</Text>
-                  <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalSalesGbpMinor)}</Text>
+                  <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalSalesGbpMinor, currencySymbol)}</Text>
                 </View>
                 <View style={styles.summaryRow}>
                   <View style={styles.summaryIconWrap}>
                     <Ionicons name="cash-outline" size={18} color={colors.textSecondary} />
                   </View>
                   <Text style={styles.summaryLabel}>Distributions</Text>
-                  <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalDistributionsGbpMinor)}</Text>
+                  <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalDistributionsGbpMinor, currencySymbol)}</Text>
                 </View>
               </View>
             </View>
@@ -207,7 +209,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                         <Text style={styles.breakdownAsset}>{p.assetId.slice(0, 16)}…</Text>
                         <Text style={styles.breakdownMeta}>{p.units} units · {p.executionCount} trades</Text>
                       </View>
-                      <Text style={styles.breakdownValue}>{formatGbp(p.totalGbpMinor)}</Text>
+                      <Text style={styles.breakdownValue}>{formatGbp(p.totalGbpMinor, currencySymbol)}</Text>
                     </View>
                   ))}
                 </View>
@@ -227,7 +229,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                         <Text style={styles.breakdownAsset}>{s.assetId.slice(0, 16)}…</Text>
                         <Text style={styles.breakdownMeta}>{s.units} units · {s.executionCount} trades</Text>
                       </View>
-                      <Text style={styles.breakdownValue}>{formatGbp(s.totalGbpMinor)}</Text>
+                      <Text style={styles.breakdownValue}>{formatGbp(s.totalGbpMinor, currencySymbol)}</Text>
                     </View>
                   ))}
                 </View>
@@ -247,7 +249,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                         <Text style={styles.breakdownAsset}>{d.assetId.slice(0, 16)}…</Text>
                         <Text style={styles.breakdownMeta}>{d.count} payments</Text>
                       </View>
-                      <Text style={styles.breakdownValue}>{formatGbp(d.totalGbpMinor)}</Text>
+                      <Text style={styles.breakdownValue}>{formatGbp(d.totalGbpMinor, currencySymbol)}</Text>
                     </View>
                   ))}
                 </View>

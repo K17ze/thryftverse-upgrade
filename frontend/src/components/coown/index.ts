@@ -102,6 +102,8 @@ export { CoOwnSupplySheet } from './CoOwnSupplySheet';
 export type { CoOwnSupplySheetProps } from './CoOwnSupplySheet';
 export { CoOwnOverflowSheet } from './CoOwnOverflowSheet';
 export type { CoOwnOverflowSheetProps } from './CoOwnOverflowSheet';
+export { CoOwnPriceAlertForm } from './CoOwnPriceAlertForm';
+export type { CoOwnPriceAlertFormProps } from './CoOwnPriceAlertForm';
 
 // Canonical model types — single source of truth in coOwnModels.ts
 export type {

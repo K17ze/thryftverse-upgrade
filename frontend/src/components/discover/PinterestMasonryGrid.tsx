@@ -23,6 +23,7 @@ import type {
   RecommendationBreakFeedUnit,
 } from '../../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
+import { mapListingToDiscoverySummary } from '../../contracts/DiscoveryListingSummary';
 import { ProductDiscoveryTile } from '../ProductCardV2';
 import { Space, Type, Typography, Radius } from '../../theme/designTokens';
 import { typographyV2Style } from '../../theme/typography.v2';
@@ -253,7 +254,7 @@ export function PinterestMasonryGrid({
           onMoodboardPress,
         });
       }
-      // Legacy listing path — unchanged single-column tile.
+      // Legacy listing path — single-column tile with optional save button.
       return (
         <View style={{ paddingHorizontal: gap / 2, paddingBottom: gap, width: '100%' }}>
           <ProductDiscoveryTile
@@ -262,6 +263,8 @@ export function PinterestMasonryGrid({
             aspectRatio={resolveListingMediaAspectRatio(item)}
             downscaleWidth={colWidth}
             testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
+            isSaved={isItemSaved?.(item.id)}
+            onSaveToggle={onItemSaveToggle ? () => onItemSaveToggle(mapListingToDiscoverySummary(item)) : undefined}
           />
         </View>
       );

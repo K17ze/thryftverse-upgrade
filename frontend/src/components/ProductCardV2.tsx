@@ -22,13 +22,12 @@ import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT, getListingCoverUri
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../utils/listingMediaGeometry';
-import { computeSustainabilityScore } from '../utils/sustainabilityScore';
+import { useRenderTrace } from '../performance/renderTrace';
 import { SustainabilityBadge } from './product/SustainabilityBadge';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 
 import { Space, Radius, Control, Type, Typography } from '../theme/designTokens';
 import { synthesizeListingIdentity } from '../services/listingMapper';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 // A URI is only usable when it is a non-blank string. Backend rows can surface
 // `''`, `null`, or whitespace-only strings; treat all of these as "no media"
 // so the premium placeholder renders instead of a broken image.
@@ -86,7 +85,7 @@ function ProductCardV2Base({
   const { show } = useToast();
   const haptic = useHaptic();
   const { requireAuth } = useSignupWall();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -115,22 +114,11 @@ function ProductCardV2Base({
   );
 
   // Sustainability — only surface A/B grades on the card to avoid visual
-  // noise on lower-impact items. Returns null in production (fail-closed).
-  const sustainabilityScore = React.useMemo(
-    () =>
-      computeSustainabilityScore({
-        condition: item.condition,
-        category: item.category,
-        subcategory: item.subcategory,
-        brand: item.brand,
-        sellerLocation: item.seller?.location ?? null,
-      }),
-    [item.condition, item.category, item.subcategory, item.brand, item.seller?.location],
-  );
+  // noise on lower-impact items. The grade is backend-computed from real
+  // emissions data; null/undefined means no data (fail-closed per AGENTS.md §11).
   const showSustainabilityChip =
     !item.isSold &&
-    sustainabilityScore !== null &&
-    (sustainabilityScore.grade === 'A' || sustainabilityScore.grade === 'B');
+    (item.sustainabilityGrade === 'A' || item.sustainabilityGrade === 'B');
 
   const handleToggleFav = () => {
     if (!requireAuth('save_item')) return;
@@ -181,7 +169,7 @@ function ProductCardV2Base({
         style={styles.imageWrap}
         hapticFeedback="light"
         accessibilityRole="none"
-        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
+        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
         testID={testID}
       >
@@ -225,10 +213,17 @@ function ProductCardV2Base({
           <View style={styles.priceDropBadge}>
             <Text style={styles.conditionText}>-{priceDropPercent}%</Text>
           </View>
-        ) : !item.isSold && showSustainabilityChip ? (
+        ) : !item.isSold && showSustainabilityChip && item.sustainabilityGrade ? (
           <View style={styles.sustainabilityChipWrap}>
             <SustainabilityBadge
-              score={sustainabilityScore}
+              score={{
+                grade: item.sustainabilityGrade,
+                score: 0,
+                factors: [],
+                co2SavedKg: 0,
+                waterSavedL: 0,
+                summary: '',
+              }}
               variant="compact"
               onMedia
             />
@@ -310,7 +305,7 @@ function ProductCardV2Base({
           ) : null}
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.priceHero}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+            <Text style={styles.priceHero}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
           </View>
           {sellerUsername ? (
             <View style={styles.sellerRow}>
@@ -367,78 +362,6 @@ function ProductCardV2Base({
 }
 
 export const ProductCardV2 = React.memo(ProductCardV2Base);
-
-// ============================================================================
-// MASONRY GRID
-// ============================================================================
-//
-// CANONICAL STRATEGY (audit §02 — one masonry implementation):
-//   1. Virtualized feeds (HomeScreen): FlashList numColumns=2 — the single
-//      virtualized masonry path for long feeds.
-//   2. Non-virtualized masonry (Browse, Search, CategoryDetail, VisualSearch,
-//      CollectionDetail, Closet, ExploreCollection): PinterestMasonryGrid
-//      in components/discover/PinterestMasonryGrid.tsx — the single
-//      non-virtualized masonry path.
-//
-// This `MasonryGrid` export is kept for backward compatibility with existing
-// callers (CollectionDetail, Closet, ExploreCollection). New screens should
-// import PinterestMasonryGrid instead. Do not add new callers of this export.
-
-interface MasonryGridProps {
-  items: Listing[];
-  onPressItem: (item: Listing) => void;
-  numColumns?: number;
-  showSaveButton?: boolean;
-  visualOnly?: boolean;
-}
-
-export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton = false, visualOnly = false }: MasonryGridProps) {
-  const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
-  // True masonry: assign each item to the shortest column for visual balance
-  const columns: { item: Listing; originalIndex: number }[][] = Array.from({ length: numColumns }, () => []);
-  const heights = Array.from({ length: numColumns }, () => 0);
-
-  items.forEach((item, index) => {
-    const aspect = resolveListingMediaAspectRatio(item);
-    const imgHeight = 160 / aspect; // approximate; actual width varies
-    const infoHeight = visualOnly ? 0 : 88; // title + price + seller row (no likes/size)
-    const itemHeight = imgHeight + infoHeight + 12;
-
-    let shortestCol = 0;
-    let shortestHeight = heights[0];
-    for (let c = 1; c < numColumns; c++) {
-      if (heights[c] < shortestHeight) {
-        shortestCol = c;
-        shortestHeight = heights[c];
-      }
-    }
-
-    columns[shortestCol].push({ item, originalIndex: index });
-    heights[shortestCol] += itemHeight;
-  });
-
-  return (
-    <View style={styles.grid}>
-      {columns.map((columnItems, colIndex) => (
-        <View key={colIndex} style={styles.column}>
-          {columnItems.map(({ item, originalIndex }) => (
-            <ProductCardV2
-              key={item.id}
-              item={item}
-              onPress={() => onPressItem(item)}
-              index={originalIndex}
-              showSaveButton={showSaveButton}
-              visualOnly={visualOnly}
-              mediaAspectRatio={resolveListingMediaAspectRatio(item)}
-              enableEntranceAnimation={true}
-            />
-          ))}
-        </View>
-      ))}
-    </View>
-  );
-}
 
 // ============================================================================
 // STYLES
@@ -661,17 +584,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     textTransform: 'uppercase',
     fontVariant: ['tabular-nums'],
   },
-
-  // Grid — breathable gaps for flagship feel (12pt vs 8pt)
-  grid: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    gap: 12,
-  },
-  column: {
-    flex: 1,
-    gap: 12,
-  },
 });
 
 // ============================================================================
@@ -714,9 +626,10 @@ function ProductDiscoveryTileBase({
   onSaveToggle,
 }: ProductDiscoveryTileProps) {
   const { colors } = useAppTheme();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const haptic = useHaptic();
   const tileStyles = React.useMemo(() => createTileStyles(colors), [colors]);
+  useRenderTrace('ProductDiscoveryTile', { itemId: item.id, isSaved, aspectRatio });
   const ratio = aspectRatio ?? resolveListingMediaAspectRatio(item);
   // Use getListingCoverUri to always pick an image (not a video) — ExpoImage
   // cannot render video URIs, and the discovery tile is image-only.
@@ -763,7 +676,7 @@ function ProductDiscoveryTileBase({
       hapticFeedback="light"
       style={tileStyles.container}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
+      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
       accessibilityHint="Opens item details"
       testID={testID}
     >
@@ -808,7 +721,7 @@ function ProductDiscoveryTileBase({
       </View>
       <View style={tileStyles.info}>
         <Text style={tileStyles.title} numberOfLines={1}>{item.title}</Text>
-        <Text style={tileStyles.price}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+        <Text style={tileStyles.price}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
       </View>
     </AnimatedPressable>
   );

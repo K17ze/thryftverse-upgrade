@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { Pool } from 'pg';
 import { logger } from '../lib/logger.js';
+import { encryptMessageBody, resolveMessageBody } from '../lib/messageEncryption.js';
 import type {
   ConversationOwnershipState,
   MessageAuthorRole,
@@ -29,6 +30,8 @@ interface SupportMessageRow {
   author_id: string | null;
   author_role: MessageAuthorRole;
   body: string;
+  body_ciphertext: string | null;
+  key_version: number | null;
   citations: unknown[];
   metadata: Record<string, unknown>;
   created_at: string;
@@ -50,13 +53,14 @@ function serializeConversation(row: SupportConversationRow): SupportConversation
   };
 }
 
-function serializeMessage(row: SupportMessageRow): SupportMessage {
+async function serializeMessageAsync(row: SupportMessageRow): Promise<SupportMessage> {
+  const body = await resolveMessageBody(row.id, row.body, row.body_ciphertext);
   return {
     id: row.id,
     conversationId: row.conversation_id,
     authorId: row.author_id,
     authorRole: row.author_role,
-    body: row.body,
+    body,
     citations: row.citations,
     metadata: row.metadata,
     createdAt: row.created_at,
@@ -126,17 +130,28 @@ export async function createConversation(
 
   // Seed the opening system message so the thread is never empty.
   const messageId = `msg_${crypto.randomUUID()}`;
+  const seedBody = 'How can we help you today? Reply with your question and our assistant will respond.';
+
+  // Dual-write encryption for the seed system message.
+  let seedCiphertext: string | null = null;
+  let seedKeyVersion: number | null = null;
+  let seedStoredBody = seedBody;
+  try {
+    const encrypted = await encryptMessageBody(messageId, seedBody);
+    seedCiphertext = encrypted.ciphertext;
+    seedKeyVersion = encrypted.keyVersion;
+    seedStoredBody = '[encrypted]';
+  } catch {
+    // Graceful degradation — plaintext stored, backfill will encrypt later.
+  }
+
   await db.query(
     `
       INSERT INTO support_messages
-        (id, conversation_id, author_id, author_role, body, citations, metadata)
-      VALUES ($1, $2, NULL, 'system', $3, '[]'::jsonb, '{}'::jsonb)
+        (id, conversation_id, author_id, author_role, body, body_ciphertext, key_version, citations, metadata)
+      VALUES ($1, $2, NULL, 'system', $3, $4, $5, '[]'::jsonb, '{}'::jsonb)
     `,
-    [
-      messageId,
-      id,
-      'How can we help you today? Reply with your question and our assistant will respond.',
-    ],
+    [messageId, id, seedStoredBody, seedCiphertext, seedKeyVersion],
   );
 
   // Register the customer as the first participant.
@@ -267,14 +282,35 @@ export async function appendMessage(
 ): Promise<SupportMessage> {
   const id = `msg_${crypto.randomUUID()}`;
 
+  // Dual-write encryption: try to encrypt the body. If the key service is
+  // unavailable, fall back to plaintext (graceful degradation — the
+  // backfill worker will encrypt it later).
+  let bodyCiphertext: string | null = null;
+  let keyVersion: number | null = null;
+  let storedBody = body;
+
+  try {
+    const encrypted = await encryptMessageBody(id, body);
+    bodyCiphertext = encrypted.ciphertext;
+    keyVersion = encrypted.keyVersion;
+    storedBody = '[encrypted]';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn(
+      { messageId: id, err: message },
+      'supportMessage.encryptionFailed',
+    );
+    // Graceful degradation: store plaintext, backfill worker will encrypt later.
+  }
+
   const result = await db.query<SupportMessageRow>(
     `
       WITH inserted AS (
         INSERT INTO support_messages
-          (id, conversation_id, author_id, author_role, body, citations, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
+          (id, conversation_id, author_id, author_role, body, body_ciphertext, key_version, citations, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
         RETURNING id, conversation_id, author_id, author_role, body,
-                  citations, metadata, created_at
+                  body_ciphertext, key_version, citations, metadata, created_at
       ),
       bumped AS (
         UPDATE support_conversations
@@ -289,13 +325,15 @@ export async function appendMessage(
       conversationId,
       authorId,
       authorRole,
-      body,
+      storedBody,
+      bodyCiphertext,
+      keyVersion,
       JSON.stringify(citations),
       JSON.stringify(metadata),
     ],
   );
 
-  return serializeMessage(result.rows[0]);
+  return serializeMessageAsync(result.rows[0]);
 }
 
 /**
@@ -314,6 +352,7 @@ export async function listMessages(
     const result = await db.query<SupportMessageRow>(
       `
         SELECT id, conversation_id, author_id, author_role, body,
+               body_ciphertext, key_version,
                citations, metadata, created_at
         FROM support_messages
         WHERE conversation_id = $1 AND created_at > $2
@@ -322,12 +361,13 @@ export async function listMessages(
       `,
       [conversationId, cursor, pageLimit],
     );
-    return result.rows.map(serializeMessage);
+    return Promise.all(result.rows.map(serializeMessageAsync));
   }
 
   const result = await db.query<SupportMessageRow>(
     `
       SELECT id, conversation_id, author_id, author_role, body,
+             body_ciphertext, key_version,
              citations, metadata, created_at
       FROM support_messages
       WHERE conversation_id = $1
@@ -336,7 +376,7 @@ export async function listMessages(
     `,
     [conversationId, pageLimit],
   );
-  return result.rows.map(serializeMessage);
+  return Promise.all(result.rows.map(serializeMessageAsync));
 }
 
 /**

@@ -107,6 +107,22 @@ export async function scheduleRepeatableJobs(
         options: { repeat: { every: 24 * 60 * 60_000 }, removeOnComplete: true, removeOnFail: 100 },
       },
     },
+    {
+      queueName: 'infra_ops',
+      config: {
+        name: 'retention_sweep',
+        data: { reason: 'scheduled' },
+        options: { repeat: { every: 6 * 60 * 60_000 }, removeOnComplete: true, removeOnFail: 100 },
+      },
+    },
+    {
+      queueName: 'infra_ops',
+      config: {
+        name: 'backup_expiry_check',
+        data: { reason: 'scheduled' },
+        options: { repeat: { every: 24 * 60 * 60_000 }, removeOnComplete: true, removeOnFail: 100 },
+      },
+    },
   ];
 
   for (const { queueName, config } of repeatableJobs) {

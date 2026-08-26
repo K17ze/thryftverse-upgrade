@@ -418,7 +418,7 @@ export default function LiveShoppingHomeScreen() {
   const styles = useStyles();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const { width } = useWindowDimensions();
 
   const [summary, setSummary] = useState<LiveSessionSummary | null>(null);
@@ -464,8 +464,8 @@ export default function LiveShoppingHomeScreen() {
   );
 
   const formatBid = useCallback(
-    (gbp: number) => formatFromFiat(gbp) ?? `£${gbp.toFixed(0)}`,
-    [formatFromFiat],
+    (gbp: number) => formatFromFiat(gbp, currencyCode) ?? '',
+    [formatFromFiat, currencyCode],
   );
 
   const formatScheduled = useCallback((iso: string) => {

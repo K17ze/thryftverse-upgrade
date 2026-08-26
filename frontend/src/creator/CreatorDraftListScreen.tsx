@@ -685,7 +685,7 @@ function UndoToast({
         style={{ width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}
         accessibilityLabel="Dismiss"
         accessibilityRole="button"
-        hitSlop={8}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Ionicons name="close" size={IconGrammar.metadata} color={colors.textSecondary} />
       </Pressable>

@@ -21,7 +21,6 @@ import {
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -41,7 +40,7 @@ interface LeaderboardAsset {
 export default function AssetLeaderboardScreen() {
   const navigation = useNavigation<NavT>();
   const { colors } = useAppTheme();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
 
@@ -99,7 +98,7 @@ export default function AssetLeaderboardScreen() {
 
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
-    navigation.navigate('Portfolio');
+    navigation.navigate('CoOwnHub');
   }, [navigation]);
 
   // ── Rankings (no speculative price-move metrics) ──
@@ -177,7 +176,7 @@ export default function AssetLeaderboardScreen() {
               <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>{asset.title}</Text>
               <View style={styles.priceRow}>
                 <Text style={[styles.rowPrice, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{format1ze(asset.unitPriceGBP)}</Text>
-                <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{formatFromFiat(asset.unitPriceGBP, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+                <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{formatFromFiat(asset.unitPriceGBP, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
             </View>
             <View style={styles.metricGroup}>

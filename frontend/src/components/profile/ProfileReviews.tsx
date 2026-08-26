@@ -222,6 +222,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
           disabled={!canOpenListing}
           accessibilityRole={canOpenListing ? 'button' : undefined}
           accessibilityLabel={canOpenListing ? `Open listing ${item.listing!.title}` : undefined}
+          hitSlop={{ top: 6, bottom: 6, left: 0, right: 0 }}
         >
           {item.listing.imageUrl ? (
             <CachedImage
