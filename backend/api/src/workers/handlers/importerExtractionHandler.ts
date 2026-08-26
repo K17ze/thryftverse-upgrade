@@ -30,13 +30,11 @@ import { importerExtractionService } from '../../domain/catalogImports/importerE
 // Job payload
 // ---------------------------------------------------------------------------
 
-export interface ImporterExtractionJobData {
-  extractionId: string;
-  itemId: string;
-  mediaAssetId: string | null;
-  modelId: string;
-  modelVersion: string;
-}
+// Re-export the queue's job data type (converged shape: runId/modelBundle).
+// The old runId/modelId/modelVersion fields are replaced by the
+// converged extraction intelligence domain.
+export type { ImporterExtractionJobData } from '../../lib/queues.js';
+import type { ImporterExtractionJobData } from '../../lib/queues.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -169,10 +167,10 @@ async function generatePlaceholderExtraction(
 export async function processImporterExtraction(
   data: ImporterExtractionJobData,
 ): Promise<void> {
-  const { extractionId, itemId, mediaAssetId, modelId, modelVersion } = data;
+  const { runId, itemId, mediaAssetId, modelBundleId, modelBundleVersion } = data;
 
   logger.info(
-    { extractionId, itemId, mediaAssetId, modelId, modelVersion },
+    { runId, itemId, mediaAssetId, modelBundleId, modelBundleVersion },
     'importerExtraction.job_started',
   );
 
@@ -181,13 +179,13 @@ export async function processImporterExtraction(
     `SELECT extraction_status FROM catalog_import_extractions
      WHERE id = $1
      LIMIT 1`,
-    [extractionId],
+    [runId],
   );
 
   const existingStatus = statusResult.rows[0]?.extraction_status;
   if (!existingStatus) {
     logger.warn(
-      { extractionId, itemId },
+      { runId, itemId },
       'importerExtraction.extraction_not_found',
     );
     return;
@@ -195,7 +193,7 @@ export async function processImporterExtraction(
 
   if (existingStatus === 'completed') {
     logger.info(
-      { extractionId, itemId },
+      { runId, itemId },
       'importerExtraction.skipped_already_completed',
     );
     return;
@@ -203,7 +201,7 @@ export async function processImporterExtraction(
 
   if (existingStatus === 'superseded') {
     logger.info(
-      { extractionId, itemId },
+      { runId, itemId },
       'importerExtraction.skipped_superseded',
     );
     return;
@@ -219,12 +217,12 @@ export async function processImporterExtraction(
     // No media asset or no URL — store an empty completed extraction.
     // This is honest: we cannot extract from a photo we cannot locate.
     logger.warn(
-      { extractionId, itemId, mediaAssetId },
+      { runId, itemId, mediaAssetId },
       'importerExtraction.no_image_url',
     );
 
     await importerExtractionService.processExtractionResult(
-      extractionId,
+      runId,
       {},
       {},
       null,
@@ -236,12 +234,12 @@ export async function processImporterExtraction(
   const imageBuffer = await downloadImage(imageUrl);
   if (!imageBuffer) {
     logger.warn(
-      { extractionId, itemId, mediaAssetId },
+      { runId, itemId, mediaAssetId },
       'importerExtraction.download_failed',
     );
 
     await importerExtractionService.processExtractionResult(
-      extractionId,
+      runId,
       {},
       {},
       'image_download_failed',
@@ -255,7 +253,7 @@ export async function processImporterExtraction(
   // ── 5. Store the result ──────────────────────────────────────────────
   try {
     await importerExtractionService.processExtractionResult(
-      extractionId,
+      runId,
       extractionResult.fields,
       extractionResult.confidenceScores,
       null,
@@ -263,11 +261,11 @@ export async function processImporterExtraction(
 
     logger.info(
       {
-        extractionId,
+        runId,
         itemId,
         mediaAssetId,
-        modelId,
-        modelVersion,
+        modelBundleId,
+        modelBundleVersion,
         fieldCount: Object.keys(extractionResult.fields).length,
         placeholder: extractionResult.placeholder,
         byteSize: imageBuffer.length,
@@ -277,7 +275,7 @@ export async function processImporterExtraction(
   } catch (err) {
     logger.error(
       {
-        extractionId,
+        runId,
         itemId,
         mediaAssetId,
         err: err instanceof Error ? err.message : String(err),

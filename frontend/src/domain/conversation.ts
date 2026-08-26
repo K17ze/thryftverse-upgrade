@@ -14,7 +14,7 @@ export interface Message {
   systemTitle?: string;
   timestamp: string;
   itemImage?: string;
-  type?: 'text' | 'offer' | 'system' | 'commerce_state';
+  type?: 'text' | 'offer' | 'system' | 'commerce_state' | 'voice';
   sender?: 'me' | 'other' | 'system';
   offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled'; expiresAt?: string; counterRound?: number };
   reactions?: MessageReaction[];
@@ -22,6 +22,13 @@ export interface Message {
   mediaUri?: string;
   mediaType?: 'image' | 'video';
   uploadStatus?: 'uploading' | 'failed' | 'sent';
+  // Voice messages — report 19.
+  voiceUri?: string;
+  voiceDurationMs?: number;
+  voiceWaveform?: number[];
+  voiceContainer?: 'm4a' | 'ogg' | 'webm' | 'mp4';
+  voiceCodec?: 'aac' | 'opus' | 'mp3';
+  voiceModerationState?: 'pending' | 'allowed' | 'limited' | 'blocked';
   commerceState?: {
     stateType: 'order_placed' | 'payment_confirmed' | 'order_shipped' | 'order_in_transit' | 'order_delivered' | 'order_cancelled' | 'order_refunded';
     orderId: string;

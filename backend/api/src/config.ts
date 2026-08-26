@@ -150,6 +150,16 @@ export const config = {
         'video/mp4',
         'video/quicktime',
         'video/x-m4v',
+        // Voice messages — report 19. M4A/AAC is the iOS/Android default from
+        // expo-audio's HIGH_QUALITY preset; Ogg/Opus is the Android alternative.
+        // The backend decodes at finalization to verify container/codec and
+        // reject polyglot/mismatch (extension trust is not enough).
+        'audio/mp4',
+        'audio/m4a',
+        'audio/x-m4a',
+        'audio/aac',
+        'audio/ogg',
+        'audio/webm',
         'application/pdf',
         ...(nodeEnv === 'production' ? [] : ['text/plain']),
       ],
@@ -173,6 +183,16 @@ export const config = {
     10 * 1024 * 1024,
     1_024,
     50 * 1024 * 1024
+  ),
+  // Voice messages — separate from documents. A 2-minute voice message at
+  // HIGH_QUALITY AAC is ~1–2 MB; 16 MB comfortably covers 2 minutes with
+  // headroom for higher bitrates, while bounding decompression/decoding abuse.
+  s3MaxAudioUploadBytes: asIntegerInRange(
+    'S3_MAX_AUDIO_UPLOAD_BYTES',
+    process.env.S3_MAX_AUDIO_UPLOAD_BYTES,
+    16 * 1024 * 1024,
+    1_024,
+    64 * 1024 * 1024
   ),
   s3PresignTtlSeconds: asIntegerInRange(
     'S3_PRESIGN_TTL_SECONDS',
@@ -489,6 +509,7 @@ export const config = {
   ),
   platformRevenueSweepIntervalMs: asNumber(process.env.PLATFORM_REVENUE_SWEEP_INTERVAL_MS, 6 * 60 * 60 * 1000),
   retentionSweepIntervalMs: asNumber(process.env.RETENTION_SWEEP_INTERVAL_MS, 24 * 60 * 60 * 1000),
+  analyticsAggregationIntervalMs: asNumber(process.env.ANALYTICS_AGGREGATION_INTERVAL_MS, 15 * 60 * 1000),
   opsAlertIntervalMs: asNumber(process.env.OPS_ALERT_INTERVAL_MS, 60_000),
   alertingWebhookUrls: asCsvList(process.env.ALERTING_WEBHOOK_URLS ?? process.env.ALERTING_WEBHOOK_URL),
   alertingAdminUserIds: asCsvList(process.env.ALERTING_ADMIN_USER_IDS),

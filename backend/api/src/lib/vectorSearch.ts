@@ -37,6 +37,15 @@ interface MeiliModule {
 
 let cachedMeiliClient: MeiliSearchClient | null | undefined;
 
+// ── Embedder readiness cache ─────────────────────────────────────────────────
+// The settings endpoint is hit at most once per READINESS_CACHE_TTL ms to avoid
+// adding a round-trip to every search request.
+const READINESS_CACHE_TTL_MS = 60_000;
+let readinessCache: {
+  result: { ready: boolean; embedderNames: string[]; reason?: string };
+  expiresAt: number;
+} | null = null;
+
 async function getMeiliClient(): Promise<MeiliSearchClient | null> {
   if (cachedMeiliClient !== undefined) {
     return cachedMeiliClient;
@@ -65,6 +74,65 @@ async function getMeiliClient(): Promise<MeiliSearchClient | null> {
   }
 }
 
+/**
+ * Check whether the Meilisearch index has a configured embedder. Returns
+ * true only when the embedders settings endpoint returns a non-empty
+ * object with at least one embedder. The result is cached for
+ * READINESS_CACHE_TTL_MS so the settings endpoint is not hit on every
+ * search request.
+ */
+export async function checkEmbedderReadiness(): Promise<{
+  ready: boolean;
+  embedderNames: string[];
+  reason?: string;
+}> {
+  if (readinessCache && Date.now() < readinessCache.expiresAt) {
+    return readinessCache.result;
+  }
+
+  const client = await getMeiliClient();
+  if (!client) {
+    const result = { ready: false, embedderNames: [] as string[], reason: 'meilisearch_not_configured' as const };
+    readinessCache = { result, expiresAt: Date.now() + READINESS_CACHE_TTL_MS };
+    return result;
+  }
+
+  try {
+    const indexName = process.env.MEILISEARCH_INDEX ?? 'listings';
+    const response = await fetch(
+      `${process.env.MEILISEARCH_URL}/indexes/${indexName}/settings/embedders`,
+      { headers: { Authorization: `Bearer ${process.env.MEILISEARCH_KEY ?? ''}` } },
+    );
+    if (!response.ok) {
+      const result = { ready: false, embedderNames: [] as string[], reason: `settings_endpoint_${response.status}` as const };
+      readinessCache = { result, expiresAt: Date.now() + READINESS_CACHE_TTL_MS };
+      return result;
+    }
+    const embedders = (await response.json()) as Record<string, unknown>;
+    const names = Object.keys(embedders);
+    if (names.length === 0) {
+      const result = { ready: false, embedderNames: [] as string[], reason: 'no_embedders_configured' as const };
+      readinessCache = { result, expiresAt: Date.now() + READINESS_CACHE_TTL_MS };
+      return result;
+    }
+    const result = { ready: true, embedderNames: names };
+    readinessCache = { result, expiresAt: Date.now() + READINESS_CACHE_TTL_MS };
+    return result;
+  } catch {
+    const result = { ready: false, embedderNames: [] as string[], reason: 'settings_fetch_failed' as const };
+    readinessCache = { result, expiresAt: Date.now() + READINESS_CACHE_TTL_MS };
+    return result;
+  }
+}
+
+/**
+ * Invalidate the cached readiness result so the next call re-checks the
+ * settings endpoint. Useful after embedder configuration is applied.
+ */
+export function invalidateEmbedderReadinessCache(): void {
+  readinessCache = null;
+}
+
 function buildMeiliFilter(filters: Record<string, unknown>): string | undefined {
   const expressions: string[] = [];
   for (const [key, value] of Object.entries(filters)) {
@@ -89,6 +157,7 @@ function buildMeiliFilter(filters: Record<string, unknown>): string | undefined 
  * The returned `retrievalMeta` is honest about what happened:
  *   - hybrid search succeeded            → method 'hybrid', embedderConfigured true
  *   - no Meilisearch URL / SDK           → method 'lexical', fallbackReason 'embedder_unconfigured'
+ *   - embedder not ready (probed)        → method 'lexical', fallbackReason 'embedder_unconfigured'
  *   - hybrid call failed (missing embed) → method 'lexical', fallbackReason 'embedder_unconfigured'
  *   - hybrid call failed (other error)   → method 'lexical', fallbackReason 'hybrid_search_failed'
  *   - text fallback also failed          → method 'lexical', fallbackReason 'hybrid_search_failed', empty results
@@ -106,12 +175,30 @@ export async function semanticSearch(
 
   const client = await getMeiliClient();
   if (client) {
+    const readiness = await checkEmbedderReadiness();
+    if (!readiness.ready) {
+      logger.warn(
+        { reason: readiness.reason },
+        'semanticSearch: embedder not ready, skipping hybrid attempt',
+      );
+      const fallbackResults = await textFallback(adapter, query, options, limit);
+      return {
+        results: fallbackResults,
+        retrievalMeta: {
+          method: 'lexical',
+          fallbackReason: 'embedder_unconfigured',
+          embedderConfigured: false,
+          searchEngineVersion: adapterInfo.searchEngineVersion,
+        },
+      };
+    }
+
     try {
       const indexName = process.env.MEILISEARCH_INDEX ?? 'listings';
       const index = client.index(indexName);
       const searchOpts: Record<string, unknown> = {
         limit,
-        hybrid: { embedded: 'default', semanticRatio: 0.5 },
+        hybrid: { embedder: 'default', semanticRatio: 0.5 },
       };
       const filter = buildMeiliFilter(options.filters ?? {});
       if (filter) {
@@ -173,15 +260,41 @@ export async function semanticSearch(
  * Inspect a hybrid-search error and decide whether the embedder was the
  * cause (e.g. Meilisearch rejects an unknown embedder name) or some other
  * failure. This keeps the fallbackReason honest without over-claiming.
+ *
+ * Meilisearch errors are structured objects with `code`, `message`, and
+ * `type` fields. We check the structured `code` first (the authoritative
+ * signal), then fall back to precise message inspection. We deliberately
+ * do NOT treat a bare mention of the word "embedder" as proof the embedder
+ * is unconfigured — an error like "embedder response timeout" is a
+ * transient runtime failure, not a configuration problem, and must not be
+ * misclassified (the previous implementation made that mistake).
  */
-function classifyHybridError(error: unknown): RetrievalFallbackReason {
-  const message =
-    typeof error === 'object' && error !== null && 'message' in error
-      ? String((error as { message: unknown }).message).toLowerCase()
-      : '';
-  if (message.includes('embedder') || message.includes('embedding') || message.includes('vector')) {
-    return 'embedder_unconfigured';
+export function classifyHybridError(error: unknown): RetrievalFallbackReason {
+  if (typeof error === 'object' && error !== null) {
+    const code = String((error as { code?: unknown }).code ?? '').toLowerCase();
+    // Meilisearch raises these codes when the requested embedder is not
+    // configured on the index (unknown name) or hybrid search references a
+    // missing embedder.
+    if (
+      code === 'invalid_search_embedder' ||
+      code === 'embedder_not_found' ||
+      code === 'search_embedder_not_found'
+    ) {
+      return 'embedder_unconfigured';
+    }
+
+    const message = String((error as { message?: unknown }).message ?? '').toLowerCase();
+    // Only match messages that explicitly tie the embedder to a
+    // missing/unconfigured/not-found condition. A bare "embedder" token
+    // (e.g. "embedder response timeout") must NOT match.
+    if (
+      /embedder[^a-z].*(not found|not configured|unconfigured|does not exist|is missing)/.test(message) ||
+      /(not found|not configured|unconfigured|does not exist|is missing).*embedder/.test(message)
+    ) {
+      return 'embedder_unconfigured';
+    }
   }
+
   return 'hybrid_search_failed';
 }
 

@@ -31,7 +31,19 @@ export interface AuctionDetailInput {
   isWatched: boolean;
   cancelledAt: string | null;
   settledAt: string | null;
+  paidAt: string | null;
+  paymentDeadlineAt: string | null;
+  secondChanceOfferedTo: string | null;
+  cancelledBy: string | null;
+  cancelledReason: string | null;
+  antiSniping: {
+    enabled: boolean;
+    extensionSeconds: number;
+    maxExtensions: number;
+    windowSeconds: number;
+  } | null;
   winnerBidderId: string | null;
+  auctionSequence?: number;
   lifecycle: string;
   terminalReason: string | null;
   /**
@@ -55,12 +67,20 @@ export type PrimaryAction =
   | { type: 'viewSimilar'; label: string }
   | { type: 'viewPerformance'; label: string }
   | { type: 'viewOutcome'; label: string }
+  | { type: 'payNow'; label: string }
+  | { type: 'acceptSecondChance'; label: string }
+  | { type: 'relist'; label: string }
+  | { type: 'acceptHighestBid'; label: string }
   | { type: 'none'; label: string };
 
 export type SecondaryAction =
   | { type: 'buyNow'; label: string; priceGbp: number }
   | { type: 'watchingToggle'; label: string }
   | { type: 'share'; label: string }
+  | { type: 'viewResult'; label: string }
+  | { type: 'viewOutcome'; label: string }
+  | { type: 'viewSimilar'; label: string }
+  | { type: 'declineSecondChance'; label: string }
   | { type: 'none'; label: string };
 
 export type ForbiddenAction =
@@ -99,6 +119,9 @@ export type AuctionPresentationLabel =
   | 'Cancelled'
   | 'Settled'
   | 'Awaiting payment'
+  | 'Payment expired'
+  | 'Second chance'
+  | 'Reserve not met'
   | 'Settlement pending'
   | 'Watching'
   | 'Leading'
@@ -383,6 +406,140 @@ export function resolveAuctionPresentationState(
     };
   }
 
+  // ── Reserve not met ──
+  if (effectiveState === 'reserve_not_met') {
+    const viewerMessage = isSeller
+      ? 'Reserve not met. Relist or accept highest bid?'
+      : 'Reserve not met';
+    return {
+      stateLabel: 'Reserve not met',
+      colorKey: 'warning',
+      viewerMessage,
+      viewerTreatment: isSeller ? 'seller' : 'subdued',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'none',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: isSeller
+        ? 'Reserve not met. You can relist or accept the highest bid.'
+        : 'Reserve not met.',
+    };
+  }
+
+  // ── Awaiting payment ──
+  if (effectiveState === 'awaiting_payment') {
+    const deadlineText = auction.paymentDeadlineAt
+      ? new Date(auction.paymentDeadlineAt).toLocaleString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : 'soon';
+    if (viewerState === 'won') {
+      return {
+        stateLabel: 'Awaiting payment',
+        colorKey: 'warning',
+        viewerMessage: `You won. Pay by ${deadlineText}.`,
+        viewerTreatment: 'result',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'elevated',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: `You won. Pay by ${deadlineText}.`,
+      };
+    }
+    if (isSeller) {
+      return {
+        stateLabel: 'Awaiting payment',
+        colorKey: 'warning',
+        viewerMessage: 'Awaiting buyer payment',
+        viewerTreatment: 'seller',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: 'Awaiting buyer payment.',
+      };
+    }
+    return {
+      stateLabel: 'Awaiting payment',
+      colorKey: 'textSecondary',
+      viewerMessage: `Sold with ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'} · awaiting payment`,
+      viewerTreatment: 'subdued',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'none',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: 'Auction sold. Awaiting buyer payment.',
+    };
+  }
+
+  // ── Payment expired ──
+  if (effectiveState === 'payment_expired') {
+    if (viewerState === 'outbid' || viewerState === 'lost') {
+      return {
+        stateLabel: 'Payment expired',
+        colorKey: 'warning',
+        viewerMessage: 'Second chance available',
+        viewerTreatment: 'warning',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: 'Second chance available. Tap to accept or decline.',
+      };
+    }
+    return {
+      stateLabel: 'Payment expired',
+      colorKey: 'warning',
+      viewerMessage: isSeller ? 'Payment expired' : 'Payment window closed',
+      viewerTreatment: isSeller ? 'seller' : 'subdued',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'none',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: 'Payment window expired.',
+    };
+  }
+
+  // ── Second chance offered ──
+  if (effectiveState === 'second_chance_offered') {
+    const deadlineText = auction.paymentDeadlineAt
+      ? new Date(auction.paymentDeadlineAt).toLocaleString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : 'soon';
+    return {
+      stateLabel: 'Second chance',
+      colorKey: 'warning',
+      viewerMessage: `Second chance · accept by ${deadlineText}`,
+      viewerTreatment: 'warning',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'elevated',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: `Second chance. Accept by ${deadlineText}.`,
+    };
+  }
+
   // ── Live ──
   const urgency: AuctionUrgencyLevel = isFinalMinutes ? 'final' : countdownStage === 'moderate' ? 'elevated' : 'restrained';
 
@@ -555,6 +712,86 @@ export function resolveStateAction(
     };
   }
 
+  // Reserve not met — seller can relist or accept
+  if (effectiveState === 'reserve_not_met') {
+    if (viewerState === 'seller') {
+      return {
+        primary: { type: 'relist', label: 'Relist' },
+        secondary: { type: 'viewOutcome', label: 'View outcome' },
+        forbidden: ['placeBid', 'buyNow', 'edit', 'cancel'],
+        viewerMessage: 'Reserve not met. Relist or accept highest bid?',
+        viewerTreatment: 'seller',
+      };
+    }
+    return {
+      primary: { type: 'viewSimilar', label: 'View similar items' },
+      secondary: { type: 'none', label: '' },
+      forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+      viewerMessage: 'Reserve not met',
+      viewerTreatment: 'subdued',
+    };
+  }
+
+  // Awaiting payment — winner pays, seller waits
+  if (effectiveState === 'awaiting_payment') {
+    if (viewerState === 'won') {
+      return {
+        primary: { type: 'payNow', label: 'Pay now' },
+        secondary: { type: 'viewResult', label: 'View result' },
+        forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+        viewerMessage: 'You won this auction · awaiting payment',
+        viewerTreatment: 'result',
+      };
+    }
+    if (viewerState === 'seller') {
+      return {
+        primary: { type: 'viewOutcome', label: 'View outcome' },
+        secondary: { type: 'none', label: '' },
+        forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+        viewerMessage: 'Awaiting buyer payment',
+        viewerTreatment: 'seller',
+      };
+    }
+    return {
+      primary: { type: 'viewSimilar', label: 'View similar items' },
+      secondary: { type: 'none', label: '' },
+      forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+      viewerMessage: `Sold with ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'} · awaiting payment`,
+      viewerTreatment: 'subdued',
+    };
+  }
+
+  // Payment expired — second chance may be offered
+  if (effectiveState === 'payment_expired') {
+    if (viewerState === 'outbid' || viewerState === 'lost') {
+      return {
+        primary: { type: 'acceptSecondChance', label: 'Accept second chance' },
+        secondary: { type: 'declineSecondChance', label: 'Decline' },
+        forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+        viewerMessage: 'Second chance available',
+        viewerTreatment: 'warning',
+      };
+    }
+    return {
+      primary: { type: 'viewSimilar', label: 'View similar items' },
+      secondary: { type: 'none', label: '' },
+      forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+      viewerMessage: 'Payment window closed',
+      viewerTreatment: 'subdued',
+    };
+  }
+
+  // Second chance offered — explicit acceptance state
+  if (effectiveState === 'second_chance_offered') {
+    return {
+      primary: { type: 'acceptSecondChance', label: 'Accept second chance' },
+      secondary: { type: 'declineSecondChance', label: 'Decline' },
+      forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+      viewerMessage: 'Second chance · accept before it expires',
+      viewerTreatment: 'warning',
+    };
+  }
+
   // Upcoming — no bidding yet
   if (effectiveState === 'upcoming') {
     if (viewerState === 'seller') {
@@ -630,12 +867,50 @@ export function isBuyNowAvailable(auction: AuctionDetailInput, effectiveState: A
 
 // ── Reserve price status ──
 
-export type ReserveStatus = 'none' | 'not-met' | 'met';
+export type ReserveStatus = 'hidden' | 'not_met' | 'met';
 
 export function resolveReserveStatus(auction: { reservePriceGbp: number | null; currentBidGbp: number; bidCount: number }): ReserveStatus {
-  if (auction.reservePriceGbp === null || auction.reservePriceGbp <= 0) return 'none';
-  if (auction.bidCount === 0) return 'not-met';
-  return auction.currentBidGbp >= auction.reservePriceGbp ? 'met' : 'not-met';
+  if (auction.reservePriceGbp === null || auction.reservePriceGbp <= 0) return 'hidden';
+  return auction.currentBidGbp >= auction.reservePriceGbp ? 'met' : 'not_met';
+}
+
+// ── Bid rule (proxy + anti-sniping) ──
+
+export function resolveBidRule(auction: {
+  antiSniping: { enabled: boolean; extensionSeconds: number } | null;
+}): string {
+  const isProxy = auction.antiSniping !== null && auction.antiSniping.enabled;
+  if (isProxy) {
+    return `Proxy bidding · ${auction.antiSniping!.extensionSeconds}s anti-sniping`;
+  }
+  return 'Direct bidding · no extension';
+}
+
+// ── Payment deadline countdown ──
+
+export function resolvePaymentDeadlineCountdown(
+  deadline: string,
+  nowMs: number,
+): { text: string; isExpired: boolean } {
+  const deadlineMs = new Date(deadline).getTime();
+  const remainingMs = deadlineMs - nowMs;
+  if (Number.isNaN(deadlineMs)) {
+    return { text: 'Deadline unavailable', isExpired: false };
+  }
+  if (remainingMs <= 0) {
+    return { text: 'Expired', isExpired: true };
+  }
+  const totalSeconds = Math.floor(remainingMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 48) {
+    const days = Math.floor(hours / 24);
+    return { text: `${days}d left`, isExpired: false };
+  }
+  if (hours > 0) {
+    return { text: `${hours}h ${minutes}m left`, isExpired: false };
+  }
+  return { text: `${minutes}m left`, isExpired: false };
 }
 
 // ── Seller cannot bid ──
@@ -658,7 +933,15 @@ export function resolveDetailPriceLabel(
   auction: AuctionDetailInput,
   effectiveState: AuctionEffectiveState,
 ): DetailPriceLabel {
-  if (effectiveState === 'cancelled' || effectiveState === 'settled' || effectiveState === 'ended') {
+  if (
+    effectiveState === 'cancelled' ||
+    effectiveState === 'settled' ||
+    effectiveState === 'ended' ||
+    effectiveState === 'reserve_not_met' ||
+    effectiveState === 'awaiting_payment' ||
+    effectiveState === 'payment_expired' ||
+    effectiveState === 'second_chance_offered'
+  ) {
     return auction.bidCount > 0 ? 'Final bid' : 'No bids';
   }
   if (effectiveState === 'upcoming') {
@@ -685,6 +968,14 @@ export function resolveDetailCountdown(
   if (timing.effectiveState === 'cancelled') return { text: 'Cancelled', isFinalMinutes: false, stage: 'ended' };
   if (timing.effectiveState === 'settled') return { text: 'Settled', isFinalMinutes: false, stage: 'ended' };
   if (timing.effectiveState === 'ended') return { text: 'Ended', isFinalMinutes: false, stage: 'ended' };
+  if (
+    timing.effectiveState === 'reserve_not_met' ||
+    timing.effectiveState === 'awaiting_payment' ||
+    timing.effectiveState === 'payment_expired' ||
+    timing.effectiveState === 'second_chance_offered'
+  ) {
+    return { text: 'Ended', isFinalMinutes: false, stage: 'ended' };
+  }
   if (timing.effectiveState === 'upcoming') {
     return { text: `Starts in ${formatCountdown(timing.msToStart)}`, isFinalMinutes: false, stage: 'upcoming' };
   }

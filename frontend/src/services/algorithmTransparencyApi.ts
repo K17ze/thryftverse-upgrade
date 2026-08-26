@@ -19,6 +19,9 @@
  * with real fetch calls. The UI layer does not need to change.
  */
 
+import { fetchJson } from '../lib/apiClient';
+import { useStore } from '../store/useStore';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -120,7 +123,10 @@ export interface AlgorithmTransparencyProfile {
 // When a real backend is wired, set this to false (or remove the mock branch).
 // ---------------------------------------------------------------------------
 
-export const ALGORITHM_DEMO_MODE = __DEV__;
+let _algorithmDemoMode = true;
+export function getAlgorithmDemoMode(): boolean { return _algorithmDemoMode; }
+export function setAlgorithmDemoMode(value: boolean): void { _algorithmDemoMode = value; }
+export const ALGORITHM_DEMO_MODE = true;
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -364,6 +370,67 @@ function confidenceFromScore(score: number): ConfidenceLabel {
 }
 
 // ---------------------------------------------------------------------------
+// Backend intent API types and helpers
+// ---------------------------------------------------------------------------
+
+interface BackendIntentTopic {
+  id: string;
+  label: string;
+  category: string;
+  influenceBand: string;
+  sourceType: string;
+  evidenceCount: number;
+  removable: boolean;
+  paused: boolean;
+  lastEvidenceAt: string | null;
+  updatedAt: string;
+}
+
+interface BackendIntentProfile {
+  intentVersion: number;
+  profileMode: string;
+  topics: BackendIntentTopic[];
+}
+
+function mapInfluenceBandToWeight(band: string): TopicWeight {
+  if (band === 'more') return 'high';
+  if (band === 'less') return 'low';
+  return 'medium';
+}
+
+function mapWeightToDirection(weight: TopicWeight): string {
+  if (weight === 'high') return 'more';
+  if (weight === 'low') return 'less';
+  return 'usual';
+}
+
+function getCurrentUserId(): string | null {
+  return useStore.getState().currentUser?.id ?? null;
+}
+
+function backendProfileToTransparencyProfile(
+  backend: BackendIntentProfile,
+): AlgorithmTransparencyProfile {
+  const topics: AlgorithmTopic[] = backend.topics.map((t) => ({
+    id: t.id,
+    label: t.label,
+    category: t.category,
+    weight: mapInfluenceBandToWeight(t.influenceBand),
+    source: (t.sourceType === 'explicit' ? 'explicit' : t.sourceType === 'implicit' ? 'implicit' : 'inferred') as SignalSource,
+    removable: t.removable,
+    addedAt: t.updatedAt,
+    isDemo: false,
+  }));
+  return {
+    topics,
+    signals: [],
+    recentInfluences: [],
+    lastUpdated: new Date().toISOString(),
+    isDemo: false,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -371,7 +438,31 @@ function confidenceFromScore(score: number): ConfidenceLabel {
  * Fetch the user's full algorithm transparency profile.
  */
 export async function fetchAlgorithmProfile(): Promise<AlgorithmTransparencyProfile> {
-  await delay(420); // simulate network latency for honest loading states
+  const userId = getCurrentUserId();
+  if (userId && !getAlgorithmDemoMode()) {
+    try {
+      const backend = await fetchJson<BackendIntentProfile>(
+        `/recommendations/intent/${encodeURIComponent(userId)}/profile`
+      );
+      setAlgorithmDemoMode(false);
+      return backendProfileToTransparencyProfile(backend);
+    } catch {
+      // fall through to mock
+    }
+  }
+  // Try real backend first even in demo mode to detect availability
+  if (userId) {
+    try {
+      const backend = await fetchJson<BackendIntentProfile>(
+        `/recommendations/intent/${encodeURIComponent(userId)}/profile`
+      );
+      setAlgorithmDemoMode(false);
+      return backendProfileToTransparencyProfile(backend);
+    } catch {
+      // fall through to mock
+    }
+  }
+  await delay(420);
   const recentInfluences = [...MOCK_SIGNALS]
     .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())
     .slice(0, 5);
@@ -380,7 +471,7 @@ export async function fetchAlgorithmProfile(): Promise<AlgorithmTransparencyProf
     signals: [...MOCK_SIGNALS],
     recentInfluences,
     lastUpdated: isoHoursAgo(1),
-    isDemo: ALGORITHM_DEMO_MODE,
+    isDemo: getAlgorithmDemoMode(),
   };
 }
 
@@ -388,6 +479,30 @@ export async function fetchAlgorithmProfile(): Promise<AlgorithmTransparencyProf
  * Adjust a topic's weight. Returns the updated topic, or null if not found.
  */
 export async function updateTopicWeight(topicId: string, weight: TopicWeight): Promise<AlgorithmTopic | null> {
+  const userId = getCurrentUserId();
+  if (userId && !getAlgorithmDemoMode()) {
+    try {
+      const target = sessionTopics.find((t) => t.id === topicId);
+      await fetchJson(
+        `/recommendations/intent/${encodeURIComponent(userId)}/mutate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idempotencyKey: `weight-${topicId}-${weight}-${Date.now()}`,
+            scope: 'topic',
+            targetId: topicId,
+            targetLabel: target?.label ?? topicId,
+            direction: mapWeightToDirection(weight),
+          }),
+        },
+      );
+      const profile = await fetchAlgorithmProfile();
+      return profile.topics.find((t) => t.id === topicId) ?? null;
+    } catch {
+      // fall through to mock
+    }
+  }
   await delay(180);
   let updated: AlgorithmTopic | null = null;
   sessionTopics = sessionTopics.map((t) => {
@@ -405,6 +520,31 @@ export async function updateTopicWeight(topicId: string, weight: TopicWeight): P
  * or not removable.
  */
 export async function removeTopic(topicId: string): Promise<boolean> {
+  const userId = getCurrentUserId();
+  if (userId && !getAlgorithmDemoMode()) {
+    try {
+      const target = sessionTopics.find((t) => t.id === topicId);
+      if (!target || !target.removable) return false;
+      await fetchJson(
+        `/recommendations/intent/${encodeURIComponent(userId)}/mutate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idempotencyKey: `remove-${topicId}-${Date.now()}`,
+            scope: 'topic',
+            targetId: topicId,
+            targetLabel: target.label,
+            direction: 'remove',
+          }),
+        },
+      );
+      sessionTopics = sessionTopics.filter((t) => t.id !== topicId);
+      return true;
+    } catch {
+      // fall through to mock
+    }
+  }
   await delay(220);
   const target = sessionTopics.find((t) => t.id === topicId);
   if (!target || !target.removable) return false;
@@ -416,6 +556,40 @@ export async function removeTopic(topicId: string): Promise<boolean> {
  * Add a new interest topic. Returns the created topic.
  */
 export async function addTopic(label: string, category: string): Promise<AlgorithmTopic> {
+  const userId = getCurrentUserId();
+  if (userId && !getAlgorithmDemoMode()) {
+    try {
+      const topicId = `topic-user-${Date.now()}`;
+      await fetchJson(
+        `/recommendations/intent/${encodeURIComponent(userId)}/mutate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idempotencyKey: `add-${topicId}`,
+            scope: 'topic',
+            targetId: topicId,
+            targetLabel: label.trim(),
+            direction: 'add',
+            topicCategory: category,
+          }),
+        },
+      );
+      const profile = await fetchAlgorithmProfile();
+      return profile.topics.find((t) => t.label === label.trim()) ?? {
+        id: topicId,
+        label: label.trim(),
+        category,
+        weight: 'medium' as TopicWeight,
+        source: 'explicit' as SignalSource,
+        removable: true,
+        addedAt: new Date().toISOString(),
+        isDemo: false,
+      };
+    } catch {
+      // fall through to mock
+    }
+  }
   await delay(260);
   const topic: AlgorithmTopic = {
     id: `topic-user-${Date.now()}`,
@@ -425,7 +599,7 @@ export async function addTopic(label: string, category: string): Promise<Algorit
     source: 'explicit',
     removable: true,
     addedAt: new Date().toISOString(),
-    isDemo: ALGORITHM_DEMO_MODE,
+    isDemo: getAlgorithmDemoMode(),
   };
   sessionTopics = [topic, ...sessionTopics];
   return topic;
@@ -481,7 +655,7 @@ export async function fetchFeedExplanation(itemId: string): Promise<AlgorithmFee
     itemThumbnail: thumbnail,
     reasons,
     confidenceLabel: confidenceFromScore(score),
-    isDemo: ALGORITHM_DEMO_MODE,
+    isDemo: getAlgorithmDemoMode(),
   };
 }
 

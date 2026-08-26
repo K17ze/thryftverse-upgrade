@@ -49,25 +49,12 @@ export function trackCreatorEvent(event: CreatorAnalyticsEvent, payload: Creator
       // silently fail — analytics must not crash the editor
     }
   }
-  // Forward publish events to the backend analytics endpoint.
-  // We import lazily to avoid a circular dependency at module load time
-  // and to keep the editor decoupled from the network layer.
-  if (event === 'creator_publish_success' && payload.publishedId && payload.documentType) {
-    const publishedId = payload.publishedId;
-    const documentType = payload.documentType;
-    import('../services/creatorAnalyticsApi')
-      .then(({ logCreatorEvent }) =>
-        logCreatorEvent({
-          contentType: documentType === 'look' ? 'look' : 'poster',
-          contentId: publishedId,
-          eventType: 'profile_visit', // reuse as a "publish" signal
-          metadata: { event },
-        }),
-      )
-      .catch(() => {
-        // analytics must not crash the editor
-      });
-  }
+  // NOTE: Publish events are no longer forwarded to the analytics event
+  // endpoint from the client. The previous implementation sent camelCase
+  // fields to a snake_case endpoint and misclassified the event as
+  // `profile_visit`, polluting that metric. Content publication is now
+  // recorded server-side through the domain outbox in the publish route,
+  // which is the canonical source of truth for content lifecycle events.
 }
 
 export const CreatorAnalytics = {

@@ -40,6 +40,8 @@ import { useStore } from '../store/useStore';
 import {
   type PublicProfileStats,
   type PublicProfileViewer,
+  type PublicProfileTrader,
+  type PublicProfileStorefrontSummary,
   type ReportReason,
 } from '../services/profileApi';
 import {
@@ -148,6 +150,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     awayBanner: { backgroundColor: SURFACE_ALT, borderColor: BORDER },
     awayBannerTitle: { color: TEXT },
     awayBannerSub: { color: MUTED },
+    announcementText: { color: TEXT },
+    traderClassification: { color: TEXT },
+    traderDetail: { color: MUTED },
     listStateTitle: { color: TEXT },
     listStateSub: { color: MUTED },
   };
@@ -194,8 +199,25 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const looksQuery = useUserLooksInfinite(targetUserId);
   const reviewsQuery = useSellerReviewsInfinite(targetUserId);
 
-  // Seller trust summary - verified badge, response time, dispatch time, completed sales
+  // Seller trust summary - verified badge, response time, dispatch time, completed sales.
+  // This provides the detailed trust signals (response rate, dispatch time, badges)
+  // that complement the aggregate's verification flags and away state.
   const { data: sellerTrust } = useSellerTrust(targetUserId ?? undefined);
+
+  // Authoritative away state from the profile aggregate — replaces the
+  // previous useSellerTrust-derived holiday mode. The aggregate is the
+  // source-of-truth for the public profile projection.
+  const awayState = publicProfileQuery.away ?? null;
+
+  // DSA Article 30 trader disclosure from the aggregate.
+  // Legally required in EU/UK — buyers must know if they're transacting
+  // with a business (trader) or a private individual (non-trader).
+  const traderDisclosure = publicProfileQuery.trader ?? null;
+
+  // Published storefront summary from the aggregate.
+  // Contains the seller's shop announcement, section titles, and
+  // server-owned featured listing IDs for ordering.
+  const storefrontSummary = publicProfileQuery.storefront ?? null;
 
   // Story highlights — fetched for the highlights rail below the ProfileHero.
   // Renders nothing when empty (truthful UI — no fabricated placeholder content).
@@ -251,13 +273,30 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       const pages = query.data?.pages ?? [];
       const items: ListingApiItem[] = [];
       for (const page of pages) for (const item of page.items) items.push(item);
-      // Pinned/featured listings appear first in the Shop grid (2026 pattern).
-      // Stable sort preserves backend ordering for non-featured items.
-      return items.sort((a, b) => {
-        const af = a.featured === true ? 0 : 1;
-        const bf = b.featured === true ? 0 : 1;
-        return af - bf;
-      });
+      // Server-owned featured listing ranks from the storefront aggregate.
+      // The backend determines which listings are featured and their rank
+      // order via storefront_featured_listings. We apply the server's rank
+      // order to the grid — featured listings appear first in rank order,
+      // non-featured listings follow in their original backend order.
+      // This is NOT client-side featured derivation — it's applying the
+      // server's authoritative ranking.
+      const featuredIds = storefrontSummary?.featuredListingIds;
+      if (featuredIds && featuredIds.length > 0 && shopSegment === 'forsale') {
+        const rankMap = new Map<string, number>();
+        featuredIds.forEach((id, idx) => rankMap.set(id, idx));
+        const featured: ListingApiItem[] = [];
+        const rest: ListingApiItem[] = [];
+        for (const item of items) {
+          if (rankMap.has(item.id)) {
+            featured.push(item);
+          } else {
+            rest.push(item);
+          }
+        }
+        featured.sort((a, b) => (rankMap.get(a.id) ?? 0) - (rankMap.get(b.id) ?? 0));
+        return [...featured, ...rest];
+      }
+      return items;
     }
     if (activeTab === 'Looks') {
       const pages = looksQuery.data?.pages ?? [];
@@ -269,7 +308,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     const items: SellerReviewItem[] = [];
     for (const page of pages) for (const item of page.items) items.push(item);
     return items;
-  }, [activeTab, shopSegment, activeListingsQuery.data, soldListingsQuery.data, looksQuery.data, reviewsQuery.data]);
+  }, [activeTab, shopSegment, activeListingsQuery.data, soldListingsQuery.data, looksQuery.data, reviewsQuery.data, storefrontSummary]);
 
   const activeQuery = activeTab === 'Shop' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : reviewsQuery;
   const isRefreshing = activeQuery.isRefetching;
@@ -544,6 +583,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         reviewCount={reviewCount}
         memberSince={memberSince}
         sellerTrust={sellerTrust}
+        traderClassification={traderDisclosure}
         followPending={followMutation.isPending}
         isBlocked={isBlocked}
         scrollY={scrollY}
@@ -557,8 +597,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onShopSegmentSelect={(s) => setShopSegment(s)}
       />
 
-      {/* Away-mode banner - shown when seller has holiday mode enabled */}
-      {sellerTrust?.holidayMode === true ? (
+      {/* Away-mode banner - shown when the profile aggregate reports holiday mode.
+          The aggregate is the authoritative source for away state (privacy-aware,
+          viewer-dependent). sellerTrust is a secondary signal for detailed trust. */}
+      {awayState?.holidayMode === true ? (
         <View style={[styles.awayBanner, t.awayBanner]}>
           <Ionicons name="pause-circle" size={18} color={MUTED} />
           <View style={styles.awayBannerTextWrap}>
@@ -566,11 +608,62 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               This shop is on holiday
             </Text>
             <Text style={[styles.awayBannerSub, t.awayBannerSub]}>
-              {sellerTrust.awayMessage?.trim()
-                ? sellerTrust.awayMessage.trim()
+              {awayState.awayMessage?.trim()
+                ? awayState.awayMessage.trim()
                 : 'The seller is away right now. Listings are paused and will return when they are back.'}
             </Text>
           </View>
+        </View>
+      ) : null}
+
+      {/* Storefront announcement — the seller's shop greeting.
+          Only rendered when a published storefront with an announcement exists.
+          No decorative container — just text with spacing, per anti-AI design. */}
+      {storefrontSummary?.announcement?.trim() ? (
+        <View style={styles.announcementWrap}>
+          <Text style={[styles.announcementText, t.announcementText]}>
+            {storefrontSummary.announcement.trim()}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* DSA Article 30 trader disclosure — legally required in EU/UK.
+          Subtle, factual, no decorative chrome. Buyers must know whether
+          they are transacting with a business or a private individual.
+          Legal details (name, address, registration) are only shown for
+          verified traders — non-traders see only the classification. */}
+      {traderDisclosure ? (
+        <View style={styles.traderDisclosureWrap}>
+          <Text style={[styles.traderClassification, t.traderClassification]}>
+            {traderDisclosure.classification === 'trader'
+              ? 'Business seller'
+              : 'Private seller'}
+          </Text>
+          {traderDisclosure.classification === 'trader' && traderDisclosure.legalName ? (
+            <Text style={[styles.traderDetail, t.traderDetail]}>
+              {traderDisclosure.legalName}
+            </Text>
+          ) : null}
+          {traderDisclosure.classification === 'trader' && traderDisclosure.address ? (
+            <Text style={[styles.traderDetail, t.traderDetail]}>
+              {traderDisclosure.address}
+            </Text>
+          ) : null}
+          {traderDisclosure.classification === 'trader' && traderDisclosure.registrationNumber ? (
+            <Text style={[styles.traderDetail, t.traderDetail]}>
+              Reg: {traderDisclosure.registrationNumber}
+            </Text>
+          ) : null}
+          {traderDisclosure.classification === 'trader' && traderDisclosure.vatNumber ? (
+            <Text style={[styles.traderDetail, t.traderDetail]}>
+              VAT: {traderDisclosure.vatNumber}
+            </Text>
+          ) : null}
+          {traderDisclosure.classification === 'trader' && traderDisclosure.contactEmail ? (
+            <Text style={[styles.traderDetail, t.traderDetail]}>
+              {traderDisclosure.contactEmail}
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -1002,6 +1095,38 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     lineHeight: TypographyV2.meta.lineHeight + 1,
+  },
+  // Storefront announcement — seller's shop greeting. No decorative
+  // container, just text with horizontal padding matching the screen.
+  announcementWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+  },
+  announcementText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.body.lineHeight,
+  },
+  // DSA Article 30 trader disclosure — factual, no decorative chrome.
+  // Hairline top separator distinguishes it from the announcement above.
+  traderDisclosureWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.xs,
+    gap: Space.xs / 2,
+  },
+  traderClassification: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.meta.lineHeight,
+  },
+  traderDetail: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl, paddingHorizontal: Space.md, gap: Space.sm },
   listStateTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.semibold },

@@ -17,7 +17,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { FlagshipProfileMedia } from '../flagship';
 import { isVideoUri } from '../../utils/media';
-import type { PublicProfileStats, PublicProfileViewer } from '../../services/profileApi';
+import type { PublicProfileStats, PublicProfileViewer, PublicProfileTrader } from '../../services/profileApi';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -43,6 +43,8 @@ interface ProfileHeroProps {
   memberSince?: string;
   /** Seller trust summary from /sellers/:id — provides verified badge, response time, dispatch time. */
   sellerTrust?: SellerTrustSummary | null;
+  /** DSA Article 30 trader classification from the profile aggregate. */
+  traderClassification?: PublicProfileTrader | null;
   followPending: boolean;
   isBlocked: boolean;
   scrollY: SharedValue<number>;
@@ -115,6 +117,7 @@ export function ProfileHero({
   reviewCount,
   memberSince,
   sellerTrust,
+  traderClassification,
   followPending,
   isBlocked,
   scrollY,
@@ -156,6 +159,10 @@ export function ProfileHero({
   if (soldCount > 0) trustParts.push(`${soldCount} sold`);
   if (memberSince) trustParts.push(`Joined ${memberSince}`);
   if (sellerTrust?.responseTimeLabel) trustParts.push(`Replies ${sellerTrust.responseTimeLabel}`);
+  // DSA Article 30 trader classification — factual, not decorative.
+  if (traderClassification) {
+    trustParts.push(traderClassification.classification === 'trader' ? 'Business' : 'Private');
+  }
   const trustLine = trustParts.join(' · ');
 
   return (

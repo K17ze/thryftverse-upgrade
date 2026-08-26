@@ -48,8 +48,9 @@ export interface SearchQueryParams {
     priceMin?: number;
     priceMax?: number;
     location?: string;
+    sustainableOnly?: boolean;
   };
-  sort?: 'relevance' | 'recent' | 'price_asc' | 'price_desc';
+  sort?: 'relevance' | 'recent' | 'price_asc' | 'price_desc' | 'most_liked' | 'ending_soon';
   page?: number;
   limit?: number;
 }

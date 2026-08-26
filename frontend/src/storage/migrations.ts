@@ -12,7 +12,7 @@
  */
 
 import type { OPSQLiteDatabase } from '@op-engineering/op-sqlite';
-import { CURRENT_SCHEMA_VERSION, SCHEMA_VERSION_1 } from './schema';
+import { CURRENT_SCHEMA_VERSION, SCHEMA_VERSION_1, SCHEMA_VERSION_2 } from './schema';
 
 /**
  * A single migration step. `version` is the schema version produced by
@@ -34,6 +34,11 @@ export const MIGRATIONS: Migration[] = [
     version: 1,
     description: 'Initial schema — sync, conversations, messages, feed, drafts, products, outbox.',
     sql: SCHEMA_VERSION_1,
+  },
+  {
+    version: 2,
+    description: 'Moodboard cache table for offline-first editing.',
+    sql: SCHEMA_VERSION_2,
   },
 ];
 

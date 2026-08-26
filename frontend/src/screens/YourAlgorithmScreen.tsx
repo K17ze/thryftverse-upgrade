@@ -53,8 +53,6 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppInput } from '../components/ui/AppInput';
 import { CachedImage } from '../components/CachedImage';
-import { AITrustBadge, type AIConfidence } from '../components/ai/AITrustBadge';
-import { AITrustSignal } from '../components/ai/AITrustSignal';
 
 import {
   AlgorithmTransparencyProfile,
@@ -92,20 +90,6 @@ const WEIGHT_META: Record<TopicWeight, { label: string; dotCount: number }> = {
 };
 
 const WEIGHT_ORDER: TopicWeight[] = ['low', 'medium', 'high'];
-
-/** Map a topic's influence weight to an AI confidence level. */
-const WEIGHT_TO_CONFIDENCE: Record<TopicWeight, AIConfidence> = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-};
-
-/** Map a signal's relative weight (0–1) to an AI confidence level. */
-function signalWeightToConfidence(weight: number): AIConfidence {
-  if (weight >= 0.66) return 'high';
-  if (weight >= 0.33) return 'medium';
-  return 'low';
-}
 
 const SOURCE_LABEL: Record<SignalSource, string> = {
   explicit: 'Explicit',
@@ -632,7 +616,7 @@ function HowItWorks({
             Your feed is shaped by topics and signals. Topics are the interests we've learned from your activity — some you told us explicitly, others we inferred from your behaviour. Signals are the individual actions (saves, searches, follows) that feed into those topics.
           </Text>
           <Text style={[styles.howItWorksBody, { color: colors.textSecondary }]}>
-            Adjust how strongly each topic influences your feed, remove topics you no longer want, or add new ones. Topics derived from purchase or browse history cannot be removed because they reflect your real activity.
+            Adjust how strongly each topic influences your feed, remove topics you no longer want, or add new ones. Topics from your activity can be paused from your feed. Transaction records are kept for trust and accounting but you control whether they influence recommendations.
           </Text>
           {ALGORITHM_DEMO_MODE && (
             <Text style={[styles.howItWorksDemo, { color: colors.textMuted }]}>
@@ -736,11 +720,6 @@ function TopicRow({
             <Text style={[styles.topicSource, { color: colors.textMuted }]}>
               {SOURCE_LABEL[topic.source]}
             </Text>
-            <AITrustBadge
-              confidence={WEIGHT_TO_CONFIDENCE[topic.weight]}
-              isDemo={ALGORITHM_DEMO_MODE}
-              style={styles.topicConfidenceBadge}
-            />
           </View>
         </View>
 
@@ -750,7 +729,7 @@ function TopicRow({
               name="lock-closed"
               size={16}
               color={colors.textMuted}
-              accessibilityLabel="Cannot be removed"
+              accessibilityLabel="Kept for trust, influence can be paused"
             />
           )}
           <Reanimated.View style={chevronStyle}>
@@ -834,7 +813,7 @@ function TopicRow({
             <View style={styles.lockHint}>
               <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
               <Text style={[styles.lockHintText, { color: colors.textMuted }]}>
-                Cannot be removed — derived from your activity history.
+                Kept for trust and accounting. You can pause its influence on your feed.
               </Text>
             </View>
           )}
@@ -894,14 +873,6 @@ function SignalRow({
           ]}
         />
       </View>
-      {/* AI trust signal — confidence + source provenance for this signal */}
-      <AITrustSignal
-        confidence={signalWeightToConfidence(signal.weight)}
-        source={`${SOURCE_LABEL[signal.type]} signal — ${signal.label}`}
-        context={`Relative influence: ${Math.round(signal.weight * 100)}%`}
-        isDemo={ALGORITHM_DEMO_MODE}
-        style={styles.signalTrust}
-      />
     </View>
   );
 }
@@ -1172,9 +1143,6 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       lineHeight: Type.caption.lineHeight,
       marginLeft: Space.sm,
     },
-    topicConfidenceBadge: {
-      marginLeft: Space.sm,
-    },
     topicRight: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1278,9 +1246,6 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     signalWeightFill: {
       height: '100%',
       borderRadius: Radius.sm,
-    },
-    signalTrust: {
-      marginTop: Space.sm,
     },
 
     // Add topic

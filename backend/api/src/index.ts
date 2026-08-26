@@ -104,6 +104,10 @@ import {
   type MoneyProvider,
   type ProviderAmountUnit,
 } from './lib/money.js';
+// P0.8: Exact decimal string formatting for Co-Own trading API responses.
+// Avoids IEEE 754 representation error in the JSON wire format by emitting
+// decimal string variants (e.g. "49.2500") alongside legacy number fields.
+import { formatGbp } from './lib/moneyFormat.js';
 import {
   createMobileCustomerSession,
   getOrCreateStripeCustomer,
@@ -124,6 +128,9 @@ import {
   enqueueOutboxDrainJob,
   enqueueReconciliationJob,
   enqueueRetentionSweepJob,
+  enqueueAnalyticsAggregationJob,
+  enqueuePushReceiptReconciliationJob,
+  enqueueScheduledPublicationSweepJob,
   enqueueOnezeWithdrawalExecuteJob,
   enqueuePushNotificationJob,
   enqueueMediaIngestJob,
@@ -153,6 +160,7 @@ import {
   recordBackgroundJobDuration,
   recordPaymentTransition,
   recordPushDelivery,
+  recordPushTicketError,
   renderMetrics,
 } from './lib/metrics.js';
 import {
@@ -235,6 +243,8 @@ import { registerCollectionRoutes } from './routes/collections.js';
 import { registerSearchRoutes } from './routes/search.js';
 import { createKysely } from './lib/kysely.js';
 import { registerCreatorDocumentRoutes } from './routes/creatorDocuments.js';
+import { registerCreatorPublicationRoutes } from './routes/creatorPublications.js';
+import { registerCreatorAnalyticsRoutes } from './routes/creatorAnalytics.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerSmsRoutes } from './routes/sms.js';
 import { registerRealtimeRoutes } from './routes/realtime.js';
@@ -245,7 +255,6 @@ import { registerVendorWebhookRoutes } from './routes/vendorWebhooks.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerMediaAssetRoutes } from './routes/mediaAssets.js';
 import { registerModerationRoutes } from './routes/moderation.js';
-import { registerAppealsRoutes } from './routes/appeals.js';
 import { registerModerationTriageRoutes } from './routes/moderationTriage.js';
 import { moderateListingText } from './lib/moderation/moderationService.js';
 import { processMediaAsset } from './lib/media/pipeline.js';
@@ -260,16 +269,23 @@ import {
   processMediaEmbeddingJob,
   processModerationTriageJob,
   processImporterExtraction,
+  processExtractionIntelligenceJob,
   processRetentionSweep,
+  processPushReceiptReconciliation,
+  sweepScheduledPublications,
 } from './workers/handlers/index.js';
 import {
   evaluatePriceAlertsForListing,
   registerPriceAlertRoutes,
 } from './routes/priceAlerts.js';
 import { registerListingOfferRoutes } from './routes/listingOffers.js';
+import { registerSmartSellPolicyRoutes } from './routes/smartSellPolicy.js';
+import { registerListingIntelligenceRoutes } from './routes/listingIntelligence.js';
 import { registerChatComposerStateRoutes } from './routes/chatComposerState.js';
+import { registerVoiceMessageRoutes } from './routes/voiceMessages.js';
 import { registerAiTruthRoutes } from './routes/aiTruth.js';
 import { registerRecommendationRoutes } from './routes/recommendations.js';
+import { registerRecommendationIntentRoutes } from './routes/recommendationIntent.js';
 import { registerFraudDetectionRoutes } from './routes/fraudDetection.js';
 import { registerAccountSecurityRoutes } from './routes/accountSecurity.js';
 import { registerFraudShadowRoutes } from './routes/fraudShadow.js';
@@ -277,6 +293,7 @@ import { registerComplianceRoutes } from './routes/compliance.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import { registerImpactRoutes } from './routes/impact.js';
 import { registerStreamingRoutes } from './routes/streaming.js';
+import { registerLiveLotEngineRoutes } from './routes/liveLotEngine.js';
 import { registerSecureProfilesRoutes } from './routes/secureProfiles.js';
 import { registerSecureMessagesRoutes } from './routes/secureMessages.js';
 import { registerAdminAuditRoutes } from './routes/adminAudit.js';
@@ -285,6 +302,7 @@ import { registerOpsConsoleRoutes } from './routes/opsConsole.js';
 import { registerBotsRoutes } from './routes/bots.js';
 import { registerV2Routes } from './routes/v2.js';
 import { registerSellerRoutes } from './routes/sellers.js';
+import { registerStorefrontRoutes } from './routes/storefronts.js';
 import { registerSellerHubRoutes } from './routes/sellerHub.js';
 import { registerPoliciesRoutes } from './routes/policies.js';
 import { registerFeedRoutes } from './routes/feed.js';
@@ -301,10 +319,12 @@ import { registerTaxonomyRoutes } from './routes/taxonomy.js';
 import { registerCatalogImportRoutes } from './routes/catalogImports.js';
 import { registerModelArtifactRoutes } from './routes/modelArtifacts.js';
 import { registerMediaEmbeddingRoutes } from './routes/mediaEmbeddings.js';
+import { registerMediaEnhancementRoutes } from './routes/mediaEnhancement.js';
 import { registerReturnRoutes } from './routes/returns.js';
 import { registerRefundRoutes } from './routes/refunds.js';
 import { registerExceptionQueueRoutes } from './routes/exceptionQueue.js';
 import { registerImporterExtractionRoutes } from './routes/importerExtraction.js';
+import { registerExtractionIntelligenceRoutes } from './routes/extractionIntelligence.js';
 import { checkFraudNonBlocking } from './lib/fraudDetection.js';
 import { FraudShadowScoringService } from './lib/fraudShadowScoring.js';
 import { evaluateRisk, recordExecution } from './lib/riskDecision.js';
@@ -2235,21 +2255,72 @@ async function serializeChatMessageRows(
     else byEmoji.set(r.emoji, [r.user_id]);
   }
 
-  return rows.map((row) => ({
-    id: row.id,
-    senderType: row.sender_type,
-    senderUserId: row.sender_user_id,
-    senderBotId: row.sender_bot_id,
-    body: row.body,
-    metadata: row.metadata ?? {},
-    createdAt: row.created_at,
-    clientMessageId: row.client_message_id ?? undefined,
-    replyToMessageId: row.reply_to_message_id ?? undefined,
-    deletedForEveryoneAt: row.deleted_for_everyone_at ?? undefined,
-    editVersion: row.edit_version,
-    editedAt: row.edited_at ?? undefined,
-    reactions: formatReactionsMap(reactionsByMessage, row.id),
-  }));
+  // Voice message binding — load in one batch to avoid N+1. Returns the
+  // canonical voice metadata so the client can render a real waveform (or
+  // an honest progress line when samples are not yet ready) and a duration.
+  const voiceResult = await db.query<{
+    message_id: string;
+    duration_ms: number;
+    bytes: string;
+    container: string;
+    codec: string;
+    waveform_samples: number[] | null;
+    waveform_sample_count: number | null;
+    waveform_algorithm_version: number | null;
+    moderation_state: string;
+  }>(
+    `SELECT message_id, duration_ms, bytes::text, container, codec,
+            waveform_samples, waveform_sample_count, waveform_algorithm_version,
+            moderation_state
+     FROM voice_messages
+     WHERE message_id = ANY($1::text[])`,
+    [messageIds]
+  );
+  const voiceByMessage = new Map<string, {
+    durationMs: number;
+    bytes: number;
+    container: string;
+    codec: string;
+    waveform: number[] | null;
+    waveformSampleCount: number | null;
+    waveformAlgorithmVersion: number | null;
+    moderationState: string;
+  }>();
+  for (const r of voiceResult.rows) {
+    voiceByMessage.set(r.message_id, {
+      durationMs: r.duration_ms,
+      bytes: Number(r.bytes),
+      container: r.container,
+      codec: r.codec,
+      waveform: Array.isArray(r.waveform_samples) ? r.waveform_samples : null,
+      waveformSampleCount: r.waveform_sample_count,
+      waveformAlgorithmVersion: r.waveform_algorithm_version,
+      moderationState: r.moderation_state,
+    });
+  }
+
+  return rows.map((row) => {
+    const baseReturn: Record<string, unknown> = {
+      id: row.id,
+      senderType: row.sender_type,
+      senderUserId: row.sender_user_id,
+      senderBotId: row.sender_bot_id,
+      body: row.body,
+      metadata: row.metadata ?? {},
+      createdAt: row.created_at,
+      clientMessageId: row.client_message_id ?? undefined,
+      replyToMessageId: row.reply_to_message_id ?? undefined,
+      deletedForEveryoneAt: row.deleted_for_everyone_at ?? undefined,
+      editVersion: row.edit_version,
+      editedAt: row.edited_at ?? undefined,
+      reactions: formatReactionsMap(reactionsByMessage, row.id),
+    };
+    const voice = voiceByMessage.get(row.id);
+    if (voice) {
+      baseReturn.voice = voice;
+    }
+    return baseReturn;
+  });
 }
 
 // Single-message serializer — for the create route where only one message
@@ -3178,6 +3249,127 @@ async function saveWalletIdempotentResponse(
 // Prevents duplicate order placement on network retry. The client generates
 // a stable idempotency key per order attempt and reuses it across retries.
 
+// ── P0.3: Per-asset market sequence allocation ──
+// Every public book mutation (new order, cancel, partial fill, expiry) must
+// advance this sequence exactly once. The sequence is allocated inside the
+// same transaction as the mutation, guaranteeing atomicity. Snapshot and
+// delta streams share this sequence so clients can detect gaps and reorder.
+async function allocateMarketSequence(
+  client: DbQueryable,
+  assetId: string
+): Promise<number> {
+  // Upsert with RETURNING — atomically allocates the next sequence number.
+  // If the row doesn't exist, it's created with next_sequence=1 and we get 1.
+  // If it exists, next_sequence is incremented and we get the new value.
+  const result = await client.query<{ next_sequence: string }>(
+    `
+      INSERT INTO coown_market_sequences (asset_id, next_sequence)
+      VALUES ($1, 1)
+      ON CONFLICT (asset_id)
+      DO UPDATE SET next_sequence = coown_market_sequences.next_sequence + 1
+      RETURNING next_sequence::text
+    `,
+    [assetId]
+  );
+  return Number(result.rows[0].next_sequence);
+}
+
+// ── P0.6: Reservation idempotency ──
+// Mirrors the order idempotency pattern. The reservation endpoint accepts an
+// idempotency key; this stores the response so a retry returns the original
+// reservation instead of creating a duplicate.
+async function getCoOwnReservationIdempotentResponse(
+  client: DbQueryable,
+  input: {
+    assetId: string;
+    userId: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }
+): Promise<Record<string, unknown> | null> {
+  const result = await client.query<{
+    request_hash: string;
+    response_body: Record<string, unknown>;
+  }>(
+    `
+      SELECT request_hash, response_body
+      FROM coown_reservation_idempotency
+      WHERE asset_id = $1
+        AND user_id = $2
+        AND idempotency_key = $3
+      LIMIT 1
+    `,
+    [input.assetId, input.userId, input.idempotencyKey]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  if (row.request_hash !== input.requestHash) {
+    throw createApiError(
+      'IDEMPOTENCY_KEY_REUSED',
+      'Idempotency key was already used with a different reservation payload'
+    );
+  }
+
+  return row.response_body;
+}
+
+async function saveCoOwnReservationIdempotentResponse(
+  client: DbQueryable,
+  input: {
+    assetId: string;
+    userId: string;
+    idempotencyKey: string;
+    requestHash: string;
+    responseStatus: number;
+    responseBody: Record<string, unknown>;
+  }
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO coown_reservation_idempotency (
+        idempotency_key, asset_id, user_id, request_hash,
+        response_status, response_body
+      )
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      ON CONFLICT (asset_id, user_id, idempotency_key)
+      DO NOTHING
+    `,
+    [
+      input.idempotencyKey,
+      input.assetId,
+      input.userId,
+      input.requestHash,
+      input.responseStatus,
+      toJsonString(input.responseBody),
+    ]
+  );
+}
+
+function hashCoOwnReservationPayload(payload: {
+  side: string;
+  units: number;
+  orderType: string;
+  limitPriceGbp?: number | null;
+  maxPriceGbp?: number | null;
+  minPriceGbp?: number | null;
+}): string {
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify({
+      side: payload.side,
+      units: payload.units,
+      orderType: payload.orderType,
+      limitPriceGbp: payload.limitPriceGbp ?? null,
+      maxPriceGbp: payload.maxPriceGbp ?? null,
+      minPriceGbp: payload.minPriceGbp ?? null,
+    }))
+    .digest('hex');
+}
+
 async function getCoOwnOrderIdempotentResponse(
   client: DbQueryable,
   input: {
@@ -3254,6 +3446,8 @@ function hashCoOwnOrderPayload(payload: {
   units: number;
   orderType: string;
   limitPriceGbp?: number | null;
+  maxPriceGbp?: number | null;
+  minPriceGbp?: number | null;
   reservationId?: string | null;
 }): string {
   return crypto
@@ -3263,6 +3457,8 @@ function hashCoOwnOrderPayload(payload: {
       units: payload.units,
       orderType: payload.orderType,
       limitPriceGbp: payload.limitPriceGbp ?? null,
+      maxPriceGbp: payload.maxPriceGbp ?? null,
+      minPriceGbp: payload.minPriceGbp ?? null,
       reservationId: payload.reservationId ?? null,
     }))
     .digest('hex');
@@ -8657,12 +8853,15 @@ const NOTIFICATION_EVENT_TYPES = [
   'order_refunded', 'resolution_opened', 'resolution_status_changed',
   'review_received', 'chat_message', 'payout_processed', 'refund_completed',
   'price_drop', 'offer_accepted',
+  'auction_outbid', 'auction_won', 'auction_ending_soon',
+  'new_follower', 'new_listing_from_followed_seller',
+  'safety_outcome',
   'generic',
 ] as const;
 type NotificationEventType = typeof NOTIFICATION_EVENT_TYPES[number];
 
 const NOTIFICATION_PUSH_CATEGORIES = [
-  'messages', 'offers', 'wishlist', 'followers', 'orderUpdates', 'priceDrops', 'news',
+  'messages', 'offers', 'wishlist', 'followers', 'orderUpdates', 'priceDrops', 'auctionAlerts', 'news',
 ] as const;
 type NotificationPushCategory = typeof NOTIFICATION_PUSH_CATEGORIES[number];
 
@@ -8670,11 +8869,54 @@ function mapEventToPushCategory(eventType: string): NotificationPushCategory | n
   if (eventType === 'chat_message') return 'messages';
   if (eventType === 'offer_accepted') return 'offers';
   if (eventType.startsWith('order_')) return 'orderUpdates';
-  if (eventType === 'review_received') return 'orderUpdates';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orderUpdates';
   if (eventType === 'payout_processed' || eventType === 'refund_completed') return 'orderUpdates';
   if (eventType === 'price_drop') return 'priceDrops';
+  if (eventType === 'auction_outbid' || eventType === 'auction_won' || eventType === 'auction_ending_soon') return 'auctionAlerts';
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller') return 'followers';
+  if (eventType === 'review_received') return 'wishlist';
+  if (eventType === 'generic' || eventType === 'safety_outcome') return 'news';
   return null;
+}
+
+function mapEventTypeToChannelId(eventType: string): string {
+  if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 'orders';
+  if (eventType.startsWith('auction_')) return 'auctions';
+  if (eventType === 'chat_message') return 'messages';
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'review_received') return 'social';
+  if (eventType === 'price_drop' || eventType === 'offer_accepted' || eventType === 'generic' || eventType === 'safety_outcome') return 'news';
+  if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orders';
+  return 'default';
+}
+
+function mapEventTypeToInterruptionLevel(eventType: string): 'passive' | 'active' | 'timeSensitive' {
+  if (eventType === 'auction_ending_soon' || eventType === 'auction_outbid' || eventType === 'auction_won') return 'timeSensitive';
+  if (eventType === 'order_dispatched' || eventType === 'order_out_for_delivery') return 'timeSensitive';
+  if (eventType === 'resolution_opened' || eventType === 'safety_outcome') return 'timeSensitive';
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'price_drop' || eventType === 'generic' || eventType === 'review_received') return 'passive';
+  return 'active';
+}
+
+function mapEventTypeToRelevanceScore(eventType: string): number {
+  if (eventType === 'auction_won') return 1.0;
+  if (eventType === 'auction_ending_soon' || eventType === 'auction_outbid') return 0.9;
+  if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 0.8;
+  if (eventType === 'resolution_opened' || eventType === 'safety_outcome') return 0.8;
+  if (eventType === 'offer_accepted') return 0.7;
+  if (eventType === 'chat_message') return 0.6;
+  if (eventType === 'price_drop') return 0.4;
+  if (eventType === 'review_received') return 0.3;
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller') return 0.2;
+  return 0.1;
+}
+
+const CRITICAL_EVENT_TYPES_SET = new Set([
+  'auction_won', 'auction_ending_soon', 'auction_outbid',
+  'order_cancelled', 'resolution_opened', 'safety_outcome',
+]);
+
+function isCriticalEventType(eventType: string): boolean {
+  return CRITICAL_EVENT_TYPES_SET.has(eventType);
 }
 
 async function queueUserNotification(input: {
@@ -8748,17 +8990,40 @@ async function queueUserNotification(input: {
       // A durable event may have been inserted just before Redis became
       // unavailable. Retrying the producer repairs that boundary. BullMQ's
       // event-based job ID prevents duplicate queued jobs.
+      //
+      // P0 FIX: Re-evaluate push preference before re-enqueueing. A previously
+      // queued event may have been suppressed by a preference change since the
+      // original insert. Re-enqueueing without re-checking would defeat
+      // suppression — the retry would send a push the user opted out of.
       if (existingEvent?.status === 'queued') {
-        await enqueuePushNotificationJob({
-          eventId: existingEvent.id,
-          userId: existingEvent.user_id,
-          title: existingEvent.title,
-          body: existingEvent.body,
-          payload: existingEvent.payload,
-          eventType: existingEvent.event_type,
-          actorUserId: existingEvent.actor_user_id,
-          route: existingEvent.route,
-        });
+        const retryCategory = mapEventToPushCategory(existingEvent.event_type);
+        let retryShouldPush = false; // fail closed for unmapped types
+        if (retryCategory) {
+          const retryPref = await db.query<{ enabled: boolean }>(
+            `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+            [existingEvent.user_id, retryCategory]
+          );
+          retryShouldPush = !retryPref.rowCount || retryPref.rows[0].enabled;
+        }
+        if (retryShouldPush) {
+          await enqueuePushNotificationJob({
+            eventId: existingEvent.id,
+            userId: existingEvent.user_id,
+            title: existingEvent.title,
+            body: existingEvent.body,
+            payload: existingEvent.payload,
+            eventType: existingEvent.event_type,
+            actorUserId: existingEvent.actor_user_id,
+            route: existingEvent.route,
+          });
+        } else {
+          // Preference now suppresses this event — mark it suppressed
+          await db.query(
+            `UPDATE notification_events SET status = 'suppressed', suppression_reason = 'preference' WHERE id = $1`,
+            [existingEvent.id]
+          );
+          recordPushDelivery({ provider: 'expo', status: 'suppressed' });
+        }
       }
       return existingEvent?.id ?? null;
     }
@@ -8767,16 +9032,54 @@ async function queueUserNotification(input: {
 
   const insertedEventId = insertResult.rows[0].id;
 
-  // Push preference check
+  // Push preference check — fail closed for unknown event types.
+  // Unknown events (mapEventToPushCategory returns null) are in-app only;
+  // they never bypass preferences with shouldPush=true.
   const pushCategory = mapEventToPushCategory(eventType);
-  let shouldPush = true;
-  if (pushCategory) {
+  let shouldPush = false;
+  let suppressionReason: string | null = null;
+  if (!pushCategory) {
+    // Unknown event type — in-app only, no push
+    shouldPush = false;
+    suppressionReason = 'unmapped_event_type';
+  } else {
     const prefResult = await db.query<{ enabled: boolean }>(
       `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
       [input.userId, pushCategory]
     );
     if (prefResult.rowCount && !prefResult.rows[0].enabled) {
       shouldPush = false;
+      suppressionReason = 'preference';
+    } else {
+      shouldPush = true;
+    }
+  }
+
+  // Server-side quiet hours enforcement.
+  // If the user has quiet hours configured and the current time falls within
+  // the quiet window, suppress non-critical push notifications. Critical
+  // event types (auction won, safety, resolution) bypass quiet hours.
+  if (shouldPush && pushCategory && !isCriticalEventType(eventType)) {
+    const qhResult = await db.query<{ quiet_hours: unknown }>(
+      `SELECT quiet_hours FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+      [input.userId, pushCategory]
+    );
+    const qhRaw = qhResult.rows[0]?.quiet_hours;
+    if (qhRaw && typeof qhRaw === 'object') {
+      const qh = qhRaw as { enabled?: boolean; startHour?: number; endHour?: number };
+      if (qh.enabled && typeof qh.startHour === 'number' && typeof qh.endHour === 'number') {
+        const nowUtc = new Date();
+        const currentHour = nowUtc.getUTCHours();
+        const start = qh.startHour;
+        const end = qh.endHour;
+        const inQuietWindow = start <= end
+          ? (currentHour >= start && currentHour < end)
+          : (currentHour >= start || currentHour < end);
+        if (inQuietWindow) {
+          shouldPush = false;
+          suppressionReason = 'quiet_hours';
+        }
+      }
     }
   }
 
@@ -8791,12 +9094,18 @@ async function queueUserNotification(input: {
       actorUserId: input.actorUserId ?? null,
       route: input.route ?? null,
     });
+    recordPushDelivery({
+      provider: 'expo',
+      status: 'queued',
+    });
+  } else {
+    // Mark the event as suppressed with the reason
+    await db.query(
+      `UPDATE notification_events SET status = 'suppressed', suppression_reason = $2 WHERE id = $1`,
+      [insertedEventId, suppressionReason]
+    );
+    recordPushDelivery({ provider: 'expo', status: 'suppressed' });
   }
-
-  recordPushDelivery({
-    provider: 'expo',
-    status: 'queued',
-  });
 
   publishRealtimeEvent({
     topic: `notifications.user:${input.userId}`,
@@ -9131,7 +9440,28 @@ async function processPushQueueJob(job: {
   }
 
   const expoResponses: Array<Record<string, unknown>> = [];
-  let deliveredCount = 0;
+  const ticketIdTokenPairs: Array<{ ticketId: string; token: string }> = [];
+  const tokensToRevoke: string[] = [];
+  let ticketedCount = 0;
+  let ticketErrorCount = 0;
+
+  // Preview policy enforcement — transform title/body based on user preference.
+  let pushTitle = job.title;
+  let pushBody = job.body;
+  const previewCategory = mapEventToPushCategory(job.eventType ?? 'generic');
+  if (previewCategory) {
+    const previewResult = await db.query<{ preview_policy: string }>(
+      `SELECT preview_policy FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+      [job.userId, previewCategory]
+    );
+    const policy = previewResult.rows[0]?.preview_policy ?? 'full';
+    if (policy === 'hidden') {
+      pushTitle = 'New notification';
+      pushBody = 'Tap to view';
+    } else if (policy === 'sender_only') {
+      pushBody = 'New message';
+    }
+  }
 
   for (const device of devicesResult.rows) {
     try {
@@ -9143,9 +9473,11 @@ async function processPushQueueJob(job: {
         },
         body: toJsonString({
           to: device.token,
-          title: job.title,
-          body: job.body,
-          channelId: config.pushDefaultChannel,
+          title: pushTitle,
+          body: pushBody,
+          channelId: mapEventTypeToChannelId(job.eventType ?? 'generic'),
+          interruptionLevel: mapEventTypeToInterruptionLevel(job.eventType ?? 'generic'),
+          relevanceScore: mapEventTypeToRelevanceScore(job.eventType ?? 'generic'),
           data: {
             ...(job.payload ?? {}),
             eventId: job.eventId,
@@ -9156,20 +9488,50 @@ async function processPushQueueJob(job: {
         }),
       });
 
-      const payload = response.ok
-        ? (await response.json() as Record<string, unknown>)
-        : { error: `http_${response.status}` };
+      if (!response.ok) {
+        expoResponses.push({
+          token: device.token,
+          provider: device.provider,
+          platform: device.platform,
+          ok: false,
+          error: `http_${response.status}`,
+        });
+        ticketErrorCount += 1;
+        continue;
+      }
 
-      expoResponses.push({
-        token: device.token,
-        provider: device.provider,
-        platform: device.platform,
-        response: payload,
-        ok: response.ok,
-      });
+      const payload = (await response.json()) as Record<string, unknown>;
+      const tickets = Array.isArray(payload.data) ? payload.data : [payload.data];
 
-      if (response.ok) {
-        deliveredCount += 1;
+      for (const ticket of tickets) {
+        const t = ticket as Record<string, unknown>;
+        const ticketStatus = t.status as string;
+        const ticketId = t.id as string | undefined;
+        const ticketMessage = t.message as string | undefined;
+        const ticketDetails = t.details as Record<string, unknown> | undefined;
+        const ticketError = ticketDetails?.error as string | undefined;
+
+        expoResponses.push({
+          token: device.token,
+          provider: device.provider,
+          platform: device.platform,
+          ticketStatus,
+          ticketId: ticketId ?? null,
+          message: ticketMessage ?? null,
+          error: ticketError ?? null,
+          ok: ticketStatus === 'ok',
+        });
+
+        if (ticketStatus === 'ok' && ticketId) {
+          ticketIdTokenPairs.push({ ticketId, token: device.token });
+          ticketedCount += 1;
+        } else {
+          ticketErrorCount += 1;
+          recordPushTicketError({ provider: 'expo', error: ticketError ?? 'unknown' });
+          if (ticketError === 'DeviceNotRegistered') {
+            tokensToRevoke.push(device.token);
+          }
+        }
       }
     } catch (error) {
       expoResponses.push({
@@ -9179,10 +9541,25 @@ async function processPushQueueJob(job: {
         ok: false,
         error: (error as Error).message,
       });
+      ticketErrorCount += 1;
     }
   }
 
-  const status = deliveredCount > 0 ? 'sent' : 'failed';
+  // Revoke DeviceNotRegistered tokens
+  if (tokensToRevoke.length > 0) {
+    await db.query(
+      `UPDATE notification_devices
+       SET is_active = FALSE, token_status = 'not_registered', last_seen_at = NOW()
+       WHERE token = ANY($1::text[])`,
+      [tokensToRevoke]
+    );
+  }
+
+  // P0 FIX: 'ticketed' means Expo accepted the payload (ticket status=ok).
+  // This is NOT device delivery. The event transitions to 'sent' only after
+  // the receipt reconciler confirms receipt status=ok from APNs/FCM.
+  const status = ticketedCount > 0 ? 'ticketed' : 'failed';
+  const firstTicketId = ticketIdTokenPairs[0]?.ticketId ?? null;
 
   await db.query(
     `
@@ -9191,35 +9568,41 @@ async function processPushQueueJob(job: {
         status = $2,
         sent_at = CASE WHEN $2 = 'sent' THEN NOW() ELSE sent_at END,
         provider_message_id = COALESCE(provider_message_id, $3),
-        provider_error = CASE WHEN $2 = 'failed' THEN $4 ELSE NULL END,
-        metadata = metadata || $5::jsonb
+        provider_ticket_ids = $4::jsonb,
+        provider_error = CASE WHEN $2 = 'failed' THEN $5 ELSE NULL END,
+        metadata = metadata || $6::jsonb
       WHERE id = $1
     `,
     [
       job.eventId,
       status,
-      deliveredCount > 0 ? `expo:${job.eventId}` : null,
-      deliveredCount > 0 ? null : 'delivery_failed',
+      firstTicketId,
+      toJsonString(ticketIdTokenPairs),
+      ticketedCount > 0 ? null : 'delivery_failed',
       toJsonString({
         providerResponses: expoResponses,
+        ticketedCount,
+        ticketErrorCount,
+        tokensRevoked: tokensToRevoke.length,
       }),
     ]
   );
 
   recordPushDelivery({
     provider: 'expo',
-    status: deliveredCount > 0 ? 'sent' : 'failed',
+    status: ticketedCount > 0 ? 'ticketed' : 'failed',
   });
 
   publishRealtimeEvent({
     topic: `notifications.user:${job.userId}`,
-    type: deliveredCount > 0 ? 'notification.sent' : 'notification.failed',
+    type: ticketedCount > 0 ? 'notification.ticketed' : 'notification.failed',
     userId: job.userId,
     payload: {
       id: job.eventId,
       title: job.title,
       body: job.body,
-      deliveredCount,
+      ticketedCount,
+      ticketErrorCount,
     },
   });
 }
@@ -9684,6 +10067,91 @@ function stopRetentionSweepScheduler(): void {
   }
   clearInterval(retentionSweepTimer);
   retentionSweepTimer = null;
+}
+
+let analyticsAggregationTimer: NodeJS.Timeout | null = null;
+
+function startAnalyticsAggregationScheduler(): void {
+  if (analyticsAggregationTimer) {
+    return;
+  }
+
+  const enqueueAggregation = () => {
+    void enqueueAnalyticsAggregationJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling analytics aggregation job');
+    });
+  };
+
+  analyticsAggregationTimer = setInterval(enqueueAggregation, config.analyticsAggregationIntervalMs);
+  analyticsAggregationTimer.unref?.();
+}
+
+function stopAnalyticsAggregationScheduler(): void {
+  if (!analyticsAggregationTimer) {
+    return;
+  }
+  clearInterval(analyticsAggregationTimer);
+  analyticsAggregationTimer = null;
+}
+
+let pushReceiptReconciliationTimer: NodeJS.Timeout | null = null;
+
+function startPushReceiptReconciliationScheduler(): void {
+  if (pushReceiptReconciliationTimer) {
+    return;
+  }
+
+  const enqueueReconciliation = () => {
+    void enqueuePushReceiptReconciliationJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling push receipt reconciliation job');
+    });
+  };
+
+  // Run every 5 minutes. Expo recommends checking receipts 15 minutes after
+  // sending, but we run more frequently to catch receipts as they become
+  // available. The handler only checks events older than 15 seconds.
+  pushReceiptReconciliationTimer = setInterval(enqueueReconciliation, 5 * 60 * 1000);
+  pushReceiptReconciliationTimer.unref?.();
+
+  // Also run once shortly after startup to reconcile any pending tickets
+  setTimeout(enqueueReconciliation, 30_000);
+}
+
+function stopPushReceiptReconciliationScheduler(): void {
+  if (!pushReceiptReconciliationTimer) {
+    return;
+  }
+  clearInterval(pushReceiptReconciliationTimer);
+  pushReceiptReconciliationTimer = null;
+}
+
+let scheduledPublicationSweepTimer: NodeJS.Timeout | null = null;
+
+function startScheduledPublicationSweepScheduler(): void {
+  if (scheduledPublicationSweepTimer) {
+    return;
+  }
+
+  const enqueueSweep = () => {
+    void enqueueScheduledPublicationSweepJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling scheduled publication sweep job');
+    });
+  };
+
+  // Run every 30 seconds — the SLO target is "within 60 seconds of due time".
+  scheduledPublicationSweepTimer = setInterval(enqueueSweep, 30_000);
+  scheduledPublicationSweepTimer.unref?.();
+
+  // Also run once shortly after startup to catch any due schedules.
+  setTimeout(enqueueSweep, 10_000);
+}
+
+function stopScheduledPublicationSweepScheduler(): void {
+  if (!scheduledPublicationSweepTimer) {
+    return;
+  }
+  clearInterval(scheduledPublicationSweepTimer);
+  scheduledPublicationSweepTimer = null;
 }
 
 function startAuctionSweepScheduler(): void {
@@ -12345,7 +12813,10 @@ function toProfilePayload(row: ProfileUserRow) {
   };
 }
 
-function toPublicProfilePayload(row: ProfileUserRow) {
+function toPublicProfilePayload(row: ProfileUserRow & {
+  identity_verified?: boolean | null;
+  seller_verified?: boolean | null;
+}) {
   return {
     id: row.id,
     username: row.username,
@@ -12358,6 +12829,13 @@ function toPublicProfilePayload(row: ProfileUserRow) {
     coverVideo: row.cover_video,
     role: normalizeAuthRole(row.role),
     emailVerified: Boolean(row.email_verified_at),
+    // Identity/KYC verification — distinct from email verification.
+    // Derived from seller_trust_evidence (code='identity_checked', state='active', not expired).
+    // Null when no evidence exists — never defaulted to true.
+    identityVerified: row.identity_verified === true ? true : undefined,
+    // Seller standards verification — distinct from email/identity.
+    // Derived from seller_trust_evidence (code='top_rated' or 'trader_verified', active, not expired).
+    sellerVerified: row.seller_verified === true ? true : undefined,
     createdAt: row.created_at,
   };
 }
@@ -13031,12 +13509,129 @@ app.patch('/users/me', async (request, reply) => {
     location: z.string().trim().max(120).optional(),
     website: z.string().trim().max(255).optional(),
     phone: z.string().trim().max(30).optional(),
-    avatar: z.string().trim().max(2048).optional(),
-    coverPhoto: z.string().trim().max(2048).optional(),
-    coverVideo: z.string().trim().max(2048).optional(),
+    // Media fields accept either a verified asset ID (preferred) or a URL
+    // string (legacy). When an asset ID is provided, the backend verifies
+    // ownership and publishable status before persisting. When a URL string
+    // is provided, it is validated against the user's own upload_finalizations
+    // to prevent binding another user's media or an external URL.
+    avatar: z.union([z.string().trim().max(2048), z.null()]).optional(),
+    coverPhoto: z.union([z.string().trim().max(2048), z.null()]).optional(),
+    coverVideo: z.union([z.string().trim().max(2048), z.null()]).optional(),
+    avatarAssetId: z.string().min(2).max(200).optional(),
+    coverAssetId: z.string().min(2).max(200).optional(),
   });
 
   const payload = bodySchema.parse(request.body ?? {});
+
+  // ── Resolve media URLs from verified assets when asset IDs are provided ──
+  // This is the authoritative path: the backend verifies that the asset
+  // belongs to the user and is in a publishable state, then resolves the
+  // canonical URL. The user cannot bind another owner's asset or an
+  // external URL.
+  let resolvedAvatarUrl: string | null | undefined;
+  let resolvedCoverUrl: string | null | undefined;
+
+  if (payload.avatarAssetId !== undefined) {
+    const assetResult = await db.query<{
+      canonical_url: string | null;
+      original_object_url: string;
+      status: string;
+      media_kind: string;
+    }>(
+      `SELECT canonical_url, original_object_url, status, media_kind
+       FROM media_assets
+       WHERE id = $1 AND owner_id = $2
+       LIMIT 1`,
+      [payload.avatarAssetId, request.authUser.userId]
+    );
+    const asset = assetResult.rows[0];
+    if (!asset) {
+      reply.code(422);
+      return { ok: false, error: 'Avatar asset not found or not owned by you' };
+    }
+    if (asset.media_kind !== 'image') {
+      reply.code(422);
+      return { ok: false, error: 'Avatar must be an image' };
+    }
+    // Accept publishable or published status. For non-gated environments,
+    // integrity_verified is also accepted (the asset exists and is owned).
+    if (asset.status === 'rejected' || asset.status === 'quarantined' || asset.status === 'revoked') {
+      reply.code(422);
+      return { ok: false, error: 'Avatar asset is not in a usable state', code: 'MEDIA_NOT_USABLE' };
+    }
+    resolvedAvatarUrl = asset.canonical_url ?? asset.original_object_url;
+  } else if (payload.avatar !== undefined) {
+    // Legacy URL path: validate the URL belongs to the user's own uploads.
+    // Null clears the avatar. Empty/external URLs are rejected.
+    if (payload.avatar === null) {
+      resolvedAvatarUrl = null;
+    } else {
+      const urlCheck = await db.query<{ id: string }>(
+        `SELECT id FROM upload_finalizations
+         WHERE owner_id = $1 AND (public_url = $2 OR canonical_url = $2)
+         LIMIT 1`,
+        [request.authUser.userId, payload.avatar]
+      );
+      if ((urlCheck.rowCount ?? 0) === 0) {
+        reply.code(422);
+        return {
+          ok: false,
+          error: 'Avatar URL must reference your own uploaded media. Use avatarAssetId for verified binding.',
+          code: 'MEDIA_NOT_OWNED',
+        };
+      }
+      resolvedAvatarUrl = payload.avatar;
+    }
+  }
+
+  if (payload.coverAssetId !== undefined) {
+    const assetResult = await db.query<{
+      canonical_url: string | null;
+      original_object_url: string;
+      status: string;
+      media_kind: string;
+    }>(
+      `SELECT canonical_url, original_object_url, status, media_kind
+       FROM media_assets
+       WHERE id = $1 AND owner_id = $2
+       LIMIT 1`,
+      [payload.coverAssetId, request.authUser.userId]
+    );
+    const asset = assetResult.rows[0];
+    if (!asset) {
+      reply.code(422);
+      return { ok: false, error: 'Cover asset not found or not owned by you' };
+    }
+    if (asset.media_kind !== 'image' && asset.media_kind !== 'video') {
+      reply.code(422);
+      return { ok: false, error: 'Cover must be an image or video' };
+    }
+    if (asset.status === 'rejected' || asset.status === 'quarantined' || asset.status === 'revoked') {
+      reply.code(422);
+      return { ok: false, error: 'Cover asset is not in a usable state', code: 'MEDIA_NOT_USABLE' };
+    }
+    resolvedCoverUrl = asset.canonical_url ?? asset.original_object_url;
+  } else if (payload.coverPhoto !== undefined) {
+    if (payload.coverPhoto === null) {
+      resolvedCoverUrl = null;
+    } else {
+      const urlCheck = await db.query<{ id: string }>(
+        `SELECT id FROM upload_finalizations
+         WHERE owner_id = $1 AND (public_url = $2 OR canonical_url = $2)
+         LIMIT 1`,
+        [request.authUser.userId, payload.coverPhoto]
+      );
+      if ((urlCheck.rowCount ?? 0) === 0) {
+        reply.code(422);
+        return {
+          ok: false,
+          error: 'Cover URL must reference your own uploaded media. Use coverAssetId for verified binding.',
+          code: 'MEDIA_NOT_OWNED',
+        };
+      }
+      resolvedCoverUrl = payload.coverPhoto;
+    }
+  }
 
   const allowed: Record<string, unknown> = {};
   if (payload.displayName !== undefined) allowed.display_name = payload.displayName;
@@ -13045,8 +13640,8 @@ app.patch('/users/me', async (request, reply) => {
   if (payload.location !== undefined) allowed.location = payload.location;
   if (payload.website !== undefined) allowed.website = payload.website;
   if (payload.phone !== undefined) allowed.phone = payload.phone;
-  if (payload.avatar !== undefined) allowed.avatar = payload.avatar;
-  if (payload.coverPhoto !== undefined) allowed.cover_photo = payload.coverPhoto;
+  if (resolvedAvatarUrl !== undefined) allowed.avatar = resolvedAvatarUrl;
+  if (resolvedCoverUrl !== undefined) allowed.cover_photo = resolvedCoverUrl;
   if (payload.coverVideo !== undefined) allowed.cover_video = payload.coverVideo;
 
   if (Object.keys(allowed).length === 0) {
@@ -13065,6 +13660,46 @@ app.patch('/users/me', async (request, reply) => {
     `,
     [request.authUser.userId, ...values]
   );
+
+  // ── Record media bindings for verified assets ──────────────────────
+  // This creates an authoritative binding record in media_bindings, enabling
+  // cache invalidation and lifecycle management (detach old binding when a
+  // new one is set).
+  if (payload.avatarAssetId) {
+    try {
+      await db.query(
+        `INSERT INTO media_bindings (id, media_asset_id, owner_id, target_type, target_ref_id, role, sort_order)
+         VALUES ($1, $2, $3, 'profile', $4, 'avatar', 0)
+         ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
+         DO UPDATE SET removed_at = NULL, sort_order = EXCLUDED.sort_order`,
+        [`mbind_profile_${request.authUser.userId}_avatar`, payload.avatarAssetId, request.authUser.userId, request.authUser.userId]
+      );
+      // Soft-remove any previous avatar bindings from different assets.
+      await db.query(
+        `UPDATE media_bindings SET removed_at = NOW()
+         WHERE target_type = 'profile' AND target_ref_id = $1 AND role = 'avatar'
+           AND media_asset_id <> $2 AND removed_at IS NULL`,
+        [request.authUser.userId, payload.avatarAssetId]
+      );
+    } catch { /* non-fatal — binding is a projection */ }
+  }
+  if (payload.coverAssetId) {
+    try {
+      await db.query(
+        `INSERT INTO media_bindings (id, media_asset_id, owner_id, target_type, target_ref_id, role, sort_order)
+         VALUES ($1, $2, $3, 'profile', $4, 'cover', 0)
+         ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
+         DO UPDATE SET removed_at = NULL, sort_order = EXCLUDED.sort_order`,
+        [`mbind_profile_${request.authUser.userId}_cover`, payload.coverAssetId, request.authUser.userId, request.authUser.userId]
+      );
+      await db.query(
+        `UPDATE media_bindings SET removed_at = NOW()
+         WHERE target_type = 'profile' AND target_ref_id = $1 AND role = 'cover'
+           AND media_asset_id <> $2 AND removed_at IS NULL`,
+        [request.authUser.userId, payload.coverAssetId]
+      );
+    } catch { /* non-fatal — binding is a projection */ }
+  }
 
   const result = await db.query<ProfileUserRow>(
     `
@@ -14537,6 +15172,8 @@ app.get('/users/me/co-own/tax-documents', async (request, reply) => {
 
 registerSellerRoutes({ app, db, readDb });
 
+registerStorefrontRoutes({ app, db, readDb, resolveAuthenticatedUserId });
+
 // Idempotent follow (POST /users/:userId/follow) — creates follow only if absent.
 app.post('/users/:userId/follow', async (request, reply) => {
   if (!request.authUser) {
@@ -14622,15 +15259,22 @@ app.get('/users/:userId/profile', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
 
-  await ensureUserExists(userId);
+  const viewerUserId = request.authUser?.userId ?? null;
 
-  const result = await db.query<ProfileUserRow>(
+  // ── Fetch the target user row with privacy-relevant columns ──────────
+  const result = await db.query<ProfileUserRow & {
+    private_profile: boolean;
+    holiday_mode: boolean;
+    away_message: string | null;
+  }>(
     `
       SELECT
-        id, username, email, display_name, bio, location, website, phone, avatar, cover_photo, cover_video,
-        role, email_verified_at, two_factor_enabled, created_at, updated_at
-      FROM users
-      WHERE id = $1
+        u.id, u.username, u.email, u.display_name, u.bio, u.location, u.website, u.phone,
+        u.avatar, u.cover_photo, u.cover_video, u.role, u.email_verified_at,
+        u.two_factor_enabled, u.created_at, u.updated_at,
+        u.private_profile, u.holiday_mode, u.away_message
+      FROM users u
+      WHERE u.id = $1
       LIMIT 1
     `,
     [userId]
@@ -14642,13 +15286,275 @@ app.get('/users/:userId/profile', async (request, reply) => {
     return { ok: false, error: 'User not found' };
   }
 
+  // ── Block state (both directions) ────────────────────────────────────
+  // If the viewer blocked the target, the viewer chose not to see them —
+  // we still return the profile but with restricted viewer permissions.
+  // If the target blocked the viewer, the target's existence is not
+  // disclosed to the viewer (404) unless the viewer is a moderator/admin.
+  let blockedByViewer = false;
+  let blockedByTarget = false;
+
+  if (viewerUserId && viewerUserId !== userId) {
+    const blockResult = await readDb.query<{ viewer_blocked: boolean; target_blocked: boolean }>(
+      `SELECT
+         EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2) AS viewer_blocked,
+         EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = $2 AND blocked_id = $1) AS target_blocked`,
+      [viewerUserId, userId]
+    );
+    const blockRow = blockResult.rows[0];
+    blockedByViewer = blockRow?.viewer_blocked ?? false;
+    blockedByTarget = blockRow?.target_blocked ?? false;
+  }
+
+  // If the target blocked the viewer, do not disclose the profile.
+  // Return 404 — existence disclosure is not allowed for blocked viewers.
+  if (blockedByTarget) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  // ── Determine viewer relationship ────────────────────────────────────
+  const isSelf = viewerUserId === userId;
+  let isFollowing = false;
+  if (viewerUserId && !isSelf) {
+    const followResult = await readDb.query<{ id: string }>(
+      `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
+      [viewerUserId, userId]
+    );
+    isFollowing = (followResult.rowCount ?? 0) > 0;
+  }
+
+  // ── Privacy policy: private_profile ──────────────────────────────────
+  // A private profile hides social content (Looks, creations) and detailed
+  // stats from non-followers. Identity, shop listings, and basic counts
+  // remain visible because they are commerce-obligated (DSA traceability).
+  // Self-viewers see everything regardless of the private preference.
+  const isPrivate = user.private_profile === true;
+  const canViewSocialContent = isSelf || !isPrivate || isFollowing;
+  const canViewShop = true; // Shop is always visible (commerce obligation)
+
+  // ── Compute stats ────────────────────────────────────────────────────
+  // Active and sold listing counts are commerce-obligated and always visible.
+  // Follower/following counts are visible unless the profile is private and
+  // the viewer is not following.
+  const statsResult = await readDb.query<{
+    active_listings: string;
+    sold_listings: string;
+    published_looks: string;
+    followers: string;
+    following: string;
+    review_count: string;
+    avg_rating: string | null;
+  }>(
+    `SELECT
+       (SELECT COUNT(*)::text FROM listings WHERE seller_id = $1 AND status = 'active') AS active_listings,
+       (SELECT COUNT(*)::text FROM listings WHERE seller_id = $1 AND status = 'sold') AS sold_listings,
+       (SELECT COUNT(*)::text FROM looks WHERE creator_id = $1 AND status = 'published') AS published_looks,
+       (SELECT COUNT(*)::text FROM user_follows WHERE following_id = $1) AS followers,
+       (SELECT COUNT(*)::text FROM user_follows WHERE follower_id = $1) AS following,
+       (SELECT COUNT(*)::text FROM order_reviews WHERE seller_id = $1) AS review_count,
+       (SELECT AVG(rating)::numeric(3,2) FROM order_reviews WHERE seller_id = $1) AS avg_rating`,
+    [userId]
+  );
+
+  const statsRow = statsResult.rows[0];
+  const activeListingCount = Number(statsRow?.active_listings ?? '0');
+  const soldListingCount = Number(statsRow?.sold_listings ?? '0');
+  const publishedLookCount = canViewSocialContent
+    ? Number(statsRow?.published_looks ?? '0')
+    : 0;
+  const followerCount = canViewSocialContent
+    ? Number(statsRow?.followers ?? '0')
+    : 0;
+  const followingCount = canViewSocialContent
+    ? Number(statsRow?.following ?? '0')
+    : 0;
+  const reviewCount = Number(statsRow?.review_count ?? '0');
+  const ratingAverage = statsRow?.avg_rating ? Number(statsRow.avg_rating) : null;
+
+  // ── Trust evidence (fail-closed) ─────────────────────────────────────
+  // Only active, non-expired evidence rows produce verification flags.
+  // No evidence → undefined (not false, to distinguish "not checked" from
+  // "checked and failed"). The frontend renders nothing for undefined.
+  let identityVerified = false;
+  let sellerVerified = false;
+  // DSA Article 30 trader classification — projected from compliance records.
+  // This is a legally required disclosure: buyers must know whether they are
+  // transacting with a trader (business) or a non-trader (private individual).
+  // The classification is derived from user_compliance_profiles.kyc_status
+  // and the trader_type field, not from self-attestation.
+  let traderClassification: 'trader' | 'non_trader' | null = null;
+  let traderLegalName: string | null = null;
+  let traderContactEmail: string | null = null;
+  let traderRegistrationNumber: string | null = null;
+  let traderAddress: string | null = null;
+  let traderVatNumber: string | null = null;
+
+  if (canViewShop) {
+    const evidenceResult = await readDb.query<{ code: string }>(
+      `SELECT code FROM seller_trust_evidence
+       WHERE seller_id = $1 AND state = 'active'
+         AND (expires_at IS NULL OR expires_at > NOW())`,
+      [userId]
+    );
+    for (const row of evidenceResult.rows) {
+      if (row.code === 'identity_checked') identityVerified = true;
+      if (row.code === 'trader_verified' || row.code === 'top_rated') sellerVerified = true;
+    }
+
+    // ── DSA Article 30: Trader disclosure from compliance records ──────
+    // Only traders (verified businesses) have their legal details disclosed.
+    // Non-traders (private individuals) are classified as such without
+    // exposing any personal details. The classification is authoritative —
+    // derived from KYC verification, not self-attestation.
+    const complianceResult = await readDb.query<{
+      trader_type: string | null;
+      kyc_status: string;
+      legal_name: string | null;
+      contact_email: string | null;
+      registration_number: string | null;
+      business_address: string | null;
+      vat_number: string | null;
+    }>(
+      `SELECT trader_type, kyc_status, legal_name, contact_email,
+              registration_number, business_address, vat_number
+       FROM user_compliance_profiles
+       WHERE user_id = $1
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+    const compliance = complianceResult.rows[0];
+    if (compliance) {
+      // A user is classified as a trader when:
+      // 1. trader_type is explicitly 'business'/'trader', OR
+      // 2. KYC status is 'verified' and trader_type is not 'private'.
+      if (compliance.trader_type === 'business' || compliance.trader_type === 'trader') {
+        traderClassification = 'trader';
+        // Only disclose legal details for verified traders.
+        if (compliance.kyc_status === 'verified') {
+          traderLegalName = compliance.legal_name;
+          traderContactEmail = compliance.contact_email;
+          traderRegistrationNumber = compliance.registration_number;
+          traderAddress = compliance.business_address;
+          traderVatNumber = compliance.vat_number;
+        }
+      } else if (compliance.trader_type === 'private' || compliance.trader_type === 'individual') {
+        traderClassification = 'non_trader';
+      }
+    }
+  }
+
+  // ── Can message? ─────────────────────────────────────────────────────
+  // Can message if: authenticated, not self, not blocked by viewer, and
+  // not blocked by target (already returned 404 above if blocked by target).
+  const canMessage = Boolean(
+    viewerUserId &&
+    !isSelf &&
+    !blockedByViewer &&
+    !blockedByTarget
+  );
+
+  // ── Build the public profile payload ─────────────────────────────────
+  const publicUser = toPublicProfilePayload({
+    ...user,
+    identity_verified: identityVerified,
+    seller_verified: sellerVerified,
+  });
+
   return {
     ok: true,
-    user: toPublicProfilePayload(user),
+    user: publicUser,
+    stats: {
+      activeListingCount,
+      soldListingCount,
+      publishedLookCount,
+      followerCount,
+      followingCount,
+      reviewCount,
+      ratingAverage,
+    },
+    viewer: {
+      isSelf,
+      isFollowing,
+      isBlocked: blockedByViewer,
+      isBlockedByTarget: blockedByTarget,
+      canMessage,
+      canViewSocialContent,
+      canViewShop,
+    },
+    // ── DSA Article 30: Trader disclosure ──────────────────────────────
+    // Legally required disclosure of trader status. 'trader' = business,
+    // 'non_trader' = private individual. Legal details are only disclosed
+    // for verified traders. Null when no compliance record exists.
+    trader: traderClassification
+      ? {
+          classification: traderClassification,
+          legalName: traderLegalName,
+          contactEmail: traderContactEmail,
+          registrationNumber: traderRegistrationNumber,
+          address: traderAddress,
+          vatNumber: traderVatNumber,
+        }
+      : undefined,
+    // Authoritative away state — only present when holiday mode is on.
+    // The frontend uses this to show the away banner with the seller's message.
+    away: user.holiday_mode
+      ? {
+          holidayMode: true,
+          awayMessage: user.away_message ?? null,
+        }
+      : undefined,
+    // ── Storefront summary (published only) ────────────────────────────
+    // Included when the seller has a published storefront. Draft/paused
+    // storefronts are owner-only and never appear in the public projection.
+    // The summary contains the announcement, section titles, and featured
+    // listing IDs — enough for the profile to render the shop module
+    // without a separate /storefronts/:sellerId call.
+    ...(canViewShop ? await loadStorefrontSummary(readDb, userId) : {}),
   };
 });
 
 // ── Follow counts + follower/following lists ─────────────────────────
+
+// Helper: load a published storefront summary for the public profile aggregate.
+// Returns an empty object when no published storefront exists, so the spread
+// in the aggregate return is a no-op.
+async function loadStorefrontSummary(
+  readDb: Pool,
+  sellerId: string
+): Promise<{ storefront?: { announcement: string | null; sections: { kind: string; title: string; sortOrder: number }[]; featuredListingIds: string[] } }> {
+  const sfResult = await readDb.query<{ id: string; announcement: string | null }>(
+    `SELECT id, announcement FROM storefronts
+     WHERE seller_id = $1 AND status = 'published' LIMIT 1`,
+    [sellerId]
+  );
+  if (!sfResult.rowCount) return {};
+
+  const sf = sfResult.rows[0];
+  const sectionsResult = await readDb.query<{ kind: string; title: string; sort_order: number }>(
+    `SELECT kind, title, sort_order FROM storefront_sections
+     WHERE storefront_id = $1 ORDER BY sort_order ASC`,
+    [sf.id]
+  );
+  const featuredResult = await readDb.query<{ listing_id: string }>(
+    `SELECT listing_id FROM storefront_featured_listings
+     WHERE storefront_id = $1 ORDER BY rank ASC`,
+    [sf.id]
+  );
+
+  return {
+    storefront: {
+      announcement: sf.announcement,
+      sections: sectionsResult.rows.map((s) => ({
+        kind: s.kind,
+        title: s.title,
+        sortOrder: s.sort_order,
+      })),
+      featuredListingIds: featuredResult.rows.map((r) => r.listing_id),
+    },
+  };
+}
 
 app.get('/users/:userId/follow-counts', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
@@ -18910,7 +19816,7 @@ app.delete('/listings/:listingId', async (request, reply) => {
   return { ok: true };
 });
 
-registerSellerHubRoutes({ app, readDb });
+registerSellerHubRoutes({ app, readDb, db });
 
 app.get('/users/:userId/listings', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
@@ -19358,6 +20264,11 @@ registerModelArtifactRoutes({ app, db, createApiError, resolveAuthenticatedUserI
 registerMediaEmbeddingRoutes({ app, db, createApiError });
 
 registerImporterExtractionRoutes({ app, db, readDb });
+
+// Extraction Intelligence — converged extraction domain (migration 192).
+// Server-owned model identity, bound media, honest outcomes, revision-checked
+// field decisions that converge into canonical normalised_fields/provenance.
+registerExtractionIntelligenceRoutes({ app, db, readDb });
 
 // registerSecureMessagesRoutes({ app, db, ensureUserExists, queueUserNotification });
 
@@ -20317,7 +21228,7 @@ app.post('/chat/conversations/:conversationId/messages', {
     body: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['text', 'image', 'video'] },
+        type: { type: 'string', enum: ['text', 'image', 'video', 'voice'] },
         text: { type: 'string', maxLength: 4000 },
         mediaUri: { type: 'string', minLength: 1, maxLength: 2048 },
         metadata: { type: 'object' },
@@ -20334,9 +21245,12 @@ app.post('/chat/conversations/:conversationId/messages', {
   // P0-MSG-1: Discriminated message payload. Text is required only for
   // `type: 'text'` (or when `type` is absent for backwards compatibility).
   // Image/video messages require a `mediaUri` and may omit the caption.
+  // Voice messages (report 19) require a `mediaUri` plus voice metadata
+  // (durationMs, container, codec) and are never sent without a finalized
+  // audio asset — the client must upload + finalize before sending.
   const bodySchema = z
     .object({
-      type: z.enum(['text', 'image', 'video']).optional(),
+      type: z.enum(['text', 'image', 'video', 'voice']).optional(),
       text: z.string().trim().max(4000).optional(),
       mediaUri: z.string().min(1).max(2048).optional(),
       metadata: z.record(z.unknown()).optional(),
@@ -20345,12 +21259,46 @@ app.post('/chat/conversations/:conversationId/messages', {
     })
     .superRefine((val, ctx) => {
       const isMedia = val.type === 'image' || val.type === 'video';
+      const isVoice = val.type === 'voice';
       if (isMedia) {
         if (!val.mediaUri || val.mediaUri.length < 1) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: 'mediaUri is required for image/video messages',
             path: ['mediaUri'],
+          });
+        }
+      } else if (isVoice) {
+        if (!val.mediaUri || val.mediaUri.length < 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'mediaUri is required for voice messages',
+            path: ['mediaUri'],
+          });
+        }
+        const meta = val.metadata ?? {};
+        const durationMs = meta.durationMs ?? meta.duration_ms;
+        if (typeof durationMs !== 'number' || durationMs <= 0 || durationMs > 120_000) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'durationMs must be a positive number up to 120000 (2 minutes)',
+            path: ['metadata', 'durationMs'],
+          });
+        }
+        const container = meta.container ?? meta.audioContainer;
+        if (typeof container !== 'string' || !['m4a', 'ogg', 'webm', 'mp4'].includes(container)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'container must be one of m4a, ogg, webm, mp4',
+            path: ['metadata', 'container'],
+          });
+        }
+        const codec = meta.codec ?? meta.audioCodec;
+        if (typeof codec !== 'string' || !['aac', 'opus', 'mp3'].includes(codec)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'codec must be one of aac, opus, mp3',
+            path: ['metadata', 'codec'],
           });
         }
       } else {
@@ -20370,14 +21318,18 @@ app.post('/chat/conversations/:conversationId/messages', {
   const payload = bodySchema.parse(request.body ?? {});
 
   const isMediaMessage = payload.type === 'image' || payload.type === 'video';
-  // `body` is NOT NULL in chat_messages; media-only messages use an empty
-  // string so the column constraint is satisfied while the media URI lives
-  // in metadata for the read path.
+  const isVoiceMessage = payload.type === 'voice';
+  // `body` is NOT NULL in chat_messages; media-only and voice messages use
+  // an empty string so the column constraint is satisfied while the media
+  // URI lives in metadata for the read path.
   const bodyText = payload.text ?? '';
   const mergedMetadata: Record<string, unknown> = {
     ...(payload.metadata ?? {}),
     ...(isMediaMessage
       ? { mediaUri: payload.mediaUri, mediaType: payload.type }
+      : {}),
+    ...(isVoiceMessage
+      ? { mediaUri: payload.mediaUri, mediaType: 'voice', voiceMessage: true }
       : {}),
   };
 
@@ -20530,7 +21482,7 @@ app.post('/chat/conversations/:conversationId/messages', {
     }
   }
 
-  if (isMediaMessage && payload.mediaUri) {
+  if ((isMediaMessage || isVoiceMessage) && payload.mediaUri) {
     const mediaUri = payload.mediaUri;
     if (mediaUri.includes('/media/')) {
       const assetResult = await db.query<{
@@ -20552,18 +21504,67 @@ app.post('/chat/conversations/:conversationId/messages', {
         reply.code(403);
         return { ok: false, error: 'Media asset does not belong to the sender' };
       }
-      const attachmentKind = asset.media_kind === 'video' ? 'video' : 'image';
+      // Voice messages require an audio-kind asset. Reject if the sender
+      // claims type:'voice' but the asset is not audio — this catches a
+      // misclassified upload (e.g. .m4a filed as image/jpeg) before it
+      // becomes a voice bubble with no playable audio.
+      if (isVoiceMessage && asset.media_kind !== 'audio') {
+        reply.code(422);
+        return {
+          ok: false,
+          error: 'Voice message media asset is not audio-kind. Re-upload with the correct content type.',
+        };
+      }
+      const attachmentKind = isVoiceMessage
+        ? 'audio'
+        : asset.media_kind === 'video'
+          ? 'video'
+          : 'image';
       await db.query(
         `INSERT INTO chat_message_attachments (id, message_id, media_asset_id, kind, canonical_url, created_at)
          VALUES ($1, $2, $3, $4, $5, NOW())`,
         [createRuntimeId('chatatt'), result.rows[0].id, asset.id, attachmentKind, mediaUri],
       );
+
+      // Voice messages get a canonical voice_messages row binding the asset
+      // to the message with duration/container/codec metadata. The waveform
+      // is left NULL — the waveform worker fills it async. The client reads
+      // this row to render a real waveform or an honest progress line.
+      if (isVoiceMessage) {
+        const voiceMeta = payload.metadata ?? {};
+        const durationMs = Number(voiceMeta.durationMs ?? voiceMeta.duration_ms ?? 0);
+        const container = String(voiceMeta.container ?? voiceMeta.audioContainer ?? 'm4a');
+        const codec = String(voiceMeta.codec ?? voiceMeta.audioCodec ?? 'aac');
+        const bytes = Number(voiceMeta.bytes ?? voiceMeta.sizeBytes ?? 0);
+        await db.query(
+          `INSERT INTO voice_messages (
+             id, message_id, conversation_id, media_asset_id, sender_user_id,
+             duration_ms, bytes, container, codec, moderation_state
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')`,
+          [
+            createRuntimeId('voice'),
+            result.rows[0].id,
+            conversationId,
+            asset.id,
+            actorUserId,
+            durationMs,
+            bytes,
+            container,
+            codec,
+          ],
+        );
+      }
     } else {
       request.log.warn(
         { mediaUri, conversationId, actorUserId },
         'Chat message media URI does not match canonical media URL pattern — allowing without ownership check',
       );
-      const attachmentKind = payload.type === 'video' ? 'video' : 'image';
+      const attachmentKind = isVoiceMessage
+        ? 'audio'
+        : payload.type === 'video'
+          ? 'video'
+          : 'image';
       await db.query(
         `INSERT INTO chat_message_attachments (id, message_id, kind, canonical_url, created_at)
          VALUES ($1, $2, $3, $4, NOW())`,
@@ -27571,8 +28572,8 @@ registerMediaAssetRoutes({
   resolveAuthenticatedUserId,
   authorizeInternalServiceRequest,
 });
+registerMediaEnhancementRoutes({ app, db, resolveAuthenticatedUserId });
 registerModerationRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
-registerAppealsRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerModerationTriageRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerRecommendationRoutes({
   app,
@@ -27581,6 +28582,13 @@ registerRecommendationRoutes({
   decisionServiceUrl: config.decisionServiceUrl,
   decisionServiceTimeoutMs: config.decisionServiceTimeoutMs,
   decisionServiceToken: config.decisionServiceToken,
+  resolveAuthenticatedUserId,
+});
+
+registerRecommendationIntentRoutes({
+  app,
+  db,
+  redis,
   resolveAuthenticatedUserId,
 });
 
@@ -40144,8 +41152,18 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
     }>(
       `
         SELECT
-          COALESCE((SELECT MAX(id) FROM coOwn_orders WHERE asset_id = $1), 0)::text AS snapshot_sequence,
-          COALESCE((SELECT MAX(id) FROM coOwn_trades WHERE asset_id = $1), 0)::text AS event_sequence,
+          -- P0.3: Use the per-asset market_sequence instead of MAX(order.id).
+          -- MAX(order.id) does not advance on cancel, partial fill, or expiry,
+          -- so clients cannot detect book mutations that don't create new rows.
+          -- The market_sequence advances on EVERY book mutation.
+          COALESCE(
+            (SELECT next_sequence - 1 FROM coown_market_sequences WHERE asset_id = $1),
+            0
+          )::text AS snapshot_sequence,
+          COALESCE(
+            (SELECT MAX(market_sequence) FROM coOwn_trades WHERE asset_id = $1),
+            0
+          )::text AS event_sequence,
           (SELECT MAX(created_at)::text FROM coOwn_trades WHERE asset_id = $1) AS last_execution_timestamp
       `,
       [assetId]
@@ -40165,7 +41183,11 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
   return {
     ok: true,
     snapshotSequence: Number(sequencing?.snapshot_sequence ?? 0),
+    // P0.8: exact decimal string — sequences can exceed 2^53.
+    snapshotSequenceStr: String(sequencing?.snapshot_sequence ?? 0),
     eventSequence: Number(sequencing?.event_sequence ?? 0),
+    // P0.8: exact decimal string — sequences can exceed 2^53.
+    eventSequenceStr: String(sequencing?.event_sequence ?? 0),
     serverTimestamp: new Date().toISOString(),
     lastExecutionTimestamp: sequencing?.last_execution_timestamp ?? null,
     stalenessThresholdSeconds: 15,
@@ -40175,6 +41197,8 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
       .map((row) => ({
         side: row.side,
         unitPriceGbp: Number(row.unit_price_gbp),
+        // P0.8: exact decimal string from the DB NUMERIC value.
+        unitPriceGbpStr: formatGbp(row.unit_price_gbp),
         units: Number(row.units),
         orderCount: Number(row.order_count),
       })),
@@ -40183,6 +41207,8 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
       .map((row) => ({
         side: row.side,
         unitPriceGbp: Number(row.unit_price_gbp),
+        // P0.8: exact decimal string from the DB NUMERIC value.
+        unitPriceGbpStr: formatGbp(row.unit_price_gbp),
         units: Number(row.units),
         orderCount: Number(row.order_count),
       })),
@@ -40291,8 +41317,36 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
     userId: z.string().min(2),
     side: z.enum(['buy', 'sell']),
     units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
-    orderType: z.enum(['market', 'limit']).default('market'),
+    orderType: z.enum(['market', 'limit', 'protected_market']).default('market'),
     limitPriceGbp: z.number().positive().optional(),
+    // P0.1: protected_market uses maxPriceGbp (buy) or minPriceGbp (sell) as
+    // the protection cap — never limitPriceGbp, which is for resting limits.
+    maxPriceGbp: z.number().positive().optional(),
+    minPriceGbp: z.number().positive().optional(),
+  }).superRefine((value, ctx) => {
+    if (value.orderType === 'limit' && !value.limitPriceGbp) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'limitPriceGbp is required for limit orders',
+        path: ['limitPriceGbp'],
+      });
+    }
+    if (value.orderType === 'protected_market') {
+      if (value.side === 'buy' && !value.maxPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'maxPriceGbp is required for protected_market buy orders',
+          path: ['maxPriceGbp'],
+        });
+      }
+      if (value.side === 'sell' && !value.minPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'minPriceGbp is required for protected_market sell orders',
+          path: ['minPriceGbp'],
+        });
+      }
+    }
   });
 
   const { assetId } = paramsSchema.parse(request.params);
@@ -40326,13 +41380,32 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
   }
 
   const referencePriceGbp = Number(asset.unit_price_gbp);
+  // P0.1: protected_market uses the protection cap price (maxPriceGbp for
+  // buys, minPriceGbp for sells) as the worst acceptable price. The order
+  // walks the book like a market order but will not fill beyond this cap.
+  // If the cap cannot be honored, the remainder is cancelled (never uncapped).
+  const protectionCapGbp =
+    payload.orderType === 'protected_market'
+      ? payload.side === 'buy'
+        ? (payload.maxPriceGbp ?? null)
+        : (payload.minPriceGbp ?? null)
+      : null;
   const orderPriceGbp =
     payload.orderType === 'limit'
       ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-      : referencePriceGbp;
+      : payload.orderType === 'protected_market' && protectionCapGbp
+        ? roundTo(protectionCapGbp, 4)
+        : referencePriceGbp;
 
-  // Query the real order book for the opposite side
+  // Query the real order book for the opposite side.
+  // For protected_market, the cap filters which resting orders are eligible:
+  //   buy  → only asks ≤ maxPriceGbp
+  //   sell → only bids ≥ minPriceGbp
   const oppositeSide = payload.side === 'buy' ? 'sell' : 'buy';
+  const priceFilter =
+    payload.orderType === 'limit'
+      ? (payload.limitPriceGbp ?? null)
+      : protectionCapGbp;
   const restingOrders = await db.query<{
     units: number;
     remaining_units: number;
@@ -40354,7 +41427,7 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
         CASE WHEN $4 = 'sell' THEN unit_price_gbp END DESC,
         id ASC
     `,
-    [assetId, oppositeSide, payload.orderType === 'limit' ? payload.limitPriceGbp : null, payload.side]
+    [assetId, oppositeSide, priceFilter, payload.side]
   );
 
   // Walk the book to estimate fill
@@ -40378,12 +41451,16 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
     filledUnits += fillUnits;
   }
 
-  // For buy market orders, also check primary issuance (issuer inventory)
+  // For buy market/protected_market orders, also check primary issuance
+  // (issuer inventory). For protected_market, the cap must be ≥ reference
+  // price for primary issuance to be eligible.
   if (
     payload.side === 'buy'
     && remainingUnits > 0
     && asset.available_units > 0
-    && (payload.orderType === 'market' || (payload.limitPriceGbp ?? 0) >= referencePriceGbp)
+    && (payload.orderType === 'market'
+      || (payload.orderType === 'protected_market' && (protectionCapGbp ?? 0) >= referencePriceGbp)
+      || (payload.orderType === 'limit' && (payload.limitPriceGbp ?? 0) >= referencePriceGbp))
   ) {
     const primaryFillUnits = Math.min(remainingUnits, asset.available_units);
     grossNotional = roundTo(grossNotional + primaryFillUnits * referencePriceGbp, 4);
@@ -40421,18 +41498,30 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
       units: payload.units,
       orderType: payload.orderType,
       limitPriceGbp: payload.limitPriceGbp ?? null,
+      // P0.1: return the protection cap for protected_market orders
+      protectionPriceGbp: protectionCapGbp ?? null,
+      // P0.8: exact decimal string variants of the monetary fields above.
+      protectionPriceGbpStr: protectionCapGbp != null ? formatGbp(protectionCapGbp) : null,
       referencePriceGbp,
+      referencePriceGbpStr: formatGbp(referencePriceGbp),
       orderPriceGbp,
+      orderPriceGbpStr: formatGbp(orderPriceGbp),
       estimatedFill: {
         filledUnits,
         remainingUnits: Math.max(0, remainingUnits),
         avgFillPrice,
+        // P0.8: exact decimal string variants of the estimated fill fields.
+        avgFillPriceStr: formatGbp(avgFillPrice),
         worstPrice,
+        worstPriceStr: formatGbp(worstPrice),
         grossNotional,
+        grossNotionalStr: formatGbp(grossNotional),
         slippageBeyondDepth,
       },
       fee,
+      feeStr: formatGbp(fee),
       total,
+      totalStr: formatGbp(total),
       feeRate: CO_OWN_TRADE_FEE_RATE,
       availableUnits: asset.available_units,
       totalUnits: asset.total_units,
@@ -40462,14 +41551,62 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
     userId: z.string().min(2),
     side: z.enum(['buy', 'sell']),
     units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
-    orderType: z.enum(['market', 'limit']).default('market'),
+    orderType: z.enum(['market', 'limit', 'protected_market']).default('market'),
     limitPriceGbp: z.number().positive().optional(),
+    // P0.1: protected_market protection cap
+    maxPriceGbp: z.number().positive().optional(),
+    minPriceGbp: z.number().positive().optional(),
     idempotencyKey: z.string().min(8).max(140).optional(),
+  }).superRefine((value, ctx) => {
+    if (value.orderType === 'protected_market') {
+      if (value.side === 'buy' && !value.maxPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'maxPriceGbp is required for protected_market buy orders',
+          path: ['maxPriceGbp'],
+        });
+      }
+      if (value.side === 'sell' && !value.minPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'minPriceGbp is required for protected_market sell orders',
+          path: ['minPriceGbp'],
+        });
+      }
+    }
   });
 
   const { assetId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body);
   await ensureUserExists(payload.userId);
+
+  // P0.6: Reservation idempotency — if a key is supplied, check for a prior
+  // response. A replayed request with the same key + same payload returns the
+  // original reservation. A replayed request with the same key but different
+  // payload is rejected as a key-reuse conflict.
+  const reservationIdempotencyHash = payload.idempotencyKey
+    ? hashCoOwnReservationPayload({
+        side: payload.side,
+        units: payload.units,
+        orderType: payload.orderType,
+        limitPriceGbp: payload.limitPriceGbp ?? null,
+        maxPriceGbp: payload.maxPriceGbp ?? null,
+        minPriceGbp: payload.minPriceGbp ?? null,
+      })
+    : null;
+
+  if (payload.idempotencyKey && reservationIdempotencyHash) {
+    const idempotentResponse = await getCoOwnReservationIdempotentResponse(db, {
+      assetId,
+      userId: payload.userId,
+      idempotencyKey: payload.idempotencyKey,
+      requestHash: reservationIdempotencyHash,
+    });
+    if (idempotentResponse) {
+      reply.code(200);
+      return idempotentResponse;
+    }
+  }
 
   const client = await db.connect();
   try {
@@ -40508,10 +41645,20 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
     }
 
     const referencePriceGbp = Number(asset.unit_price_gbp);
+    // P0.1: protected_market uses the protection cap as the worst-case price
+    // for reservation purposes. We reserve enough to cover the cap × units + fee.
+    const protectionCapGbp =
+      payload.orderType === 'protected_market'
+        ? payload.side === 'buy'
+          ? (payload.maxPriceGbp ?? null)
+          : (payload.minPriceGbp ?? null)
+        : null;
     const orderPriceGbp =
       payload.orderType === 'limit'
         ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-        : referencePriceGbp;
+        : payload.orderType === 'protected_market' && protectionCapGbp
+          ? roundTo(protectionCapGbp, 4)
+          : referencePriceGbp;
     const grossNotional = roundTo(payload.units * orderPriceGbp, 4);
     const fee = roundTo(grossNotional * CO_OWN_TRADE_FEE_RATE, 4);
     const total = payload.side === 'buy' ? roundTo(grossNotional + fee, 4) : roundTo(Math.max(0, grossNotional - fee), 4);
@@ -40619,10 +41766,10 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
       ]
     );
 
-    await client.query('COMMIT');
-
+    // P0.6: Build the response body before commit so the idempotent receipt
+    // can be saved atomically in the same transaction.
     reply.code(201);
-    return {
+    const reservationResponseBody = {
       ok: true,
       reservation: {
         id: reservationId,
@@ -40630,14 +41777,38 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
         userId: payload.userId,
         side: payload.side,
         reserved1zeMg,
+        // P0.8: exact decimal string — 1ZE mg is an integer but can be large.
+        reserved1zeMgStr: String(reserved1zeMg),
         reservedUnits,
         referencePriceGbp,
+        // P0.8: exact decimal string variants of the monetary estimates.
+        referencePriceGbpStr: formatGbp(referencePriceGbp),
         estimatedTotalGbp: total,
+        estimatedTotalGbpStr: formatGbp(total),
         estimatedFeeGbp: fee,
+        estimatedFeeGbpStr: formatGbp(fee),
         expiresAt: expiresAt.toISOString(),
         status: 'active',
       },
     };
+
+    // P0.6: Save the idempotent response inside the transaction — atomic with
+    // the reservation commit. A crash after COMMIT but before a post-commit
+    // save would leave a committed reservation without a dedupe receipt.
+    if (payload.idempotencyKey && reservationIdempotencyHash) {
+      await saveCoOwnReservationIdempotentResponse(client, {
+        assetId,
+        userId: payload.userId,
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: reservationIdempotencyHash,
+        responseStatus: 201,
+        responseBody: reservationResponseBody,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    return reservationResponseBody;
   } catch (error) {
     await client.query('ROLLBACK');
     reply.code(500);
@@ -40651,6 +41822,8 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
 });
 
 // Cancel a reservation (release the held funds/units)
+// P0.5: Owner-bound — only the reservation owner can cancel. The actor is
+// derived from request.authUser, never from the request body or URL.
 app.delete('/co-own/assets/:assetId/orders/reserve/:reservationId', async (request, reply) => {
   const paramsSchema = z.object({
     assetId: z.string().min(2),
@@ -40658,17 +41831,35 @@ app.delete('/co-own/assets/:assetId/orders/reserve/:reservationId', async (reque
   });
   const { assetId, reservationId } = paramsSchema.parse(request.params);
 
+  // P0.5: Derive the actor from the auth token. If not authenticated, reject.
+  const actorUserId = request.authUser?.userId;
+  if (!actorUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required to cancel a reservation' };
+  }
+
+  // P0.5: Bind cancellation to the owner. Only the user who created the
+  // reservation can cancel it — prevents reservation theft/cancel by another user.
   const result = await db.query(
     `
       UPDATE coown_order_reservations
       SET status = 'cancelled', updated_at = NOW()
-      WHERE id = $1 AND asset_id = $2 AND status = 'active'
+      WHERE id = $1 AND asset_id = $2 AND user_id = $3 AND status = 'active'
       RETURNING id
     `,
-    [reservationId, assetId]
+    [reservationId, assetId, actorUserId]
   );
 
   if (result.rows.length === 0) {
+    // Check if the reservation exists at all but belongs to another user
+    const existing = await db.query<{ user_id: string; status: string }>(
+      `SELECT user_id, status FROM coown_order_reservations WHERE id = $1 AND asset_id = $2`,
+      [reservationId, assetId]
+    );
+    if (existing.rows[0] && existing.rows[0].user_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Only the reservation owner can cancel it' };
+    }
     reply.code(404);
     return { ok: false, error: 'Reservation not found or already released' };
   }
@@ -40683,8 +41874,11 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     userId: z.string().min(2),
     side: z.enum(['buy', 'sell']),
     units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
-    orderType: z.enum(['market', 'limit']).default('market'),
+    orderType: z.enum(['market', 'limit', 'protected_market']).default('market'),
     limitPriceGbp: z.number().positive().optional(),
+    // P0.1: protected_market protection cap
+    maxPriceGbp: z.number().positive().optional(),
+    minPriceGbp: z.number().positive().optional(),
     reservationId: z.string().min(8).max(160),
     idempotencyKey: z.string().min(8).max(140).optional(),
   }).superRefine((value, ctx) => {
@@ -40703,6 +41897,32 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         path: ['limitPriceGbp'],
       });
     }
+
+    // P0.1: protected_market must not carry limitPriceGbp; the cap lives
+    // in maxPriceGbp (buy) / minPriceGbp (sell).
+    if (value.orderType === 'protected_market') {
+      if (value.limitPriceGbp !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'protected_market orders use maxPriceGbp/minPriceGbp, not limitPriceGbp',
+          path: ['limitPriceGbp'],
+        });
+      }
+      if (value.side === 'buy' && !value.maxPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'maxPriceGbp is required for protected_market buy orders',
+          path: ['maxPriceGbp'],
+        });
+      }
+      if (value.side === 'sell' && !value.minPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'minPriceGbp is required for protected_market sell orders',
+          path: ['minPriceGbp'],
+        });
+      }
+    }
   });
 
   const { assetId } = paramsSchema.parse(request.params);
@@ -40720,6 +41940,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         units: payload.units,
         orderType: payload.orderType,
         limitPriceGbp: payload.limitPriceGbp ?? null,
+        maxPriceGbp: payload.maxPriceGbp ?? null,
+        minPriceGbp: payload.minPriceGbp ?? null,
         reservationId: payload.reservationId,
       })
     : null;
@@ -40750,6 +41972,63 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
   let amlAlert: { alertId: string; status: string } | null = null;
   try {
     await client.query('BEGIN');
+
+    // ── Command lifecycle: insert PENDING row for unknown-result lookup ──
+    // The coown_order_commands table tracks the pending→acknowledged
+    // lifecycle so the lookup-by-key endpoint can tell a client whether
+    // their order is still processing or has been committed. The row is
+    // written inside this transaction so it rolls back if the order fails
+    // and is atomically promoted to 'acknowledged' before COMMIT.
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      const commandInsert = await client.query<{ id: string; status: string }>(
+        `
+          INSERT INTO coown_order_commands (asset_id, actor_id, idempotency_key, request_hash, status)
+          VALUES ($1, $2, $3, $4, 'pending')
+          ON CONFLICT (asset_id, idempotency_key) DO NOTHING
+          RETURNING id, status
+        `,
+        [assetId, payload.userId, payload.idempotencyKey, idempotencyRequestHash]
+      );
+
+      if (commandInsert.rows.length === 0) {
+        // A concurrent command with the same key already exists. Inspect
+        // its status to decide how to respond without double-processing.
+        const existingCommand = await client.query<{
+          status: string;
+          order_id: string | null;
+          response_code: number | null;
+          response_body: Record<string, unknown> | null;
+        }>(
+          `
+            SELECT status, order_id, response_code, response_body
+            FROM coown_order_commands
+            WHERE asset_id = $1 AND idempotency_key = $2
+            LIMIT 1
+          `,
+          [assetId, payload.idempotencyKey]
+        );
+
+        const existing = existingCommand.rows[0];
+        if (existing && (existing.status === 'acknowledged' || existing.status === 'completed')) {
+          // The command was already completed — replay the stored response.
+          await client.query('ROLLBACK');
+          reply.code(existing.response_code ?? 200);
+          return {
+            ok: true,
+            status: 'acknowledged',
+            ...(existing.response_body as Record<string, unknown> ?? {}),
+          };
+        }
+
+        if (existing && existing.status === 'pending') {
+          // Another request is actively handling this key — tell the
+          // client to poll.
+          await client.query('ROLLBACK');
+          reply.code(202);
+          return { ok: true, status: 'processing' };
+        }
+      }
+    }
 
     const assetResult = await client.query<{
       id: string;
@@ -40837,10 +42116,20 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     }
 
     const referencePriceGbp = Number(asset.unit_price_gbp);
+    // P0.1: protected_market uses the protection cap as the worst-case price
+    // for reservation sufficiency checking.
+    const protectionCapGbp =
+      payload.orderType === 'protected_market'
+        ? payload.side === 'buy'
+          ? (payload.maxPriceGbp ?? null)
+          : (payload.minPriceGbp ?? null)
+        : null;
     const proposedUnitPrice =
       payload.orderType === 'limit'
         ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-        : referencePriceGbp;
+        : payload.orderType === 'protected_market' && protectionCapGbp
+          ? roundTo(protectionCapGbp, 4)
+          : referencePriceGbp;
     const proposedNotionalGbp = roundTo(Math.max(0, payload.units) * proposedUnitPrice, 2);
     const requiredBuyReservationMg = Math.ceil(
       roundTo(proposedNotionalGbp * (1 + CO_OWN_TRADE_FEE_RATE), 4) * 1000
@@ -40958,7 +42247,20 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     }
 
     const orderPriceGbp =
-      payload.orderType === 'limit' ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4) : referencePriceGbp;
+      payload.orderType === 'limit'
+        ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
+        : payload.orderType === 'protected_market' && protectionCapGbp
+          ? roundTo(protectionCapGbp, 4)
+          : referencePriceGbp;
+
+    // P0.3: Allocate a market sequence for this book mutation (new order).
+    const orderMarketSeq = await allocateMarketSequence(client, assetId);
+
+    // Phase 2: Track touched price levels for the book delta emission.
+    // Matched resting orders sit on the opposing side; we collect their
+    // price levels so the aggregate state can be queried after the match.
+    const touchedOpposingLevels = new Map<string, { side: 'buy' | 'sell'; price: number }>();
+    let lastMarketSeq = orderMarketSeq;
 
     const orderResult = await client.query<{
       id: number;
@@ -40978,6 +42280,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           side,
           order_type,
           limit_price_gbp,
+          protection_price_gbp,
           units,
           remaining_units,
           filled_units,
@@ -40985,9 +42288,10 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           fee_gbp,
           total_gbp,
           updated_at,
-          status
+          status,
+          market_sequence
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $6, 0, $7, 0, 0, NOW(), 'open')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $7, 0, $8, 0, 0, NOW(), 'open', $9)
         RETURNING id, side, units, remaining_units, filled_units, unit_price_gbp::text, fee_gbp::text, total_gbp::text, created_at
       `,
       [
@@ -40996,8 +42300,11 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         payload.side,
         payload.orderType,
         payload.orderType === 'limit' ? payload.limitPriceGbp : null,
+        // P0.1: protected_market stores the cap in protection_price_gbp
+        payload.orderType === 'protected_market' ? (protectionCapGbp ?? null) : null,
         payload.units,
         orderPriceGbp,
+        orderMarketSeq,
       ]
     );
 
@@ -41044,6 +42351,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           AND side = $2
           AND status IN ('open', 'partially_filled')
           AND id <> $3
+          -- P0: STP — skip own orders to prevent wash trades
+          AND user_id <> $6
           AND (
             $4::numeric IS NULL
             OR (
@@ -41063,8 +42372,15 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         assetId,
         payload.side === 'buy' ? 'sell' : 'buy',
         incomingOrderId,
-        payload.orderType === 'limit' ? payload.limitPriceGbp : null,
+        // P0.1: protected_market uses the protection cap as the price filter
+        payload.orderType === 'limit'
+          ? (payload.limitPriceGbp ?? null)
+          : payload.orderType === 'protected_market'
+            ? (protectionCapGbp ?? null)
+            : null,
         payload.side,
+        // P0: STP — skip own orders to prevent wash trades
+        payload.userId,
       ]
     );
 
@@ -41128,6 +42444,12 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       const restingTotalAfter = roundTo(Number(resting.total_gbp) + restingTradeNet, 4);
       const restingFeeAfter = roundTo(Number(resting.fee_gbp) + tradeFee, 4);
 
+      // P0.3: Each fill is a book mutation — advance the market sequence.
+      const fillMarketSeq = await allocateMarketSequence(client, assetId);
+      const restingPrice = Number(resting.unit_price_gbp);
+      touchedOpposingLevels.set(`${resting.side}:${restingPrice}`, { side: resting.side, price: restingPrice });
+      lastMarketSeq = fillMarketSeq;
+
       await client.query(
         `
           UPDATE coOwn_orders
@@ -41137,7 +42459,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
             fee_gbp = $4,
             total_gbp = $5,
             status = $6,
-            updated_at = NOW()
+            updated_at = NOW(),
+            market_sequence = $7
           WHERE id = $1
         `,
         [
@@ -41147,6 +42470,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           restingFeeAfter,
           restingTotalAfter,
           restingStatus,
+          fillMarketSeq,
         ]
       );
 
@@ -41167,7 +42491,9 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     if (
       payload.side === 'buy'
       && remainingUnits > 0
-      && (payload.orderType === 'market' || (payload.limitPriceGbp ?? 0) >= referencePriceGbp)
+      && (payload.orderType === 'market'
+        || (payload.orderType === 'protected_market' && (protectionCapGbp ?? 0) >= referencePriceGbp)
+        || (payload.orderType === 'limit' && (payload.limitPriceGbp ?? 0) >= referencePriceGbp))
       && nextAvailableUnits > 0
     ) {
       const primaryFillUnits = Math.min(remainingUnits, nextAvailableUnits);
@@ -41201,9 +42527,20 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     let orderStatus: CoOwnOrderStatus;
     let persistedRemainingUnits = Math.max(0, remainingUnits);
 
-    if (payload.orderType === 'market') {
-      orderStatus = filledUnits > 0 ? 'filled' : 'rejected';
-      persistedRemainingUnits = 0;
+    // P0.1: protected_market behaves like market for status purposes —
+    // it fills what it can within the cap and cancels the remainder.
+    // It never rests on the book as an open order.
+    if (payload.orderType === 'market' || payload.orderType === 'protected_market') {
+      if (filledUnits > 0 && remainingUnits > 0) {
+        orderStatus = 'partially_filled';
+        persistedRemainingUnits = 0; // remainder cancelled, not resting
+      } else if (filledUnits > 0) {
+        orderStatus = 'filled';
+        persistedRemainingUnits = 0;
+      } else {
+        orderStatus = 'rejected';
+        persistedRemainingUnits = 0;
+      }
     } else if (filledUnits === 0) {
       orderStatus = 'open';
     } else if (remainingUnits > 0) {
@@ -41252,6 +42589,69 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       `,
       [payload.reservationId, incomingReserve1zeMg, incomingReserveUnits, incomingOrderId]
     );
+
+    // Phase 2: Build the book delta changes for realtime emission.
+    // The incoming order rests on its side if it has remaining units and
+    // an open/partially_filled status. Matched opposing levels are queried
+    // for their aggregate state so clients receive accurate level totals.
+    const bookDeltaChanges: Array<{
+      side: 'buy' | 'sell';
+      priceGbp: number;
+      priceGbpStr: string;
+      units: number;
+      orderCount: number;
+    }> = [];
+
+    if (persistedRemainingUnits > 0 && (orderStatus === 'open' || orderStatus === 'partially_filled')) {
+      bookDeltaChanges.push({
+        side: payload.side,
+        priceGbp: orderPriceGbp,
+        priceGbpStr: formatGbp(orderPriceGbp),
+        units: persistedRemainingUnits,
+        orderCount: 1,
+      });
+    }
+
+    if (touchedOpposingLevels.size > 0) {
+      const opposingSide = payload.side === 'buy' ? 'sell' : 'buy';
+      const touchedPrices = Array.from(touchedOpposingLevels.values()).map((l) => l.price);
+      const levelResult = await client.query<{
+        side: 'buy' | 'sell';
+        unit_price_gbp: string;
+        units: string;
+        order_count: string;
+      }>(
+        `
+          SELECT side, unit_price_gbp::text, SUM(remaining_units)::text AS units, COUNT(*)::text AS order_count
+          FROM coOwn_orders
+          WHERE asset_id = $1 AND side = $2 AND status IN ('open', 'partially_filled') AND remaining_units > 0
+            AND unit_price_gbp = ANY($3::numeric[])
+          GROUP BY side, unit_price_gbp
+        `,
+        [assetId, opposingSide, touchedPrices]
+      );
+      for (const row of levelResult.rows) {
+        bookDeltaChanges.push({
+          side: row.side,
+          priceGbp: Number(row.unit_price_gbp),
+          priceGbpStr: row.unit_price_gbp,
+          units: Number(row.units),
+          orderCount: Number(row.order_count),
+        });
+      }
+      // Emit drained levels (no remaining orders) as zero so clients remove them.
+      for (const level of touchedOpposingLevels.values()) {
+        if (!levelResult.rows.some((r) => Number(r.unit_price_gbp) === level.price)) {
+          bookDeltaChanges.push({
+            side: level.side,
+            priceGbp: level.price,
+            priceGbpStr: formatGbp(level.price),
+            units: 0,
+            orderCount: 0,
+          });
+        }
+      }
+    }
 
     const marketStatsResult = await client.query<{
       volume_24h_gbp: string;
@@ -41343,6 +42743,84 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       });
     }
 
+    // P0.7: Construct the response body BEFORE commit so the idempotent
+    // response can be saved atomically in the same transaction. This
+    // eliminates the post-commit gap where a crash could commit the order
+    // but lose the dedupe receipt, leaving a retry without a response.
+    reply.code(201);
+    const responseBody = {
+      ok: true,
+      order: {
+        id: incomingOrder.rows[0].id,
+        assetId,
+        userId: payload.userId,
+        side: payload.side,
+        orderType: payload.orderType,
+        limitPriceGbp: payload.limitPriceGbp ?? null,
+        // P0.1: return the protection cap for protected_market orders
+        protectionPriceGbp: payload.orderType === 'protected_market' ? (protectionCapGbp ?? null) : null,
+        units: payload.units,
+        filledUnits: incomingOrder.rows[0].filled_units,
+        remainingUnits: incomingOrder.rows[0].remaining_units,
+        unitPriceGbp: orderPriceGbp,
+        // P0.8: exact decimal string variants of the order monetary fields.
+        unitPriceGbpStr: formatGbp(orderPriceGbp),
+        feeGbp: tradedFeeGbp,
+        feeGbpStr: formatGbp(tradedFeeGbp),
+        totalGbp: orderTotalGbp,
+        totalGbpStr: formatGbp(orderTotalGbp),
+        status: incomingOrder.rows[0].status,
+        createdAt: incomingOrder.rows[0].created_at,
+        updatedAt: incomingOrder.rows[0].updated_at,
+      },
+      asset: {
+        id: updatedAssetResult.rows[0].id,
+        availableUnits: updatedAssetResult.rows[0].available_units,
+        holders: updatedAssetResult.rows[0].holders,
+        volume24hGbp: updatedAssetResult.rows[0].volume_24h_gbp == null ? null : Number(updatedAssetResult.rows[0].volume_24h_gbp),
+        unitPriceGbp: Number(updatedAssetResult.rows[0].unit_price_gbp),
+        unitPriceStable: Number(updatedAssetResult.rows[0].unit_price_stable),
+        marketMovePct24h: updatedAssetResult.rows[0].market_move_pct_24h == null ? null : Number(updatedAssetResult.rows[0].market_move_pct_24h),
+        updatedAt: updatedAssetResult.rows[0].updated_at,
+      },
+      aml: amlAlert
+        ? {
+          alertId: amlAlert.alertId,
+          status: amlAlert.status,
+        }
+        : null,
+    };
+
+    // P0.7: Save idempotent response INSIDE the transaction — atomic with
+    // the order commit. A crash after COMMIT but before the old post-commit
+    // save would leave a committed order without a dedupe receipt. Now the
+    // receipt and the order commit or roll back together.
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      await saveCoOwnOrderIdempotentResponse(client, {
+        assetId,
+        userId: payload.userId,
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: idempotencyRequestHash,
+        responseStatus: 201,
+        responseBody,
+      });
+    }
+
+    // ── Command lifecycle: mark command as ACKNOWLEDGED ──
+    // Atomically with the order commit, transition the command row from
+    // pending → acknowledged so the lookup-by-key endpoint stops returning
+    // 202 and can replay the stored response on future lookups.
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      await client.query(
+        `
+          UPDATE coown_order_commands
+          SET status = 'acknowledged', order_id = $2, response_code = 200, response_body = $3, completed_at = NOW()
+          WHERE asset_id = $1 AND idempotency_key = $4
+        `,
+        [assetId, String(incomingOrder.rows[0].id), JSON.stringify(responseBody), payload.idempotencyKey]
+      );
+    }
+
     await client.query('COMMIT');
 
     // ── GAP 1 fix: Write market audit event for the order ──
@@ -41410,6 +42888,30 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       });
     }
 
+    // Phase 2: Emit book delta for realtime orderbook subscribers.
+    // Clients subscribed to co-own.asset:{assetId} receive sequenced
+    // level changes and can apply them incrementally instead of re-fetching
+    // the full snapshot after every trade.
+    if (bookDeltaChanges.length > 0) {
+      try {
+        await publishRealtimeEvent({
+          topic: `co-own.asset:${assetId}`,
+          type: 'co-own.book-delta',
+          payload: {
+            type: 'co-own.book-delta',
+            assetId,
+            sequence: lastMarketSeq,
+            changes: bookDeltaChanges,
+            serverTimestamp: new Date().toISOString(),
+          },
+          seq: true,
+          version: 1,
+        });
+      } catch {
+        // Delta emission is best-effort — don't fail the order if WS broadcast fails.
+      }
+    }
+
     await appendComplianceAuditSafe(request, {
       eventType: 'co-own.order.created',
       subjectUserId: payload.userId,
@@ -41425,57 +42927,6 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         amlAlertId: amlAlert?.alertId ?? null,
       },
     });
-
-    reply.code(201);
-    const responseBody = {
-      ok: true,
-      order: {
-        id: incomingOrder.rows[0].id,
-        assetId,
-        userId: payload.userId,
-        side: payload.side,
-        orderType: payload.orderType,
-        limitPriceGbp: payload.limitPriceGbp ?? null,
-        units: payload.units,
-        filledUnits: incomingOrder.rows[0].filled_units,
-        remainingUnits: incomingOrder.rows[0].remaining_units,
-        unitPriceGbp: orderPriceGbp,
-        feeGbp: tradedFeeGbp,
-        totalGbp: orderTotalGbp,
-        status: incomingOrder.rows[0].status,
-        createdAt: incomingOrder.rows[0].created_at,
-        updatedAt: incomingOrder.rows[0].updated_at,
-      },
-      asset: {
-        id: updatedAssetResult.rows[0].id,
-        availableUnits: updatedAssetResult.rows[0].available_units,
-        holders: updatedAssetResult.rows[0].holders,
-        volume24hGbp: updatedAssetResult.rows[0].volume_24h_gbp == null ? null : Number(updatedAssetResult.rows[0].volume_24h_gbp),
-        unitPriceGbp: Number(updatedAssetResult.rows[0].unit_price_gbp),
-        unitPriceStable: Number(updatedAssetResult.rows[0].unit_price_stable),
-        marketMovePct24h: updatedAssetResult.rows[0].market_move_pct_24h == null ? null : Number(updatedAssetResult.rows[0].market_move_pct_24h),
-        updatedAt: updatedAssetResult.rows[0].updated_at,
-      },
-      aml: amlAlert
-        ? {
-          alertId: amlAlert.alertId,
-          status: amlAlert.status,
-        }
-        : null,
-    };
-
-    // Save idempotent response so a network retry with the same key returns
-    // this original result instead of placing a duplicate order.
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveCoOwnOrderIdempotentResponse(client, {
-        assetId,
-        userId: payload.userId,
-        idempotencyKey: payload.idempotencyKey,
-        requestHash: idempotencyRequestHash,
-        responseStatus: 201,
-        responseBody,
-      });
-    }
 
     return responseBody;
   } catch (error) {
@@ -41499,6 +42950,74 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
   } finally {
     client.release();
   }
+});
+
+// ── P0.7: Unknown-result lookup ──
+// After a network error during order submission, the client may not know
+// whether the order was placed. This endpoint lets the client look up the
+// result by idempotency key to recover gracefully.
+//   200 — order acknowledged (body contains the original response)
+//   202 — order still processing (lock held, poll with backoff)
+//   404 — no record found (safe to retry the original POST with the same key)
+app.get('/co-own/assets/:assetId/orders/lookup-by-key/:idempotencyKey', async (request, reply) => {
+  const paramsSchema = z.object({
+    assetId: z.string().min(2),
+    idempotencyKey: z.string().min(8).max(140),
+  });
+  const { assetId, idempotencyKey } = paramsSchema.parse(request.params);
+
+  const actorUserId = request.authUser?.userId;
+  if (!actorUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required to look up an order' };
+  }
+
+  // Check the order idempotency table for a completed response
+  const idempotentResult = await db.query<{
+    response_status: number;
+    response_body: Record<string, unknown>;
+  }>(
+    `
+      SELECT response_status, response_body
+      FROM coown_order_idempotency
+      WHERE asset_id = $1
+        AND user_id = $2
+        AND idempotency_key = $3
+      LIMIT 1
+    `,
+    [assetId, actorUserId, idempotencyKey]
+  );
+
+  if (idempotentResult.rows[0]) {
+    reply.code(200);
+    return {
+      ok: true,
+      status: 'acknowledged',
+      ...idempotentResult.rows[0].response_body as Record<string, unknown>,
+    };
+  }
+
+  // Check the order commands table for a pending command
+  const commandResult = await db.query<{ status: string }>(
+    `
+      SELECT status
+      FROM coown_order_commands
+      WHERE asset_id = $1
+        AND actor_id = $2
+        AND idempotency_key = $3
+      LIMIT 1
+    `,
+    [assetId, actorUserId, idempotencyKey]
+  );
+
+  if (commandResult.rows[0] && commandResult.rows[0].status === 'pending') {
+    reply.code(202);
+    return { ok: true, status: 'processing' };
+  }
+
+  // No record found — safe to retry
+  reply.code(404);
+  return { ok: false, status: 'safe_to_retry' };
 });
 
 app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply) => {
@@ -41545,13 +43064,16 @@ app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply
       return { ok: false, error: `A ${order.status} order cannot be cancelled` };
     }
 
+    // P0.3: Cancellation is a book mutation — advance the market sequence.
+    const cancelMarketSeq = await allocateMarketSequence(client, assetId);
+
     await client.query(
       `
         UPDATE coOwn_orders
-        SET remaining_units = 0, status = 'cancelled', updated_at = NOW()
+        SET remaining_units = 0, status = 'cancelled', updated_at = NOW(), market_sequence = $2
         WHERE id = $1
       `,
-      [orderId]
+      [orderId, cancelMarketSeq]
     );
     await client.query(
       `
@@ -44510,7 +46032,10 @@ const start = async () => {
           await processModerationTriageJob(job);
         },
         handleImporterExtractionJob: async (job) => {
-          await processImporterExtraction(job);
+          // Route to the new extraction intelligence handler. The job data
+          // shape (runId/modelBundle) is the converged format; the old
+          // handler is retained for legacy rows only.
+          await processExtractionIntelligenceJob(job as unknown as Parameters<typeof processExtractionIntelligenceJob>[0]);
         },
         handleCatalogImportDiscoveryJob: async ({ batchId }) => {
           await processCatalogImportDiscovery({ batchId });
@@ -44536,6 +46061,12 @@ const start = async () => {
         handleRetentionSweepJob: async ({ reason }) => {
           await processRetentionSweep({ reason });
         },
+        handlePushReceiptReconciliationJob: async () => {
+          await processPushReceiptReconciliation();
+        },
+        handleScheduledPublicationSweepJob: async ({ reason }) => {
+          await sweepScheduledPublications(reason);
+        },
       });
     } else {
       app.log.info('[api] background workers disabled — running in separate container');
@@ -44544,6 +46075,9 @@ const start = async () => {
     startAuctionSweepScheduler();
     startDomainOutboxScheduler();
     startRetentionSweepScheduler();
+    startAnalyticsAggregationScheduler();
+    startPushReceiptReconciliationScheduler();
+    startScheduledPublicationSweepScheduler();
     startPlatformReconciliationScheduler();
     startPlatformRevenueSweepScheduler();
     startOpsAlertingScheduler();
@@ -44624,6 +46158,15 @@ const start = async () => {
 registerSupportReviewRoutes({ app, db, createApiError, queueUserNotification });
 registerSupportRoutes({ app, db, createApiError, queueUserNotification });
 registerOperatorSupportRoutes({ app, db, createApiError, queueUserNotification });
+
+// ── Returns domain (Gate 8+9) ──────────────────────────────────────
+registerReturnRoutes({ app, db, resolveAuthenticatedUserId });
+
+// ── Refund execution with maker-checker (Gate 10+12) ───────────────
+registerRefundRoutes({ app, db, resolveAuthenticatedUserId, postCommerceOrderRefundLedgerReversal });
+
+// ── Exception queue infrastructure (Gate 13) ───────────────────────
+registerExceptionQueueRoutes({ app, db, resolveAuthenticatedUserId });
 registerVendorWebhookRoutes({
   app,
   db,
@@ -44874,6 +46417,8 @@ async function enrichPosterStory(
     expiresAt: storyRow.expires_at,
     createdAt: storyRow.created_at,
     compositionDocument: storyRow.composition_document ?? undefined,
+    contentType: (storyRow as Record<string, unknown>).content_type ?? 'media',
+    moodboardId: (storyRow as Record<string, unknown>).moodboard_id ?? null,
     frames,
     seenByViewer: viewedFrameCount > 0,
     viewedFrameCount,
@@ -44883,6 +46428,82 @@ async function enrichPosterStory(
 }
 
 // ── Poster Stories API ──────────────────────────────────────────────
+
+// POST /poster-stories/moodboard — publish a moodboard as a poster story
+app.post('/poster-stories/moodboard', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const bodySchema = z.object({
+    moodboardId: z.string().min(2).max(120),
+    caption: z.string().max(2200).default(''),
+    expiresInHours: z.number().int().min(1).max(168).default(24),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  // Validate the moodboard exists, is not deleted, and the actor has access
+  const boardResult = await db.query<{ id: string; creator_id: string; deleted_at: string | null }>(
+    `SELECT id, creator_id, deleted_at FROM moodboards WHERE id = $1 LIMIT 1`,
+    [payload.moodboardId]
+  );
+  if (!boardResult.rowCount || boardResult.rows[0].deleted_at) {
+    reply.code(404);
+    return { ok: false, error: 'Moodboard not found' };
+  }
+  const board = boardResult.rows[0];
+
+  // Check membership: creator or active member can publish
+  const isCreator = board.creator_id === actorUserId;
+  let isMember = isCreator;
+  if (!isCreator) {
+    const memberResult = await db.query<{ role: string }>(
+      `SELECT role FROM moodboard_members WHERE board_id = $1 AND user_id = $2 AND state = 'active'`,
+      [payload.moodboardId, actorUserId]
+    );
+    isMember = (memberResult.rowCount ?? 0) > 0;
+  }
+  if (!isMember) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: not a member of this moodboard' };
+  }
+
+  const storyId = `ps_mb_${payload.moodboardId}_${Date.now()}`;
+  const frameId = `frame_mb_${payload.moodboardId}_${Date.now()}`;
+  const posterId = `poster_mb_${payload.moodboardId}_${Date.now()}`;
+  const expiresAt = new Date(Date.now() + payload.expiresInHours * 3600_000).toISOString();
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Create the story with moodboard content type
+    await client.query(
+      `INSERT INTO poster_stories (id, creator_id, audience, allow_replies, allow_reactions, status, expires_at, content_type, moodboard_id)
+       VALUES ($1, $2, 'public', true, true, 'active', $3, 'moodboard', $4)`,
+      [storyId, actorUserId, expiresAt, payload.moodboardId]
+    );
+
+    // Create a single frame that references the moodboard
+    await client.query(
+      `INSERT INTO posters (id, creator_id, story_id, media_url, caption, media_type, layout, status, expiry_hours, content_type, moodboard_id)
+       VALUES ($1, $2, $3, '', $4, 'text', 'single', 'published', $5, 'moodboard', $6)`,
+      [posterId, actorUserId, storyId, payload.caption, payload.expiresInHours, payload.moodboardId]
+    );
+
+    // Link the moodboard to the published poster
+    await client.query(
+      `UPDATE moodboards SET published_poster_id = $1 WHERE id = $2`,
+      [posterId, payload.moodboardId]
+    );
+
+    await client.query('COMMIT');
+    reply.code(201);
+    return { ok: true, storyId };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
 
 // POST /poster-stories — create story with frames and stickers in one transaction
 app.post('/poster-stories', async (request, reply) => {
@@ -45276,9 +46897,11 @@ app.get('/poster-stories', async (request) => {
     creator_username: string | null;
     creator_avatar: string | null;
     composition_document: unknown | null;
+    content_type: string;
+    moodboard_id: string | null;
   }>(
     `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
-       ps.composition_document,
+       ps.composition_document, ps.content_type, ps.moodboard_id,
        u.username AS creator_username, u.avatar AS creator_avatar
      FROM poster_stories ps
      LEFT JOIN users u ON u.id = ps.creator_id
@@ -45340,9 +46963,11 @@ app.get('/poster-stories/:storyId', async (request, reply) => {
     creator_username: string | null;
     creator_avatar: string | null;
     composition_document: unknown | null;
+    content_type: string;
+    moodboard_id: string | null;
   }>(
     `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
-       ps.composition_document,
+       ps.composition_document, ps.content_type, ps.moodboard_id,
        u.username AS creator_username, u.avatar AS creator_avatar
      FROM poster_stories ps
      LEFT JOIN users u ON u.id = ps.creator_id
@@ -46173,146 +47798,13 @@ app.delete('/poster-highlights/:highlightId/frames/:frameId', async (request, re
 
 registerCreatorDocumentRoutes({ app, db, resolveAuthenticatedUserId });
 
-// ── Creator analytics ─────────────────────────────────────────────────────
+// ── Creator publication orchestrator (P0 fix — creates real projections) ──
 
-const ANALYTICS_CONTENT_TYPES = new Set(['look', 'poster', 'story', 'document']);
-const ANALYTICS_EVENT_TYPES = new Set([
-  'view', 'like', 'save', 'comment', 'share', 'product_click', 'profile_visit',
-]);
+registerCreatorPublicationRoutes({ app, db, resolveAuthenticatedUserId });
 
-// POST /creator/analytics/events — log an analytics event
-app.post('/creator/analytics/events', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
+// ── Creator analytics (v2 — versioned, ownership-resolved) ────────────────
 
-  const bodySchema = z.object({
-    content_type: z.string(),
-    content_id: z.string().min(1).max(200),
-    event_type: z.string(),
-    metadata: z.record(z.unknown()).optional(),
-  });
-  const payload = bodySchema.parse(request.body);
-
-  if (!ANALYTICS_CONTENT_TYPES.has(payload.content_type)) {
-    throw createApiError('ANALYTICS_CONTENT_TYPE_INVALID', 'Invalid content_type');
-  }
-  if (!ANALYTICS_EVENT_TYPES.has(payload.event_type)) {
-    throw createApiError('ANALYTICS_EVENT_TYPE_INVALID', 'Invalid event_type');
-  }
-
-  const result = await db.query<{ id: string }>(
-    `INSERT INTO creator_analytics_events (creator_id, content_type, content_id, event_type, viewer_id, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id`,
-    [
-      actorUserId,
-      payload.content_type,
-      payload.content_id,
-      payload.event_type,
-      actorUserId,
-      JSON.stringify(payload.metadata ?? {}),
-    ]
-  );
-
-  reply.code(201);
-  return { ok: true, eventId: result.rows[0].id };
-});
-
-// GET /creator/analytics/summary — overall stats for the authenticated creator
-app.get('/creator/analytics/summary', async (request) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-
-  const result = await db.query<{
-    views: string;
-    likes: string;
-    saves: string;
-    comments: string;
-    shares: string;
-    product_clicks: string;
-    profile_visits: string;
-  }>(
-    `SELECT
-       COUNT(*) FILTER (WHERE event_type = 'view')          AS views,
-       COUNT(*) FILTER (WHERE event_type = 'like')          AS likes,
-       COUNT(*) FILTER (WHERE event_type = 'save')          AS saves,
-       COUNT(*) FILTER (WHERE event_type = 'comment')       AS comments,
-       COUNT(*) FILTER (WHERE event_type = 'share')         AS shares,
-       COUNT(*) FILTER (WHERE event_type = 'product_click') AS product_clicks,
-       COUNT(*) FILTER (WHERE event_type = 'profile_visit') AS profile_visits
-     FROM creator_analytics_events
-     WHERE creator_id = $1`,
-    [actorUserId]
-  );
-
-  const row = result.rows[0] ?? {};
-  const views = Number(row.views ?? 0);
-  const engagement =
-    Number(row.likes ?? 0) +
-    Number(row.saves ?? 0) +
-    Number(row.comments ?? 0) +
-    Number(row.shares ?? 0) +
-    Number(row.product_clicks ?? 0);
-
-  return {
-    views,
-    likes: Number(row.likes ?? 0),
-    saves: Number(row.saves ?? 0),
-    comments: Number(row.comments ?? 0),
-    shares: Number(row.shares ?? 0),
-    productClicks: Number(row.product_clicks ?? 0),
-    profileVisits: Number(row.profile_visits ?? 0),
-    engagementRate: views > 0 ? Number((engagement / views).toFixed(4)) : 0,
-  };
-});
-
-// GET /creator/analytics/timeline — daily time-series for the authenticated creator
-app.get('/creator/analytics/timeline', async (request) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-
-  const querySchema = z.object({
-    days: z.coerce.number().int().min(1).max(365).default(30),
-  });
-  const { days } = querySchema.parse(request.query ?? {});
-
-  const result = await db.query<{
-    date: string;
-    views: string;
-    likes: string;
-    saves: string;
-    comments: string;
-    shares: string;
-    product_clicks: string;
-    profile_visits: string;
-  }>(
-    `SELECT
-       date_trunc('day', created_at)::date AS date,
-       COUNT(*) FILTER (WHERE event_type = 'view')          AS views,
-       COUNT(*) FILTER (WHERE event_type = 'like')          AS likes,
-       COUNT(*) FILTER (WHERE event_type = 'save')          AS saves,
-       COUNT(*) FILTER (WHERE event_type = 'comment')       AS comments,
-       COUNT(*) FILTER (WHERE event_type = 'share')         AS shares,
-       COUNT(*) FILTER (WHERE event_type = 'product_click') AS product_clicks,
-       COUNT(*) FILTER (WHERE event_type = 'profile_visit') AS profile_visits
-     FROM creator_analytics_events
-     WHERE creator_id = $1
-       AND created_at >= NOW() - ($2 || ' days')::INTERVAL
-     GROUP BY date_trunc('day', created_at)::date
-     ORDER BY date ASC`,
-    [actorUserId, days]
-  );
-
-  return {
-    items: result.rows.map((row) => ({
-      date: row.date,
-      views: Number(row.views),
-      likes: Number(row.likes),
-      saves: Number(row.saves),
-      comments: Number(row.comments),
-      shares: Number(row.shares),
-      productClicks: Number(row.product_clicks),
-      profileVisits: Number(row.profile_visits),
-    })),
-  };
-});
+registerCreatorAnalyticsRoutes({ app, db, createApiError, resolveAuthenticatedUserId, resolveRequestIpAddress });
 
 // ── Creator content scheduling ────────────────────────────────────────────
 
@@ -46323,10 +47815,17 @@ app.patch('/creator/documents/:documentId/schedule', async (request, reply) => {
   const paramsSchema = z.object({ documentId: z.string().min(2).max(120) });
   const { documentId } = paramsSchema.parse(request.params);
 
+  // Accept both snake_case (scheduled_for — server contract) and camelCase
+  // (scheduledFor — native client contract). The casing mismatch was a P0
+  // bug identified in the publishing-lifecycle research report (23): the
+  // frontend sent scheduledFor while the server expected scheduled_for.
+  // Both are now accepted; scheduled_for remains the canonical server field.
   const bodySchema = z.object({
-    scheduled_for: z.string().datetime().nullable(),
+    scheduled_for: z.string().datetime().nullable().optional(),
+    scheduledFor: z.string().datetime().nullable().optional(),
   });
-  const { scheduled_for } = bodySchema.parse(request.body);
+  const parsed = bodySchema.parse(request.body);
+  const scheduled_for = parsed.scheduled_for ?? parsed.scheduledFor ?? null;
 
   const ownerResult = await db.query<{ creator_id: string }>(
     `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
@@ -46363,11 +47862,67 @@ registerListingOfferRoutes({
   calculatePlatformChargeGbp: calculateCommercePlatformChargeGbp,
   authorizeInternalServiceRequest,
   enqueueOutboxDrain: () => enqueueOutboxDrainJob('after_commit'),
+  triggerSmartSellEvaluation: (offerId: string) => {
+    // Fire-and-forget: check if the listing has an active Smart Sell policy
+    // and evaluate the offer. This is non-blocking — the offer is already
+    // durable when this is called. The evaluation is idempotent: if the
+    // policy is paused or doesn't exist, the evaluate endpoint skips.
+    void (async () => {
+      try {
+        const offerResult = await db.query<{ listing_id: string }>(
+          `SELECT listing_id FROM listing_offers WHERE id = $1 LIMIT 1`,
+          [offerId],
+        );
+        if (!offerResult.rowCount) return;
+        const policyResult = await db.query<{ id: string }>(
+          `SELECT id FROM smart_sell_policies WHERE listing_id = $1 AND status = 'active' LIMIT 1`,
+          [offerResult.rows[0].listing_id],
+        );
+        if (!policyResult.rowCount) return;
+        // Make an internal HTTP call to the evaluate endpoint.
+        // Using the app's internal inject method avoids network round-trip.
+        await app.inject({
+          method: 'POST',
+          url: '/smart-sell/evaluate',
+          headers: {
+            'x-internal-service-token': config.apiInternalServiceToken,
+          },
+          payload: { offerId },
+        });
+      } catch (error) {
+        app.log.error({ err: error, offerId }, 'Smart Sell evaluation trigger failed');
+      }
+    })();
+  },
+});
+
+registerSmartSellPolicyRoutes({
+  app,
+  db,
+  resolveAuthenticatedUserId,
+  calculatePlatformChargeGbp: calculateCommercePlatformChargeGbp,
+  authorizeInternalServiceRequest,
+  enqueueOutboxDrain: () => enqueueOutboxDrainJob('after_commit'),
+});
+
+registerListingIntelligenceRoutes({
+  app,
+  db,
+  resolveAuthenticatedUserId,
 });
 
 registerChatComposerStateRoutes({ app, db, resolveAuthenticatedUserId });
+registerVoiceMessageRoutes({ app, db, resolveAuthenticatedUserId });
 
 registerStreamingRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
+registerLiveLotEngineRoutes({
+  app,
+  db,
+  createApiError,
+  resolveAuthenticatedUserId,
+  calculateCommercePlatformChargeGbp,
+});
 
 registerAiTruthRoutes({
   app,
@@ -46403,6 +47958,10 @@ const shutdown = async () => {
 
   stopAuctionSweepScheduler();
   stopDomainOutboxScheduler();
+  stopRetentionSweepScheduler();
+  stopAnalyticsAggregationScheduler();
+  stopPushReceiptReconciliationScheduler();
+  stopScheduledPublicationSweepScheduler();
   stopPlatformReconciliationScheduler();
   stopPlatformRevenueSweepScheduler();
   stopOpsAlertingScheduler();

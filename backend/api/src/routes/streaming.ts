@@ -61,6 +61,27 @@ type LiveShoppingCurrentLotRow = {
   updated_at: string;
 };
 
+type LiveLotRow = {
+  id: string;
+  session_id: string;
+  listing_id: string;
+  position: number;
+  status: string;
+  currency: string;
+  start_price_minor: string;
+  reserve_price_minor: string | null;
+  min_increment_minor: string;
+  opens_at: string | null;
+  closes_at: string | null;
+  version: number;
+  high_bid_id: string | null;
+  high_bid_minor: string;
+  high_bidder_id: string | null;
+  winner_id: string | null;
+  order_id: string | null;
+  extension_count: number;
+};
+
 const createSessionSchema = z.object({
   title: z.string().trim().min(1).max(200),
   recordingEnabled: z.boolean().optional().default(false),
@@ -94,7 +115,8 @@ const setCurrentLotSchema = z.object({
 });
 
 const placeBidSchema = z.object({
-  amount: z.number().positive().max(1_000_000),
+  amount: z.coerce.number().positive().max(1_000_000),
+  clientBidId: z.string().uuid().optional(),
 });
 
 const unauthorized = (reply: FastifyReply) => {
@@ -164,6 +186,8 @@ const fetchSessionRow = async (
 };
 
 const liveSessionTopic = (sessionId: string) => `live.session:${sessionId}`;
+
+const activeViewersBySession = new Map<string, Set<string>>();
 
 const fetchCurrentLotRow = async (
   db: Pool,
@@ -347,18 +371,17 @@ export const registerStreamingRoutes = ({
     // Viewer count broadcast: increment when a viewer joins and publish
     // a realtime event so all subscribers see the updated count.
     if (role === "viewer") {
-      const updated = await db.query<LiveShoppingSessionRow>(
-        `UPDATE live_shopping_sessions
-           SET viewer_count = viewer_count + 1
-         WHERE id = $1
-         RETURNING *`,
-        [roomId],
-      );
-      const session = updated.rows[0] ?? row;
+      let viewers = activeViewersBySession.get(roomId);
+      if (!viewers) {
+        viewers = new Set<string>();
+        activeViewersBySession.set(roomId, viewers);
+      }
+      viewers.add(userId);
+
       void publishRealtimeEvent({
         topic: liveSessionTopic(roomId),
-        type: "live.viewer_count.update",
-        payload: { count: session.viewer_count },
+        type: "live.viewer.token_issued",
+        payload: { userId, viewerCount: row.viewer_count },
         seq: true,
         version: 1,
       });
@@ -369,12 +392,26 @@ export const registerStreamingRoutes = ({
 
   // ── Viewer leave: decrement viewer count and broadcast ──
   app.post("/streaming/sessions/:sessionId/leave", async (request, reply) => {
-    resolveAuthenticatedUserId(request);
+    const userId = resolveAuthenticatedUserId(request);
     const { sessionId } = sessionIdParamsSchema.parse(request.params);
 
     const row = await fetchSessionRow(db, sessionId);
     if (!row) {
       throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
+    }
+
+    if (row.host_user_id === userId) {
+      return { ok: true, viewerCount: row.viewer_count };
+    }
+
+    const viewers = activeViewersBySession.get(sessionId);
+    if (!viewers || !viewers.has(userId)) {
+      return { ok: true, viewerCount: row.viewer_count };
+    }
+
+    viewers.delete(userId);
+    if (viewers.size === 0) {
+      activeViewersBySession.delete(sessionId);
     }
 
     const updated = await db.query<LiveShoppingSessionRow>(
@@ -538,7 +575,7 @@ export const registerStreamingRoutes = ({
   app.post("/streaming/sessions/:sessionId/bids", async (request, reply) => {
     const userId = resolveAuthenticatedUserId(request);
     const { sessionId } = sessionIdParamsSchema.parse(request.params);
-    const { amount } = placeBidSchema.parse(request.body);
+    const { amount, clientBidId } = placeBidSchema.parse(request.body);
 
     const sessionRow = await fetchSessionRow(db, sessionId);
     if (!sessionRow) {
@@ -549,80 +586,269 @@ export const registerStreamingRoutes = ({
       return { ok: false, error: "Stream is not live", code: "STREAM_NOT_LIVE" };
     }
 
-    const currentLot = await fetchCurrentLotRow(db, sessionId);
-    if (!currentLot) {
-      reply.code(409);
-      return { ok: false, error: "No current lot set for this session", code: "NO_CURRENT_LOT" };
-    }
-
-    const currentPrice = Number(currentLot.current_price);
-    if (amount <= currentPrice) {
-      reply.code(422);
-      return {
-        ok: false,
-        error: `Bid must be higher than current price (${currentPrice})`,
-        code: "BID_TOO_LOW",
-      };
-    }
-
-    const bidId = randomUUID();
     const bidderName = request.authUser?.userId ?? userId;
+    const bidId = clientBidId ?? randomUUID();
+    const amountMinor = Math.round(amount * 100);
 
-    await db.query(
-      `INSERT INTO live_shopping_bids
-         (id, session_id, listing_id, lot_number, bidder_id, amount)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [bidId, sessionId, currentLot.listing_id, currentLot.lot_number, userId, amount],
-    );
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
 
-    const updated = await db.query<LiveShoppingCurrentLotRow>(
-      `UPDATE live_shopping_current_lots
-         SET current_price = $2, bid_count = bid_count + 1, updated_at = NOW()
-       WHERE session_id = $1
-       RETURNING *`,
-      [sessionId, amount],
-    );
+      const lotResult = await client.query<LiveLotRow>(
+        `SELECT * FROM live_lots WHERE session_id = $1 AND status = 'open' FOR UPDATE`,
+        [sessionId],
+      );
+      const lockedLot = lotResult.rows[0];
+      if (!lockedLot) {
+        await client.query("ROLLBACK");
+        reply.code(409);
+        return { ok: false, error: "No current lot set for this session", code: "NO_CURRENT_LOT" };
+      }
 
-    const updatedLot = updated.rows[0] ?? currentLot;
-    const lotState = mapCurrentLotRow(updatedLot);
+      const projectionResult = await client.query<LiveShoppingCurrentLotRow>(
+        `SELECT * FROM live_shopping_current_lots WHERE session_id = $1 LIMIT 1`,
+        [sessionId],
+      );
+      const projection = projectionResult.rows[0];
+      const lotNumber = projection?.lot_number ?? lockedLot.position;
 
-    void publishRealtimeEvent({
-      topic: liveSessionTopic(sessionId),
-      type: "live.bid.placed",
-      payload: {
-        lotId: currentLot.listing_id,
+      const highBidMinor = Number(lockedLot.high_bid_minor ?? 0);
+      const minIncrement = Number(lockedLot.min_increment_minor ?? 0);
+      const requiredMinor = highBidMinor + minIncrement;
+      if (amountMinor < requiredMinor) {
+        await client.query("ROLLBACK");
+        reply.code(422);
+        return {
+          ok: false,
+          error: `Bid must be at least ${(requiredMinor / 100).toFixed(2)} (current high bid ${(highBidMinor / 100).toFixed(2)} plus increment ${(minIncrement / 100).toFixed(2)})`,
+          code: "BID_TOO_LOW",
+          currentPrice: highBidMinor / 100,
+          bidCount: projection?.bid_count ?? 0,
+        };
+      }
+
+      if (clientBidId) {
+        const existing = await client.query(
+          `SELECT id FROM live_shopping_bids WHERE id = $1 LIMIT 1`,
+          [bidId],
+        );
+        if (existing.rows.length > 0) {
+          await client.query("ROLLBACK");
+          const existingLot = await fetchCurrentLotRow(db, sessionId);
+          if (existingLot) {
+            const lotState = mapCurrentLotRow(existingLot);
+            return {
+              ok: true,
+              success: true,
+              currentBid: lotState.currentPrice,
+              bidCount: lotState.bidCount,
+              isHighBidder: true,
+              idempotent: true,
+            };
+          }
+          return { ok: true, success: true, idempotent: true };
+        }
+      }
+
+      await client.query(
+        `INSERT INTO live_shopping_bids
+           (id, session_id, listing_id, lot_number, bidder_id, amount, lot_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [bidId, sessionId, lockedLot.listing_id, lotNumber, userId, amount, lockedLot.id],
+      );
+
+      await client.query(
+        `UPDATE live_lots
+           SET high_bid_minor = GREATEST(high_bid_minor, $2),
+               high_bidder_id = $3,
+               high_bid_id = $4,
+               version = version + 1
+         WHERE id = $1`,
+        [lockedLot.id, amountMinor, userId, bidId],
+      );
+
+      if (lockedLot.closes_at) {
+        const closeTime = Date.parse(lockedLot.closes_at);
+        const now = Date.now();
+        const thirtySeconds = 30_000;
+        if (closeTime - now < thirtySeconds) {
+          await client.query(
+            `UPDATE live_lots SET closes_at = NOW() + INTERVAL '30 seconds', extension_count = extension_count + 1 WHERE id = $1`,
+            [lockedLot.id],
+          );
+        }
+      }
+
+      const updated = await client.query<LiveShoppingCurrentLotRow>(
+        `UPDATE live_shopping_current_lots
+           SET current_price = GREATEST(current_price, $2),
+               bid_count = bid_count + 1,
+               high_bidder_id = $3,
+               updated_at = NOW()
+         WHERE session_id = $1
+         RETURNING *`,
+        [sessionId, amount, userId],
+      );
+
+      await client.query("COMMIT");
+
+      const updatedLot = updated.rows[0] ?? projection;
+      const lotState = updatedLot ? mapCurrentLotRow(updatedLot) : {
+        sessionId,
+        listingId: lockedLot.listing_id,
+        lotNumber,
+        currentPrice: amount,
+        bidCount: (projection?.bid_count ?? 0) + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      const createdAt = new Date().toISOString();
+
+      void publishRealtimeEvent({
+        topic: liveSessionTopic(sessionId),
+        type: "live.bid.placed",
+        payload: {
+          lotId: lockedLot.id,
+          bid: {
+            id: bidId,
+            sessionId,
+            listingId: lockedLot.listing_id,
+            lotNumber,
+            bidderId: userId,
+            bidderName,
+            amount,
+            createdAt,
+          },
+          lot: lotState,
+          newCurrentPrice: lotState.currentPrice,
+          newBidCount: lotState.bidCount,
+        },
+        seq: true,
+        version: 1,
+      });
+
+      reply.code(201);
+      return {
+        ok: true,
         bid: {
           id: bidId,
           sessionId,
-          listingId: currentLot.listing_id,
-          lotNumber: currentLot.lot_number,
+          listingId: lockedLot.listing_id,
+          lotNumber,
           bidderId: userId,
           bidderName,
           amount,
-          createdAt: new Date().toISOString(),
+          createdAt,
         },
         lot: lotState,
-        newCurrentPrice: lotState.currentPrice,
-        newBidCount: lotState.bidCount,
-      },
-      seq: true,
-      version: 1,
-    });
+      };
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (code === "40001" || code === "40P01") {
+        reply.code(409);
+        return {
+          ok: false,
+          error: "BID_CONFLICT",
+          code: "BID_CONFLICT",
+          message: "Another bid was placed simultaneously. Please retry.",
+        };
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  });
 
-    reply.code(201);
-    return {
-      ok: true,
-      bid: {
-        id: bidId,
-        sessionId,
-        listingId: currentLot.listing_id,
-        lotNumber: currentLot.lot_number,
-        bidderId: userId,
-        bidderName,
-        amount,
-        createdAt: new Date().toISOString(),
-      },
-      lot: lotState,
-    };
+  app.post("/streaming/sessions/:sessionId/lots/auto-close", async (request, reply) => {
+    const { sessionId } = sessionIdParamsSchema.parse(request.params);
+
+    const sessionRow = await fetchSessionRow(db, sessionId);
+    if (!sessionRow) {
+      throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
+    }
+
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+
+      const dueResult = await client.query<LiveLotRow>(
+        `SELECT * FROM live_lots
+           WHERE session_id = $1
+             AND status = 'open'
+             AND closes_at IS NOT NULL
+             AND closes_at <= NOW()
+         FOR UPDATE`,
+        [sessionId],
+      );
+
+      const closedLots: Array<{
+        lotId: string;
+        listingId: string;
+        status: string;
+        winnerId: string | null;
+        highBidMinor: number;
+        reservePriceMinor: number | null;
+      }> = [];
+
+      for (const lot of dueResult.rows) {
+        const highBidMinor = Number(lot.high_bid_minor ?? 0);
+        const reserveMinor = lot.reserve_price_minor != null ? Number(lot.reserve_price_minor) : null;
+        const meetsReserve = reserveMinor == null || highBidMinor >= reserveMinor;
+        const newStatus = meetsReserve && highBidMinor > 0 && lot.high_bidder_id
+          ? "sold"
+          : "passed";
+        const winnerId = newStatus === "sold" ? lot.high_bidder_id : null;
+
+        await client.query(
+          `UPDATE live_lots
+             SET status = $2,
+                 winner_id = $3,
+                 version = version + 1
+           WHERE id = $1`,
+          [lot.id, newStatus, winnerId],
+        );
+
+        await client.query(
+          `UPDATE live_shopping_current_lots
+             SET status = $2,
+                 winner_id = $3,
+                 updated_at = NOW()
+           WHERE session_id = $1`,
+          [sessionId, newStatus, winnerId],
+        );
+
+        closedLots.push({
+          lotId: lot.id,
+          listingId: lot.listing_id,
+          status: newStatus,
+          winnerId,
+          highBidMinor,
+          reservePriceMinor: reserveMinor,
+        });
+
+        void publishRealtimeEvent({
+          topic: liveSessionTopic(sessionId),
+          type: "live.lot.closed",
+          payload: {
+            lotId: lot.id,
+            listingId: lot.listing_id,
+            status: newStatus,
+            winnerId,
+            highBidMinor,
+            reservePriceMinor: reserveMinor,
+          },
+          seq: true,
+          version: 1,
+        });
+      }
+
+      await client.query("COMMIT");
+
+      return { ok: true, closedLots };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   });
 };

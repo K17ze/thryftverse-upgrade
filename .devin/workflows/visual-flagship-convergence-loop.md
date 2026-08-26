@@ -75,6 +75,49 @@ Psychology must remain testable:
 | continuity | preserve object position/context | no unexplained jump across transition |
 | agency | escape, undo, reduced motion | recovery works without hidden gesture |
 
+### Feedback intensity — the S0–S4 hierarchy (AGENTS.md §27.9)
+
+Feedback intensity must correspond to the significance of the state transition, not be applied universally. Do NOT automatically add scale, haptic, shake, or celebration to every element.
+
+| Tier | Feedback | Use when |
+|---|---|---|
+| S0 — invisible | None. Local state updates silently. | Filter toggle, sort order, internal flag. |
+| S1 — visual state only | Icon/state change, no haptic. | Like, save, follow, bookmark. |
+| S2 — visual + subtle haptic | State change + light impact haptic. | Add to cart, send message, submit search. |
+| S3 — dedicated success state | Full success surface + haptic. | Purchase, sale, payout, listing published. |
+| S4 — celebratory | Spring celebration + haptic + optional sound. | First sale, milestone, rare badge. |
+
+The vast majority of success moments are S0 or S1. S3 and S4 are rare by design. Press scale (0.97–0.985) is for primary actions only; transparent 44pt hit targets need only a tint/opacity press state.
+
+### Motion grammar (AGENTS.md §27.2–27.3)
+
+Use the canonical spring configs from `theme/motionTokens.ts` via `useMotionConfig()`:
+
+```text
+tap (damping 18, stiffness 280) · press (15, 200) · entrance (22, 180)
+lift (16, 160) · success (12, 120) · sharedElement (26, 200) · urgency (14, 220)
+```
+
+Timing: 50–100ms instant feedback, 100–200ms simple state change, 200–300ms standard transition, 300–500ms complex transition. Err on the shorter side. Respect reduced motion with instant or fade fallbacks.
+
+### Optical authority (AGENTS.md §29)
+
+The native render wins over mathematical purity. Small documented optical corrections are permitted when token-perfect geometry looks visually wrong:
+
+- 1px icon baseline correction, glyph optical-size compensation, asymmetric visual centering, category-specific media focal positioning, inner/outer corner compensation, typography baseline adjustment.
+- Every optical correction must be documented inline with a comment explaining the deviation.
+- Optical corrections are local to the component. Never propagate a correction into a shared token.
+- Never "clean up" an intentional optical exception because it doesn't match the spacing scale.
+
+### iOS 26 Liquid Glass — RN implications (AGENTS.md §34.2, §35.2)
+
+React Native cannot use `.glassEffect()`. The RN approach:
+
+- reduce opaque backgrounds on bars; use translucent surface fills (`colors.surfaceAlt`) for selected states.
+- let content extend underneath bars via `contentContainerStyle` padding.
+- check `AccessibilityInfo.isReduceTransparencyEnabled()` before rendering glass.
+- Apple says "reduce custom backgrounds in controls and navigation elements" — scoped usage only, never wrap the entire app in glass.
+
 ## 4. Implement the whole surface state machine
 
 Modify canonical production files and directly coupled primitives only. Preserve
@@ -128,8 +171,30 @@ off visually.
 Do not commit captures unless requested. Record their local paths, device/OS,
 viewport, build ID, state, timestamp, and rework decision.
 
+## 7. Last-mile visual acceptance gate (AGENTS.md §30)
+
+Before claiming visual completion, inspect the rendered surface against this
+checklist. Passing TypeScript and tests is not permission to skip this gate.
+
+```text
+Silhouette:  25% scale primary object obvious? no rounded-rect grid?
+First viewport: most important content visible without scrolling?
+Rhythm:      spacing cadence deliberate, not random?
+Corners:     inner/outer radii relate correctly? hairlines only where needed?
+Icons:       consistent line weight? align to text baseline? consistent gap?
+Media:       focal point preserved? no blind cover? consistent aspect ratios?
+Typography:  clear type scale? tabular figures? graceful truncation?
+States:      press states on every control? skeleton matches final? no layout shift?
+Theme:       light + dark identical geometry/hierarchy/density? no added glow?
+Device:      compact phone no overflow? standard holds? large scales gracefully?
+```
+
+Only after every applicable box passes may the agent claim `COMPLETE — TARGET MET`.
+If any box fails, fix and re-run. Do not claim completion with open failures.
+
 Research basis, reviewed 25 August 2026: [Apple design principles](https://developer.apple.com/design/human-interface-guidelines/design-principles),
 [Apple feedback](https://developer.apple.com/design/human-interface-guidelines/feedback),
 [Apple motion](https://developer.apple.com/design/human-interface-guidelines/motion),
 [Android core app quality](https://developer.android.com/docs/quality-guidelines/core-app-quality),
-and [WCAG 2.2](https://www.w3.org/TR/WCAG22/).
+[WCAG 2.2](https://www.w3.org/TR/WCAG22/), and
+[iOS 26 Liquid Glass](https://developer.apple.com/developer-services-and-distribution/download/wwdc-2026/).

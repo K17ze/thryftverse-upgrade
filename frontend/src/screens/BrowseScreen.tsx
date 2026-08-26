@@ -452,12 +452,12 @@ export default function BrowseScreen() {
   }, [categoryId, searchQuery, browseFilters.query, updateBrowseFilters]);
 
   useEffect(() => {
-    const sortMap: Record<string, 'newest' | 'price_asc' | 'price_desc'> = {
+    const sortMap: Record<string, 'newest' | 'price_asc' | 'price_desc' | 'most_liked' | 'ending_soon'> = {
       Newest: 'newest',
       'Price: Low to High': 'price_asc',
       'Price: High to Low': 'price_desc',
-      'Most liked': 'newest',
-      'Ending soon': 'newest',
+      'Most liked': 'most_liked',
+      'Ending soon': 'ending_soon',
     };
 
     const hasBackendFilters =
@@ -466,6 +466,7 @@ export default function BrowseScreen() {
       browseFilters.sizes.length > 0 ||
       browseFilters.condition !== 'Any' ||
       browseFilters.sort !== 'Recommended' ||
+      browseFilters.sustainableOnly ||
       (categoryId && categoryId !== 'search' && categoryId !== 'all');
 
     if (!hasBackendFilters) {
@@ -486,6 +487,7 @@ export default function BrowseScreen() {
       minPrice: browseFilters.priceMin ?? undefined,
       maxPrice: browseFilters.priceMax ?? undefined,
       sort: sortMap[browseFilters.sort] || 'newest',
+      sustainableOnly: browseFilters.sustainableOnly,
     })
       .then((result) => {
         if (cancelled) return;
@@ -693,11 +695,9 @@ export default function BrowseScreen() {
     </View>
   );
 
-  // Sustainability filter is fail-closed: isSustainableGrade returns false
-  // in production (no real data), so this filter yields no results until a
-  // backend impact service or seller tags exist.
   const displayListings = useMemo(() => {
-    const base = backendListings ?? dataToRender;
+    if (backendListings !== null) return backendListings;
+    const base = dataToRender;
     if (!browseFilters.sustainableOnly) return base;
     return base.filter((listing) =>
       isSustainableGrade({

@@ -30,18 +30,17 @@ interface KpiRow {
   sublabel?: string;
 }
 
-type Period = '7d' | '30d' | '90d' | '1y';
+type Period = '7d' | '30d' | '90d';
 
 const PERIOD_OPTIONS: { key: Period; label: string }[] = [
   { key: '7d', label: '7d' },
   { key: '30d', label: '30d' },
   { key: '90d', label: '90d' },
-  { key: '1y', label: '1y' },
 ];
 
-// ── Simple bar chart for listing activity over time ──
+// ── Simple bar chart for listing creation over time ──
 // Derived from real listing createdAt timestamps. No fabricated data.
-// Shows listings created per day (7d/30d) or per week (90d) or per month (1y).
+// Shows listings created per day (7d/30d) or per week (90d).
 interface ChartBucket {
   label: string;
   count: number;
@@ -109,27 +108,6 @@ function computeActivityBuckets(listings: ListingApiItem[], period: Period): Cha
         }
       }
     }
-  } else {
-    // 1y — 12 monthly buckets
-    const now2 = new Date();
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
-      const monthLabel = d.toLocaleDateString('en-GB', { month: 'short' });
-      buckets.push({ label: monthLabel, count: 0 });
-    }
-    for (const l of listings) {
-      const created = new Date(l.createdAt);
-      if (!Number.isNaN(created.getTime())) {
-        for (let i = 0; i < 12; i++) {
-          const bucketDate = new Date(now2.getFullYear(), now2.getMonth() - (11 - i), 1);
-          const nextBucketDate = new Date(now2.getFullYear(), now2.getMonth() - (11 - i) + 1, 1);
-          if (created >= bucketDate && created < nextBucketDate) {
-            buckets[i].count++;
-            break;
-          }
-        }
-      }
-    }
   }
 
   return buckets;
@@ -148,7 +126,7 @@ function ActivityChart({ buckets, colors, accessibilitySummary }: { buckets: Cha
       <View style={chartStyles.emptyWrap}>
         <Ionicons name="bar-chart-outline" size={24} color={colors.textMuted} />
         <Text style={[chartStyles.emptyText, { color: colors.textMuted }]}>
-          No listing activity in this period
+          No listings created in this period
         </Text>
       </View>
     );
@@ -315,39 +293,46 @@ export default function SellerAnalyticsScreen() {
   };
 
   // ── Primary outcome: revenue ──
-  const revenue = useMemo(() => {
+  // When the analytics API is unavailable we fall back to listing data.
+  // Listing rows carry no `soldAt` timestamp, so revenue cannot be honestly
+  // filtered to the selected period — show "Unavailable" rather than a
+  // cumulative figure dressed up as period revenue (AGENTS.md §11).
+  const revenue = useMemo<number | null>(() => {
     if (analytics) return analytics.revenueGbpMinor / 100;
-    const sold = listings.filter((l) => l.status === 'sold');
-    return sold.reduce((sum, l) => sum + l.priceGbp, 0);
-  }, [analytics, listings]);
+    return null;
+  }, [analytics]);
 
-  const itemsSold = useMemo(() => {
+  const itemsSold = useMemo<number | null>(() => {
     if (analytics) return analytics.itemsSold;
-    return listings.filter((l) => l.status === 'sold').length;
-  }, [analytics, listings]);
+    return null;
+  }, [analytics]);
 
-  const totalViews = useMemo(() => {
+  const totalViews = useMemo<number | null>(() => {
     if (analytics) return analytics.totalViews;
-    return listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
-  }, [analytics, listings]);
+    return null;
+  }, [analytics]);
 
-  const totalLikes = useMemo(() => {
+  const totalLikes = useMemo<number | null>(() => {
     if (analytics) return analytics.totalLikes;
-    return listings.reduce((sum, l) => sum + (l.engagement?.likes ?? 0), 0);
-  }, [analytics, listings]);
+    return null;
+  }, [analytics]);
 
-  const conversionRate = useMemo(() => {
-    const views = analytics ? analytics.totalViews : listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
-    const sold = analytics ? analytics.itemsSold : listings.filter((l) => l.status === 'sold').length;
+  // Conversion rate requires period-scoped views. Listing engagement is
+  // cumulative (no per-period breakdown), so mixing it with a period sold
+  // count would be a truth defect. Show "Unavailable" in fallback.
+  const conversionRate = useMemo<number | null>(() => {
+    if (!analytics) return null;
+    const views = analytics.totalViews;
+    const sold = analytics.itemsSold;
     return views > 0 ? (sold / views) * 100 : 0;
-  }, [analytics, listings]);
+  }, [analytics]);
 
   const avgRating = analytics?.avgRating ?? null;
   const reviewCount = analytics?.reviewCount ?? 0;
 
   // ── Avg order value ──
-  const avgOrderValue = useMemo(() => {
-    if (itemsSold === 0) return 0;
+  const avgOrderValue = useMemo<number | null>(() => {
+    if (revenue == null || itemsSold == null || itemsSold === 0) return null;
     return revenue / itemsSold;
   }, [revenue, itemsSold]);
 
@@ -359,14 +344,14 @@ export default function SellerAnalyticsScreen() {
   // ── Supporting KPIs as flat rows (2-4 max) ──
   const kpiRows = useMemo<KpiRow[]>(() => {
     return [
-      { icon: 'checkmark-done', label: 'Items sold', value: String(itemsSold) },
+      { icon: 'checkmark-done', label: 'Items sold', value: itemsSold != null ? String(itemsSold) : 'Unavailable' },
       {
         icon: 'cash-outline',
         label: 'Avg order value',
-        value: avgOrderValue > 0 ? `£${avgOrderValue.toFixed(2)}` : '—',
+        value: avgOrderValue != null ? `£${avgOrderValue.toFixed(2)}` : 'Unavailable',
       },
-      { icon: 'trending-up-outline', label: 'Conversion', value: `${conversionRate.toFixed(1)}%` },
-      { icon: 'eye-outline', label: 'Views', value: String(totalViews) },
+      { icon: 'trending-up-outline', label: 'Conversion', value: conversionRate != null ? `${conversionRate.toFixed(1)}%` : 'Unavailable' },
+      { icon: 'eye-outline', label: 'Views', value: totalViews != null ? String(totalViews) : 'Unavailable' },
     ];
   }, [itemsSold, avgOrderValue, conversionRate, totalViews]);
 
@@ -403,7 +388,7 @@ export default function SellerAnalyticsScreen() {
 
   // ── Activity chart data ──
   // Derived from real listing createdAt timestamps. Shows listings created
-  // per day (7d/30d), per week (90d), or per month (1y).
+  // per day (7d/30d) or per week (90d). No fabricated data.
   const activityBuckets = useMemo(() => computeActivityBuckets(listings, period), [listings, period]);
 
   const activityChartSummary = useMemo(() => {
@@ -411,8 +396,8 @@ export default function SellerAnalyticsScreen() {
     const max = Math.max(...counts);
     const min = Math.min(...counts);
     const total = counts.reduce((sum, c) => sum + c, 0);
-    const periodDesc = period === '7d' ? '7 days' : period === '30d' ? '30 days' : period === '90d' ? '90 days' : '1 year';
-    return `Listing activity chart over ${periodDesc}. ${total} listings created. Highest: ${max}, lowest: ${min}.`;
+    const periodDesc = period === '7d' ? '7 days' : period === '30d' ? '30 days' : '90 days';
+    return `Listings created chart over ${periodDesc}. ${total} listings created. Highest: ${max}, lowest: ${min}.`;
   }, [activityBuckets, period]);
 
   // ── Needs attention: active listings with low views and no sales ──
@@ -433,7 +418,7 @@ export default function SellerAnalyticsScreen() {
       }));
   }, [listings]);
 
-  const periodLabel = period === '7d' ? '7 days' : period === '30d' ? '30 days' : period === '90d' ? '90 days' : '1 year';
+  const periodLabel = period === '7d' ? '7 days' : period === '30d' ? '30 days' : '90 days';
 
   const handleListingPress = useCallback((listingId: string) => {
     navigation.navigate('ItemDetail', { itemId: listingId });
@@ -458,7 +443,7 @@ export default function SellerAnalyticsScreen() {
           {/* Period selector skeleton */}
           <View style={{ height: Space.lg }} />
           <View style={{ flexDirection: 'row', gap: Space.xs }}>
-            {[0, 1, 2, 3].map((i) => (
+            {[0, 1, 2].map((i) => (
               <View key={i} style={{ backgroundColor: colors.surfaceAlt, height: 32, flex: 1, borderRadius: Radius.full }} />
             ))}
           </View>
@@ -534,23 +519,25 @@ export default function SellerAnalyticsScreen() {
         <View style={styles.heroBlock}>
           <Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>Revenue · Last {periodLabel}</Text>
           <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
-            £{revenue.toFixed(2)}
+            {revenue != null ? `£${revenue.toFixed(2)}` : 'Unavailable'}
           </Text>
           <View style={styles.heroTrendRow}>
             <Ionicons
-              name={itemsSold > 0 ? 'checkmark-circle-outline' : 'remove'}
+              name={itemsSold != null && itemsSold > 0 ? 'checkmark-circle-outline' : 'remove'}
               size={14}
-              color={itemsSold > 0 ? colors.success : colors.textMuted}
+              color={itemsSold != null && itemsSold > 0 ? colors.success : colors.textMuted}
             />
-            <Text style={[styles.heroTrendText, { color: itemsSold > 0 ? colors.success : colors.textMuted }]}>
-              {itemsSold > 0
-                ? `${itemsSold} ${itemsSold === 1 ? 'item sold' : 'items sold'}`
-                : 'No sales yet'}
+            <Text style={[styles.heroTrendText, { color: itemsSold != null && itemsSold > 0 ? colors.success : colors.textMuted }]}>
+              {itemsSold != null
+                ? itemsSold > 0
+                  ? `${itemsSold} ${itemsSold === 1 ? 'item sold' : 'items sold'}`
+                  : 'No sales yet'
+                : 'Unavailable'}
             </Text>
           </View>
         </View>
 
-        {/* ── Period selector — segmented control (7d / 30d / 90d / 1y) ── */}
+        {/* ── Period selector — segmented control (7d / 30d / 90d) ── */}
         <View style={styles.periodSegmentRow}>
           {PERIOD_OPTIONS.map((opt) => {
             const isActive = period === opt.key;
@@ -574,14 +561,14 @@ export default function SellerAnalyticsScreen() {
           })}
         </View>
 
-        {/* ── Activity chart — listings created over time ──
+        {/* ── Listings created chart ──
             Simple bar chart derived from real listing createdAt timestamps.
-            Shows listing creation activity per day/week/month depending on
-            the selected period. No fabricated data — only real listings. */}
+            Shows listings created per day/week depending on the selected
+            period. No fabricated data — only real listings. */}
         <View style={styles.chartSection}>
           <View style={styles.chartHeader}>
             <Text style={[styles.chartTitle, { color: colors.textSecondary }]}>
-              Listing activity
+              Listings created
             </Text>
             <Text style={[styles.chartSubtitle, { color: colors.textMuted }]}>
               {activityBuckets.reduce((sum, b) => sum + b.count, 0)} created
@@ -619,7 +606,7 @@ export default function SellerAnalyticsScreen() {
                   <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Like-to-view ratio</Text>
                 </View>
                 <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
-                  {totalViews > 0 ? `${((totalLikes / totalViews) * 100).toFixed(1)}%` : '—'}
+                  {totalViews != null && totalLikes != null && totalViews > 0 ? `${((totalLikes / totalViews) * 100).toFixed(1)}%` : 'Unavailable'}
                 </Text>
               </View>
               <View style={styles.kpiRow}>

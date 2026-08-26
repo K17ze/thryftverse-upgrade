@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, type TextStyle } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Type, Control, FontFamily, FontSize } from '../../theme/designTokens';
@@ -14,6 +14,9 @@ export interface SettingsRowProps {
   iconColor?: string;
   danger?: boolean;
   disabled?: boolean;
+  /** When true, the row is syncing to the server: a small spinner is shown
+   *  next to the toggle and the toggle is non-interactive. */
+  syncing?: boolean;
   onPress?: () => void;
   toggleValue?: boolean;
   onToggle?: (v: boolean) => void;
@@ -36,6 +39,7 @@ export function SettingsRow({
   iconColor,
   danger,
   disabled,
+  syncing,
   onPress,
   toggleValue,
   onToggle,
@@ -50,6 +54,8 @@ export function SettingsRow({
   const hasAction = !!onPress || !!onToggle;
   const showChevron = !!onPress && !onToggle && toggleValue === undefined;
   const isToggle = onToggle !== undefined;
+  const isSyncing = !!syncing;
+  const toggleDisabled = disabled || isSyncing;
 
   // Compose a truthful accessibility label from the visible text so screen
   // readers announce the row's identity without duplicating the title.
@@ -74,7 +80,7 @@ export function SettingsRow({
       activeOpacity={0.7}
       scaleValue={0.995}
       hapticFeedback="light"
-      disabled={!hasAction || disabled}
+      disabled={!hasAction || toggleDisabled}
       accessibilityRole={isToggle ? 'switch' : 'button'}
       accessibilityLabel={isToggle ? toggleA11yLabel : resolvedLabel}
       accessibilityHint={resolvedHint}
@@ -118,12 +124,17 @@ export function SettingsRow({
             </Text>
           ) : null}
           {isToggle ? (
-            <PremiumToggle
-              value={!!toggleValue}
-              onValueChange={onToggle}
-              disabled={disabled}
-              accessibilityLabel={toggleA11yLabel}
-            />
+            <>
+              {isSyncing ? (
+                <ActivityIndicator size={16} color={colors.textSecondary} />
+              ) : null}
+              <PremiumToggle
+                value={!!toggleValue}
+                onValueChange={onToggle}
+                disabled={toggleDisabled}
+                accessibilityLabel={toggleA11yLabel}
+              />
+            </>
           ) : showChevron ? (
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           ) : null}

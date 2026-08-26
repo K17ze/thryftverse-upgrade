@@ -144,6 +144,34 @@ update ID, endpoint/environment, device/OS, screenshot or recording path, review
 and not-run reason. Never commit secrets, customer data, temporary logs, or captures
 unless requested.
 
+### Visual acceptance gate (AGENTS.md §30)
+
+Before signing off a visual surface, the last-mile visual acceptance checklist must
+pass: silhouette at 25% scale, first viewport usefulness, rhythm, corner continuity,
+icon consistency, media crop/focal point, typography hierarchy, press states,
+skeleton-to-final geometry, theme parity (light/dark identical geometry), and device
+matrix (compact/standard/large). See `visual-flagship-convergence-loop.md` §7 for the
+full checklist. A TypeScript pass cannot override an obviously inferior native render.
+
+### Live-signs completion gate (AGENTS.md §37.10–37.12)
+
+For surfaces touching data, endpoints, mutations, or trust signals, readiness also
+requires:
+
+- UI renders real data from a live endpoint (not mock, not hardcoded);
+- the live endpoint has been hit and returns expected rows (recorded);
+- every mutation propagates to its full surface set;
+- the full state matrix is honest, including unknown-outcome;
+- every trust signal is evidenced by a backend row (fail-closed);
+- money/creation mutations are transactional + idempotent;
+- auth + privacy projections are correct;
+- no timer/subscription leak.
+
+A surface is complete only when it has passed **both** the Visual Flagship Convergence
+Loop (§31) and the Live-Signs Convergence Loop (§37). Priority order: money surfaces
+first, then trust, then discovery, then creator, then propagation hotspots, then
+remaining CRUD.
+
 The final report uses the format and lowest honest status required by `AGENTS.md`.
 It names remaining blockers and the next bounded slice; it does not convert an
 inventory into completion.

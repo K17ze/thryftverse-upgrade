@@ -14,7 +14,7 @@ interface Props {
 
 export function ReserveStatusBadge({ status, compact, showExplanation }: Props) {
   const { colors } = useAppTheme();
-  if (status === 'none') return null;
+  if (status === 'hidden') return null;
 
   const isMet = status === 'met';
   const iconName = isMet ? 'shield-checkmark-outline' : 'shield-half-outline';

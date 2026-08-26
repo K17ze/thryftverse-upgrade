@@ -10,8 +10,9 @@ import { CoOwnDepthPreview } from './CoOwnDepthPreview';
 export type CoOwnTradeSide = 'buy' | 'sell';
 export type CoOwnTradeMode = 'market' | 'limit';
 
-/** Phase 2.5: exchange-grade order type. */
-export type CoOwnTicketOrderType = 'protected_instant' | 'limit';
+/** Phase 2.5: exchange-grade order type.
+ * P0.1: 'protected_market' is the backend contract name for protected_instant. */
+export type CoOwnTicketOrderType = 'protected_market' | 'limit' | 'protected_instant';
 
 /** Phase 2.5: duration for resting orders. */
 export type CoOwnTicketDuration = 'GFD' | 'GTC90';
@@ -81,6 +82,9 @@ export interface CoOwnTradeComposerProps {
   postTradePreview?: CoOwnPostTradePreview;
   /** Rights version badge. */
   rightsVersion?: string;
+  /** Phase 2.5: whether the fill estimate is from a live order book or a
+      development-fallback illustrative book. Controls truth-language copy. */
+  bookSource?: 'live' | 'development-fallback';
 }
 
 export function CoOwnTradeComposer({
@@ -109,11 +113,14 @@ export function CoOwnTradeComposer({
   duration,
   postTradePreview,
   rightsVersion,
+  bookSource,
 }: CoOwnTradeComposerProps) {
   const { colors } = useAppTheme();
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const isBuy = side === 'buy';
   const maxForSide = isBuy ? Math.min(availableUnits, maxUnits) : sellableUnits;
+  const isLiveBook = bookSource === 'live';
+  const fillEstimateLabel = isLiveBook ? 'Live estimate' : 'Estimated fill (illustrative)';
 
   // Reservation line text — from computeReservation() (client-side estimate).
   // Labelled as an estimate, not an authoritative server reservation, per
@@ -220,10 +227,11 @@ export function CoOwnTradeComposer({
 
       {detailsExpanded && (
         <View style={[styles.detailsSection, { borderTopColor: colors.border }]}>
-          {/* Estimated fill + depth impact are computed from a deterministic
-              illustrative book (Phase 2.5 — no live order book exists yet).
-              Label honestly so this cannot be mistaken for real market depth. */}
-          {(fillEstimate || depthContext) && (
+          {/* Estimated fill + depth impact come from either a live order book
+              or a deterministic development-fallback illustrative book
+              (Phase 2.5). Label honestly so this cannot be mistaken for real
+              market depth when it is not. */}
+          {(fillEstimate || depthContext) && !isLiveBook && (
             <View style={styles.illustrativeNoteWrap}>
               <Text style={[styles.illustrativeNote, { color: colors.textMuted }]}>
                 Illustrative — not live market data. Actual fill depends on the real order book at execution.
@@ -234,7 +242,7 @@ export function CoOwnTradeComposer({
           {/* Estimated fill */}
           {fillEstimate && (
             <View style={styles.detailBlock}>
-              <Text style={[styles.detailHeader, { color: colors.textMuted }]}>Estimated fill (illustrative)</Text>
+              <Text style={[styles.detailHeader, { color: colors.textMuted }]}>{fillEstimateLabel}</Text>
               <DetailRow label="Avg fill price" value={`${fillEstimate.avgFillPrice.toFixed(2)} 1ZE`} colors={colors} />
               <DetailRow label="Worst price" value={`${fillEstimate.worstPrice.toFixed(2)} 1ZE`} colors={colors} />
               <DetailRow label="Units" value={String(fillEstimate.unitsFilled)} colors={colors} />

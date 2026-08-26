@@ -11,12 +11,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
-import {
-  VoiceMessageRecorder,
-  VoiceRecordingIndicator,
-} from './VoiceMessageRecorder';
+import { VoiceMessageRecorder } from './VoiceMessageRecorder';
 
 interface AttachmentPreview {
   uri: string;
@@ -47,10 +44,15 @@ interface ChatComposerBarProps {
   cautionWarning?: string;
   onDismissDangerWarning?: () => void;
   onDismissCautionWarning?: () => void;
-  onVoicePress?: () => void;
+  onVoiceRecord: (draft: {
+    uri: string;
+    fileName: string;
+    contentType: string;
+    durationMs: number;
+    sizeBytes: number;
+  }) => void;
   isVoiceRecording?: boolean;
-  onVoiceCancel?: () => void;
-  onVoiceSend?: (uri: string, durationMs: number) => void;
+  onVoiceRecordingChange?: (isRecording: boolean) => void;
 }
 
 const MAX_INPUT_HEIGHT = 120;
@@ -75,10 +77,9 @@ export function ChatComposerBar({
   cautionWarning,
   onDismissDangerWarning,
   onDismissCautionWarning,
-  onVoicePress,
+  onVoiceRecord,
   isVoiceRecording = false,
-  onVoiceCancel,
-  onVoiceSend,
+  onVoiceRecordingChange,
 }: ChatComposerBarProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -86,7 +87,6 @@ export function ChatComposerBar({
   const hasText = value.trim().length > 0;
   const canSend = (hasText || attachments.length > 0) && !isSending && !disabled;
   const showQuickReplies = quickReplies.length > 0 && !hasText && attachments.length === 0 && !isVoiceRecording;
-  const showMicButton = !hasText && attachments.length === 0 && !isVoiceRecording && !!onVoiceSend;
   const charCount = value.length;
   const showCharCount = charCount > CHAR_WARN_THRESHOLD;
   const charCountColor = charCount >= MAX_CHARS ? colors.danger : charCount >= CHAR_DANGER_THRESHOLD ? colors.warning : colors.textMuted;
@@ -200,7 +200,13 @@ export function ChatComposerBar({
         ) : null}
 
         {isVoiceRecording ? (
-          <VoiceRecordingIndicator />
+          <View style={styles.inputWrap}>
+            <VoiceMessageRecorder
+              onSend={onVoiceRecord}
+              onRecordingStateChange={onVoiceRecordingChange}
+              disabled={disabled || isSending}
+            />
+          </View>
         ) : (
           <View style={styles.inputWrap}>
             <TextInput
@@ -228,19 +234,7 @@ export function ChatComposerBar({
           </View>
         )}
 
-        {isVoiceRecording ? (
-          <AnimatedPressable
-            onPress={onVoiceCancel}
-            style={styles.actionBtn}
-            activeOpacity={0.7}
-            scaleValue={0.9}
-            hapticFeedback="light"
-            accessibilityLabel="Cancel voice recording"
-            accessibilityRole="button"
-          >
-            <Ionicons name="close" size={24} color={colors.danger} />
-          </AnimatedPressable>
-        ) : hasText || attachments.length > 0 ? (
+        {hasText || attachments.length > 0 ? (
           <AnimatedPressable
             onPress={onSend}
             style={[styles.sendBtn, canSend && styles.sendBtnActive]}
@@ -258,15 +252,6 @@ export function ChatComposerBar({
               <Ionicons name="arrow-up" size={20} color={canSend ? colors.textInverse : colors.textMuted} />
             )}
           </AnimatedPressable>
-        ) : showMicButton ? (
-          <VoiceMessageRecorder
-            onSend={(uri, durationMs) => onVoiceSend?.(uri, durationMs)}
-            onCancel={onVoiceCancel}
-            onRecordingChange={(recording) => {
-              if (recording) onVoicePress?.();
-            }}
-            disabled={disabled || isSending}
-          />
         ) : onCameraPress ? (
           <AnimatedPressable
             onPress={onCameraPress}
@@ -286,7 +271,7 @@ export function ChatComposerBar({
   );
 }
 
-const createStyles = (colors: any) => StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -433,6 +418,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     maxHeight: MAX_INPUT_HEIGHT + 24,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.xl,
+    justifyContent: 'center',
   },
   charCount: {
     fontSize: Type.meta.size,

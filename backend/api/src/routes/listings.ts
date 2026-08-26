@@ -143,13 +143,14 @@ app.get('/listings', async (request) => {
     condition: z.string().optional(),
     minPrice: z.coerce.number().nonnegative().optional(),
     maxPrice: z.coerce.number().nonnegative().optional(),
-    sort: z.enum(['newest', 'price_asc', 'price_desc']).optional().default('newest'),
+    sustainableOnly: z.coerce.boolean().optional().default(false),
+    sort: z.enum(['newest', 'price_asc', 'price_desc', 'most_liked', 'ending_soon']).optional().default('newest'),
     limit: z.coerce.number().int().min(1).max(200).optional().default(100),
     cursor: z.string().optional(),
   });
   const params = querySchema.parse(request.query ?? {});
 
-  const conditions: string[] = ["status = 'active'"];
+  const conditions: string[] = ["l.status = 'active'"];
   const args: unknown[] = [];
 
   if (params.q) {
@@ -186,6 +187,9 @@ app.get('/listings', async (request) => {
     conditions.push(`price_gbp <= $${args.length + 1}`);
     args.push(params.maxPrice);
   }
+  if (params.sustainableOnly) {
+    conditions.push(`l.sustainability_grade IN ('A', 'B')`);
+  }
 
   let cursorData: { sortValue: string | number; id: string } | null = null;
   if (params.cursor) {
@@ -197,12 +201,29 @@ app.get('/listings', async (request) => {
     }
   }
 
+  const extraJoins: string[] = [];
+  const extraSelects: string[] = [];
+  if (params.sort === 'most_liked') {
+    extraSelects.push('COALESCE(wl.like_count, 0) AS like_count');
+    extraJoins.push(
+      `LEFT JOIN (SELECT listing_id, COUNT(DISTINCT user_id) AS like_count FROM interactions WHERE action = 'wishlist' GROUP BY listing_id) wl ON wl.listing_id = l.id`,
+    );
+  }
+  if (params.sort === 'ending_soon') {
+    extraSelects.push('a.ends_at');
+    extraJoins.push('LEFT JOIN auctions a ON a.listing_id = l.id');
+  }
+
   const orderBy =
     params.sort === 'price_asc'
       ? 'price_gbp ASC, l.id ASC'
       : params.sort === 'price_desc'
         ? 'price_gbp DESC, l.id DESC'
-        : 'l.created_at DESC, l.id DESC';
+        : params.sort === 'most_liked'
+          ? 'like_count DESC, l.id DESC'
+          : params.sort === 'ending_soon'
+            ? 'a.ends_at ASC NULLS LAST, l.id DESC'
+            : 'l.created_at DESC, l.id DESC';
 
   if (cursorData) {
     if (params.sort === 'price_asc') {
@@ -210,6 +231,12 @@ app.get('/listings', async (request) => {
       args.push(cursorData.sortValue, cursorData.id);
     } else if (params.sort === 'price_desc') {
       conditions.push(`(price_gbp, l.id) < ($${args.length + 1}, $${args.length + 2})`);
+      args.push(cursorData.sortValue, cursorData.id);
+    } else if (params.sort === 'most_liked') {
+      conditions.push(`(COALESCE(like_count, 0), l.id) < ($${args.length + 1}, $${args.length + 2})`);
+      args.push(cursorData.sortValue, cursorData.id);
+    } else if (params.sort === 'ending_soon') {
+      conditions.push(`(a.ends_at, l.id) > ($${args.length + 1}, $${args.length + 2})`);
       args.push(cursorData.sortValue, cursorData.id);
     } else {
       conditions.push(`(l.created_at, l.id) < ($${args.length + 1}, $${args.length + 2})`);
@@ -234,14 +261,17 @@ app.get('/listings', async (request) => {
     original_price_gbp: number | string | null;
     created_at: string;
     seller_username: string | null;
+    like_count?: string | number | null;
+    ends_at?: string | null;
   }>(
     `
       SELECT
         l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
         l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
-        u.username AS seller_username
+        u.username AS seller_username${extraSelects.length ? `, ${extraSelects.join(', ')}` : ''}
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
+      ${extraJoins.join('\n      ')}
       WHERE ${conditions.join(' AND ')}
       ORDER BY ${orderBy}
       LIMIT $${args.length + 1}
@@ -295,7 +325,11 @@ app.get('/listings', async (request) => {
     ? Buffer.from(JSON.stringify({
         sortValue: params.sort === 'price_asc' || params.sort === 'price_desc'
           ? Number(lastRow.price_gbp)
-          : lastRow.created_at,
+          : params.sort === 'most_liked'
+            ? Number(lastRow.like_count ?? 0)
+            : params.sort === 'ending_soon'
+              ? lastRow.ends_at ?? null
+              : lastRow.created_at,
         id: lastRow.id,
       })).toString('base64')
     : undefined;
@@ -348,11 +382,12 @@ app.get('/search/listings', async (request) => {
     size: z.string().min(1).optional(),
     priceMin: z.coerce.number().min(0).optional(),
     priceMax: z.coerce.number().min(0).optional(),
+    sustainableOnly: z.coerce.boolean().optional().default(false),
     sort: z.enum(['relevance', 'recent', 'price_asc', 'price_desc']).default('relevance'),
     page: z.coerce.number().int().min(1).max(100).default(1),
   });
 
-  const { q, limit, category, condition, size, priceMin, priceMax, sort, page } =
+  const { q, limit, category, condition, size, priceMin, priceMax, sustainableOnly, sort, page } =
     querySchema.parse(request.query);
   const searchPolicyVersion = 'listing-search-postgres-v3.0';
   const startTime = Date.now();
@@ -366,6 +401,7 @@ app.get('/search/listings', async (request) => {
       size,
       priceMin,
       priceMax,
+      sustainableOnly,
     },
     sort,
     page,
@@ -376,7 +412,7 @@ app.get('/search/listings', async (request) => {
   const revalidate = async (): Promise<void> => {
     const freshResult = await computeSearchResults(
       readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
-      searchPolicyVersion,
+      searchPolicyVersion, sustainableOnly,
     );
     await setCachedSearchResult(redis, cacheParams, freshResult);
   };
@@ -405,7 +441,7 @@ app.get('/search/listings', async (request) => {
   // â”€â”€ Cache miss: compute results from DB â”€â”€
   const computed = await computeSearchResults(
     readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
-    searchPolicyVersion,
+    searchPolicyVersion, sustainableOnly,
   );
 
   const responseTimeMs = Date.now() - startTime;
@@ -447,6 +483,7 @@ async function computeSearchResults(
   sort: string,
   page: number,
   searchPolicyVersion: string,
+  sustainableOnly: boolean,
 ): Promise<Omit<CachedSearchResult, 'cachedAt' | 'fromCache' | 'stale'>> {
   const offset = (page - 1) * limit;
 
@@ -474,6 +511,9 @@ async function computeSearchResults(
   if (priceMax !== undefined) {
     filterConditions.push(`l.price_gbp <= $${filterIdx++}`);
     filterArgs.push(priceMax);
+  }
+  if (sustainableOnly) {
+    filterConditions.push(`l.sustainability_grade IN ('A', 'B')`);
   }
 
   const filterClause = filterConditions.length > 0
@@ -1109,7 +1149,7 @@ app.post('/visual-search', async (request, reply) => {
     condition: z.string().optional(),
     minPrice: z.coerce.number().nonnegative().optional(),
     maxPrice: z.coerce.number().nonnegative().optional(),
-    sort: z.enum(['newest', 'price_asc', 'price_desc']).optional().default('newest'),
+    sort: z.enum(['newest', 'price_asc', 'price_desc', 'most_liked', 'ending_soon']).optional().default('newest'),
     limit: z.coerce.number().int().min(1).max(100).optional().default(48),
   });
   const payload = bodySchema.parse(request.body ?? {});

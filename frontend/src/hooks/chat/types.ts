@@ -66,6 +66,21 @@ export interface Message {
 
   voiceWaveform?: number[];
 
+  voiceContainer?: 'm4a' | 'ogg' | 'webm' | 'mp4';
+
+  voiceCodec?: 'aac' | 'opus' | 'mp3';
+
+  voiceModerationState?: 'pending' | 'allowed' | 'limited' | 'blocked';
+
+  voiceTranscription?: {
+    id: string;
+    state: 'queued' | 'processing' | 'complete' | 'failed_retryable' | 'failed_final' | 'unsupported';
+    text: string | null;
+    language: string | null;
+    failureReason: string | null;
+    derived: true;
+  };
+
   commerceState?: {
     stateType:
       | "order_placed"

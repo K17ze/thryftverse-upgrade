@@ -55,6 +55,34 @@ export interface ApiMessagePayload {
   reactions?: ApiMessageReaction[];
 }
 
+// Voice message receipt — the canonical voice metadata returned by the
+// backend serializer (joined from voice_messages). The client renders a
+// real waveform from `waveform.samples` or an honest progress line when
+// `waveform` is null (never fake bars).
+export interface VoiceMessageReceipt {
+  id: string;
+  durationMs: number;
+  bytes: number;
+  container: 'm4a' | 'ogg' | 'webm' | 'mp4';
+  codec: 'aac' | 'opus' | 'mp3';
+  waveform: {
+    samples: number[];
+    sampleCount: number;
+    algorithmVersion: number;
+  } | null;
+  moderationState: 'pending' | 'allowed' | 'limited' | 'blocked';
+}
+
+export interface VoiceTranscriptionReceipt {
+  id: string;
+  state: 'queued' | 'processing' | 'complete' | 'failed_retryable' | 'failed_final' | 'unsupported';
+  text: string | null;
+  language: string | null;
+  rating: 'good' | 'bad' | null;
+  failureReason: string | null;
+  derived: true;
+}
+
 interface ApiBotPayload {
   id: string;
   slug: string;
@@ -122,6 +150,12 @@ export function mapApiMessageToConversationMessage(payload: ApiMessagePayload): 
 
   const meta = payload.metadata || {};
 
+  // Voice messages (report 19): the backend returns a `voice` object with
+  // canonical duration/waveform/container/codec. The mediaUri lives in
+  // metadata for backwards compatibility, but the voice row is the truth.
+  const voice = (payload as ApiMessagePayload & { voice?: VoiceMessageReceipt }).voice;
+  const isVoice = Boolean(voice) || meta.voiceMessage === true || meta.mediaType === 'voice';
+
   return {
     id: payload.id,
     senderId,
@@ -129,10 +163,20 @@ export function mapApiMessageToConversationMessage(payload: ApiMessagePayload): 
     timestamp: payload.createdAt,
     isSystem: payload.senderType === 'system',
     systemTitle: payload.senderType === 'system' ? 'System' : undefined,
-    type: payload.senderType === 'system' ? 'system' : 'text',
+    type: payload.senderType === 'system'
+      ? 'system'
+      : isVoice
+        ? 'voice'
+        : 'text',
     sender: payload.senderType === 'system' ? 'system' : 'other',
     mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
     mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
+    voiceUri: typeof meta.mediaUri === 'string' && isVoice ? meta.mediaUri : undefined,
+    voiceDurationMs: voice?.durationMs ?? (typeof meta.durationMs === 'number' ? meta.durationMs : undefined),
+    voiceWaveform: voice?.waveform?.samples,
+    voiceContainer: voice?.container,
+    voiceCodec: voice?.codec,
+    voiceModerationState: voice?.moderationState,
     replyToMessageId: payload.replyToMessageId,
     reactions: payload.reactions?.map((r) => ({ emoji: r.emoji, userIds: r.userIds })),
   };
@@ -292,11 +336,17 @@ export async function sendConversationMessageOnApi(
   text: string,
   metadata?: Record<string, unknown>,
   clientMessageId?: string,
-  options?: { type?: 'text' | 'image' | 'video'; mediaUri?: string; replyToMessageId?: string },
+  options?: {
+    type?: 'text' | 'image' | 'video' | 'voice';
+    mediaUri?: string;
+    replyToMessageId?: string;
+  },
 ): Promise<Message> {
   // P0-MSG-1: Discriminated message payload. The backend accepts a
   // `type` field — 'text' (or absent) requires text; 'image'/'video'
-  // require mediaUri and make text optional. We only forward fields
+  // require mediaUri and make text optional. 'voice' (report 19) requires
+  // mediaUri plus voice metadata (durationMs, container, codec) and is
+  // only sent after the audio asset is finalized. We only forward fields
   // that are present so text-only callers stay backwards compatible.
   const body: Record<string, unknown> = {};
   if (options?.type) {
@@ -950,4 +1000,96 @@ export async function deleteQuickReplyOnApi(replyId: string): Promise<void> {
     `/chat/quick-replies/${encodeURIComponent(replyId)}`,
     { method: 'DELETE' }
   );
+}
+
+// ---------------------------------------------------------------------------
+// Voice messages — report 19. Playback authorization, waveform read path and
+// opt-in transcription. These are the client-side contracts for the backend
+// voice message routes.
+// ---------------------------------------------------------------------------
+
+export async function fetchVoiceMessageDetailsOnApi(
+  conversationId: string,
+  messageId: string,
+): Promise<VoiceMessageReceipt> {
+  const payload = await fetchJson<{
+    ok: true;
+    voice: VoiceMessageReceipt;
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/voice`,
+  );
+  return payload.voice;
+}
+
+export async function requestVoicePlaybackUrlOnApi(
+  conversationId: string,
+  messageId: string,
+): Promise<{ playbackUrl: string; expiresAt: string; expiresIn: number }> {
+  const payload = await fetchJson<{
+    ok: true;
+    playbackUrl: string;
+    expiresAt: string;
+    expiresIn: number;
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/voice/playback-url`,
+    { method: 'POST' },
+  );
+  return payload;
+}
+
+export async function requestVoiceTranscriptionOnApi(
+  conversationId: string,
+  messageId: string,
+  language?: string,
+): Promise<VoiceTranscriptionReceipt> {
+  const payload = await fetchJson<{
+    ok: true;
+    transcription: VoiceTranscriptionReceipt;
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/voice/transcribe`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: language ?? null }),
+    },
+  );
+  return payload.transcription;
+}
+
+export async function fetchVoiceTranscriptionOnApi(
+  conversationId: string,
+  messageId: string,
+): Promise<VoiceTranscriptionReceipt | null> {
+  try {
+    const payload = await fetchJson<{
+      ok: true;
+      transcription: VoiceTranscriptionReceipt;
+    }>(
+      `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/voice/transcription`,
+    );
+    return payload.transcription;
+  } catch (e: unknown) {
+    const status = (e as { status?: number }).status;
+    if (status === 404) return null;
+    throw e;
+  }
+}
+
+export async function rateVoiceTranscriptionOnApi(
+  conversationId: string,
+  messageId: string,
+  rating: 'good' | 'bad',
+): Promise<{ rating: 'good' | 'bad' }> {
+  const payload = await fetchJson<{
+    ok: true;
+    rating: 'good' | 'bad';
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/voice/transcription/rating`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating }),
+    },
+  );
+  return payload;
 }

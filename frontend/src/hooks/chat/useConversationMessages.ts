@@ -765,12 +765,132 @@ export function useConversationMessages({
     [conversationId, show],
   );
 
+  // ---------------------------------------------------------------------------
+  // Voice messages — report 19. Recording preview → presign → PUT → finalize
+  // → voice send with idempotent clientMessageId. Unknown-outcome sends use
+  // the durable outbox, just like media and text.
+  // ---------------------------------------------------------------------------
+  const sendVoiceMessage = useCallback(
+    async (msgId: string, draft: { uri: string; fileName: string; contentType: string; durationMs: number; sizeBytes: number }, existingCanonicalUrl?: string) => {
+      if (!conversationId) return;
+      const clientMessageId = createStableId('cmsg');
+
+      let canonicalUrl: string;
+      if (existingCanonicalUrl && existingCanonicalUrl.startsWith('http')) {
+        canonicalUrl = existingCanonicalUrl;
+      } else {
+        try {
+          const uploaded = await uploadMedia(draft.uri, 'voice');
+          canonicalUrl = uploaded.publicUrl;
+        } catch {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
+            ),
+          );
+          show("Voice upload failed. Tap voice message to retry.", "error");
+          return;
+        }
+      }
+
+      const voiceMetadata = {
+        durationMs: draft.durationMs,
+        bytes: draft.sizeBytes,
+        container: 'm4a' as const,
+        codec: 'aac' as const,
+      };
+
+      sendConversationMessageOnApi(
+        conversationId,
+        '',
+        { mediaUri: canonicalUrl, mediaType: 'voice' as const, ...voiceMetadata },
+        clientMessageId,
+        { type: 'voice' as const, mediaUri: canonicalUrl },
+      )
+        .then((serverMsg) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const, voiceUri: canonicalUrl } : m,
+            ),
+          );
+        })
+        .catch(() => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, status: "reconciling" as const, uploadStatus: "sent" as const, voiceUri: canonicalUrl } : m,
+            ),
+          );
+          enqueueChatMessage({
+            conversationId,
+            clientMessageId,
+            text: '',
+            metadata: { mediaUri: canonicalUrl, type: 'voice', ...voiceMetadata },
+          });
+        });
+    },
+    [conversationId, show],
+  );
+
+  const createVoiceMessage = useCallback(
+    (draft: { uri: string; fileName: string; contentType: string; durationMs: number; sizeBytes: number }): Message => {
+      return {
+        id: makeStableId('msg_voice', 7),
+        type: 'voice',
+        sender: 'me',
+        senderLabel: currentUser?.username ?? 'you',
+        text: '',
+        voiceUri: draft.uri,
+        voiceDurationMs: draft.durationMs,
+        voiceContainer: 'm4a',
+        voiceCodec: 'aac',
+        uploadStatus: 'uploading',
+      };
+    },
+    [currentUser?.username],
+  );
+
+  const handleSendVoice = useCallback(
+    async (draft: { uri: string; fileName: string; contentType: string; durationMs: number; sizeBytes: number }) => {
+      if (!conversationId) return;
+      const outgoing = createVoiceMessage(draft);
+      pushMessage(outgoing);
+      appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+      haptic.success();
+      scheduleScrollToEnd();
+      sendVoiceMessage(outgoing.id, draft);
+    },
+    [conversationId, createVoiceMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendVoiceMessage],
+  );
+
   const handleRetryUpload = useCallback(
     (msgId: string) => {
       setMessages((prev) => {
         const msg = prev.find((m) => m.id === msgId);
-        if (!msg?.mediaUri || !msg.mediaType) return prev;
-        if (msg.uploadStatus === "uploading") return prev;
+        if (!msg || msg.uploadStatus === "uploading") return prev;
+
+        if (msg.type === 'voice' && msg.voiceUri && msg.voiceDurationMs) {
+          // Voice retry: reuse the canonical URL if already uploaded, or
+          // re-upload the local draft if still a file:// URI.
+          const alreadyUploaded = msg.voiceUri.startsWith('http');
+          setTimeout(() => {
+            sendVoiceMessage(
+              msgId,
+              {
+                uri: alreadyUploaded ? msg.voiceUri! : msg.voiceUri!,
+                fileName: `voice_retry_${Date.now()}.m4a`,
+                contentType: 'audio/m4a',
+                durationMs: msg.voiceDurationMs!,
+                sizeBytes: 0,
+              },
+              alreadyUploaded ? msg.voiceUri : undefined,
+            );
+          }, 0);
+          return prev.map((m) =>
+            m.id === msgId ? { ...m, uploadStatus: "uploading" as const } : m,
+          );
+        }
+
+        if (!msg.mediaUri || !msg.mediaType) return prev;
         // P0.7: If the media was already uploaded (canonical URL exists),
         // pass it so sendMediaMessage skips re-upload and only retries the
         // message send with the same clientMessageId.
@@ -791,7 +911,7 @@ export function useConversationMessages({
       });
       haptic.light();
     },
-    [sendMediaMessage, haptic],
+    [sendMediaMessage, sendVoiceMessage, haptic],
   );
 
   const handleRetrySendMessage = useCallback(
@@ -1097,6 +1217,9 @@ export function useConversationMessages({
     retryAgentDraft,
     sendMessage,
     sendMediaMessage,
+    sendVoiceMessage,
+    handleSendVoice,
+    createVoiceMessage,
     handleRetryUpload,
     handleRetrySendMessage,
     createMediaMessage,

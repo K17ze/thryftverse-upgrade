@@ -75,7 +75,7 @@ export type MediaAssetReceipt = {
     | 'processing_failed'
     | 'revoked'
     | 'deleted';
-  mediaKind: 'image' | 'video' | 'document';
+  mediaKind: 'image' | 'video' | 'audio' | 'document';
   canonicalUrl: string | null;
   publishable: boolean;
   failureReason?: string | null;
@@ -335,10 +335,16 @@ export async function uploadMedia(
         ? 'image/gif'
         : ext === 'webp'
         ? 'image/webp'
-        : ext === 'mp4'
+        : ext === 'mp4' || ext === 'm4v'
         ? 'video/mp4'
         : ext === 'mov'
         ? 'video/quicktime'
+        : ext === 'm4a' || ext === 'aac'
+        ? 'audio/m4a'
+        : ext === 'ogg' || ext === 'opus'
+        ? 'audio/ogg'
+        : ext === 'webm'
+        ? 'audio/webm'
         : 'image/jpeg';
     fileName = `media_${Date.now()}_${Math.floor(Math.random() * 1_000_000).toString(36)}.${ext}`;
   } else {

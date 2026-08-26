@@ -5,6 +5,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Type, Radius, Stroke } from '../../theme/designTokens';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS, deriveSellerBadges, SELLER_BADGES } from '../../platform/product';
+import type { PublicProfileTrader } from '../../services/profileApi';
 
 /**
  * Trust signal chip — icon + label, restrained.
@@ -40,6 +41,9 @@ export interface ProfileTrustSignalsProps {
   reviewCount?: number;
   /** Sold listing count from public profile stats. */
   soldCount?: number;
+  /** DSA Article 30 trader classification from the profile aggregate.
+   *  When provided, renders a "Business" or "Private" chip. */
+  traderClassification?: PublicProfileTrader | null;
   /** Layout alignment — centered for self-profile, left for public profile. */
   align?: 'left' | 'center';
   /** When true, suppresses the "X sold" chip because the parent already shows
@@ -59,6 +63,7 @@ export function ProfileTrustSignals({
   ratingAverage,
   reviewCount = 0,
   soldCount = 0,
+  traderClassification = null,
   align = 'left',
   hideSoldChip = false,
 }: ProfileTrustSignalsProps) {
@@ -75,6 +80,17 @@ export function ProfileTrustSignals({
       icon: info.icon as keyof typeof Ionicons.glyphMap,
       label: info.label,
       tone: info.color === 'success' ? 'success' : 'default',
+    });
+  }
+
+  // DSA Article 30 trader classification — factual, not decorative.
+  // "Business" for traders, "Private" for non-traders. Only rendered when
+  // the aggregate provides the classification (compliance record exists).
+  if (traderClassification) {
+    chips.push({
+      icon: traderClassification.classification === 'trader' ? 'briefcase' : 'person',
+      label: traderClassification.classification === 'trader' ? 'Business' : 'Private',
+      tone: 'muted',
     });
   }
 

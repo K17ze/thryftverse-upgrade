@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -27,10 +26,14 @@ import { useHaptic } from '../hooks/useHaptic';
 import { DiscoveryModeNav, type DiscoveryMode } from '../components/discovery/DiscoveryModeNav';
 import { DiscoverScene, PulseScene, LooksScene } from '../scenes/discovery';
 import { SearchAutocomplete } from '../components/search/SearchAutocomplete';
+import { loadRecentSearchStrings, recordRecentSearch, clearRecentSearches } from '../services/searchHistory';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
+import { CATEGORIES } from '../constants/categories';
 
-const RECENT_SEARCHES_KEY = '@thryftverse_recent_searches';
-const TRENDING_SEARCHES = ['Vintage denim', 'Y2K bags', 'Linen shirts', 'Chunky boots', 'Gold jewellery'];
+// Trending searches are derived from the canonical category tree rather
+// than hardcoded strings, so they always reflect real browse destinations
+// the inventory is organized under (research: truthfulness P2).
+const TRENDING_SEARCHES = CATEGORIES.slice(0, 5).map((cat) => cat.name);
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -59,17 +62,12 @@ export default function SearchScreen() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const searchInputRef = useRef<TextInput>(null);
-  const recentSearchesKey = `${RECENT_SEARCHES_KEY}:${currentUser?.id ?? 'guest'}`;
 
   useEffect(() => {
-    AsyncStorage.getItem(recentSearchesKey)
-      .then((raw) => {
-        if (raw) {
-          try { setRecentSearches(JSON.parse(raw)); } catch { /* noop */ }
-        }
-      })
+    loadRecentSearchStrings(currentUser?.id)
+      .then(setRecentSearches)
       .catch(() => undefined);
-  }, [recentSearchesKey]);
+  }, [currentUser?.id]);
 
   const submitSearch = useCallback((query: string) => {
     const trimmed = query.trim();
@@ -77,13 +75,11 @@ export default function SearchScreen() {
     Keyboard.dismiss();
     setIsSearchFocused(false);
     // Persist to recent searches.
-    setRecentSearches((prev) => {
-      const updated = [trimmed, ...prev.filter((s) => s !== trimmed)].slice(0, 8);
-      void AsyncStorage.setItem(recentSearchesKey, JSON.stringify(updated)).catch(() => undefined);
-      return updated;
-    });
+    recordRecentSearch(trimmed, currentUser?.id)
+      .then((updated) => setRecentSearches(updated.map((e) => e.query)))
+      .catch(() => undefined);
     navigation.navigate('GlobalSearch', { initialQuery: trimmed });
-  }, [navigation, recentSearchesKey]);
+  }, [navigation, currentUser?.id]);
 
   const handleRefresh = async () => {
     haptic.patterns.refresh();
@@ -297,8 +293,9 @@ export default function SearchScreen() {
                 submitSearch(query);
               }}
               onClearRecent={() => {
-                setRecentSearches([]);
-                void AsyncStorage.removeItem(recentSearchesKey).catch(() => undefined);
+                clearRecentSearches(currentUser?.id)
+                  .then(() => setRecentSearches([]))
+                  .catch(() => undefined);
               }}
             />
           </View>

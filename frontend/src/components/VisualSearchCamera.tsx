@@ -6,6 +6,7 @@ import {
   Animated,
   Text,
   Image,
+  ActivityIndicator,
   GestureResponderEvent,
 } from 'react-native';
 import { Camera, type CameraRef, useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
@@ -21,8 +22,6 @@ import { Linking } from 'react-native';
 
 const SHUTTER_SIZE = 80;
 const SHUTTER_INNER = 64;
-const CORNER_SIZE = 40;
-const CORNER_STROKE = 3;
 
 interface VisualSearchCameraProps {
   onPhotoCapture: (uri: string) => void;
@@ -48,6 +47,8 @@ export default function VisualSearchCamera({
   const photoOutput = usePhotoOutput({ qualityPrioritization: 'balanced' });
   const { hasPermission, requestPermission } = useCameraPermission();
   const [flash, setFlash] = React.useState<'off' | 'on'>('off');
+  const [isCapturing, setIsCapturing] = React.useState(false);
+  const [permissionStatus, setPermissionStatus] = React.useState<'loading' | 'denied' | 'granted'>('loading');
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
   const [focusPoint, setFocusPoint] = React.useState<{ x: number; y: number } | null>(null);
   const focusAnim = React.useRef(new Animated.Value(0)).current;
@@ -62,11 +63,22 @@ export default function VisualSearchCamera({
   }, []);
 
   React.useEffect(() => {
-    if (!hasPermission) {
-      requestPermission().catch(() => {
-        show('Camera permission is required for visual search', 'error');
-      });
+    if (hasPermission) {
+      setPermissionStatus('granted');
+      return;
     }
+    let cancelled = false;
+    requestPermission()
+      .then(() => {
+        if (!cancelled) setPermissionStatus('granted');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPermissionStatus('denied');
+          show('Camera permission is required for visual search', 'error');
+        }
+      });
+    return () => { cancelled = true; };
   }, [hasPermission, requestPermission, show]);
 
   // Load the most recent gallery thumbnail for the bottom-left shortcut (Google Lens pattern).
@@ -108,7 +120,8 @@ export default function VisualSearchCamera({
   };
 
   const takePhoto = async () => {
-    if (!device) return;
+    if (!device || isCapturing) return;
+    setIsCapturing(true);
     try {
       const photo = await photoOutput.capturePhoto({ flashMode: flash }, {});
       const filePath = await photo.saveToTemporaryFileAsync();
@@ -117,6 +130,8 @@ export default function VisualSearchCamera({
       onPhotoCapture(`file://${filePath}`);
     } catch {
       show('Failed to capture photo', 'error');
+    } finally {
+      setIsCapturing(false);
     }
   };
 
@@ -153,17 +168,40 @@ export default function VisualSearchCamera({
 
   const handleOpenSettings = () => Linking.openSettings();
 
-  if (!hasPermission) {
+  if (permissionStatus === 'loading') {
+    return (
+      <View style={styles.permissionOverlay}>
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
+  }
+
+  if (permissionStatus === 'denied') {
     return (
       <View style={styles.permissionOverlay}>
         <View style={styles.permissionContent}>
           <Ionicons name="camera-outline" size={48} color="#fff" />
-          <Text style={styles.permissionTitle}>Camera access needed</Text>
+          <Text style={styles.permissionTitle} accessibilityRole="header">Camera access needed</Text>
           <Text style={styles.permissionText}>
             Enable camera permission in Settings to search with a photo.
           </Text>
-          <Pressable style={styles.permissionBtn} onPress={handleOpenSettings} accessibilityRole="button">
+          <Pressable
+            style={styles.permissionBtn}
+            onPress={handleOpenSettings}
+            accessibilityRole="button"
+            accessibilityLabel="Open device settings"
+            accessibilityHint="Opens settings so you can allow camera access"
+          >
             <Text style={styles.permissionBtnText}>Open Settings</Text>
+          </Pressable>
+          <Pressable
+            style={styles.permissionSecondaryBtn}
+            onPress={onGallery}
+            accessibilityRole="button"
+            accessibilityLabel="Use gallery instead"
+            accessibilityHint="Choose a photo from your gallery to search with"
+          >
+            <Text style={styles.permissionSecondaryBtnText}>Use Gallery</Text>
           </Pressable>
         </View>
       </View>
@@ -175,10 +213,19 @@ export default function VisualSearchCamera({
       <View style={styles.permissionOverlay}>
         <View style={styles.permissionContent}>
           <Ionicons name="camera-outline" size={48} color="#fff" />
-          <Text style={styles.permissionTitle}>No camera available</Text>
+          <Text style={styles.permissionTitle} accessibilityRole="header">No camera available</Text>
           <Text style={styles.permissionText}>
             A camera could not be found on this device.
           </Text>
+          <Pressable
+            style={styles.permissionBtn}
+            onPress={onGallery}
+            accessibilityRole="button"
+            accessibilityLabel="Choose from gallery"
+            accessibilityHint="Choose a photo from your gallery to search with"
+          >
+            <Text style={styles.permissionBtnText}>Choose from Gallery</Text>
+          </Pressable>
         </View>
       </View>
     );
@@ -215,22 +262,17 @@ export default function VisualSearchCamera({
         />
       )}
 
-      {/* Corner brackets */}
-      <View style={styles.bracketTL} />
-      <View style={styles.bracketTR} />
-      <View style={styles.bracketBL} />
-      <View style={styles.bracketBR} />
-
-      {/* Center crosshair */}
-      <View style={styles.crosshair} pointerEvents="none">
-        <View style={styles.crosshairH} />
-        <View style={styles.crosshairV} />
-      </View>
-
       {/* Top controls */}
       <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 16) + 8 }]} pointerEvents="box-none">
-        <Pressable style={styles.topIconBtn} onPress={onClose} hitSlop={12} accessibilityLabel="Close visual search" accessibilityRole="button">
-          <Ionicons name="close" size={26} color="#fff" />
+        <Pressable
+          style={styles.topIconBtn}
+          onPress={onClose}
+          hitSlop={12}
+          accessibilityLabel="Close visual search"
+          accessibilityHint="Closes the camera and returns to the previous screen"
+          accessibilityRole="button"
+        >
+          <Ionicons name="close" size={26} color="#fff" style={styles.topIcon} />
         </Pressable>
 
         <View style={styles.topRightControls}>
@@ -239,18 +281,21 @@ export default function VisualSearchCamera({
             onPress={onSavedSearches}
             hitSlop={12}
             accessibilityLabel="Saved visual searches"
-          accessibilityRole="button"
+            accessibilityHint="View your saved visual searches"
+            accessibilityRole="button"
           >
-            <Ionicons name="time-outline" size={24} color="#fff" />
+            <Ionicons name="time-outline" size={24} color="#fff" style={styles.topIcon} />
           </Pressable>
           <Pressable
             style={styles.topIconBtn}
             onPress={toggleFlash}
             hitSlop={12}
             accessibilityLabel={flash === 'on' ? 'Flash on' : 'Flash off'}
-          accessibilityRole="switch"
+            accessibilityHint="Toggles the camera flash on or off"
+            accessibilityRole="switch"
+            accessibilityState={{ checked: flash === 'on' }}
           >
-            <Ionicons name={flash === 'on' ? 'flash' : 'flash-off'} size={24} color="#fff" />
+            <Ionicons name={flash === 'on' ? 'flash' : 'flash-off'} size={24} color="#fff" style={styles.topIcon} />
           </Pressable>
         </View>
       </View>
@@ -272,8 +317,16 @@ export default function VisualSearchCamera({
           <Text style={styles.bottomLabel}>Gallery</Text>
         </Pressable>
 
-        <Pressable onPress={handleShutterPress} hitSlop={24} accessibilityLabel="Take photo" accessibilityRole="button">
-          <Animated.View style={[styles.shutterOuter, { transform: [{ scale: scaleAnim }] }]}>
+        <Pressable
+          onPress={handleShutterPress}
+          hitSlop={24}
+          disabled={isCapturing}
+          accessibilityLabel="Take photo"
+          accessibilityHint="Captures a photo to search with"
+          accessibilityRole="button"
+          accessibilityState={{ busy: isCapturing }}
+        >
+          <Animated.View style={[styles.shutterOuter, { transform: [{ scale: scaleAnim }] }, isCapturing && styles.shutterBusy]}>
             <View style={styles.shutterInner} />
           </Animated.View>
         </Pressable>
@@ -335,6 +388,20 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontSize: Type.body.size,
     color: colors.textInverse,
   },
+  permissionSecondaryBtn: {
+    marginTop: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: 10,
+    borderRadius: Radius.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: 'transparent',
+  },
+  permissionSecondaryBtnText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    color: 'rgba(255,255,255,0.85)',
+  },
   focusReticle: {
     position: 'absolute',
     width: 60,
@@ -343,74 +410,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderColor: '#fff',
     borderRadius: Radius.sm,
     pointerEvents: 'none',
-  },
-  // Corner brackets
-  bracketTL: {
-    position: 'absolute',
-    top: '18%',
-    left: '12%',
-    width: CORNER_SIZE,
-    height: CORNER_SIZE,
-    borderTopWidth: CORNER_STROKE,
-    borderLeftWidth: CORNER_STROKE,
-    borderColor: 'rgba(255,255,255,0.85)',
-    borderTopLeftRadius: 12,
-  },
-  bracketTR: {
-    position: 'absolute',
-    top: '18%',
-    right: '12%',
-    width: CORNER_SIZE,
-    height: CORNER_SIZE,
-    borderTopWidth: CORNER_STROKE,
-    borderRightWidth: CORNER_STROKE,
-    borderColor: 'rgba(255,255,255,0.85)',
-    borderTopRightRadius: 12,
-  },
-  bracketBL: {
-    position: 'absolute',
-    bottom: '28%',
-    left: '12%',
-    width: CORNER_SIZE,
-    height: CORNER_SIZE,
-    borderBottomWidth: CORNER_STROKE,
-    borderLeftWidth: CORNER_STROKE,
-    borderColor: 'rgba(255,255,255,0.85)',
-    borderBottomLeftRadius: 12,
-  },
-  bracketBR: {
-    position: 'absolute',
-    bottom: '28%',
-    right: '12%',
-    width: CORNER_SIZE,
-    height: CORNER_SIZE,
-    borderBottomWidth: CORNER_STROKE,
-    borderRightWidth: CORNER_STROKE,
-    borderColor: 'rgba(255,255,255,0.85)',
-    borderBottomRightRadius: 12,
-  },
-  crosshair: {
-    position: 'absolute',
-    left: '50%',
-    top: '40%',
-    width: 24,
-    height: 24,
-    marginLeft: -12,
-    marginTop: -12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  crosshairH: {
-    position: 'absolute',
-    width: 24,
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  crosshairV: {
-    position: 'absolute',
-    width: 2,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.6)',
   },
   topBar: {
     position: 'absolute',
@@ -428,12 +427,17 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     gap: 8,
   },
   topIconBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  topIcon: {
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   bottomBar: {
     position: 'absolute',
@@ -484,6 +488,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     height: SHUTTER_INNER,
     borderRadius: SHUTTER_INNER / 2,
     backgroundColor: '#fff',
+  },
+  shutterBusy: {
+    opacity: 0.5,
   },
   modePill: {
     position: 'absolute',

@@ -257,6 +257,8 @@ async function recordServe(
   surface: string,
   sessionId: string | undefined,
   latencyMs: number,
+  intentVersion: number = 0,
+  serveMode: string = 'personalized',
 ): Promise<void> {
   const client = await db.connect();
   try {
@@ -266,10 +268,10 @@ async function recordServe(
          request_id, user_id, policy_version, feature_schema_version,
          capability_level, source, surface, session_id, candidate_count,
          eligible_count, result_count, exploration_rate, cold_start,
-         latency_ms, diagnostics, generated_at
+         latency_ms, diagnostics, generated_at, intent_version, serve_mode
        )
        VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
        )`,
       [
         input.decision.request_id,
@@ -288,6 +290,8 @@ async function recordServe(
         latencyMs,
         input.decision.diagnostics,
         input.decision.generated_at,
+        intentVersion,
+        serveMode,
       ],
     );
     // Candidate-source lineage and selection propensity (migration 142).
@@ -636,6 +640,21 @@ export function registerRecommendationRoutes({
     const { surface, sessionId } = recommendationQuerySchema.parse(request.query);
     const intentEpoch = await resolveIntentEpoch(redis, userId, request.log);
     const cacheKey = `recommendations:v2:${userId}:${surface}:${POLICY_VERSION}:${intentEpoch}`;
+
+    let dbIntentVersion = 0;
+    let profileMode = 'personalized';
+    try {
+      const intentRow = await db.query<{ intent_version: string; profile_mode: string }>(
+        'SELECT intent_version, profile_mode FROM user_intent_versions WHERE user_id = $1',
+        [userId],
+      );
+      if (intentRow.rows.length > 0) {
+        dbIntentVersion = Number(intentRow.rows[0].intent_version);
+        profileMode = intentRow.rows[0].profile_mode;
+      }
+    } catch (error) {
+      request.log.warn({ err: error, userId }, 'Intent version read failed');
+    }
     const generatedAt = new Date().toISOString();
     const requestId = `rec_${crypto.randomUUID()}`;
 
@@ -872,7 +891,13 @@ export function registerRecommendationRoutes({
       latencyMs = Date.now() - startedAt;
     }
 
-    await recordServe(db, result, userId, surface, sessionId, latencyMs);
+    const baseServeMode =
+      result.source === 'fallback' ? 'degraded_baseline' :
+      result.decision.cold_start ? 'cold_start' :
+      'personalized';
+    const serveMode = profileMode === 'non_profiled' ? 'non_profiled' : baseServeMode;
+
+    await recordServe(db, result, userId, surface, sessionId, latencyMs, dbIntentVersion, serveMode);
     recordRecommendationServe({
       source: result.source,
       policyVersion: result.decision.policy_version,
@@ -898,6 +923,8 @@ export function registerRecommendationRoutes({
 
     return {
       source: usedCache ? 'cache' : result.source,
+      serveMode,
+      intentVersion: dbIntentVersion,
       decision: {
         requestId: result.decision.request_id,
         policyVersion: result.decision.policy_version,

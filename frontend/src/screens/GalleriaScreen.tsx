@@ -562,7 +562,7 @@ export default function GalleriaScreen() {
         )}
 
         {/* ── Section 1: Hero editorial ── */}
-        {loading ? (
+        {loading && editorials.length > 0 ? (
           <HeroSkeleton />
         ) : heroEditorial ? (
           <HeroEditorialCard
@@ -614,6 +614,7 @@ export default function GalleriaScreen() {
     [
       loading,
       heroEditorial,
+      editorials.length,
       collections,
       featuredCollection,
       railCollections,
@@ -628,7 +629,7 @@ export default function GalleriaScreen() {
     () => (
       <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2) }}>
         {/* ── Section 4: Editorial list ── */}
-        {loading ? (
+        {loading && editorials.length > 0 ? (
           <>
             <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
             <EditorialSkeleton />
@@ -645,16 +646,6 @@ export default function GalleriaScreen() {
                 size={idx === 0 ? 'large' : 'standard'}
               />
             ))}
-          </>
-        ) : !loading && heroEditorial === null ? (
-          <>
-            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
-            <EmptyState
-              density="compact"
-              icon="book-outline"
-              title="No editorials available"
-              subtitle="Our editors are preparing new stories. Check back soon."
-            />
           </>
         ) : null}
 
@@ -689,6 +680,7 @@ export default function GalleriaScreen() {
     [
       loading,
       remainingEditorials,
+      editorials.length,
       heroEditorial,
       styles,
       colors,

@@ -113,6 +113,52 @@ functional outcomes, preserved/fixed/removed interactions, states, accessibility
 commands/results, native/live validation, blockers, rollback, and the lowest honest
 status required by `AGENTS.md`.
 
+### Completion standard (AGENTS.md §22)
+
+A task is complete only when:
+
+- requested screens were visibly improved to flagship quality;
+- working functionality was preserved;
+- navigation is correct;
+- every visible control is truthful;
+- relevant states are complete;
+- TypeScript passes;
+- the diff contains no unrelated work;
+- no fake success or fake data remains;
+- remaining blockers are explicitly reported.
+
+Use one honest status:
+
+```text
+COMPLETE — TARGET MET
+IMPLEMENTED — NATIVE DEVICE VALIDATION PENDING
+PARTIAL — VISUAL TARGET NOT MET
+PARTIAL — INTERACTION FAILURES REMAIN
+PARTIAL — BACKEND CAPABILITY BLOCKER
+BLOCKED — INCORRECT REPOSITORY OPEN
+BLOCKED — REFERENCE IMAGES UNAVAILABLE
+BLOCKED — RUNTIME FAILURE
+```
+
+For tasks touching data, endpoints, mutations, or trust signals, completion also
+requires the live-signs definition of done (AGENTS.md §37.10, see
+`live-signs-convergence-loop.md`).
+
+### Final response format (AGENTS.md §23)
+
+Every implementation report must include:
+
+```text
+Workspace:              Starting branch:        Starting HEAD:
+Final branch:           Final HEAD:             Files changed:
+Visible improvements:   Interactions preserved: Interactions fixed:
+Controls removed:       Navigation changes:     Loading/empty/error states:
+Accessibility:          TypeScript:             Tests:
+Native validation:      Remaining visual weaknesses:
+Remaining interaction issues: Backend blockers:
+Commit SHAs:            Final status:
+```
+
 Do not commit, push, open a PR, deploy, change repository settings, or message an
 external party unless the user requested that action.
 

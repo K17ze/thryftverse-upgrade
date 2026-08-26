@@ -26,6 +26,7 @@ import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
+import type { AuctionEffectiveState } from '../../hooks/useServerClock';
 
 export interface BuyNowSheetAuctionContext {
   id: string;
@@ -33,7 +34,7 @@ export interface BuyNowSheetAuctionContext {
   imageUrl: string | null;
   buyNowPriceGbp: number | null;
   sellerName: string;
-  effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+  effectiveState: AuctionEffectiveState;
   isSeller: boolean;
 }
 
@@ -109,7 +110,7 @@ export function BuyNowSheet({
 
     // PASS 4: Authoritative preflight when stale
     let effectivePrice = authoritativePrice ?? auction.buyNowPriceGbp;
-    let authoritativeState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled' = auction.effectiveState;
+    let authoritativeState: AuctionEffectiveState = auction.effectiveState;
 
     setIsPreflighting(true);
     try {

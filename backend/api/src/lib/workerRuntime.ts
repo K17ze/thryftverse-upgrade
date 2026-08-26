@@ -45,6 +45,7 @@ import {
   ledgerTablesAvailable,
   mgToOnezeAmount,
   mapEventToPushCategory,
+  isCriticalEventType,
   normalizeOnezeCountryTag,
   roundTo,
   toJsonString,
@@ -150,17 +151,39 @@ export async function queueUserNotification(input: {
       // A durable event may have been inserted just before Redis became
       // unavailable. Retrying the producer repairs that boundary. BullMQ's
       // event-based job ID prevents duplicate queued jobs.
+      //
+      // P0 FIX: Re-evaluate push preference before re-enqueueing. A previously
+      // queued event may have been suppressed by a preference change since the
+      // original insert. Re-enqueueing without re-checking would defeat
+      // suppression — the retry would send a push the user opted out of.
       if (existingEvent?.status === 'queued') {
-        await enqueuePushNotificationJob({
-          eventId: existingEvent.id,
-          userId: existingEvent.user_id,
-          title: existingEvent.title,
-          body: existingEvent.body,
-          payload: existingEvent.payload,
-          eventType: existingEvent.event_type,
-          actorUserId: existingEvent.actor_user_id,
-          route: existingEvent.route,
-        });
+        const retryCategory = mapEventToPushCategory(existingEvent.event_type);
+        let retryShouldPush = false;
+        if (retryCategory) {
+          const retryPref = await db.query<{ enabled: boolean }>(
+            `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+            [existingEvent.user_id, retryCategory]
+          );
+          retryShouldPush = !retryPref.rowCount || retryPref.rows[0].enabled;
+        }
+        if (retryShouldPush) {
+          await enqueuePushNotificationJob({
+            eventId: existingEvent.id,
+            userId: existingEvent.user_id,
+            title: existingEvent.title,
+            body: existingEvent.body,
+            payload: existingEvent.payload,
+            eventType: existingEvent.event_type,
+            actorUserId: existingEvent.actor_user_id,
+            route: existingEvent.route,
+          });
+        } else {
+          await db.query(
+            `UPDATE notification_events SET status = 'suppressed', suppression_reason = 'preference' WHERE id = $1`,
+            [existingEvent.id]
+          );
+          recordPushDelivery({ provider: 'expo', status: 'suppressed' });
+        }
       }
       return existingEvent?.id ?? null;
     }
@@ -169,16 +192,57 @@ export async function queueUserNotification(input: {
 
   const insertedEventId = insertResult.rows[0].id;
 
-  // Push preference check
+  // Push preference check — fail closed for unknown event types.
+  // Unknown events (mapEventToPushCategory returns null) are in-app only;
+  // they never bypass preferences with shouldPush=true.
   const pushCategory = mapEventToPushCategory(eventType);
-  let shouldPush = true;
-  if (pushCategory) {
+  let shouldPush = false;
+  let suppressionReason: string | null = null;
+  if (!pushCategory) {
+    shouldPush = false;
+    suppressionReason = 'unmapped_event_type';
+  } else {
     const prefResult = await db.query<{ enabled: boolean }>(
       `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
       [input.userId, pushCategory]
     );
     if (prefResult.rowCount && !prefResult.rows[0].enabled) {
       shouldPush = false;
+      suppressionReason = 'preference';
+    } else {
+      shouldPush = true;
+    }
+  }
+
+  // Server-side quiet hours enforcement.
+  // If the user has quiet hours configured and the current time falls within
+  // the quiet window, suppress non-critical push notifications. Critical
+  // event types (auction won, safety, resolution) bypass quiet hours.
+  if (shouldPush && pushCategory && !isCriticalEventType(eventType)) {
+    const qhResult = await db.query<{ quiet_hours: unknown }>(
+      `SELECT quiet_hours FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+      [input.userId, pushCategory]
+    );
+    const qhRaw = qhResult.rows[0]?.quiet_hours;
+    if (qhRaw && typeof qhRaw === 'object') {
+      const qh = qhRaw as { enabled?: boolean; startHour?: number; endHour?: number };
+      if (qh.enabled && typeof qh.startHour === 'number' && typeof qh.endHour === 'number') {
+        const nowUtc = new Date();
+        // Use UTC hour as a simple approximation. A full implementation would
+        // store the user's IANA timezone and convert. The quiet_hours JSONB
+        // can include a `timezone` field for future enhancement.
+        const currentHour = nowUtc.getUTCHours();
+        const start = qh.startHour;
+        const end = qh.endHour;
+        // Handle wrap-around (e.g., 22 → 7)
+        const inQuietWindow = start <= end
+          ? (currentHour >= start && currentHour < end)
+          : (currentHour >= start || currentHour < end);
+        if (inQuietWindow) {
+          shouldPush = false;
+          suppressionReason = 'quiet_hours';
+        }
+      }
     }
   }
 
@@ -193,12 +257,17 @@ export async function queueUserNotification(input: {
       actorUserId: input.actorUserId ?? null,
       route: input.route ?? null,
     });
+    recordPushDelivery({
+      provider: 'expo',
+      status: 'queued',
+    });
+  } else {
+    await db.query(
+      `UPDATE notification_events SET status = 'suppressed', suppression_reason = $2 WHERE id = $1`,
+      [insertedEventId, suppressionReason]
+    );
+    recordPushDelivery({ provider: 'expo', status: 'suppressed' });
   }
-
-  recordPushDelivery({
-    provider: 'expo',
-    status: 'queued',
-  });
 
   publishRealtimeEvent({
     topic: `notifications.user:${input.userId}`,

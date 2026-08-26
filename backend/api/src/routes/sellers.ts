@@ -48,14 +48,20 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const { sellerId } = sellerIdParamsSchema.parse(request.params);
     const viewerUserId = request.authUser?.userId ?? null;
 
+    // Fetch user row with holiday_mode and away_message for authoritative away state.
     const userResult = await readDb.query<{
       id: string;
       username: string;
+      display_name: string | null;
       avatar: string | null;
       location: string | null;
       created_at: string;
+      holiday_mode: boolean;
+      away_message: string | null;
     }>(
-      `SELECT id, username, avatar, location, created_at FROM users WHERE id = $1 LIMIT 1`,
+      `SELECT id, username, display_name, avatar, location, created_at,
+              holiday_mode, away_message
+       FROM users WHERE id = $1 LIMIT 1`,
       [sellerId]
     );
 
@@ -92,6 +98,66 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       isFollowing = (followResult.rowCount ?? 0) > 0;
     }
 
+    // ── Trust evidence (fail-closed) ─────────────────────────────────
+    // Only active, non-expired evidence rows produce badges/verification.
+    // No evidence → no badge. This is the authoritative source for all
+    // public trust claims — the client never derives eligibility.
+    const evidenceResult = await readDb.query<{ code: string; tier: string | null }>(
+      `SELECT code, tier FROM seller_trust_evidence
+       WHERE seller_id = $1 AND state = 'active'
+         AND (expires_at IS NULL OR expires_at > NOW())`,
+      [sellerId]
+    );
+    const evidenceCodes = new Set<string>();
+    let verificationTier: 'email' | 'id' | 'seller' | null = null;
+    for (const row of evidenceResult.rows) {
+      evidenceCodes.add(row.code);
+      if (row.code === 'identity_checked') verificationTier = 'id';
+      if (row.code === 'trader_verified' || row.code === 'top_rated') {
+        verificationTier = 'seller';
+      }
+    }
+
+    // Map evidence codes to badge types for the frontend.
+    // Only evidence-backed badges are emitted — no client-side derivation.
+    const badges: string[] = [];
+    if (evidenceCodes.has('top_rated')) badges.push('topSeller');
+    if (evidenceCodes.has('fast_dispatch')) badges.push('fastShipper');
+    if (evidenceCodes.has('responsive_seller')) badges.push('responsive');
+
+    // ── Seller trust projection (response rate, dispatch time) ───────
+    // From seller_trust table (migration 166), recomputed from authoritative
+    // order/carrier facts. Null when no data exists — never fabricated.
+    const trustResult = await readDb.query<{
+      response_rate: string | number | null;
+      ship_within_days: number | null;
+      total_sales: string | number | null;
+      positive_rating_pct: string | number | null;
+    }>(
+      `SELECT response_rate, ship_within_days, total_sales, positive_rating_pct
+       FROM seller_trust WHERE user_id = $1 LIMIT 1`,
+      [sellerId]
+    );
+    const trustRow = trustResult.rows[0] ?? {};
+
+    // Derive human-readable labels from authoritative data.
+    // Null when no data — the frontend renders nothing for null labels.
+    const dispatchTimeLabel = trustRow.ship_within_days != null
+      ? trustRow.ship_within_days <= 1
+        ? 'Dispatches same day'
+        : `Dispatches in ${trustRow.ship_within_days} days`
+      : null;
+
+    // Response time label — derived from response_rate percentage.
+    // This is a simplified mapping; a full implementation would compute
+    // actual response time from message events.
+    const responseRate = trustRow.response_rate != null ? Number(trustRow.response_rate) : null;
+    const responseTimeLabel = responseRate != null && responseRate >= 90
+      ? 'in 1h'
+      : responseRate != null && responseRate >= 50
+      ? 'in 3h'
+      : null;
+
     const avgRating = reviewStats.rows[0]?.avg_rating ? Number(reviewStats.rows[0].avg_rating) : null;
     const reviewCount = reviewStats.rows[0]?.review_count ? Number(reviewStats.rows[0].review_count) : 0;
     const completedSales = salesResult.rows[0]?.completed_sales ? Number(salesResult.rows[0].completed_sales) : 0;
@@ -102,6 +168,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       seller: {
         id: user.id,
         username: user.username,
+        displayName: user.display_name,
         avatar: user.avatar,
         location: user.location,
         rating: avgRating,
@@ -110,10 +177,26 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         activeListingCount,
         memberSince: user.created_at,
         isFollowing,
+        // Verification tier — evidence-backed, fail-closed.
+        // 'email' is never used here (email verification is not a trust claim).
+        verificationTier,
+        verified: verificationTier === 'seller',
+        // Operational trust signals from seller_trust (authoritative).
+        responseRate: trustRow.response_rate != null ? Number(trustRow.response_rate) : null,
+        responseTimeLabel,
+        dispatchTimeLabel,
+        // Evidence-backed badges — no client-side derivation.
+        badges,
+        // Authoritative away state.
+        holidayMode: user.holiday_mode === true,
+        awayMessage: user.away_message ?? null,
       },
     };
   });
 
+  // ── Idempotent follow (POST) — creates follow only if absent ────────
+  // Replaces the unsafe toggle mutation. A lost response followed by retry
+  // no longer reverses the user's intent.
   app.post('/sellers/:sellerId/follow', async (request, reply) => {
     if (!request.authUser) {
       reply.code(401);
@@ -128,26 +211,43 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       return { ok: false, error: 'Cannot follow yourself' };
     }
 
-    const existing = await readDb.query<{ id: string }>(
-      `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
-      [userId, sellerId]
+    // Check block state — cannot follow if blocked by target
+    const blockedByTarget = await readDb.query<{ id: string }>(
+      `SELECT id FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2 LIMIT 1`,
+      [sellerId, userId]
     );
-
-    if ((existing.rowCount ?? 0) > 0) {
-      await db.query(
-        `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
-        [userId, sellerId]
-      );
-      return { ok: true, isFollowing: false };
+    if ((blockedByTarget.rowCount ?? 0) > 0) {
+      reply.code(403);
+      return { ok: false, error: 'Cannot follow this user', code: 'BLOCKED_BY_TARGET' };
     }
 
     const followId = `follow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     await db.query(
-      `INSERT INTO user_follows (id, follower_id, following_id, created_at) VALUES ($1, $2, $3, NOW())`,
+      `INSERT INTO user_follows (id, follower_id, following_id, created_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (follower_id, following_id) DO NOTHING`,
       [followId, userId, sellerId]
     );
 
     return { ok: true, isFollowing: true };
+  });
+
+  // ── Idempotent unfollow (DELETE) — removes follow only if present ───
+  app.delete('/sellers/:sellerId/follow', async (request, reply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const { sellerId } = sellerIdParamsSchema.parse(request.params);
+    const userId = request.authUser.userId;
+
+    await db.query(
+      `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
+      [userId, sellerId]
+    );
+
+    return { ok: true, isFollowing: false };
   });
 
   // ── Seller reviews: summary + paginated list ─────────────────────────
@@ -363,22 +463,85 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       total_views: string | number;
       total_likes: string | number;
       total_saves: string | number;
-      items_sold: string | number;
-      revenue_gbp_minor: string | number;
     }>(
       `
         SELECT
           COUNT(DISTINCT l.id) AS total_listings,
           COALESCE(SUM(l.views_count), 0) AS total_views,
           COALESCE(SUM(l.likes_count), 0) AS total_likes,
-          COALESCE(SUM(l.saved_count), 0) AS total_saves,
-          COUNT(CASE WHEN l.sold_at IS NOT NULL AND l.sold_at > NOW() - ${interval} THEN 1 END) AS items_sold,
-          COALESCE(SUM(CASE WHEN l.sold_at IS NOT NULL AND l.sold_at > NOW() - ${interval} THEN l.price_gbp_minor ELSE 0 END), 0) AS revenue_gbp_minor
+          COALESCE(SUM(l.saved_count), 0) AS total_saves
         FROM listings l
         WHERE l.seller_id = $1
       `,
       [sellerId]
     );
+
+    // Revenue and items sold come from settled order facts (orders.subtotal_gbp
+    // for paid/shipped/delivered orders), NOT from listings.price_gbp_minor
+    // (asking price). paid_at is the authoritative sale timestamp (migration 076).
+    const ordersResult = await db.query<{
+      items_sold: string | number;
+      revenue_gbp_minor: string | number;
+    }>(
+      `
+        SELECT
+          COUNT(*) AS items_sold,
+          COALESCE(SUM(subtotal_gbp) * 100, 0)::bigint AS revenue_gbp_minor
+        FROM orders
+        WHERE seller_id = $1
+          AND status IN ('paid', 'shipped', 'delivered')
+          AND paid_at IS NOT NULL
+          AND paid_at >= NOW() - ${interval}
+      `,
+      [sellerId]
+    );
+
+    // Refunds and fees from ledger_entries (if available). When the ledger
+    // tables are absent, completeness is 'partial' and these are null.
+    let refundsGbpMinor: number | null = null;
+    let feesGbpMinor: number | null = null;
+    let completeness: 'complete' | 'partial' = 'partial';
+    const ledgerCheck = await db.query<{ exists: boolean }>(
+      `SELECT to_regclass('public.ledger_accounts') IS NOT NULL
+        AND to_regclass('public.ledger_entries') IS NOT NULL AS exists`
+    );
+    if (ledgerCheck.rows[0]?.exists) {
+      completeness = 'complete';
+      const refundsResult = await db.query<{ refunds: string | null }>(
+        `
+          SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS refunds
+          FROM ledger_entries
+          WHERE account_id = (
+            SELECT id FROM ledger_accounts
+            WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+            LIMIT 1
+          )
+          AND source_type = 'refund'
+          AND direction = 'debit'
+          AND created_at >= NOW() - ${interval}
+        `,
+        [sellerId]
+      );
+      refundsGbpMinor = Number(refundsResult.rows[0]?.refunds ?? 0);
+
+      const feesResult = await db.query<{ fees: string | null }>(
+        `
+          SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS fees
+          FROM ledger_entries
+          WHERE account_id = (
+            SELECT id FROM ledger_accounts
+            WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+            LIMIT 1
+          )
+          AND source_type = 'order_payment'
+          AND direction = 'debit'
+          AND line_type = 'platform_fee'
+          AND created_at >= NOW() - ${interval}
+        `,
+        [sellerId]
+      );
+      feesGbpMinor = Number(feesResult.rows[0]?.fees ?? 0);
+    }
 
     const reviewsResult = await db.query<{
       avg_rating: string | number | null;
@@ -404,8 +567,15 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     );
 
     const row = listingsResult.rows[0] ?? {};
+    const orders = ordersResult.rows[0] ?? {};
     const reviews = reviewsResult.rows[0] ?? {};
     const trust = trustResult.rows[0] ?? {};
+
+    const revenueGbpMinor = Number(orders.revenue_gbp_minor ?? 0);
+    const netSalesGbpMinor =
+      refundsGbpMinor !== null && feesGbpMinor !== null
+        ? revenueGbpMinor - refundsGbpMinor - feesGbpMinor
+        : null;
 
     return {
       ok: true,
@@ -414,8 +584,12 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         totalViews: Number(row.total_views ?? 0),
         totalLikes: Number(row.total_likes ?? 0),
         totalSaves: Number(row.total_saves ?? 0),
-        itemsSold: Number(row.items_sold ?? 0),
-        revenueGbpMinor: Number(row.revenue_gbp_minor ?? 0),
+        itemsSold: Number(orders.items_sold ?? 0),
+        revenueGbpMinor,
+        refundsGbpMinor,
+        feesGbpMinor,
+        netSalesGbpMinor,
+        completeness,
         avgRating: reviews.avg_rating ? Number(reviews.avg_rating) : null,
         reviewCount: Number(reviews.review_count ?? 0),
         responseRate: trust.response_rate ? Number(trust.response_rate) : null,

@@ -6,10 +6,10 @@
  * chains remain authoritative across devices (same source of truth as
  * `MakeOfferScreen`).
  *
- * Truthful UI (AGENTS.md §11):
+ * Truthful UI (AGENTS.md):
  *   - Smart Sell auto-accept messaging is only shown when the seller's
- *     config reports `enabled: true`. While `SMART_SELL_DEMO_MODE` is on,
- *     the indicator is honestly labelled "Demo mode".
+ *     policy reports `enabled: true`. When the capability is in preview,
+ *     the indicator is honestly labelled "Preview".
  *   - No fabricated success: the sheet calls the real offer API and only
  *     reports success when the server returns an offer entity.
  */
@@ -48,7 +48,7 @@ import {
   calculateOfferSummaryFromDisplay,
 } from '../../../utils/currencyAuthoringFlows';
 import { createListingOfferOnApi } from '../../../services/listingOffersApi';
-import { fetchSmartSellConfig, SMART_SELL_DEMO_MODE } from '../../../services/smartSellApi';
+import { fetchSmartSellConfig, SMART_SELL_PREVIEW_MODE } from '../../../services/smartSellApi';
 import { createStableId } from '../../../utils/createStableId';
 import { haptics } from '../../../utils/haptics';
 
@@ -138,6 +138,7 @@ export function MakeOfferSheet({
       if (cancelled) return;
       setSmartSellEnabled(config.enabled);
       setSmartSellThreshold(config.enabled ? config.autoAcceptThreshold : null);
+      // config.isPreview is available for honest labelling when needed
     } catch {
       if (!cancelled) {
         setSmartSellEnabled(false);
@@ -359,6 +360,7 @@ export function MakeOfferSheet({
         <Text
           style={[styles.amountValue, { color: colors.textPrimary }]}
           accessibilityLabel={`Your offer ${offerDisplayFormatted}${discountPct ? `, ${discountPct} percent below asking` : ''}`}
+          accessibilityHint="The offer amount you are about to send"
         >
           {offerDisplayFormatted}
         </Text>
@@ -377,6 +379,7 @@ export function MakeOfferSheet({
         onLayout={handleTrackLayout}
         accessibilityRole="adjustable"
         accessibilityLabel="Offer amount slider"
+        accessibilityHint="Drag to adjust your offer amount"
         accessibilityValue={{
           min: minDisplay,
           max: maxDisplay,
@@ -485,7 +488,7 @@ export function MakeOfferSheet({
         >
           <Ionicons name="trending-up-outline" size={14} color={colors.success} />
           <Text style={[styles.smartSellText, { color: colors.textSecondary }]}>
-            {SMART_SELL_DEMO_MODE ? 'Demo mode — ' : ''}
+            {SMART_SELL_PREVIEW_MODE ? 'Preview — ' : ''}
             Seller has Smart Sell enabled — offers above{' '}
             {formatFromFiat(smartSellThreshold, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} auto-accept
           </Text>

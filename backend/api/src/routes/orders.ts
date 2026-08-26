@@ -2501,6 +2501,25 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
       parcelEventType: 'delivered',
     });
 
+    // Emit order.fulfilled for the creator earnings ledger.
+    // The outbox drain handler creates an immutable 'earned' entry
+    // with the commission rate at time of fulfillment.
+    await appendDomainEvent(client, {
+      aggregateType: 'order',
+      aggregateId: orderId,
+      eventType: 'order.fulfilled',
+      payload: {
+        orderId,
+        sellerId: order.seller_id,
+        listingId: order.listing_id,
+        subtotalGbp: Number(order.subtotal_gbp),
+        deliveredAt: new Date().toISOString(),
+      },
+      actorId: order.seller_id,
+      idempotencyKey: `fulfilled_${orderId}`,
+      deduplicationKey: `order.fulfilled:${orderId}`,
+    });
+
     await client.query('COMMIT');
     recordGmv(Number(order.subtotal_gbp));
     recordOrderCompleted();

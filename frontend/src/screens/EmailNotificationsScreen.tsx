@@ -17,6 +17,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
+import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -150,6 +151,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
+  const { show } = useToast();
 
   const [preferences, setPreferences] = React.useState<EmailPreferences | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -185,6 +187,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
     } catch {
       // Revert on failure
       setPreferences({ ...preferences, [category.key]: !value });
+      show('Failed to update email preference. Try again.', 'error');
     } finally {
       setUpdatingKeys((prev) => {
         const next = new Set(prev);

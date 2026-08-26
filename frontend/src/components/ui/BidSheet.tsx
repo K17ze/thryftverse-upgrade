@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
@@ -16,6 +17,7 @@ import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   sanitizeDecimalInput,
+  convertDisplayToGbpAmount,
 } from '../../utils/currencyAuthoringFlows';
 import { toIze, formatIzeAmount } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
@@ -24,6 +26,7 @@ import type { SupportedCurrencyCode } from '../../constants/currencies';
 import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { GoldRates } from '../../utils/currency';
 import type { AuctionDetailResponse } from '../../services/marketApi';
+import type { AuctionEffectiveState } from '../../hooks/useServerClock';
 import {
   validateBidEntry,
   applyQuickIncrement,
@@ -45,7 +48,7 @@ export interface BidSheetAuctionContext {
   minimumNextBidGbp: number;
   endsAt: string;
   sellerName: string;
-  effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+  effectiveState: AuctionEffectiveState;
   isSeller: boolean;
   countdownText: string;
 }
@@ -57,7 +60,7 @@ interface BidSheetProps {
   currencyCode: SupportedCurrencyCode;
   goldRates: Partial<GoldRates>;
   formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: any) => string;
-  onSubmitBid: (gbpAmount: number, idempotencyKey: string) => Promise<void>;
+  onSubmitBid: (gbpAmount: number, idempotencyKey: string, maxBidGbp?: number) => Promise<void>;
   onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
   onReviewBuyNow?: () => void;
   serverClockMs: number;
@@ -108,12 +111,16 @@ export function BidSheet({
   const [isPreflighting, setIsPreflighting] = React.useState(false);
   const [sheetOpenedAtMs, setSheetOpenedAtMs] = React.useState(0);
   const [currentMinimum, setCurrentMinimum] = React.useState(auction.minimumNextBidGbp);
+  // Proxy bidding (max bid) state
+  const [proxyEnabled, setProxyEnabled] = React.useState(false);
+  const [maxBidInput, setMaxBidInput] = React.useState('');
+  const [maxBidGbp, setMaxBidGbp] = React.useState<number | null>(null);
   const idempotencyKeyRef = React.useRef<string | null>(null);
 
   // Shared authoritative snapshot helper — returns refreshed state or null on failure
   const getAuthoritativeSnapshot = async (): Promise<{
     minimumNextBidGbp: number;
-    effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+    effectiveState: AuctionEffectiveState;
   } | null> => {
     if (!isSheetStateStale(sheetOpenedAtMs, Date.now())) {
       return {
@@ -128,7 +135,7 @@ export function BidSheet({
     const minFromSnapshot = snapshot.auction.minimumNextBidGbp;
     setCurrentMinimum(minFromSnapshot);
     setSheetOpenedAtMs(Date.now());
-    const snapshotState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled' =
+    const snapshotState: AuctionEffectiveState =
       snapshot.auction.cancelledAt ? 'cancelled'
       : snapshot.auction.settledAt ? 'settled'
       : snapshot.auction.lifecycle;
@@ -149,6 +156,9 @@ export function BidSheet({
       setIsSubmitting(false);
       setCurrentMinimum(auction.minimumNextBidGbp);
       setSheetOpenedAtMs(Date.now());
+      setProxyEnabled(false);
+      setMaxBidInput('');
+      setMaxBidGbp(null);
       idempotencyKeyRef.current = null;
     }
   }, [visible, auction.minimumNextBidGbp, currencyCode, goldRates, initialBidAmount]);
@@ -188,6 +198,71 @@ export function BidSheet({
     setError(null);
   };
 
+  // Validate the optional proxy max bid. Returns the validated GBP amount
+  // or null with an error set on the caller's behalf.
+  const validateMaxBid = (
+    maxBidDisplay: string,
+    bidGbp: number,
+    minGbp: number,
+  ): { gbp: number | null; error: TransactionError | null } => {
+    const raw = Number(maxBidDisplay);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return {
+        gbp: null,
+        error: {
+          kind: 'invalid_amount',
+          message: 'Enter a maximum bid.',
+          canRetry: true,
+          transactionPossible: true,
+          isAmbiguous: false,
+        },
+      };
+    }
+    const maxGbp = convertDisplayToGbpAmount(raw, currencyCode, goldRates);
+    if (!Number.isFinite(maxGbp) || maxGbp <= 0) {
+      return {
+        gbp: null,
+        error: {
+          kind: 'invalid_amount',
+          message: 'Couldn\'t convert maximum bid to this currency.',
+          canRetry: true,
+          transactionPossible: true,
+          isAmbiguous: false,
+        },
+      };
+    }
+    if (maxGbp < bidGbp) {
+      return {
+        gbp: null,
+        error: {
+          kind: 'invalid_amount',
+          message: 'Maximum bid must be at least your bid amount.',
+          canRetry: true,
+          transactionPossible: true,
+          isAmbiguous: false,
+        },
+      };
+    }
+    if (maxGbp < minGbp) {
+      return {
+        gbp: null,
+        error: {
+          kind: 'below_minimum',
+          message: 'Maximum bid is below the minimum to lead.',
+          canRetry: true,
+          transactionPossible: true,
+          isAmbiguous: false,
+        },
+      };
+    }
+    return { gbp: maxGbp, error: null };
+  };
+
+  const handleMaxBidChange = (v: string) => {
+    setMaxBidInput(sanitizeDecimalInput(v));
+    setError(null);
+  };
+
   const handleProceedToReview = async () => {
     setIsPreflighting(true);
     try {
@@ -216,6 +291,19 @@ export function BidSheet({
       }
 
       const validatedGbpAmount = result.gbpAmount;
+
+      // Validate optional proxy max bid against the authoritative snapshot
+      if (proxyEnabled) {
+        const maxResult = validateMaxBid(maxBidInput, validatedGbpAmount, snapshot.minimumNextBidGbp);
+        if (maxResult.error) {
+          setError(maxResult.error);
+          return;
+        }
+        setMaxBidGbp(maxResult.gbp);
+      } else {
+        setMaxBidGbp(null);
+      }
+
       setGbpAmount(validatedGbpAmount);
       setError(null);
       setStage('review');
@@ -229,6 +317,7 @@ export function BidSheet({
 
     setIsPreflighting(true);
     let validatedGbpAmount = gbpAmount;
+    let validatedMaxBidGbp: number | null = null;
 
     try {
       const snapshot = await getAuthoritativeSnapshot();
@@ -258,6 +347,20 @@ export function BidSheet({
       }
       validatedGbpAmount = result.gbpAmount;
       setGbpAmount(validatedGbpAmount);
+
+      // Re-validate optional proxy max bid against the refreshed snapshot
+      if (proxyEnabled) {
+        const maxResult = validateMaxBid(maxBidInput, validatedGbpAmount, snapshot.minimumNextBidGbp);
+        if (maxResult.error) {
+          setError(maxResult.error);
+          setStage('entry');
+          return;
+        }
+        validatedMaxBidGbp = maxResult.gbp;
+        setMaxBidGbp(validatedMaxBidGbp);
+      } else {
+        setMaxBidGbp(null);
+      }
     } finally {
       setIsPreflighting(false);
     }
@@ -272,7 +375,11 @@ export function BidSheet({
 
     try {
       // Submit the validated local variable, not stale state
-      await onSubmitBid(validatedGbpAmount, idempotencyKeyRef.current);
+      await onSubmitBid(
+        validatedGbpAmount,
+        idempotencyKeyRef.current,
+        proxyEnabled && validatedMaxBidGbp != null ? validatedMaxBidGbp : undefined,
+      );
       setStage('success');
       haptics.success();
     } catch (err) {
@@ -437,6 +544,45 @@ export function BidSheet({
               ))}
             </View>
 
+            {/* Proxy bidding toggle — restrained switch, no card chrome */}
+            <View style={styles.proxyToggleRow}>
+              <Text style={styles.proxyToggleLabel}>Set maximum bid</Text>
+              <Switch
+                value={proxyEnabled}
+                onValueChange={(v) => {
+                  setProxyEnabled(v);
+                  setError(null);
+                  if (!v) setMaxBidInput('');
+                }}
+                disabled={isPreflighting || isSubmitting}
+                trackColor={{ false: themed.border, true: themed.brand }}
+                ios_backgroundColor={themed.border}
+                accessibilityLabel="Enable proxy bidding with a maximum bid"
+                accessibilityRole="switch"
+              />
+            </View>
+
+            {/* Max bid input — same styling as the bid input, inline below */}
+            {proxyEnabled && (
+              <>
+                <View style={styles.amountContainer}>
+                  <Text style={styles.amountCurrency}>{currencyCode}</Text>
+                  <AppInput
+                    value={maxBidInput}
+                    onChangeText={handleMaxBidChange}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    accessibilityLabel="Maximum bid amount"
+                    accessibilityHint={`Enter your maximum bid in ${currencyCode}`}
+                    containerStyle={styles.amountInput}
+                  />
+                </View>
+                <Text style={styles.amountIzeEquivalent}>
+                  {formatIzeAmount(toIze(Number(maxBidInput) || 0, currencyCode, goldRates), 2)}
+                </Text>
+              </>
+            )}
+
             {/* Bid confidence indicator — shows if the current amount would lead */}
             {(() => {
               const bidGbp = gbpAmount ?? 0;
@@ -470,7 +616,7 @@ export function BidSheet({
               variant="primary"
               size="md"
               align="center"
-              title={isPreflighting ? 'Checking...' : 'Review bid'}
+              title={isPreflighting ? 'Checking...' : proxyEnabled ? 'Review proxy bid' : 'Review bid'}
               disabled={isPreflighting || isSubmitting}
               accessibilityLabel="Review your bid"
             />
@@ -514,6 +660,12 @@ export function BidSheet({
                 <Text style={styles.reviewReceiptLabel}>Minimum to lead</Text>
                 <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, DEFAULT_CURRENCY_CODE)}</Text>
               </View>
+              {proxyEnabled && maxBidGbp != null && (
+                <View style={styles.reviewReceiptRow}>
+                  <Text style={styles.reviewReceiptLabel}>Maximum bid</Text>
+                  <Text style={styles.reviewReceiptValue}>{formatFromFiat(maxBidGbp, DEFAULT_CURRENCY_CODE)}</Text>
+                </View>
+              )}
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Time remaining</Text>
                 <Text style={styles.reviewReceiptValue}>{auction.countdownText}</Text>
@@ -555,7 +707,7 @@ export function BidSheet({
               variant="primary"
               size="md"
               align="center"
-              title={isPreflighting ? 'Checking...' : 'Confirm bid'}
+              title={isPreflighting ? 'Checking...' : proxyEnabled ? 'Place proxy bid' : 'Confirm bid'}
               disabled={isPreflighting || isSubmitting}
               accessibilityLabel="Confirm and submit your bid"
             />
@@ -919,6 +1071,17 @@ const createStyles = (themed: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: themed.textPrimary,
+  },
+  proxyToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.xs,
+  },
+  proxyToggleLabel: {
+    fontSize: Type.body.size,
+    color: themed.textPrimary,
+    fontFamily: Typography.family.medium,
   },
   confidenceRow: {
     flexDirection: 'row',

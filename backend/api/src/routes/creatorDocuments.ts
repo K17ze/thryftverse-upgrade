@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import { appendDomainEvent } from '../lib/domainOutbox.js';
 
 type CreatorDocumentsRouteDependencies = {
   app: FastifyInstance;
@@ -604,6 +605,24 @@ export const registerCreatorDocumentRoutes = ({
     return { ok: true };
   });
 
+  // POST /creator/documents/:documentId/publish — DEPRECATED.
+  //
+  // This endpoint records an internal revision and flips the document status
+  // to 'published', but it does NOT create a public Look or Poster projection.
+  // It was the source of the P0 architectural disconnect identified in the
+  // publishing-lifecycle research report (23): the native publisher bypassed
+  // it, and calling it 'publish' created two divergent truths — "document
+  // status is published" and "content is publicly available" — which could
+  // drift apart.
+  //
+  // The canonical publish command is now:
+  //   POST /creator/documents/:documentId/publications
+  // (see routes/creatorPublications.ts), which creates the public projection
+  // transactionally inside the same commit that writes the publication row.
+  //
+  // This legacy endpoint is retained for backward compatibility but is
+  // clearly labelled as revision-only. New clients must use the publications
+  // orchestrator. The response includes a `deprecation` notice.
   app.post('/creator/documents/:documentId/publish', async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
@@ -625,8 +644,9 @@ export const registerCreatorDocumentRoutes = ({
         creator_id: string;
         document_json: string;
         lock_version: number;
+        head_revision: number;
       }>(
-        `SELECT creator_id, document_json, lock_version
+        `SELECT creator_id, document_json, lock_version, head_revision
          FROM creator_documents
          WHERE id = $1
          LIMIT 1
@@ -669,30 +689,34 @@ export const registerCreatorDocumentRoutes = ({
       );
       if (existingRevision.rowCount) {
         await client.query('COMMIT');
+        reply.header('Deprecation', 'true');
+        reply.header('Link', '</creator/documents/' + documentId + '/publications>; rel="successor-version"');
         return {
           ok: true,
           documentId,
           status: 'published',
           revisionNumber: existingRevision.rows[0].revision_number,
           idempotentReplay: true,
+          deprecation: 'Use POST /creator/documents/:id/publications to create a public projection',
         };
       }
 
-      const allocation = await client.query<{ revision_number: number }>(
+      const headRevision = result.rows[0].head_revision;
+      const nextRevision = headRevision + 1;
+      const revisionId = `rev_${crypto.randomUUID()}`;
+
+      await client.query(
         `UPDATE creator_documents
-         SET next_revision_number = next_revision_number + 1,
+         SET next_revision_number = $2 + 1,
+             head_revision = $2,
+             published_revision = $2,
              status = 'published',
              lock_version = lock_version + 1,
              published_at = COALESCE(published_at, NOW()),
              updated_at = NOW()
-         WHERE id = $1
-         RETURNING
-           next_revision_number - 1 AS revision_number,
-           lock_version`,
-        [documentId],
+         WHERE id = $1`,
+        [documentId, nextRevision],
       );
-      const nextRevision = allocation.rows[0].revision_number;
-      const revisionId = `rev_${crypto.randomUUID()}`;
 
       await client.query(
         `INSERT INTO creator_document_revisions (
@@ -711,14 +735,37 @@ export const registerCreatorDocumentRoutes = ({
         ],
       );
 
+      // Emit a content.published domain event inside the same transaction.
+      // Analytics subscribes to this via the outbox drain — it does NOT
+      // accept forgeable client POSTs for content lifecycle events.
+      await appendDomainEvent(client, {
+        aggregateType: 'creator_document',
+        aggregateId: documentId,
+        eventType: 'content.published',
+        payload: {
+          documentId,
+          revisionId,
+          revisionNumber: nextRevision,
+          creatorId: actorUserId,
+          contentType: doc.type,
+          publishedAt: new Date().toISOString(),
+        },
+        actorId: actorUserId,
+        idempotencyKey: publishKey,
+        deduplicationKey: `content.published:${documentId}:${publishKey}`,
+      });
+
       await client.query('COMMIT');
 
+      reply.header('Deprecation', 'true');
+      reply.header('Link', '</creator/documents/' + documentId + '/publications>; rel="successor-version"');
       return {
         ok: true,
         documentId,
         status: 'published',
         revisionNumber: nextRevision,
         idempotentReplay: false,
+        deprecation: 'Use POST /creator/documents/:id/publications to create a public projection',
       };
     } catch (error) {
       await client.query('ROLLBACK');

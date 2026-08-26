@@ -81,6 +81,12 @@ const baseAuction: AuctionDetail = {
   winnerBidderId: null,
   settledAt: null,
   cancelledAt: null,
+  paidAt: null,
+  paymentDeadlineAt: null,
+  secondChanceOfferedTo: null,
+  cancelledBy: null,
+  cancelledReason: null,
+  antiSniping: null,
   createdAt: '2025-06-28T10:00:00Z',
 };
 

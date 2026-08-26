@@ -33,6 +33,8 @@ import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import { createLookOnApi, fetchLookByIdFromApi, updateLookOnApi } from '../services/looksApi';
 import { createPosterStory, fetchPosterStoryById, scheduleCreatorDocument } from '../services/postersApi';
+import { publishCreatorDocument, lookupPublicationByKey, schedulePublication } from '../services/creatorPublicationsApi';
+import type { PublishCommand, ExpectedMediaEntry } from '../services/creatorPublicationsApi';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { uploadAllLocalMedia, hasLocalUris } from './mediaUploadPipeline';
 import { useUploadManager, detectMimeType } from './core/upload';
@@ -439,84 +441,73 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       const processingFraction = 0.8;
       progressWidth.value = reduceMotion ? processingFraction : withSpring(processingFraction, spring.entrance);
 
-      if (workingDoc.type === 'look') {
-        // 4. Serialise to canonical look payload
-        const { payload } = serialiseToLookPayload(workingDoc);
+      // ── Build the unified publication command ──
+      // The orchestrator creates the public projection transactionally
+      // inside the same commit that writes the creator_publications row.
+      const { payload: lookPayload } = workingDoc.type === 'look'
+        ? serialiseToLookPayload(workingDoc)
+        : { payload: null as null };
+      const { payload: posterPayload } = workingDoc.type === 'poster'
+        ? serialiseToPosterPayload(workingDoc)
+        : { payload: null as null };
 
-        // 5. Send real publish request — update existing look or create new
-        publicationRequestStarted = true;
-        const result = editingLookId
-          ? await updateLookOnApi(editingLookId, payload)
-          : await createLookOnApi(payload);
-
-        // 6. If scheduled, set the scheduled_for timestamp on the document
-        if (workingDoc.metadata.scheduledFor) {
-          try {
-            await scheduleCreatorDocument(workingDoc.id, workingDoc.metadata.scheduledFor);
-          } catch (scheduleErr: unknown) {
-            // Scheduling failed AFTER immediate publication. The content is
-            // already public — we must NOT show a success state that implies
-            // it will appear later. Surface an honest error with corrective
-            // actions (retry schedule or accept immediate publication).
-            publishGuardRef.current.complete(workingDoc.id);
-            setPublishedId(result.lookId);
-            invalidateCachesAfterPublish(workingDoc.id, currentUser?.id ?? null);
-            setScheduleError(scheduleErr instanceof Error ? scheduleErr.message : 'Scheduling failed');
-            progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
-            setStage('scheduleFailed');
-            CreatorAnalytics.publishError(document.type, `Schedule failed after publish: ${scheduleErr instanceof Error ? scheduleErr.message : 'Unknown'}`);
-            return;
+      const expectedMedia: ExpectedMediaEntry[] = [];
+      for (const page of workingDoc.pages) {
+        for (const layer of page.layers) {
+          if (layer.type === 'media' && layer.payload.mediaUri && !isLocalUri(layer.payload.mediaUri)) {
+            if (layer.payload.mediaFinalizationId) {
+              expectedMedia.push({
+                layerId: layer.id,
+                finalizationId: layer.payload.mediaFinalizationId,
+                assetId: layer.payload.mediaAssetId,
+                mediaType: layer.payload.mediaType ?? 'image',
+                suppliedUrl: layer.payload.mediaUri,
+                role: workingDoc.type === 'look' ? 'primary' : `frame:${page.id}`,
+              });
+            }
           }
         }
+      }
 
-        // 7. Confirm server success
+      const publishCommand: PublishCommand = {
+        revision: 0, // The orchestrator allocates the revision server-side
+        destination: workingDoc.type === 'look' ? 'look' : 'poster',
+        audience: workingDoc.metadata.visibility === 'closeFriends' ? 'closeFriends' : (workingDoc.metadata.visibility as 'public' | 'private'),
+        expiresInHours: workingDoc.metadata.expiresInHours ?? 24,
+        expectedMedia,
+        compositionDocument: workingDoc.type === 'look'
+          ? lookPayload?.compositionDocument
+          : posterPayload?.compositionDocument,
+      };
+
+      // ── Branch: schedule vs publish now ──
+      // When scheduledFor is set, create a server-owned schedule row.
+      // The content is NOT published immediately — the worker publishes
+      // exactly once at the scheduled time. This is the honest scheduling
+      // path that replaces the old "publish now + attach schedule" bug.
+      if (workingDoc.metadata.scheduledFor) {
+        publicationRequestStarted = true;
+        await schedulePublication(workingDoc.id, {
+          dueAt: workingDoc.metadata.scheduledFor,
+          publishCommand,
+        });
+
         publishGuardRef.current.complete(workingDoc.id);
-        setPublishedId(result.lookId);
-        // Invalidate caches so profile, discovery, and drafts reflect
-        // the newly published look.
-        invalidateCachesAfterPublish(workingDoc.id, currentUser?.id ?? null);
-        // Animate progress to 100%
         progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
         setStage('success');
-        CreatorAnalytics.publishSuccess('look', result.lookId);
+        CreatorAnalytics.publishSuccess(workingDoc.type, `scheduled:${workingDoc.id}`);
       } else {
-        // 4. Serialise to canonical poster payload
-        const { payload } = serialiseToPosterPayload(workingDoc);
-
-        // 5. Send real publish request
+        // Publish now via the orchestrator.
         publicationRequestStarted = true;
-        const result = await createPosterStory(payload);
+        const pubResult = await publishCreatorDocument(workingDoc.id, publishCommand);
+        const targetId = pubResult.targetId;
 
-        // 6. If scheduled, set the scheduled_for timestamp on the document
-        if (workingDoc.metadata.scheduledFor) {
-          try {
-            await scheduleCreatorDocument(workingDoc.id, workingDoc.metadata.scheduledFor);
-          } catch (scheduleErr: unknown) {
-            // Scheduling failed AFTER immediate publication. The content is
-            // already public — we must NOT show a success state that implies
-            // it will appear later. Surface an honest error with corrective
-            // actions (retry schedule or accept immediate publication).
-            publishGuardRef.current.complete(workingDoc.id);
-            setPublishedId(result.storyId);
-            invalidateCachesAfterPublish(workingDoc.id, currentUser?.id ?? null);
-            setScheduleError(scheduleErr instanceof Error ? scheduleErr.message : 'Scheduling failed');
-            progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
-            setStage('scheduleFailed');
-            CreatorAnalytics.publishError(document.type, `Schedule failed after publish: ${scheduleErr instanceof Error ? scheduleErr.message : 'Unknown'}`);
-            return;
-          }
-        }
-
-        // 7. Confirm server success
         publishGuardRef.current.complete(workingDoc.id);
-        setPublishedId(result.storyId);
-        // Invalidate caches so profile, discovery, and drafts reflect
-        // the newly published poster.
+        setPublishedId(targetId);
         invalidateCachesAfterPublish(workingDoc.id, currentUser?.id ?? null);
-        // Animate progress to 100%
         progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
         setStage('success');
-        CreatorAnalytics.publishSuccess('poster', result.storyId);
+        CreatorAnalytics.publishSuccess(workingDoc.type, targetId);
       }
     } catch (err: unknown) {
       publishGuardRef.current.fail();
@@ -545,6 +536,24 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     setIsCheckingResult(true);
     setErrorMessage('');
     try {
+      // First, try the authoritative publication lookup by idempotency key.
+      // The orchestrator's creator_publications row is the source of truth —
+      // if it exists, the publish committed, regardless of whether the public
+      // projection has propagated to the read model yet.
+      const idempotencyKey = `pub_${document.id}_0`;
+      const publication = await lookupPublicationByKey(document.id, idempotencyKey);
+      if (publication && publication.ok) {
+        publishGuardRef.current.complete(publication.targetId);
+        setPublishedId(publication.targetId);
+        invalidateCachesAfterPublish(publication.targetId, currentUser?.id ?? null);
+        progressWidth.value = 1;
+        setStage('success');
+        CreatorAnalytics.publishSuccess(document.type, publication.targetId);
+        return;
+      }
+
+      // Fallback: check the public projection directly (legacy path for
+      // documents published before the orchestrator existed).
       if (document.type === 'look') {
         const result = await fetchLookByIdFromApi(targetId);
         if (!result.ok || !result.look) throw new Error('No confirmed publication was found yet.');
@@ -566,27 +575,54 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     }
   }, [document.id, document.type, editingLookId, haptic, progressWidth, currentUser]);
 
-  // Retry only the scheduling step after a schedule failure. The content is
-  // already published immediately; this attempts to attach the scheduled_for
-  // timestamp again without re-publishing.
+  // Retry scheduling after a failure. With the new server-owned schedule,
+  // this re-creates the schedule row (the old row was cancelled on retry).
   const handleRetrySchedule = useCallback(async () => {
     if (!document.metadata.scheduledFor) return;
     haptic.medium();
     setStage('publishing');
     progressWidth.value = reduceMotion ? 0.8 : withSpring(0.8, spring.entrance);
     try {
-      await scheduleCreatorDocument(document.id, document.metadata.scheduledFor);
+      // Build the same publish command for the schedule.
+      const expectedMedia: ExpectedMediaEntry[] = [];
+      for (const page of document.pages) {
+        for (const layer of page.layers) {
+          if (layer.type === 'media' && layer.payload.mediaUri && !isLocalUri(layer.payload.mediaUri)) {
+            if (layer.payload.mediaFinalizationId) {
+              expectedMedia.push({
+                layerId: layer.id,
+                finalizationId: layer.payload.mediaFinalizationId,
+                assetId: layer.payload.mediaAssetId,
+                mediaType: layer.payload.mediaType ?? 'image',
+                suppliedUrl: layer.payload.mediaUri,
+                role: document.type === 'look' ? 'primary' : `frame:${page.id}`,
+              });
+            }
+          }
+        }
+      }
+      const retryCommand: PublishCommand = {
+        revision: 0,
+        destination: document.type === 'look' ? 'look' : 'poster',
+        audience: document.metadata.visibility === 'closeFriends' ? 'closeFriends' : (document.metadata.visibility as 'public' | 'private'),
+        expiresInHours: document.metadata.expiresInHours ?? 24,
+        expectedMedia,
+      };
+      await schedulePublication(document.id, {
+        dueAt: document.metadata.scheduledFor,
+        publishCommand: retryCommand,
+      });
       progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
       setScheduleError('');
       setStage('success');
-      CreatorAnalytics.publishSuccess(document.type, publishedId);
+      CreatorAnalytics.publishSuccess(document.type, `scheduled:${document.id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Scheduling failed';
       setScheduleError(msg);
       setStage('scheduleFailed');
       CreatorAnalytics.publishError(document.type, `Schedule retry failed: ${msg}`);
     }
-  }, [document.id, document.type, document.metadata.scheduledFor, publishedId, haptic, reduceMotion, spring.entrance, spring.success, progressWidth]);
+  }, [document.id, document.type, document.metadata.scheduledFor, document.metadata.visibility, document.metadata.expiresInHours, document.pages, haptic, reduceMotion, spring.entrance, spring.success, progressWidth]);
 
   // Accept that the content was published immediately (skip scheduling).
   const handleAcceptImmediate = useCallback(() => {

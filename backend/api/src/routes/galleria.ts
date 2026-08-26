@@ -68,6 +68,49 @@ type GalleriaItemRow = {
   sort_order: number;
 };
 
+type GalleriaEditorialRow = {
+  id: string;
+  title: string;
+  excerpt: string;
+  hero_image_url: string;
+  author_name: string;
+  author_avatar: string;
+  body_content: string;
+  read_time_minutes: number;
+  status: string;
+  theme: string;
+  created_at: string;
+  published_at: string | null;
+};
+
+const createEditorialSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  excerpt: z.string().trim().max(600).default(''),
+  heroImageUrl: z.string().trim().max(1000).default(''),
+  authorName: z.string().trim().max(120).default(''),
+  authorAvatar: z.string().trim().max(500).default(''),
+  bodyContent: z.array(z.string().trim().max(5000)).default([]),
+  readTimeMinutes: z.coerce.number().int().min(1).max(120).default(5),
+  status: z.enum(['draft', 'published']).default('published'),
+  theme: z.string().trim().max(80).default(''),
+});
+
+function mapEditorial(row: GalleriaEditorialRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    excerpt: row.excerpt,
+    heroImageUrl: row.hero_image_url,
+    authorName: row.author_name,
+    authorAvatar: row.author_avatar,
+    publishedAt: row.published_at ?? row.created_at,
+    readTimeMinutes: row.read_time_minutes,
+    bodyContent: JSON.parse(row.body_content || '[]') as string[],
+    theme: row.theme,
+    isDemo: false,
+  };
+}
+
 function mapCollection(row: GalleriaCollectionRow, itemIds: string[]) {
   return {
     id: row.id,
@@ -254,5 +297,62 @@ export function registerGalleriaRoutes({
       ok: true,
       id: collectionId,
     };
+  });
+
+  // ── Editorials ──
+  app.get('/galleria/editorials', async () => {
+    const limit = 24;
+    const offset = 0;
+    const result = await readDb.query<GalleriaEditorialRow>(
+      `SELECT id, title, excerpt, hero_image_url, author_name, author_avatar,
+              body_content, read_time_minutes, status, theme,
+              created_at, published_at
+       FROM galleria_editorials
+       WHERE status = 'published'
+       ORDER BY published_at DESC NULLS LAST, created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    return { items: result.rows.map(mapEditorial) };
+  });
+
+  app.post('/galleria/editorials', async (request, reply) => {
+    if (request.authUser?.role !== 'admin') {
+      reply.code(403);
+      return { ok: false, error: 'Forbidden: admin role required' };
+    }
+
+    const parsed = createEditorialSchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid editorial', details: parsed.error.flatten() };
+    }
+
+    const data = parsed.data;
+    const id = randomUUID();
+    const now = new Date();
+
+    await db.query(
+      `INSERT INTO galleria_editorials
+         (id, title, excerpt, hero_image_url, author_name, author_avatar,
+          body_content, read_time_minutes, status, theme, created_at, published_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [
+        id,
+        data.title,
+        data.excerpt,
+        data.heroImageUrl,
+        data.authorName,
+        data.authorAvatar,
+        JSON.stringify(data.bodyContent),
+        data.readTimeMinutes,
+        data.status,
+        data.theme,
+        now,
+        data.status === 'published' ? now : null,
+      ]
+    );
+
+    return { ok: true, id };
   });
 }

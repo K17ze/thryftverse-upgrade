@@ -163,6 +163,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     recentlyDeleted,
     composerSending,
     sendMessage: hookSendMessage,
+    sendVoiceMessage,
+    handleSendVoice,
     handleDeleteMessage,
     handleUndoDelete,
     dateSeparatorIndices,
@@ -213,6 +215,10 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   // P0.13: Replaces the false self-typing indicator. useTypingIndicator
   // subscribes to chat.typing.update events and auto-clears after 4s.
   const remoteTyping = useTypingIndicator(groupId);
+
+  // Voice recording state — owned at screen level so the recorder survives
+  // composer re-renders while recording (report 19).
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
 
   // ─── Send adapter ───────────────────────────────────────────────────
   const handleSend = useCallback(() => {
@@ -334,6 +340,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
             </View>
           ) : null}
           <MessageBubble
+            id={item.id}
+            conversationId={conversationId}
             text={item.text ?? ''}
             isMe={item.sender === 'me'}
             senderLabel={isAgent ? `${item.senderLabel ?? 'Member'} · AI` : item.senderLabel}
@@ -517,6 +525,9 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                 value={input}
                 onChangeText={setTypingInput}
                 onSend={handleSend}
+                onVoiceRecord={handleSendVoice}
+                isVoiceRecording={isVoiceRecording}
+                onVoiceRecordingChange={setIsVoiceRecording}
                 placeholder="Message the group…"
                 isSending={composerSending}
               />

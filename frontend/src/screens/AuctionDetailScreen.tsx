@@ -6,6 +6,7 @@ import {
   RefreshControl,
   Pressable,
   Text,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -36,6 +37,11 @@ import {
   getAuctionDetail,
   placeAuctionBid,
   buyAuctionNow,
+  cancelAuction,
+  payAuction,
+  acceptHighestBid,
+  acceptSecondChance,
+  declineSecondChance,
   addToWatchlist,
   removeFromWatchlist,
   listAuctions,
@@ -67,6 +73,7 @@ import {
   CommerceDetailUnavailableInline,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
+import { useRealtimeEvent } from '../platform/realtime';
 import {
   useBucketedServerClock,
   resolveAuctionTiming,
@@ -88,6 +95,7 @@ import type { Listing } from '../services/listingsApi';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   resolveStateAction,
+  resolveAuctionPresentationState,
   resolveDetailPriceLabel,
   resolveDetailPriceAmount,
   resolveDetailCountdown,
@@ -95,6 +103,8 @@ import {
   buildDetailAccessibilityLabel,
   formatBidActivityRow,
   detectLifecycleTransition,
+  resolveBidRule,
+  resolvePaymentDeadlineCountdown,
   type AuctionDetailInput,
   resolveReserveStatus,
 } from '../utils/auctionDetailLogic';
@@ -152,6 +162,11 @@ export default function AuctionDetailScreen() {
   const [relatedAuctions, setRelatedAuctions] = React.useState<MarketAuction[]>([]);
   const [relatedLoading, setRelatedLoading] = React.useState(false);
   const [lastFetchAt, setLastFetchAt] = React.useState<number | null>(null);
+  const [isCancelLoading, setIsCancelLoading] = React.useState(false);
+  const [isPayLoading, setIsPayLoading] = React.useState(false);
+  const [isAcceptSecondChanceLoading, setIsAcceptSecondChanceLoading] = React.useState(false);
+  const [isDeclineSecondChanceLoading, setIsDeclineSecondChanceLoading] = React.useState(false);
+  const [isAcceptHighestBidLoading, setIsAcceptHighestBidLoading] = React.useState(false);
 
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
@@ -166,6 +181,16 @@ export default function AuctionDetailScreen() {
     useBucketedServerClock(serverNowRef.current);
 
   const prevLifecycleRef = React.useRef<AuctionEffectiveState | null>(null);
+
+  // ── Realtime bid events ──
+  // Subscribe to the auction topic so bid events can trigger an
+  // immediate resync if the monotonic sequence gaps. This is a
+  // client-side safety net on top of the existing polling path.
+  const lastAuctionSequenceRef = React.useRef<number | null>(null);
+  const bidEvent = useRealtimeEvent<{ auctionSequence?: number }>(
+    auctionId ? `auction.${auctionId}` : '',
+    'bid.created',
+  );
 
   // Guard against async state updates after the component unmounts.
   // fetchDetail and fetchRelatedAuctions both await network calls and
@@ -216,6 +241,19 @@ export default function AuctionDetailScreen() {
       }
     }
   }, [auctionId, resync, clearResyncFailed, markResyncFailed]);
+
+  // ── Realtime gap recovery ──
+  // Compare the monotonic auction sequence in each incoming bid event
+  // with the last known sequence. A gap forces a fresh detail fetch.
+  React.useEffect(() => {
+    if (!bidEvent?.payload?.auctionSequence) return;
+    const seq = bidEvent.payload.auctionSequence;
+    const last = lastAuctionSequenceRef.current;
+    if (last != null && seq > last + 1) {
+      void fetchDetail();
+    }
+    lastAuctionSequenceRef.current = seq;
+  }, [bidEvent, fetchDetail]);
 
   React.useEffect(() => {
     void fetchDetail();
@@ -339,12 +377,12 @@ export default function AuctionDetailScreen() {
 
   // PASS 6: Sheet owns transaction feedback. Parent only calls API and returns typed result.
   // No duplicate toast — sheet handles inline error/success presentation.
-  const handleSubmitBid = async (gbpAmount: number, idempotencyKey: string): Promise<void> => {
+  const handleSubmitBid = async (gbpAmount: number, idempotencyKey: string, maxBidGbp?: number): Promise<void> => {
     if (!auction || isSubmittingBid) return;
     setIsSubmittingBid(true);
 
     try {
-      await placeAuctionBid(auction.id, { amountGbp: gbpAmount, idempotencyKey });
+      await placeAuctionBid(auction.id, { amountGbp: gbpAmount, idempotencyKey, maxBidGbp });
       // Post-success refresh — do not convert to error if refresh fails
       await fetchDetail();
     } catch (err) {
@@ -395,6 +433,104 @@ export default function AuctionDetailScreen() {
     }
   };
 
+  // ── Post-end lifecycle action handlers ──
+  // Each handler guards against double-submit, calls the dedicated API,
+  // then refreshes detail so the UI reflects the authoritative backend
+  // state. Toasts are minimal and truthful — no verbose explanations.
+
+  const handleAcceptHighestBid = async () => {
+    if (!auction || isAcceptHighestBidLoading) return;
+    if (!requireAuth('create_listing')) return;
+    setIsAcceptHighestBidLoading(true);
+    try {
+      await acceptHighestBid(auction.id);
+      await fetchDetail();
+      show('Highest bid accepted', 'success');
+    } catch (err) {
+      const parsed = parseApiError(err, 'Failed to accept highest bid');
+      show(parsed.message, 'error');
+    } finally {
+      setIsAcceptHighestBidLoading(false);
+    }
+  };
+
+  const handlePayNow = async () => {
+    if (!auction || isPayLoading) return;
+    if (!requireAuth('purchase')) return;
+    setIsPayLoading(true);
+    try {
+      const idempotencyKey = `pay-${auction.id}-${Date.now()}`;
+      await payAuction(auction.id, { idempotencyKey });
+      await fetchDetail();
+      show('Payment initiated', 'success');
+    } catch (err) {
+      const parsed = parseApiError(err, 'Payment failed');
+      show(parsed.message, 'error');
+    } finally {
+      setIsPayLoading(false);
+    }
+  };
+
+  const handleAcceptSecondChance = async () => {
+    if (!auction || isAcceptSecondChanceLoading) return;
+    if (!requireAuth('purchase')) return;
+    setIsAcceptSecondChanceLoading(true);
+    try {
+      const idempotencyKey = `sc-accept-${auction.id}-${Date.now()}`;
+      await acceptSecondChance(auction.id, idempotencyKey);
+      await fetchDetail();
+      show('Second chance accepted', 'success');
+    } catch (err) {
+      const parsed = parseApiError(err, 'Failed to accept second chance');
+      show(parsed.message, 'error');
+    } finally {
+      setIsAcceptSecondChanceLoading(false);
+    }
+  };
+
+  const handleDeclineSecondChance = async () => {
+    if (!auction || isDeclineSecondChanceLoading) return;
+    setIsDeclineSecondChanceLoading(true);
+    try {
+      await declineSecondChance(auction.id);
+      await fetchDetail();
+      show('Second chance declined', 'info');
+    } catch (err) {
+      const parsed = parseApiError(err, 'Failed to decline second chance');
+      show(parsed.message, 'error');
+    } finally {
+      setIsDeclineSecondChanceLoading(false);
+    }
+  };
+
+  const handleCancelAuction = () => {
+    if (!auction || isCancelLoading) return;
+    Alert.alert(
+      'Cancel auction',
+      'This will cancel the auction and notify all bidders. This cannot be undone.',
+      [
+        { text: 'Keep auction', style: 'cancel' },
+        {
+          text: 'Cancel auction',
+          style: 'destructive',
+          onPress: async () => {
+            setIsCancelLoading(true);
+            try {
+              await cancelAuction(auction.id);
+              await fetchDetail();
+              show('Auction cancelled', 'info');
+            } catch (err) {
+              const parsed = parseApiError(err, 'Failed to cancel auction');
+              show(parsed.message, 'error');
+            } finally {
+              setIsCancelLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const detailInput: AuctionDetailInput | null = React.useMemo(() => {
     if (!auction) return null;
     return {
@@ -419,12 +555,27 @@ export default function AuctionDetailScreen() {
       isWatched: auction.isWatched,
       cancelledAt: auction.cancelledAt,
       settledAt: auction.settledAt,
+      paidAt: auction.paidAt,
+      paymentDeadlineAt: auction.paymentDeadlineAt,
+      secondChanceOfferedTo: auction.secondChanceOfferedTo,
+      cancelledBy: auction.cancelledBy,
+      cancelledReason: auction.cancelledReason,
+      antiSniping: auction.antiSniping,
       winnerBidderId: auction.winnerBidderId,
+      auctionSequence: auction.auctionSequence,
       lifecycle: auction.lifecycle,
       terminalReason: auction.terminalReason,
       fulfilment: auction.fulfilment ?? null,
     };
   }, [auction]);
+
+  // Keep the last known monotonic sequence in sync with the canonical
+  // detail so realtime gap detection has a stable baseline.
+  React.useEffect(() => {
+    if (auction?.auctionSequence != null) {
+      lastAuctionSequenceRef.current = auction.auctionSequence;
+    }
+  }, [auction?.auctionSequence]);
 
   const timing = React.useMemo(() => {
     if (!auction || !effectiveState) return null;
@@ -461,6 +612,17 @@ export default function AuctionDetailScreen() {
     return resolveDetailCountdown(timing, secondClock, minuteClock);
   }, [timing, secondClock, minuteClock]);
 
+  // Canonical presentation state for badge, primary sentence, and dock.
+  const presentation = React.useMemo(() => {
+    if (!detailInput || !effectiveState || !countdown) return null;
+    return resolveAuctionPresentationState(
+      effectiveState,
+      detailInput.viewerState,
+      detailInput,
+      countdown.stage,
+    );
+  }, [detailInput, effectiveState, countdown]);
+
   const accessibilityLabel = React.useMemo(() => {
     if (!detailInput || !timing) return '';
     return buildDetailAccessibilityLabel(
@@ -478,6 +640,11 @@ export default function AuctionDetailScreen() {
   const isEnded = effectiveState === 'ended';
   const isCancelled = effectiveState === 'cancelled';
   const isSettled = effectiveState === 'settled';
+  const isReserveNotMet = effectiveState === 'reserve_not_met';
+  const isAwaitingPayment = effectiveState === 'awaiting_payment';
+  const isPaymentExpired = effectiveState === 'payment_expired';
+  const isSecondChanceOffered = effectiveState === 'second_chance_offered';
+  const isPostEnd = isReserveNotMet || isAwaitingPayment || isPaymentExpired || isSecondChanceOffered;
   const isTerminal = isEnded || isCancelled || isSettled;
 
   // ── Real-time polling for live auctions ──────────────────────────
@@ -518,7 +685,28 @@ export default function AuctionDetailScreen() {
   const isSeller = viewerState === 'seller';
   const buyNowAvailable = detailInput ? isBuyNowAvailable(detailInput, effectiveState ?? 'upcoming') : false;
   const reserveStatus = detailInput ? resolveReserveStatus(detailInput) : 'none';
-  const showBidControls = !isTerminal && !isSeller;
+  const showBidControls = !isTerminal && !isPostEnd && !isSeller;
+
+  // ── Second-chance recipient detection ──
+  // The backend sets secondChanceOfferedTo to a specific user ID. Only
+  // that user sees accept/decline controls. Falls back to viewerState
+  // (outbid/lost) when the backend hasn't populated the field yet.
+  const isSecondChanceRecipient = React.useMemo(() => {
+    if (!auction) return false;
+    if (auction.secondChanceOfferedTo && currentUser?.id) {
+      return auction.secondChanceOfferedTo === currentUser.id;
+    }
+    return (isPaymentExpired || isSecondChanceOffered) &&
+      (viewerState === 'outbid' || viewerState === 'lost');
+  }, [auction, currentUser?.id, isPaymentExpired, isSecondChanceOffered, viewerState]);
+
+  // ── Payment deadline countdown ──
+  // Uses the same server-clock pattern as the auction end countdown so
+  // the deadline ticks down with the same per-second precision.
+  const paymentDeadlineCountdown = React.useMemo(() => {
+    if (!auction?.paymentDeadlineAt) return null;
+    return resolvePaymentDeadlineCountdown(auction.paymentDeadlineAt, secondClock);
+  }, [auction?.paymentDeadlineAt, secondClock]);
 
   // ── PRODUCT-01: unified view model + shared social state + seller trust + recommendations ──
   const viewModel = React.useMemo(() => {
@@ -709,59 +897,36 @@ export default function AuctionDetailScreen() {
     text: string;
     color: string;
   } | null>(() => {
-    if (!timing || !detailInput || !auction) return null;
+    if (!presentation) return null;
+    const colorByKey: Record<typeof presentation.colorKey, string> = {
+      brand: colors.brand,
+      success: colors.success,
+      danger: colors.danger,
+      warning: colors.warning,
+      textPrimary: colors.textPrimary,
+      textSecondary: colors.textSecondary,
+      textMuted: colors.textMuted,
+    };
+    return {
+      text: presentation.viewerMessage ?? presentation.stateLabel,
+      color: colorByKey[presentation.colorKey],
+    };
+  }, [presentation, colors]);
 
-    // Terminal states — server-confirmed end
-    if (isEnded || isSettled) {
-      if (viewerState === 'won' && !isPaymentConfirmed && !isSettled) {
-        return { text: 'Payment required', color: colors.warning };
-      }
-      return { text: 'Ended', color: colors.textMuted };
-    }
-    if (isCancelled) {
-      return { text: 'Cancelled', color: colors.textMuted };
-    }
-
-    // Live — viewer-state sentences dominate over countdown
-    if (isLive) {
-      if (viewerState === 'outbid') {
-        return { text: 'Outbid', color: colors.warning };
-      }
-      if (viewerState === 'leading') {
-        return { text: "You're highest bidder", color: colors.success };
-      }
-      if (reserveStatus === 'not-met') {
-        return { text: 'Reserve not met', color: colors.textPrimary };
-      }
-      // Default — countdown is the primary sentence
-      return { text: `Ends in ${formatCountdownSentence(liveMsToEnd)}`, color: countdownColor };
-    }
-
-    // Upcoming
-    if (isUpcoming) {
-      return { text: `Starts in ${formatCountdownSentence(liveMsToStart)}`, color: colors.brand };
-    }
-
-    return null;
-  }, [timing, detailInput, auction, isEnded, isSettled, isCancelled, isLive, isUpcoming, viewerState, isPaymentConfirmed, reserveStatus, liveMsToEnd, liveMsToStart, countdownColor, colors]);
-
-  // Subordinate metadata — countdown demotes here when viewer state
-  // dominates the primary sentence. Kept small and neutral so it never
-  // competes with the primary state sentence.
+  // The dedicated countdown bar owns time display; avoid a second
+  // countdown line in the transaction surface.
   const subordinateStateText = React.useMemo<string | null>(() => {
-    if (!isLive || !auction) return null;
-    // Only show subordinate countdown when the primary sentence is NOT
-    // the countdown itself (i.e., viewer state or reserve dominates).
-    const primaryIsCountdown =
-      primaryState?.text.startsWith('Ends in') || primaryState?.text.startsWith('Starts in');
-    if (primaryIsCountdown) return null;
-    if (liveMsToEnd <= 0) return null;
-    return `Ends in ${formatCountdownSentence(liveMsToEnd)}`;
-  }, [isLive, auction, primaryState, liveMsToEnd]);
+    return null;
+  }, []);
 
   // Compute scroll bottom padding from dock geometry + safe area so the
   // sticky dock never covers the last content row.
-  const hasDualDock = showBidControls && buyNowAvailable && stateAction?.secondary.type === 'buyNow' && !isBuyNowLoading;
+  const hasDualDock =
+    (showBidControls && buyNowAvailable && stateAction?.secondary.type === 'buyNow' && !isBuyNowLoading) ||
+    (isPostEnd && (
+      (isReserveNotMet && isSeller && (auction?.bidCount ?? 0) > 0) ||
+      ((isPaymentExpired || isSecondChanceOffered) && isSecondChanceRecipient)
+    ));
   const dockHeight = hasDualDock
     ? DockConstants.dualActionHeight
     : DockConstants.singleActionHeight;
@@ -995,6 +1160,117 @@ export default function AuctionDetailScreen() {
           onRetry={handleRefresh}
         />
 
+        {/* ── Post-end lifecycle status banners ──
+            Flat, restrained bars using the same countdownBar geometry.
+            One icon + one line of truthful copy. No decorative chrome.
+            Color comes from the theme via the presentation state's
+            colorKey so the banner stays consistent with the dock and
+            primary state sentence. */}
+        {isReserveNotMet && (
+          <View
+            style={[styles.countdownBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel="Reserve not met"
+          >
+            <Ionicons name="information-circle-outline" size={16} color={colors.warning} />
+            <Text
+              style={[styles.countdownBarText, { color: colors.textPrimary }]}
+              numberOfLines={2}
+            >
+              {isSeller
+                ? 'Reserve not met — accept the highest bid or relist'
+                : 'Reserve not met — the seller may accept the highest bid'}
+            </Text>
+          </View>
+        )}
+        {isAwaitingPayment && viewerState === 'won' && paymentDeadlineCountdown && !paymentDeadlineCountdown.isExpired && (
+          <View
+            style={[
+              styles.countdownBar,
+              {
+                backgroundColor: paymentDeadlineCountdown.text.includes('m left') && !paymentDeadlineCountdown.text.includes('h')
+                  ? colors.danger
+                  : colors.surface,
+                borderBottomColor: colors.border,
+              },
+            ]}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={`Payment deadline: ${paymentDeadlineCountdown.text}`}
+          >
+            <Ionicons
+              name="time-outline"
+              size={16}
+              color={paymentDeadlineCountdown.text.includes('m left') && !paymentDeadlineCountdown.text.includes('h')
+                ? colors.textInverse
+                : colors.warning}
+            />
+            <Text
+              style={[
+                styles.countdownBarText,
+                {
+                  color: paymentDeadlineCountdown.text.includes('m left') && !paymentDeadlineCountdown.text.includes('h')
+                    ? colors.textInverse
+                    : colors.textPrimary,
+                  fontVariant: ['tabular-nums'] as any,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {`Pay within ${paymentDeadlineCountdown.text}`}
+            </Text>
+          </View>
+        )}
+        {isAwaitingPayment && viewerState !== 'won' && (
+          <View
+            style={[styles.countdownBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel="Awaiting buyer payment"
+          >
+            <Ionicons name="time-outline" size={16} color={colors.warning} />
+            <Text
+              style={[styles.countdownBarText, { color: colors.textPrimary }]}
+              numberOfLines={1}
+            >
+              {isSeller ? 'Awaiting buyer payment' : 'Sold · awaiting payment'}
+            </Text>
+          </View>
+        )}
+        {(isPaymentExpired || isSecondChanceOffered) && !isSecondChanceRecipient && (
+          <View
+            style={[styles.countdownBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel="Payment expired"
+          >
+            <Ionicons name="information-circle-outline" size={16} color={colors.warning} />
+            <Text
+              style={[styles.countdownBarText, { color: colors.textPrimary }]}
+              numberOfLines={1}
+            >
+              {isSeller ? 'Payment expired' : 'Payment window closed'}
+            </Text>
+          </View>
+        )}
+        {(isPaymentExpired || isSecondChanceOffered) && isSecondChanceRecipient && (
+          <View
+            style={[styles.countdownBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel="Second chance available"
+          >
+            <Ionicons name="gift-outline" size={16} color={colors.warning} />
+            <Text
+              style={[styles.countdownBarText, { color: colors.textPrimary }]}
+              numberOfLines={2}
+            >
+              {isSecondChanceOffered
+                ? 'Second chance offered to you'
+                : 'Second chance available'}
+              {paymentDeadlineCountdown && !paymentDeadlineCountdown.isExpired
+                ? ` · ${paymentDeadlineCountdown.text}`
+                : ''}
+            </Text>
+          </View>
+        )}
+
         {/* ── Zone C — Auction transaction surface ──
             One primary state sentence above the fold. The countdown,
             viewer signals, and reserve status demote to subordinate
@@ -1206,6 +1482,27 @@ export default function AuctionDetailScreen() {
             }
           />
         </View>
+
+        {/* ── Seller cancel action ──
+            Restrained: a muted text link in a secondary position, not a
+            prominent CTA. Only shown to the seller when the auction is
+            still live or upcoming (cancellable states). Destructive
+            intent signalled by the text, not by a red button. */}
+        {isSeller && (isLive || isUpcoming) && (
+          <View style={styles.sellerCancelRow}>
+            <Pressable
+              onPress={handleCancelAuction}
+              disabled={isCancelLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel this auction"
+              style={({ pressed }) => pressed && { opacity: 0.5 }}
+            >
+              <Text style={[styles.sellerCancelText, { color: colors.textMuted }]}>
+                {isCancelLoading ? 'Cancelling…' : 'Cancel auction'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* ── Zone E — Item details ──
             Per spec 02_AUCTION §5: wrap description, category evidence,
@@ -1431,6 +1728,160 @@ export default function AuctionDetailScreen() {
               primaryAction={terminalAction}
             />
           ) : null;
+        }
+
+        // ── Post-end lifecycle states ──
+        // reserve_not_met, awaiting_payment, payment_expired,
+        // second_chance_offered. The body status banner communicates the
+        // state; the dock carries the single next valid action. Uses
+        // presentation.stateLabel for the dock badge so the dock and
+        // banner stay in sync.
+        if (isPostEnd) {
+          const postEndBadge = presentation ? (
+            <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
+              {presentation.stateLabel}
+            </Text>
+          ) : undefined;
+
+          // Reserve not met — seller can accept highest bid; others get discovery.
+          if (isReserveNotMet) {
+            if (isSeller && auction.bidCount > 0) {
+              return (
+                <CommerceDetailStateDock
+                  stateBadge={postEndBadge}
+                  value={terminalAmountText}
+                  valueLabel="Highest bid"
+                  primaryAction={{
+                    label: isAcceptHighestBidLoading ? 'Accepting…' : 'Accept highest bid',
+                    onPress: () => { haptics.press(); void handleAcceptHighestBid(); },
+                    loading: isAcceptHighestBidLoading,
+                    disabled: isAcceptHighestBidLoading,
+                    accessibilityLabel: 'Accept the highest bid',
+                  }}
+                  secondaryAction={{
+                    label: 'Manage',
+                    onPress: () => navigation.navigate('SellerAuctionCentre'),
+                    accessibilityLabel: 'Manage auction in seller centre',
+                    primary: false,
+                  }}
+                />
+              );
+            }
+            return (
+              <CommerceDetailStateDock
+                stateBadge={postEndBadge}
+                value={terminalAmountText}
+                valueLabel="Highest bid"
+                primaryAction={{
+                  label: 'Discover similar',
+                  onPress: () => navigation.navigate('AuctionHome'),
+                  accessibilityLabel: 'Discover similar auctions',
+                }}
+              />
+            );
+          }
+
+          // Awaiting payment — winner pays; seller/others wait.
+          if (isAwaitingPayment) {
+            if (viewerState === 'won') {
+              return (
+                <CommerceDetailStateDock
+                  stateBadge={postEndBadge}
+                  value={terminalAmountText}
+                  valueLabel="Amount due"
+                  subtitle={paymentDeadlineCountdown && !paymentDeadlineCountdown.isExpired
+                    ? `Pay within ${paymentDeadlineCountdown.text}`
+                    : undefined}
+                  primaryAction={{
+                    label: isPayLoading ? 'Processing…' : 'Pay now',
+                    onPress: () => { haptics.press(); void handlePayNow(); },
+                    loading: isPayLoading,
+                    disabled: isPayLoading,
+                    accessibilityLabel: 'Pay for this auction now',
+                  }}
+                  secondaryAction={auctionFulfilment?.orderId
+                    ? {
+                        label: 'View order',
+                        onPress: () => navigation.navigate('OrderDetail', { orderId: auctionFulfilment.orderId! }),
+                        accessibilityLabel: 'View auction order',
+                        primary: false,
+                      }
+                    : undefined}
+                />
+              );
+            }
+            if (isSeller) {
+              return (
+                <CommerceDetailStateDock
+                  stateBadge={postEndBadge}
+                  value={terminalAmountText}
+                  valueLabel="Highest bid"
+                  subtitle="Awaiting buyer payment"
+                  primaryAction={{
+                    label: 'Manage auction',
+                    onPress: () => navigation.navigate('SellerAuctionCentre'),
+                    accessibilityLabel: 'Manage auction in seller centre',
+                  }}
+                />
+              );
+            }
+            return (
+              <CommerceDetailStateDock
+                stateBadge={postEndBadge}
+                value={terminalAmountText}
+                valueLabel="Final bid"
+                primaryAction={{
+                  label: 'Discover similar',
+                  onPress: () => navigation.navigate('AuctionHome'),
+                  accessibilityLabel: 'Discover similar auctions',
+                }}
+              />
+            );
+          }
+
+          // Payment expired / second chance offered — recipient gets
+          // accept/decline; everyone else gets discovery.
+          if (isPaymentExpired || isSecondChanceOffered) {
+            if (isSecondChanceRecipient) {
+              return (
+                <CommerceDetailStateDock
+                  stateBadge={postEndBadge}
+                  value={terminalAmountText}
+                  valueLabel="Second chance"
+                  subtitle={paymentDeadlineCountdown && !paymentDeadlineCountdown.isExpired
+                    ? `${paymentDeadlineCountdown.text} to decide`
+                    : undefined}
+                  primaryAction={{
+                    label: isAcceptSecondChanceLoading ? 'Accepting…' : 'Accept second chance',
+                    onPress: () => { haptics.press(); void handleAcceptSecondChance(); },
+                    loading: isAcceptSecondChanceLoading,
+                    disabled: isAcceptSecondChanceLoading,
+                    accessibilityLabel: 'Accept the second chance offer',
+                  }}
+                  secondaryAction={{
+                    label: isDeclineSecondChanceLoading ? 'Declining…' : 'Decline',
+                    onPress: () => { haptics.tap(); void handleDeclineSecondChance(); },
+                    loading: isDeclineSecondChanceLoading,
+                    disabled: isDeclineSecondChanceLoading,
+                    accessibilityLabel: 'Decline the second chance offer',
+                    primary: false,
+                  }}
+                />
+              );
+            }
+            return (
+              <CommerceDetailStateDock
+                stateBadge={postEndBadge}
+                value={terminalAmountText}
+                valueLabel="Final bid"
+                primaryAction={{
+                  label: 'Discover similar',
+                  onPress: () => navigation.navigate('AuctionHome'),
+                  accessibilityLabel: 'Discover similar auctions',
+                }}
+              />
+            );
+          }
         }
 
         // Seller view — calm state, no primary action.
@@ -1865,7 +2316,7 @@ export default function AuctionDetailScreen() {
 function resolveEffectiveState(
   auction: AuctionDetailType,
   clockMs: number,
-): 'cancelled' | 'settled' | 'upcoming' | 'live' | 'ended' {
+): AuctionEffectiveState {
   // 1. Cancelled — highest precedence
   if (auction.cancelledAt) return 'cancelled';
   // 2. Settled — explicit settlement
@@ -1873,10 +2324,14 @@ function resolveEffectiveState(
   // 3. Winner set or Buy Now terminal — ended regardless of dates
   if (auction.winnerBidderId) return 'ended';
   if (auction.terminalReason === 'buy_now') return 'ended';
-  // 4. Authoritative lifecycle from backend
+  // 4. Authoritative lifecycle from backend (includes post-end states)
   if (auction.lifecycle === 'ended') return 'ended';
   if (auction.lifecycle === 'cancelled') return 'cancelled';
   if (auction.lifecycle === 'settled') return 'settled';
+  if (auction.lifecycle === 'reserve_not_met') return 'reserve_not_met';
+  if (auction.lifecycle === 'awaiting_payment') return 'awaiting_payment';
+  if (auction.lifecycle === 'payment_expired') return 'payment_expired';
+  if (auction.lifecycle === 'second_chance_offered') return 'second_chance_offered';
   // 5. Scheduled end according to server clock
   const endsMs = new Date(auction.endsAt).getTime();
   const startsMs = new Date(auction.startsAt).getTime();
@@ -2212,6 +2667,20 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
+  },
+  // ── Seller cancel action ──
+  // Restrained: a muted text link centered in a secondary position.
+  // Not a prominent CTA — destructive intent is communicated by the
+  // text itself, not by a red button or card container.
+  sellerCancelRow: {
+    alignItems: 'center',
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+  },
+  sellerCancelText: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   // ── Bid history sheet rows ──
   // Per 2026 Apple HIG: compact flat rows, not cards. No outer

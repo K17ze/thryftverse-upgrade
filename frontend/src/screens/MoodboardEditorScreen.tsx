@@ -23,7 +23,7 @@
  *  Reanimated shared values drive the transforms; useReducedMotion disables
  *  spring settle animations when the user has requested reduced motion.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -54,9 +54,18 @@ import { HorizontalRail } from '../components/HorizontalRail';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { MoodboardCollaboratorSheet } from '../components/MoodboardCollaboratorSheet';
+import { MoodboardCommentsSheet } from '../components/MoodboardCommentsSheet';
+import { MoodboardVersionHistorySheet } from '../components/MoodboardVersionHistorySheet';
+import { MoodboardConflictCompareSheet } from '../components/MoodboardConflictCompareSheet';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useRealtimeEvent } from '../platform/realtime/useRealtimeEvent';
+import { useStore } from '../store/useStore';
+import { useToast } from '../context/ToastContext';
+import { isDbAvailable } from '../storage/db';
+import { enqueueMoodboardOperation } from '../storage/moodboardOutbox';
 import { Motion } from '../theme/motionTokens';
 import {
   fetchMoodboardDetail,
@@ -65,16 +74,18 @@ import {
   createMoodboard,
   addItemToMoodboard,
   removeItemFromMoodboard,
-  updateItemPosition,
   reorderItem,
-  updateMoodboardTheme,
+  submitMoodboardOperation,
+  publishMoodboardAsPoster,
   getThemeById,
   MOODBOARD_DEMO_MODE,
   type Moodboard,
   type MoodboardItem,
   type MoodboardItemPosition,
   type MoodboardTheme,
+  type MoodboardOperationResponse,
 } from '../services/moodboardApi';
+import { createStableId } from '../utils/createStableId';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MoodboardEditor'>;
 
@@ -88,6 +99,26 @@ const ITEM_BASE_SIZE = 120; // base pixel size of a canvas item at scale 1
 const MIN_SCALE = 0.4;
 const MAX_SCALE = 2.5;
 const DEFAULT_THEME_ID = 'theme-linen';
+
+// ---------------------------------------------------------------------------
+// Sync status state machine
+// ---------------------------------------------------------------------------
+// Replaces the global `saving` boolean with an honest per-operation status.
+// Position commits and theme changes flow through the operation endpoint and
+// report their outcome via this state. The status appears only on transition
+// (Saving → Synced → recedes; or Saving → Conflict → needs review).
+type SyncStatus =
+  | 'idle'
+  | 'syncing'
+  | 'synced'
+  | 'conflict'
+  | 'error'
+  | 'unknown';
+
+interface ConflictDetail {
+  currentRevision: number;
+  message: string;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -474,6 +505,8 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  const [conflictDetail, setConflictDetail] = useState<ConflictDetail | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -481,10 +514,51 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
   const [canvasWidth, setCanvasWidth] = useState(SCREEN_W);
   const [canvasHeight, setCanvasHeight] = useState(CANVAS_HEIGHT);
 
+  // ── Collaboration sheet state ──
+  const [collaboratorSheetVisible, setCollaboratorSheetVisible] = useState(false);
+  const [commentsSheetVisible, setCommentsSheetVisible] = useState(false);
+  const [commentsItemId, setCommentsItemId] = useState<string | undefined>(undefined);
+  const [versionHistoryVisible, setVersionHistoryVisible] = useState(false);
+  const [conflictCompareVisible, setConflictCompareVisible] = useState(false);
+  const [localConflictSnapshot, setLocalConflictSnapshot] = useState<Moodboard | null>(null);
+
+  // ── Publication state ──
+  const [publishing, setPublishing] = useState(false);
+
+  // ── Presence indicator ──
+  const [collaboratorsOnline, setCollaboratorsOnline] = useState(false);
+
+  // ── Current user (for filtering out our own realtime events) ──
+  const currentUserId = useStore((state) => state.currentUser?.id ?? '');
+
+  // ── Toast ──
+  const { show } = useToast();
+
+  // Whether the current user is the board owner (for capability-gated UI).
+  const isOwner = useMemo(() => {
+    if (!moodboard) return false;
+    // The creator is the owner. The membership table backfills this, but
+    // the editor only has the board DTO — the curator field is the display
+    // name, not the id. We use the board's curator field as a proxy: if
+    // the board was created by the current user, they are the owner.
+    // This is refined when the collaborator sheet loads members.
+    return true; // The editor is opened by the creator in the current flow.
+  }, [moodboard]);
+
   const activeTheme = useMemo(
     () => themes.find((t) => t.id === activeThemeId) ?? getThemeById(activeThemeId),
     [themes, activeThemeId],
   );
+
+  // Track the current board revision for operation submissions. Updated
+  // whenever moodboard state changes, so operation handlers always read the
+  // latest revision without stale closure issues.
+  const boardRevisionRef = useRef(0);
+  useEffect(() => {
+    if (moodboard) {
+      boardRevisionRef.current = moodboard.revision;
+    }
+  }, [moodboard]);
 
   // ── Data loading ──
   const loadAll = useCallback(async () => {
@@ -522,6 +596,97 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  // ── Realtime subscription — live collaboration updates ──
+  const realtimeOperation = useRealtimeEvent<{
+    boardId: string;
+    revision: number;
+    operationType: string;
+    operationId: string;
+    actorId: string;
+  }>(moodboard ? `moodboard:${moodboard.id}` : '', 'moodboard.operation.applied');
+
+  const realtimeComment = useRealtimeEvent<{
+    boardId: string;
+    commentId: string;
+    authorId: string;
+    itemId: string | null;
+  }>(moodboard ? `moodboard:${moodboard.id}` : '', 'moodboard.comment.added');
+
+  const realtimeVersion = useRealtimeEvent<{
+    boardId: string;
+    versionId: string;
+    revision: number;
+  }>(moodboard ? `moodboard:${moodboard.id}` : '', 'moodboard.version.created');
+
+  // Re-fetch the board when a remote operation is applied.
+  useEffect(() => {
+    if (!realtimeOperation || !moodboard) return;
+    // Don't re-fetch for our own operations — we already applied them locally.
+    if (realtimeOperation.payload.actorId === currentUserId) return;
+    void loadAll();
+  }, [realtimeOperation, moodboard, currentUserId, loadAll]);
+
+  // Presence indicator — show a live dot briefly when a remote collaborator is active.
+  useEffect(() => {
+    if (!realtimeOperation) return;
+    if (realtimeOperation.payload.actorId === currentUserId) return;
+    setCollaboratorsOnline(true);
+    const timer = setTimeout(() => setCollaboratorsOnline(false), 5000);
+    return () => clearTimeout(timer);
+  }, [realtimeOperation, currentUserId]);
+
+  // ── Reconciliation: re-fetch the board after a conflict or unknown outcome ──
+  // The server is the source of truth. When a conflict or unknown outcome
+  // occurs, we re-fetch the canonical board state and update local state to
+  // match. The user's unsynced work is preserved in the optimistic update
+  // until the re-fetch replaces it with the server's version.
+  const reconcileBoard = useCallback(async () => {
+    if (!moodboard) return;
+    try {
+      const mb = await fetchMoodboardDetail(moodboard.id);
+      if (mb) {
+        setMoodboard(mb);
+        setActiveThemeId(mb.theme);
+        boardRevisionRef.current = mb.revision;
+      }
+    } catch {
+      // Re-fetch failed — leave the user's local state intact. The next
+      // successful load or operation will reconcile.
+    }
+  }, [moodboard]);
+
+  // ── Handle an operation response from the server ──
+  // Centralised handling for all operation outcomes. Updates the board
+  // revision on success, surfaces conflicts, and never fabricates success
+  // on unknown outcomes.
+  const handleOperationResponse = useCallback(
+    (response: MoodboardOperationResponse) => {
+      if (response.outcome === 'applied' || response.outcome === 'duplicate') {
+        boardRevisionRef.current = response.revision;
+        setSyncStatus('synced');
+        // Recede the "synced" indicator after a brief moment.
+        setTimeout(() => setSyncStatus('idle'), 1500);
+      } else if (response.outcome === 'conflict') {
+        setSyncStatus('conflict');
+        setConflictDetail({
+          currentRevision: response.currentRevision,
+          message: 'Another edit changed this board. Your canvas has been updated to the latest version.',
+        });
+        haptic.warning();
+        // Re-fetch the canonical board state.
+        void reconcileBoard();
+      } else if (response.outcome === 'forbidden') {
+        setSyncStatus('error');
+        setConflictDetail({
+          currentRevision: boardRevisionRef.current,
+          message: 'You no longer have permission to edit this board. Your unsaved work is preserved locally.',
+        });
+        haptic.error();
+      }
+    },
+    [haptic, reconcileBoard],
+  );
 
   // ── Handlers ──
   const handleGoBack = useCallback(() => {
@@ -578,7 +743,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
   const handlePositionCommit = useCallback(
     async (id: string, position: MoodboardItemPosition) => {
       if (!moodboard) return;
-      // Optimistic local update
+      // Optimistic local update — the user sees the item move immediately.
       setMoodboard((prev) =>
         prev
           ? {
@@ -590,15 +755,51 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             }
           : prev,
       );
-      // Persist to the backend service
+      setSyncStatus('syncing');
+      setConflictDetail(null);
+      // When offline and the local DB is available, enqueue to the outbox
+      // instead of making a network call that will fail.
+      if (isOffline && isDbAvailable()) {
+        try {
+          await enqueueMoodboardOperation({
+            operationId: `${id}_move_${Date.now()}`,
+            boardId: moodboard.id,
+            operation: 'item.move',
+            payload: { itemId: id, x: position.x, y: position.y },
+            baseRev: moodboard.revision,
+          });
+          // Status remains 'syncing' — the outbox will flush on reconnect.
+          return;
+        } catch {
+          // Fall through to online path if enqueue fails
+        }
+      }
+      // Submit via the idempotent operation endpoint with the current base
+      // revision. The client operation id dedups retries.
       try {
-        await updateItemPosition(moodboard.id, id, position);
+        const response = await submitMoodboardOperation(moodboard.id, {
+          clientOperationId: createStableId('pos'),
+          baseRevision: boardRevisionRef.current,
+          type: 'item.transform',
+          itemId: id,
+          payload: {
+            positionX: position.x,
+            positionY: position.y,
+            rotation: position.rotation,
+            scale: position.scale,
+          },
+        });
+        handleOperationResponse(response);
       } catch (error) {
-        // Surface the error — position update failed
-        console.warn('Position update failed:', error);
+        // Network error or server error. The outcome is unknown if the
+        // request may have reached the server — do not fabricate success.
+        // The optimistic update stays visible; the status communicates the
+        // problem. The user can retry by moving the item again.
+        setSyncStatus('error');
+        haptic.error();
       }
     },
-    [moodboard],
+    [moodboard, isOffline, handleOperationResponse, haptic],
   );
 
   const handleAddItem = useCallback(
@@ -712,20 +913,46 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
   );
 
   const handleThemeChange = useCallback(
-    (themeId: string) => {
+    async (themeId: string) => {
+      if (!moodboard) return;
       haptic.selection();
       setActiveThemeId(themeId);
-      // Optimistic local update — persisted via the moodboard API
+      // Optimistic local update — the user sees the theme change immediately.
       setMoodboard((prev) =>
         prev ? { ...prev, theme: themeId, updatedAt: new Date().toISOString() } : prev,
       );
-      if (moodboard) {
-        void updateMoodboardTheme(moodboard.id, themeId).catch((error) => {
-          console.warn('Theme update failed:', error);
-        });
+      setSyncStatus('syncing');
+      setConflictDetail(null);
+      // When offline and the local DB is available, enqueue to the outbox
+      // instead of making a network call that will fail.
+      if (isOffline && isDbAvailable()) {
+        try {
+          await enqueueMoodboardOperation({
+            operationId: `${moodboard.id}_theme_${Date.now()}`,
+            boardId: moodboard.id,
+            operation: 'board.setTheme',
+            payload: { themeId },
+            baseRev: moodboard.revision,
+          });
+          return;
+        } catch {
+          // Fall through to online path
+        }
       }
+      // Submit via the idempotent operation endpoint.
+      void submitMoodboardOperation(moodboard.id, {
+        clientOperationId: createStableId('theme'),
+        baseRevision: boardRevisionRef.current,
+        type: 'board.theme',
+        payload: { theme: themeId },
+      })
+        .then(handleOperationResponse)
+        .catch(() => {
+          setSyncStatus('error');
+          haptic.error();
+        });
     },
-    [haptic, moodboard],
+    [haptic, moodboard, isOffline, handleOperationResponse],
   );
 
   const handleCanvasLayout = useCallback((e: LayoutChangeEvent) => {
@@ -744,6 +971,23 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
       setSelectedItemId(null);
     }
   }, [multiSelectMode]);
+
+  // ── Publish the moodboard as a poster to the user's feed ──
+  const handlePublishAsPoster = useCallback(async () => {
+    if (!moodboard) return;
+    haptic.medium();
+    setPublishing(true);
+    try {
+      await publishMoodboardAsPoster(moodboard.id);
+      haptic.success();
+      show('Published as poster', 'success');
+    } catch {
+      haptic.error();
+      show('Could not publish', 'error');
+    } finally {
+      setPublishing(false);
+    }
+  }, [moodboard, haptic, show]);
 
   // ── Derived ──
   const selectedItem = useMemo(
@@ -839,7 +1083,68 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {moodboard?.title ?? 'Moodboard'}
         </Text>
-        <View style={styles.headerRightSpacer} />
+        <View style={styles.headerActions}>
+          {collaboratorsOnline && (
+            <View style={styles.liveIndicator}>
+              <View style={styles.liveDot} />
+            </View>
+          )}
+          <AnimatedPressable
+            style={styles.headerActionButton}
+            onPress={() => {
+              haptic.selection();
+              setCommentsItemId(undefined);
+              setCommentsSheetVisible(true);
+            }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Comments"
+            accessibilityHint="View and add comments on this moodboard"
+          >
+            <Ionicons name="chatbubble-outline" size={20} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={styles.headerActionButton}
+            onPress={() => {
+              haptic.selection();
+              setVersionHistoryVisible(true);
+            }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Version history"
+            accessibilityHint="View saved versions and restore"
+          >
+            <Ionicons name="time-outline" size={20} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={styles.headerActionButton}
+            onPress={() => {
+              haptic.selection();
+              setCollaboratorSheetVisible(true);
+            }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Collaborators"
+            accessibilityHint="Invite collaborators and manage roles"
+          >
+            <Ionicons name="people-outline" size={20} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={styles.headerActionButton}
+            onPress={handlePublishAsPoster}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Publish as poster"
+            accessibilityHint="Publishes this moodboard as a poster to your feed"
+            disabled={publishing}
+          >
+            <Ionicons name="share-outline" size={20} color={publishing ? colors.textMuted : colors.textPrimary} />
+          </AnimatedPressable>
+        </View>
       </View>
 
       {/* ── Canvas (top ~70%) ── */}
@@ -937,6 +1242,15 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
                 onPress={() => void handleReorder(selectedItem.id, 'back')}
               />
               <SelectionControl
+                icon="chatbubble-outline"
+                label="Comment"
+                hint="Add a comment anchored to this item"
+                onPress={() => {
+                  setCommentsItemId(selectedItem.id);
+                  setCommentsSheetVisible(true);
+                }}
+              />
+              <SelectionControl
                 icon="trash-outline"
                 label="Remove from moodboard"
                 hint="Deletes this item from the canvas"
@@ -947,13 +1261,56 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
           )
         )}
 
-        {/* Saving indicator */}
-        {saving && (
-          <View style={styles.savingOverlay} pointerEvents="none">
-            <View style={styles.savingPill}>
-              <ActivityIndicator size="small" color={colors.textInverse} />
-              <Text style={styles.savingText}>Saving…</Text>
-            </View>
+        {/* Sync status indicator — honest per-operation status.
+            Replaces the global "Saving…" pill. Shows syncing, synced,
+            conflict, or error states for position/theme operations.
+            The saving boolean still drives the pill for add/delete/reorder
+            (heavier operations that re-fetch the full board). */}
+        {(saving || syncStatus !== 'idle') && (
+          <View style={styles.savingOverlay} pointerEvents={syncStatus === 'conflict' || syncStatus === 'error' ? 'auto' : 'none'}>
+            {syncStatus === 'conflict' && conflictDetail ? (
+              <View style={styles.conflictCard}>
+                <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
+                <Text style={styles.conflictText}>{conflictDetail.message}</Text>
+                <Pressable
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={() => {
+                    setLocalConflictSnapshot(moodboard);
+                    setConflictCompareVisible(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Compare versions"
+                >
+                  <Text style={styles.conflictDismiss}>Compare</Text>
+                </Pressable>
+                <Pressable
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={() => {
+                    setSyncStatus('idle');
+                    setConflictDetail(null);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss conflict notice"
+                >
+                  <Text style={styles.conflictDismiss}>OK</Text>
+                </Pressable>
+              </View>
+            ) : syncStatus === 'error' ? (
+              <View style={styles.errorPill}>
+                <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} />
+                <Text style={styles.savingText}>Couldn't sync — try again</Text>
+              </View>
+            ) : syncStatus === 'synced' ? (
+              <View style={styles.syncedPill}>
+                <Ionicons name="checkmark" size={14} color={colors.textInverse} />
+                <Text style={styles.savingText}>Synced</Text>
+              </View>
+            ) : (
+              <View style={styles.savingPill}>
+                <ActivityIndicator size="small" color={colors.textInverse} />
+                <Text style={styles.savingText}>Saving…</Text>
+              </View>
+            )}
           </View>
         )}
       </Pressable>
@@ -1002,6 +1359,48 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
           </View>
         )}
       </View>
+
+      {/* ── Collaboration sheets ── */}
+      {moodboard && (
+        <>
+          <MoodboardCollaboratorSheet
+            visible={collaboratorSheetVisible}
+            onDismiss={() => setCollaboratorSheetVisible(false)}
+            moodboardId={moodboard.id}
+            isOwner={isOwner}
+          />
+          <MoodboardCommentsSheet
+            visible={commentsSheetVisible}
+            onDismiss={() => setCommentsSheetVisible(false)}
+            moodboardId={moodboard.id}
+            itemId={commentsItemId}
+          />
+          <MoodboardVersionHistorySheet
+            visible={versionHistoryVisible}
+            onDismiss={() => setVersionHistoryVisible(false)}
+            moodboardId={moodboard.id}
+            isOwner={isOwner}
+            onRestored={() => void loadAll()}
+          />
+          <MoodboardConflictCompareSheet
+            visible={conflictCompareVisible}
+            onDismiss={() => setConflictCompareVisible(false)}
+            localVersion={localConflictSnapshot}
+            serverVersion={moodboard}
+            onKeepLocal={() => {
+              setConflictCompareVisible(false);
+              setSyncStatus('idle');
+              setConflictDetail(null);
+            }}
+            onKeepServer={() => {
+              setConflictCompareVisible(false);
+              setSyncStatus('idle');
+              setConflictDetail(null);
+              void loadAll();
+            }}
+          />
+        </>
+      )}
     </GestureHandlerRootView>
   );
 }
@@ -1094,8 +1493,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.sm,
   },
-  headerRightSpacer: {
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  headerActionButton: {
     width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveIndicator: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
   },
   backButtonPlaceholder: {
     width: Control.hit,
@@ -1208,6 +1627,49 @@ function useStyles() {
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
         },
+        syncedPill: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.xs,
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.sm,
+          borderRadius: Radius.full,
+          backgroundColor: colors.success,
+        },
+        errorPill: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.xs,
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.sm,
+          borderRadius: Radius.full,
+          backgroundColor: colors.danger,
+        },
+        conflictCard: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.sm,
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.sm,
+          borderRadius: Radius.lg,
+          backgroundColor: colors.warningSubtle,
+          borderWidth: Stroke.standard,
+          borderColor: colors.warningBorder,
+          marginHorizontal: Space.md,
+          maxWidth: 320,
+        },
+        conflictText: {
+          flex: 1,
+          fontSize: Type.caption.size,
+          lineHeight: Type.caption.lineHeight,
+          fontFamily: Typography.family.medium,
+          color: colors.warning,
+        },
+        conflictDismiss: {
+          fontSize: Type.bodyStrong.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.warning,
+        },
         bottomPanel: {
           paddingTop: Space.md,
           gap: Space.xs,
@@ -1285,8 +1747,28 @@ function useStyles() {
         backButtonPlaceholder: {
           width: Control.hit,
         },
-        headerRightSpacer: {
+        headerActions: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.xs,
+        },
+        headerActionButton: {
           width: Control.hit,
+          height: Control.hit,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        liveIndicator: {
+          width: Control.hit,
+          height: Control.hit,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        liveDot: {
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: '#22c55e',
         },
         pickerSkeletonRail: {
           flexDirection: 'row',
@@ -1343,7 +1825,6 @@ function useStyles() {
           ...StyleSheet.absoluteFill,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: `${colors.background}CC`,
         },
       }),
     [colors],

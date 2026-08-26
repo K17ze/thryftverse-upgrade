@@ -1,10 +1,29 @@
-import { fetchJson } from '../lib/apiClient';
+import { fetchJson, fetchWithAuth } from '../lib/apiClient';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { warnIfMockSuppressed } from '../utils/mockGate';
 
-export type AuctionLifecycle = 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+export type AuctionLifecycle =
+  | 'upcoming'
+  | 'live'
+  | 'ended'
+  | 'reserve_not_met'
+  | 'awaiting_payment'
+  | 'payment_expired'
+  | 'second_chance_offered'
+  | 'settled'
+  | 'cancelled';
 export type AuctionStatus = AuctionLifecycle;
-export type AuctionTerminalReason = 'cancelled' | 'settled' | 'buy_now' | 'scheduled_end' | null;
+export type AuctionTerminalReason =
+  | 'cancelled'
+  | 'settled'
+  | 'buy_now'
+  | 'scheduled_end'
+  | 'reserve_not_met'
+  | 'payment_expired'
+  | 'second_chance'
+  | 'seller_accepted_below_reserve'
+  | 'seller_cancelled'
+  | null;
 export type AuctionViewerState = 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
 export type AuctionSortMode = 'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh';
 
@@ -39,6 +58,18 @@ export interface MarketAuction {
   winnerBidderId: string | null;
   cancelledAt: string | null;
   settledAt: string | null;
+  paidAt: string | null;
+  paymentDeadlineAt: string | null;
+  secondChanceOfferedTo: string | null;
+  cancelledBy: string | null;
+  cancelledReason: string | null;
+  antiSniping: {
+    enabled: boolean;
+    extensionSeconds: number;
+    maxExtensions: number;
+    windowSeconds: number;
+  } | null;
+  auctionSequence?: number;
   createdAt: string;
 }
 
@@ -81,6 +112,18 @@ export interface AuctionDetail {
   winnerBidderId: string | null;
   settledAt: string | null;
   cancelledAt: string | null;
+  paidAt: string | null;
+  paymentDeadlineAt: string | null;
+  secondChanceOfferedTo: string | null;
+  cancelledBy: string | null;
+  cancelledReason: string | null;
+  antiSniping: {
+    enabled: boolean;
+    extensionSeconds: number;
+    maxExtensions: number;
+    windowSeconds: number;
+  } | null;
+  auctionSequence?: number;
   createdAt: string;
   /** Terminal fulfilment summary. Per spec 02_AUCTION §8: backend-backed
    * result/fulfilment contract. Null when the auction is not terminal
@@ -643,6 +686,7 @@ interface ListUserMarketHistoryOptions {
 
 export interface PlaceAuctionBidInput {
   amountGbp: number;
+  maxBidGbp?: number;
   idempotencyKey?: string;
 }
 
@@ -650,8 +694,10 @@ interface PlaceCoOwnOrderInput {
   userId: string;
   side: CoOwnOrderSide;
   units: number;
-  orderType?: 'market' | 'limit';
+  orderType?: 'market' | 'limit' | 'protected_market';
   limitPriceGbp?: number;
+  maxPriceGbp?: number;  // for protected_market buy orders
+  minPriceGbp?: number;  // for protected_market sell orders
   /** Active server reservation created immediately before confirmation. */
   reservationId: string;
   /** Client-supplied idempotency key per spec 10 §1. Prevents duplicate orders on retry. */
@@ -689,6 +735,12 @@ export interface CreateAuctionInput {
   buyNowPriceGbp?: number;
   reservePriceGbp?: number;
   minIncrementGbp?: number;
+  antiSniping?: {
+    enabled: boolean;
+    extensionSeconds: number;
+    maxExtensions: number;
+    windowSeconds: number;
+  };
   idempotencyKey?: string;
 }
 
@@ -828,6 +880,12 @@ function mockAuction(
     winnerBidderId: null,
     cancelledAt: null,
     settledAt: null,
+    paidAt: null,
+    paymentDeadlineAt: null,
+    secondChanceOfferedTo: null,
+    cancelledBy: null,
+    cancelledReason: null,
+    antiSniping: null,
     createdAt: isoFromNow(-1440),
   };
 }
@@ -1121,6 +1179,102 @@ export async function buyAuctionNow(
   );
 
   return payload;
+}
+
+interface CancelAuctionResponse {
+  ok: true;
+  auction: MarketAuction;
+}
+
+export async function cancelAuction(
+  auctionId: string,
+  reason?: string
+): Promise<MarketAuction> {
+  const payload = await fetchJson<CancelAuctionResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/cancel`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    }
+  );
+  return payload.auction;
+}
+
+interface PayAuctionInput {
+  idempotencyKey: string;
+  paymentMethodId?: number;
+}
+
+interface PayAuctionResponse {
+  ok: true;
+  paymentStatus: 'pending' | 'paid' | 'failed';
+  orderId?: string;
+  auction: MarketAuction;
+}
+
+export async function payAuction(
+  auctionId: string,
+  input: PayAuctionInput
+): Promise<PayAuctionResponse> {
+  return fetchJson<PayAuctionResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/payment`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+}
+
+interface AcceptSecondChanceResponse {
+  ok: true;
+  auction: MarketAuction;
+}
+
+export async function acceptSecondChance(
+  auctionId: string,
+  idempotencyKey: string
+): Promise<MarketAuction> {
+  const payload = await fetchJson<AcceptSecondChanceResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/second-chance/accept`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idempotencyKey }),
+    }
+  );
+  return payload.auction;
+}
+
+interface DeclineSecondChanceResponse {
+  ok: true;
+  auction: MarketAuction;
+}
+
+export async function declineSecondChance(
+  auctionId: string
+): Promise<MarketAuction> {
+  const payload = await fetchJson<DeclineSecondChanceResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/second-chance/decline`,
+    { method: 'POST' }
+  );
+  return payload.auction;
+}
+
+interface AcceptHighestBidResponse {
+  ok: true;
+  auction: MarketAuction;
+}
+
+export async function acceptHighestBid(
+  auctionId: string
+): Promise<MarketAuction> {
+  const payload = await fetchJson<AcceptHighestBidResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/accept-highest-bid`,
+    { method: 'POST' }
+  );
+  return payload.auction;
 }
 
 export async function listAuctionBids(
@@ -1479,6 +1633,8 @@ export async function createCoOwnAssetIssue(input: {
 export interface CoOwnOrderBookEntry {
   side: 'buy' | 'sell';
   unitPriceGbp: number;
+  /** P0.8: Exact decimal string from the backend — no IEEE 754 drift. */
+  unitPriceGbpStr?: string;
   units: number;
   orderCount: number;
 }
@@ -1488,6 +1644,8 @@ interface GetCoOwnOrderBookResponse {
   bids: CoOwnOrderBookEntry[];
   asks: CoOwnOrderBookEntry[];
   snapshotSequence?: number;
+  /** P0.8: Exact decimal string — sequences can exceed 2^53. */
+  snapshotSequenceStr?: string;
   eventSequence?: number;
   serverTimestamp?: string;
   lastExecutionTimestamp?: string | null;
@@ -1499,6 +1657,8 @@ export interface CoOwnOrderBookSnapshot {
   bids: CoOwnOrderBookEntry[];
   asks: CoOwnOrderBookEntry[];
   snapshotSequence: number;
+  /** P0.8: Exact decimal string — sequences can exceed 2^53. */
+  snapshotSequenceStr?: string;
   eventSequence: number;
   serverTimestamp: string;
   lastExecutionTimestamp: string | null;
@@ -1512,7 +1672,11 @@ export interface MarketCoOwnExecution {
   assetId: string;
   units: number;
   unitPriceGbp: number;
+  /** P0.8: Exact decimal string — no IEEE 754 drift. */
+  unitPriceGbpStr?: string;
   notionalGbp: number;
+  /** P0.8: Exact decimal string — no IEEE 754 drift. */
+  notionalGbpStr?: string;
   executedAt: string;
   /** WS3: settlement status of the trade. */
   settlementStatus?: 'settled' | 'pending' | 'failed' | 'reversed';
@@ -1593,6 +1757,41 @@ export async function placeCoOwnOrder(
   );
 }
 
+// ── P0.7: Unknown-result lookup ──
+// After a network error during order submission, the client can look up
+// the result by idempotency key to determine whether the order was placed.
+// Returns one of three states:
+//   - 'acknowledged': the order was placed, body contains the order
+//   - 'processing': the order is still being processed (poll with backoff)
+//   - 'safe_to_retry': no record found, the client may resubmit the order
+
+export type CoOwnOrderLookupResult =
+  | { status: 'acknowledged'; order: MarketCoOwnOrder; asset?: unknown }
+  | { status: 'processing' }
+  | { status: 'safe_to_retry' };
+
+export async function lookupCoOwnOrderByIdempotencyKey(
+  assetId: string,
+  idempotencyKey: string
+): Promise<CoOwnOrderLookupResult> {
+  const response = await fetchWithAuth(
+    `/co-own/assets/${encodeURIComponent(assetId)}/orders/lookup-by-key/${encodeURIComponent(idempotencyKey)}`,
+    { method: 'GET' }
+  );
+
+  if (response.status === 200) {
+    const body = await response.json() as { ok: true; status: 'acknowledged'; order: MarketCoOwnOrder; asset?: unknown };
+    return { status: 'acknowledged', order: body.order, asset: body.asset };
+  }
+
+  if (response.status === 202) {
+    return { status: 'processing' };
+  }
+
+  // 404 or any other → safe to retry
+  return { status: 'safe_to_retry' };
+}
+
 // ── Order preview (authoritative server-side) ──
 // Replaces the client-side generateSimulatedBook() with a server-side
 // preview that walks the real order book. Non-binding — the actual order
@@ -1602,8 +1801,10 @@ export interface CoOwnOrderPreviewInput {
   userId: string;
   side: CoOwnOrderSide;
   units: number;
-  orderType?: 'market' | 'limit';
+  orderType?: 'market' | 'limit' | 'protected_market';
   limitPriceGbp?: number;
+  maxPriceGbp?: number;  // for protected_market buy orders
+  minPriceGbp?: number;  // for protected_market sell orders
 }
 
 export interface CoOwnOrderPreviewResponse {
@@ -1614,18 +1815,35 @@ export interface CoOwnOrderPreviewResponse {
     units: number;
     orderType: 'market' | 'limit';
     limitPriceGbp: number | null;
+    protectionPriceGbp: number | null;
+    /** P0.8: Exact decimal string. */
+    protectionPriceGbpStr?: string | null;
     referencePriceGbp: number;
+    /** P0.8: Exact decimal string. */
+    referencePriceGbpStr?: string;
     orderPriceGbp: number;
+    /** P0.8: Exact decimal string. */
+    orderPriceGbpStr?: string;
     estimatedFill: {
       filledUnits: number;
       remainingUnits: number;
       avgFillPrice: number;
+      /** P0.8: Exact decimal string. */
+      avgFillPriceGbpStr?: string;
       worstPrice: number;
+      /** P0.8: Exact decimal string. */
+      worstPriceGbpStr?: string;
       grossNotional: number;
+      /** P0.8: Exact decimal string. */
+      grossNotionalGbpStr?: string;
       slippageBeyondDepth: boolean;
     };
     fee: number;
+    /** P0.8: Exact decimal string. */
+    feeGbpStr?: string;
     total: number;
+    /** P0.8: Exact decimal string. */
+    totalGbpStr?: string;
     feeRate: number;
     availableUnits: number;
     totalUnits: number;
@@ -1662,8 +1880,10 @@ export interface CoOwnOrderReservationInput {
   userId: string;
   side: CoOwnOrderSide;
   units: number;
-  orderType?: 'market' | 'limit';
+  orderType?: 'market' | 'limit' | 'protected_market';
   limitPriceGbp?: number;
+  maxPriceGbp?: number;  // for protected_market buy orders
+  minPriceGbp?: number;  // for protected_market sell orders
   idempotencyKey?: string;
 }
 
@@ -1675,10 +1895,18 @@ export interface CoOwnOrderReservationResponse {
     userId: string;
     side: CoOwnOrderSide;
     reserved1zeMg: number;
+    /** P0.8: Exact decimal string. */
+    reserved1zeMgStr?: string;
     reservedUnits: number;
     referencePriceGbp: number;
+    /** P0.8: Exact decimal string. */
+    referencePriceGbpStr?: string;
     estimatedTotalGbp: number;
+    /** P0.8: Exact decimal string. */
+    estimatedTotalGbpStr?: string;
     estimatedFeeGbp: number;
+    /** P0.8: Exact decimal string. */
+    estimatedFeeGbpStr?: string;
     expiresAt: string;
     status: 'active' | 'placed' | 'cancelled' | 'expired';
   };

@@ -12,6 +12,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { CachedImage } from '../CachedImage';
 import { VoiceMessageBubble } from './VoiceMessageBubble';
+import { VoiceTranscriptionPanel } from './VoiceTranscriptionPanel';
 
 interface Reaction {
   emoji: string;
@@ -25,6 +26,8 @@ interface ReplyInfo {
 }
 
 interface MessageBubbleProps {
+  id: string;
+  conversationId: string;
   text?: string;
   isMe: boolean;
   senderLabel?: string;
@@ -37,6 +40,9 @@ interface MessageBubbleProps {
   uploadStatus?: 'uploading' | 'failed' | 'sent';
   voiceDurationMs?: number;
   voiceWaveform?: number[];
+  voiceContainer?: 'm4a' | 'ogg' | 'webm' | 'mp4';
+  voiceCodec?: 'aac' | 'opus' | 'mp3';
+  voiceModerationState?: 'pending' | 'allowed' | 'limited' | 'blocked';
   replyTo?: ReplyInfo | null;
   isFirstInCluster?: boolean;
   isLastInCluster?: boolean;
@@ -64,6 +70,8 @@ interface MessageBubbleProps {
 }
 
 function MessageBubbleBase({
+  id,
+  conversationId,
   text,
   isMe,
   senderLabel,
@@ -76,6 +84,9 @@ function MessageBubbleBase({
   uploadStatus,
   voiceDurationMs,
   voiceWaveform,
+  voiceContainer,
+  voiceCodec,
+  voiceModerationState,
   replyTo,
   isFirstInCluster = true,
   isLastInCluster = true,
@@ -256,11 +267,22 @@ function MessageBubbleBase({
           ) : null}
 
           {voiceDurationMs != null ? (
-            <VoiceMessageBubble
-              durationMs={voiceDurationMs}
-              isMe={isMe}
-              waveform={voiceWaveform}
-            />
+            <>
+              <VoiceMessageBubble
+                messageId={id}
+                conversationId={conversationId}
+                durationMs={voiceDurationMs}
+                isMe={isMe}
+                waveform={voiceWaveform}
+                container={voiceContainer}
+                codec={voiceCodec}
+                moderationState={voiceModerationState}
+              />
+              <VoiceTranscriptionPanel
+                conversationId={conversationId}
+                messageId={id}
+              />
+            </>
           ) : null}
 
           {text ? (

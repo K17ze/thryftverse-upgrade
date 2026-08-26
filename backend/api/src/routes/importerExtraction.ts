@@ -76,6 +76,23 @@ export const registerImporterExtractionRoutes = ({
   const extractionService = new ImporterExtractionService();
   const catalogImportService = new CatalogImportService();
 
+  // Deprecation: these routes are superseded by the extraction intelligence
+  // routes (routes/extractionIntelligence.ts). They are retained for backward
+  // compatibility but should not be used by new clients. The new routes fix
+  // three P0 defects: client-supplied model identity, global media asset
+  // resolution, and false completion semantics.
+  const DEPRECATION_HEADER = 'true';
+  const SUNSET_DATE = '2026-12-31';
+  const DEPRECATION_LINK = '/catalog-imports/items/:itemId/extraction-runs';
+
+  // Add deprecation headers to all responses from these routes.
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('Deprecation', DEPRECATION_HEADER);
+    reply.header('Sunset', SUNSET_DATE);
+    reply.header('Link', `<${DEPRECATION_LINK}>; rel="successor-version"`);
+    return payload;
+  });
+
   // -------------------------------------------------------------------------
   // POST /catalog-imports/items/:itemId/extraction — trigger extraction
   // -------------------------------------------------------------------------
@@ -105,13 +122,13 @@ export const registerImporterExtractionRoutes = ({
           userId,
         );
 
-        // Enqueue the extraction job.
+        // Enqueue the extraction job (converged queue shape: runId/modelBundle).
         await enqueueImporterExtractionJob({
-          extractionId: extraction.id,
+          runId: extraction.id,
           itemId,
           mediaAssetId: payload.mediaAssetId ?? null,
-          modelId: payload.modelId,
-          modelVersion: payload.modelVersion,
+          modelBundleId: payload.modelId,
+          modelBundleVersion: payload.modelVersion,
         });
 
         reply.code(202);

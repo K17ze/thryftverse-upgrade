@@ -6,6 +6,7 @@ import {
 } from './currencyAuthoringFlows';
 import type { SupportedCurrencyCode } from '../constants/currencies';
 import type { GoldRates } from './currency';
+import type { AuctionEffectiveState } from '../hooks/useServerClock';
 
 // ── Types ──
 
@@ -54,7 +55,7 @@ export interface TransactionError {
 export interface BidValidationContext {
   minimumNextBidGbp: number;
   isSeller: boolean;
-  effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+  effectiveState: AuctionEffectiveState;
   isSubmitting: boolean;
 }
 
@@ -435,7 +436,7 @@ export function mapApiErrorToTransactionError(
 export interface BuyNowValidationContext {
   buyNowPriceGbp: number | null;
   isSeller: boolean;
-  effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+  effectiveState: AuctionEffectiveState;
   isSubmitting: boolean;
 }
 
@@ -472,9 +473,11 @@ export function getSuggestedBid(
 // ── Lifecycle guard for open sheet ──
 
 export function shouldCloseSheetDueToLifecycle(
-  effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled',
+  effectiveState: AuctionEffectiveState,
 ): boolean {
-  return effectiveState === 'ended' || effectiveState === 'cancelled' || effectiveState === 'settled';
+  return effectiveState === 'ended' || effectiveState === 'cancelled' || effectiveState === 'settled'
+    || effectiveState === 'reserve_not_met' || effectiveState === 'awaiting_payment'
+    || effectiveState === 'payment_expired' || effectiveState === 'second_chance_offered';
 }
 
 // ── Stale state check ──

@@ -179,7 +179,8 @@ export async function fetchFilteredListings(options?: {
   condition?: string;
   minPrice?: number;
   maxPrice?: number;
-  sort?: 'newest' | 'price_asc' | 'price_desc';
+  sort?: 'newest' | 'price_asc' | 'price_desc' | 'most_liked' | 'ending_soon';
+  sustainableOnly?: boolean;
   limit?: number;
   cursor?: string;
 }): Promise<ListingsSyncResult> {
@@ -192,6 +193,7 @@ export async function fetchFilteredListings(options?: {
   if (options?.minPrice !== undefined) params.set('minPrice', String(options.minPrice));
   if (options?.maxPrice !== undefined) params.set('maxPrice', String(options.maxPrice));
   if (options?.sort) params.set('sort', options.sort);
+  if (options?.sustainableOnly) params.set('sustainableOnly', 'true');
   if (options?.limit) params.set('limit', String(options.limit));
   if (options?.cursor) params.set('cursor', options.cursor);
   const qs = params.toString();
@@ -263,6 +265,12 @@ export async function visualSearch(params: {
   maxPrice?: number;
   sort?: 'newest' | 'price_asc' | 'price_desc' | 'similarity';
   limit?: number;
+  /**
+   * Optional `AbortSignal` for request cancellation. When the caller aborts
+   * (e.g. component unmount or a newer search supersedes this one), the
+   * in-flight request is aborted immediately rather than completing wastefully.
+   */
+  signal?: AbortSignal;
 }): Promise<VisualSearchResult> {
   try {
     const payload = await fetchJson<{
@@ -294,7 +302,7 @@ export async function visualSearch(params: {
         sort: params.sort ?? 'similarity',
         limit: params.limit ?? 48,
       }),
-    });
+    }, params.signal ? { signal: params.signal } : undefined);
 
     const rows = Array.isArray(payload.items) ? payload.items : [];
     return {

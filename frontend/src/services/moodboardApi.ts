@@ -47,6 +47,8 @@ export interface MoodboardItem {
   addedAt: string;
   /** Honest flag — true while this item comes from mock data. */
   isDemo: boolean;
+  /** Server revision number for optimistic-concurrency checks. */
+  revision: number;
 }
 
 /** A visual theme for the moodboard canvas background. */
@@ -87,6 +89,58 @@ export interface Moodboard {
   updatedAt: string;
   /** Honest flag — true while this moodboard comes from mock data. */
   isDemo: boolean;
+  /** Server revision number for optimistic-concurrency checks. */
+  revision: number;
+  /** ISO timestamp of soft-delete, or null if the board is active. */
+  deletedAt: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Operation types
+// ---------------------------------------------------------------------------
+
+/** Operation types supported by the server-authoritative LWW operation endpoint. */
+export type MoodboardOperationType =
+  | 'item.add'
+  | 'item.transform'
+  | 'item.remove'
+  | 'item.reorder'
+  | 'board.theme'
+  | 'board.rename'
+  | 'board.visibility';
+
+/** A client-submitted operation with idempotency key and base revision. */
+export interface MoodboardOperationRequest {
+  /** Client-generated idempotency key. Retries with the same key return the original result. */
+  clientOperationId: string;
+  /** The revision the client believed it was editing against. */
+  baseRevision: number;
+  type: MoodboardOperationType;
+  /** Target item id for item-level operations. */
+  itemId?: string;
+  /** Operation-specific payload (position, theme, title, etc.). */
+  payload: Record<string, unknown>;
+}
+
+/** Server response to an operation submission. */
+export type MoodboardOperationResponse =
+  | { outcome: 'applied'; operationId: string; revision: number; canonicalPatch: Record<string, unknown> }
+  | { outcome: 'duplicate'; operationId: string; revision: number }
+  | { outcome: 'conflict'; currentRevision: number; operationsSinceBase: Array<{ operationType: string; itemId: string | null; payload: Record<string, unknown>; appliedRevision: number }> }
+  | { outcome: 'forbidden'; recoverLocalCopy: true };
+
+/** A canonical operation from the server operation log. */
+export interface MoodboardOperation {
+  id: string;
+  boardId: string;
+  actorId: string;
+  clientOperationId: string;
+  baseRevision: number;
+  appliedRevision: number;
+  operationType: MoodboardOperationType;
+  itemId: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,12 +190,15 @@ interface ApiMoodboard {
     price: number;
     position: { x: number; y: number; scale: number; rotation: number };
     addedAt: string;
+    revision: number;
   }>;
   coverImage: string;
   isPublic: boolean;
   theme: string;
   createdAt: string;
   updatedAt: string;
+  revision: number;
+  deletedAt: string | null;
 }
 
 interface ApiMoodboardListResponse {
@@ -156,6 +213,7 @@ interface ApiMoodboardItemResponse {
   price: number;
   position: { x: number; y: number; scale: number; rotation: number };
   addedAt: string;
+  revision: number;
 }
 
 function mapApiMoodboard(raw: ApiMoodboard): Moodboard {
@@ -172,6 +230,8 @@ function mapApiMoodboard(raw: ApiMoodboard): Moodboard {
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
     isDemo: false,
+    revision: raw.revision,
+    deletedAt: raw.deletedAt,
   };
 }
 
@@ -184,12 +244,12 @@ function mapApiItem(raw: ApiMoodboardItemResponse): MoodboardItem {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch the current user's moodboards.
+ * Fetch the current user's moodboards (owned and member boards).
  * Errors propagate to the caller — no silent mock fallback.
  */
 export async function fetchMoodboards(): Promise<Moodboard[]> {
   try {
-    const data = await fetchJson<ApiMoodboardListResponse>('/moodboards?limit=50');
+    const data = await fetchJson<ApiMoodboardListResponse>('/me/moodboards?limit=50');
     return data.items.map(mapApiMoodboard);
   } catch (error) {
     throw error;
@@ -369,9 +429,358 @@ export async function fetchPickerItems(): Promise<MoodboardItem[]> {
 }
 
 /**
+ * Submit an operation to the server-authoritative LWW operation endpoint.
+ * Uses a client operation id for idempotency — retries with the same id
+ * return the original result instead of re-applying. Errors propagate.
+ */
+export async function submitMoodboardOperation(
+  moodboardId: string,
+  operation: MoodboardOperationRequest,
+): Promise<MoodboardOperationResponse> {
+  const data = await fetchJson<MoodboardOperationResponse>(
+    `/moodboards/${moodboardId}/operations`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(operation),
+    },
+  );
+  return data;
+}
+
+/**
+ * Fetch operations for a board since a given revision. Used to catch up
+ * after a conflict response. Errors propagate.
+ */
+export async function fetchMoodboardOperations(
+  moodboardId: string,
+  sinceRevision: number,
+): Promise<MoodboardOperation[]> {
+  const data = await fetchJson<{ items: MoodboardOperation[] }>(
+    `/moodboards/${moodboardId}/operations?since=${sinceRevision}`,
+  );
+  return data.items;
+}
+
+/**
+ * Restore a trashed moodboard. Owner-only. Errors propagate.
+ */
+export async function restoreMoodboard(moodboardId: string): Promise<Moodboard> {
+  const data = await fetchJson<ApiMoodboard>(
+    `/moodboards/${moodboardId}/restore`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+  );
+  return mapApiMoodboard(data);
+}
+
+/**
  * Resolve a theme by its ID synchronously using LOCAL_THEME_FALLBACK.
  * Used by the editor before fetchMoodboardThemes() has loaded.
  */
 export function getThemeById(themeId: string): MoodboardTheme {
   return resolveTheme(themeId);
+}
+
+// ---------------------------------------------------------------------------
+// Invite types
+// ---------------------------------------------------------------------------
+
+/** Invite role — the capability the invitee will receive on acceptance. */
+export type MoodboardInviteRole = 'editor' | 'commenter' | 'viewer';
+
+/** Invite state in its lifecycle. */
+export type MoodboardInviteState = 'pending' | 'accepted' | 'revoked' | 'expired';
+
+/** A moodboard invite DTO (token_hash never exposed). */
+export interface MoodboardInvite {
+  id: string;
+  role: MoodboardInviteRole;
+  state: MoodboardInviteState;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  acceptedBy: string | null;
+  revokedAt: string | null;
+  recipientUserId: string | null;
+}
+
+/** Response from creating an invite — includes the plaintext token (shown once). */
+export interface MoodboardInviteCreated extends MoodboardInvite {
+  token: string;
+}
+
+// ---------------------------------------------------------------------------
+// Member types
+// ---------------------------------------------------------------------------
+
+/** Board member role. */
+export type MoodboardMemberRole = 'owner' | 'editor' | 'commenter' | 'viewer';
+
+/** A board member with user info. */
+export interface MoodboardMember {
+  userId: string;
+  displayName: string;
+  avatar: string;
+  role: MoodboardMemberRole;
+  state: 'active' | 'suspended' | 'removed';
+  joinedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Comment types
+// ---------------------------------------------------------------------------
+
+/** A canvas-anchored comment. itemId is null for board-level comments. */
+export interface MoodboardComment {
+  id: string;
+  boardId: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  itemId: string | null;
+  body: string;
+  resolved: boolean;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Version snapshot types
+// ---------------------------------------------------------------------------
+
+/** Version snapshot source. */
+export type MoodboardVersionSource = 'manual' | 'auto' | 'restore';
+
+/** A version snapshot metadata (snapshot JSON not included in list view). */
+export interface MoodboardVersion {
+  id: string;
+  boardId: string;
+  revision: number;
+  label: string | null;
+  source: MoodboardVersionSource;
+  isPinned: boolean;
+  createdAt: string;
+  createdByName: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Invite API
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a new invite for a moodboard. Returns the plaintext token (shown
+ * once to the inviter). Errors propagate to the caller.
+ */
+export async function createMoodboardInvite(
+  moodboardId: string,
+  role: MoodboardInviteRole = 'editor',
+  recipientUserId?: string,
+): Promise<MoodboardInviteCreated> {
+  const body: Record<string, unknown> = { role };
+  if (recipientUserId) body.recipientUserId = recipientUserId;
+  const data = await fetchJson<MoodboardInviteCreated>(
+    `/moodboards/${moodboardId}/invites`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+  );
+  return data;
+}
+
+/**
+ * Fetch all invites for a moodboard. Errors propagate to the caller.
+ */
+export async function fetchMoodboardInvites(moodboardId: string): Promise<MoodboardInvite[]> {
+  const data = await fetchJson<{ items: MoodboardInvite[] }>(`/moodboards/${moodboardId}/invites`);
+  return data.items;
+}
+
+/**
+ * Revoke a pending invite. Errors propagate to the caller.
+ */
+export async function revokeMoodboardInvite(moodboardId: string, inviteId: string): Promise<boolean> {
+  await fetchJson<{ ok: boolean }>(`/moodboards/${moodboardId}/invites/${inviteId}/revoke`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+  });
+  return true;
+}
+
+/**
+ * Accept an invite by its plaintext token. Returns the board id the user
+ * has now joined. Errors propagate to the caller.
+ */
+export async function acceptMoodboardInvite(token: string): Promise<{ boardId: string }> {
+  const data = await fetchJson<{ ok: boolean; boardId: string }>(`/moodboards/invites/accept`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
+  });
+  return { boardId: data.boardId };
+}
+
+// ---------------------------------------------------------------------------
+// Member API
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch all members of a moodboard. Errors propagate to the caller.
+ */
+export async function fetchMoodboardMembers(moodboardId: string): Promise<MoodboardMember[]> {
+  const data = await fetchJson<{ items: MoodboardMember[] }>(`/moodboards/${moodboardId}/members`);
+  return data.items;
+}
+
+/**
+ * Update a member's role on a moodboard. Errors propagate to the caller.
+ */
+export async function updateMoodboardMemberRole(
+  moodboardId: string,
+  userId: string,
+  role: MoodboardInviteRole,
+): Promise<boolean> {
+  await fetchJson<{ ok: boolean }>(`/moodboards/${moodboardId}/members/${userId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role }),
+  });
+  return true;
+}
+
+/**
+ * Remove a member from a moodboard. Errors propagate to the caller.
+ */
+export async function removeMoodboardMember(moodboardId: string, userId: string): Promise<boolean> {
+  await fetchJson<{ ok: boolean }>(`/moodboards/${moodboardId}/members/${userId}`, {
+    method: 'DELETE',
+  });
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Comment API
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch all comments for a moodboard. Errors propagate to the caller.
+ */
+export async function fetchMoodboardComments(moodboardId: string): Promise<MoodboardComment[]> {
+  const data = await fetchJson<{ items: MoodboardComment[] }>(`/moodboards/${moodboardId}/comments`);
+  return data.items;
+}
+
+/**
+ * Create a comment on a moodboard. Pass itemId to anchor it to a canvas
+ * item; omit for a board-level comment. Errors propagate to the caller.
+ */
+export async function createMoodboardComment(
+  moodboardId: string,
+  body: string,
+  itemId?: string,
+): Promise<MoodboardComment> {
+  const payload: Record<string, unknown> = { body };
+  if (itemId) payload.itemId = itemId;
+  const data = await fetchJson<MoodboardComment>(`/moodboards/${moodboardId}/comments`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  return data;
+}
+
+/**
+ * Resolve or unresolve a comment. Errors propagate to the caller.
+ */
+export async function resolveMoodboardComment(
+  moodboardId: string,
+  commentId: string,
+  resolved: boolean,
+): Promise<boolean> {
+  await fetchJson<{ ok: boolean }>(`/moodboards/${moodboardId}/comments/${commentId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resolved }),
+  });
+  return true;
+}
+
+/**
+ * Delete a comment. Errors propagate to the caller.
+ */
+export async function deleteMoodboardComment(moodboardId: string, commentId: string): Promise<boolean> {
+  await fetchJson<{ ok: boolean }>(`/moodboards/${moodboardId}/comments/${commentId}`, {
+    method: 'DELETE',
+  });
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Version snapshot API
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a version snapshot of a moodboard. An optional label may be
+ * supplied for manual snapshots. Errors propagate to the caller.
+ */
+export async function createMoodboardVersion(
+  moodboardId: string,
+  label?: string,
+): Promise<MoodboardVersion> {
+  const payload: Record<string, unknown> = {};
+  if (label) payload.label = label;
+  const data = await fetchJson<MoodboardVersion>(`/moodboards/${moodboardId}/versions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  return data;
+}
+
+/**
+ * Fetch version snapshots for a moodboard. Errors propagate to the caller.
+ */
+export async function fetchMoodboardVersions(moodboardId: string): Promise<MoodboardVersion[]> {
+  const data = await fetchJson<{ items: MoodboardVersion[] }>(`/moodboards/${moodboardId}/versions`);
+  return data.items;
+}
+
+/**
+ * Restore a moodboard to a prior version snapshot. Returns the restored
+ * board. Errors propagate to the caller.
+ */
+export async function restoreMoodboardVersion(
+  moodboardId: string,
+  versionId: string,
+): Promise<Moodboard> {
+  const data = await fetchJson<ApiMoodboard>(`/moodboards/${moodboardId}/versions/${versionId}/restore`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+  });
+  return mapApiMoodboard(data);
+}
+
+/**
+ * Pin or unpin a version snapshot. Errors propagate to the caller.
+ */
+export async function pinMoodboardVersion(
+  moodboardId: string,
+  versionId: string,
+  isPinned: boolean,
+): Promise<boolean> {
+  await fetchJson<{ ok: boolean }>(`/moodboards/${moodboardId}/versions/${versionId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isPinned }),
+  });
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Publication API — publish a moodboard as a poster
+// ---------------------------------------------------------------------------
+
+/**
+ * Publish a moodboard as a poster story. Creates a poster story with
+ * contentType='moodboard' that references this board. The poster viewer
+ * renders the moodboard canvas interactively. Returns the story ID.
+ */
+export async function publishMoodboardAsPoster(
+  moodboardId: string,
+  options?: { caption?: string; expiryHours?: number },
+): Promise<{ storyId: string }> {
+  const body: Record<string, unknown> = {
+    moodboardId,
+  };
+  if (options?.caption) body.caption = options.caption;
+  if (options?.expiryHours) body.expiresInHours = options.expiryHours;
+  const data = await fetchJson<{ ok: boolean; storyId: string }>(`/poster-stories/moodboard`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  return { storyId: data.storyId };
 }

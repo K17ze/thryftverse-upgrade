@@ -67,6 +67,7 @@ import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
+import { useRecommendationImpressions } from '../hooks/useRecommendationImpressions';
 import { markInteractive } from '../platform/monitoring';
 import { useFeatureFlag } from '../analytics';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
@@ -240,7 +241,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<HomeDiscoveryItemVM | null>(null);
   const [newListingIds, setNewListingIds] = React.useState<Set<string>>(() => new Set());
-  const [feedMode, setFeedMode] = React.useState<'foryou' | 'following'>('foryou');
+  const [feedMode, setFeedMode] = React.useState<'foryou' | 'following' | 'non_profiled'>('foryou');
 
   // Viewability-driven video autoplay: only the most-visible feed tile plays
   // its video. Settlement delay (350ms) avoids spinning up players during fast
@@ -252,6 +253,20 @@ export default function HomeScreen() {
     onViewableItemsChanged: onPlaybackViewableItemsChanged,
     reset: resetPlayback,
   } = useViewabilityPlayback(350);
+
+  const {
+    onViewableItemsChanged: onImpressionViewableItemsChanged,
+    reset: resetImpressions,
+  } = useRecommendationImpressions(
+    React.useCallback(
+      (entries) => void forYouFeed.confirmImpressions(entries),
+      [forYouFeed.confirmImpressions],
+    ),
+  );
+
+  React.useEffect(() => {
+    resetImpressions();
+  }, [forYouFeed.requestId, resetImpressions]);
 
   const scrollY = useSharedValue(0);
   const lastScrollY = useSharedValue(0);
@@ -579,11 +594,16 @@ export default function HomeScreen() {
     }));
   }, [forYouFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
 
-  // For You mode uses personalised recommendations; fall back to all listings
-  // when the recommendation feed is empty or errored with no cached results.
-  const effectiveForYouData = forYouFeed.listings.length > 0 ? forYouExploreData : exploreData;
+  // For You mode uses personalised recommendations. When the feed is empty
+  // or errored, we do NOT silently substitute general listings. The empty/
+  // error state renders an honest message and the user can pull to refresh
+  // or browse all. The non_profiled mode uses general listings (DSA Art 38).
+  const effectiveForYouData = forYouFeed.listings.length > 0 ? forYouExploreData : [];
+  const forYouIsEmpty = feedMode === 'foryou' && !forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
+  const forYouHasError = feedMode === 'foryou' && forYouFeed.error !== null && forYouFeed.listings.length === 0;
+  const forYouIsDegraded = feedMode === 'foryou' && forYouFeed.serveMode === 'degraded_baseline' && forYouFeed.listings.length > 0;
 
-  const activeFeedData = feedMode === 'following' ? followingExploreData : effectiveForYouData;
+  const activeFeedData = feedMode === 'following' ? followingExploreData : feedMode === 'non_profiled' ? exploreData : effectiveForYouData;
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
   const showForYouLoading = feedMode === 'foryou' && forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
@@ -1013,7 +1033,10 @@ export default function HomeScreen() {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         viewabilityConfig={playbackViewabilityConfig}
-        onViewableItemsChanged={onPlaybackViewableItemsChanged}
+        onViewableItemsChanged={(info: { changed: import('react-native').ViewToken[]; viewableItems: import('react-native').ViewToken[] }) => {
+          onPlaybackViewableItemsChanged(info);
+          onImpressionViewableItemsChanged(info);
+        }}
         onEndReached={() => {
           if (hasMore && !isLoadingMore) void loadMoreListings();
         }}
@@ -1032,9 +1055,9 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <View>
             <View style={styles.feedTabBar} accessibilityRole="tablist">
-              {(['foryou', 'following'] as const).map((option) => {
+              {(['foryou', 'following', 'non_profiled'] as const).map((option) => {
                 const isSelected = feedMode === option;
-                const label = option === 'foryou' ? 'For you' : 'Following';
+                const label = option === 'foryou' ? 'For you' : option === 'following' ? 'Following' : 'General';
                 return (
                   <AnimatedPressable
                     key={option}
@@ -1048,7 +1071,9 @@ export default function HomeScreen() {
                     accessibilityRole="tab"
                     accessibilityLabel={option === 'foryou'
                       ? 'For you feed'
-                      : `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`}
+                      : option === 'following'
+                        ? `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`
+                        : 'General feed, not based on profiling'}
                     accessibilityState={{ selected: isSelected }}
                   >
                     <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
@@ -1099,6 +1124,15 @@ export default function HomeScreen() {
               <OfflineBanner onRetry={() => void handleRefresh()} />
             ) : null}
 
+            {forYouIsDegraded ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: Space.xs }}>
+                <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+                <Text style={{ flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary }} maxFontSizeMultiplier={1.5}>
+                  Showing general listings — personalised feed is temporarily unavailable.
+                </Text>
+              </View>
+            ) : null}
+
             {showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading ? (
               renderExploreLoadingState()
             ) : feedGridData.length === 0 ? (
@@ -1116,6 +1150,32 @@ export default function HomeScreen() {
                     onCtaPress={followingFeed.hasFollowing ? () => void handleRefresh() : () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
                     secondaryCtaLabel={followingFeed.hasFollowing ? 'Browse all' : undefined}
                     onSecondaryCtaPress={followingFeed.hasFollowing ? () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' }) : undefined}
+                  />
+                </View>
+              ) : forYouHasError ? (
+                <View style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon="cloud-offline-outline"
+                    title="Couldn't load your feed"
+                    subtitle={forYouFeed.error ?? 'Pull to refresh or browse all listings.'}
+                    ctaLabel="Retry"
+                    onCtaPress={() => void forYouFeed.refresh()}
+                    secondaryCtaLabel="Browse all"
+                    onSecondaryCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                  />
+                </View>
+              ) : forYouIsEmpty ? (
+                <View style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon="sparkles-outline"
+                    title="No recommendations yet"
+                    subtitle="We're learning what you like. Browse listings and save items to build your feed."
+                    ctaLabel="Browse all"
+                    onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                    secondaryCtaLabel="Refresh"
+                    onSecondaryCtaPress={() => void forYouFeed.refresh()}
                   />
                 </View>
               ) : (

@@ -33,7 +33,7 @@ const notificationDeviceSchema = z.object({
 });
 
 const notificationDeviceParamsSchema = z.object({
-  token: z.string().min(16).max(4096),
+  deviceId: z.coerce.number().int().positive(),
 });
 
 const notificationEventsQuerySchema = z.object({
@@ -142,7 +142,12 @@ export const registerNotificationRoutes = ({
         userId: row.user_id,
         provider: row.provider,
         platform: row.platform,
-        token: row.token,
+        // P0 FIX: Never return the raw push token to the client. The token
+        // is a server-side credential — exposing it enables impersonation.
+        // The client uses the device id for management, not the token.
+        token: undefined,
+        tokenRedacted: true,
+        platformLabel: row.platform === 'ios' ? 'iPhone' : row.platform === 'android' ? 'Android' : 'Web',
         isActive: row.is_active,
         appVersion: row.app_version,
         createdAt: row.created_at,
@@ -182,7 +187,10 @@ export const registerNotificationRoutes = ({
         id: row.id,
         provider: row.provider,
         platform: row.platform,
-        token: row.token,
+        // P0 FIX: Redact raw tokens. Return only a platform label for display.
+        token: undefined,
+        tokenRedacted: true,
+        platformLabel: row.platform === 'ios' ? 'iPhone' : row.platform === 'android' ? 'Android' : 'Web',
         isActive: row.is_active,
         appVersion: row.app_version,
         createdAt: row.created_at,
@@ -191,8 +199,8 @@ export const registerNotificationRoutes = ({
     };
   });
 
-  app.delete("/notifications/devices/:token", async (request, reply) => {
-    const { token } = notificationDeviceParamsSchema.parse(request.params);
+  app.delete("/notifications/devices/:deviceId", async (request, reply) => {
+    const { deviceId } = notificationDeviceParamsSchema.parse(request.params);
     const userId = request.authUser?.userId;
     if (!userId) {
       return unauthorized(reply);
@@ -201,16 +209,16 @@ export const registerNotificationRoutes = ({
     const deleted = await db.query(
       `
         UPDATE notification_devices
-        SET is_active = FALSE, last_seen_at = NOW()
-        WHERE user_id = $1 AND token = $2
+        SET is_active = FALSE, token_status = 'revoked', last_seen_at = NOW()
+        WHERE user_id = $1 AND id = $2
         RETURNING id
       `,
-      [userId, token],
+      [userId, deviceId],
     );
 
     if (!deleted.rowCount) {
       reply.code(404);
-      return { ok: false, error: "Notification device token not found" };
+      return { ok: false, error: "Notification device not found" };
     }
     return { ok: true };
   });
@@ -249,7 +257,7 @@ export const registerNotificationRoutes = ({
       title: string;
       body: string;
       payload: Record<string, unknown>;
-      status: "queued" | "sent" | "failed";
+      status: "queued" | "ticketed" | "sent" | "failed" | "suppressed";
       provider_message_id: string | null;
       provider_error: string | null;
       created_at: string;
@@ -287,6 +295,7 @@ export const registerNotificationRoutes = ({
         FROM notification_events ne
         LEFT JOIN users u ON u.id = ne.actor_user_id
         WHERE ne.user_id = $1
+          AND ne.status != 'suppressed'
         ${cursorCondition}
         ORDER BY ne.created_at DESC, ne.id DESC
         LIMIT $2
@@ -339,7 +348,7 @@ export const registerNotificationRoutes = ({
       `
         SELECT COUNT(*)::text AS count
         FROM notification_events
-        WHERE user_id = $1 AND read_at IS NULL
+        WHERE user_id = $1 AND read_at IS NULL AND status != 'suppressed'
       `,
       [authUserId],
     );
@@ -388,6 +397,33 @@ export const registerNotificationRoutes = ({
       "UPDATE notification_events SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL",
       [authUserId],
     );
+    return { ok: true };
+  });
+
+  app.delete("/notifications/events/:eventId", async (request, reply) => {
+    const authUserId = request.authUser?.userId;
+    if (!authUserId) {
+      return unauthorized(reply);
+    }
+
+    const { eventId } = notificationEventParamsSchema.parse(request.params);
+    const deleted = await db.query(
+      `
+        DELETE FROM notification_events
+        WHERE id = $1 AND user_id = $2
+        RETURNING id
+      `,
+      [eventId, authUserId],
+    );
+
+    if (!deleted.rowCount) {
+      reply.code(404);
+      return {
+        ok: false,
+        error: "Notification not found",
+        code: "NOTIFICATION_NOT_FOUND",
+      };
+    }
     return { ok: true };
   });
 
@@ -446,10 +482,10 @@ export const registerNotificationRoutes = ({
         for (const [category, enabled] of entries) {
           await client.query(
             `
-              INSERT INTO notification_preferences (user_id, category, enabled, updated_at)
-              VALUES ($1, $2, $3, NOW())
+              INSERT INTO notification_preferences (user_id, category, enabled, updated_at, revision)
+              VALUES ($1, $2, $3, NOW(), 1)
               ON CONFLICT (user_id, category)
-              DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()
+              DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW(), revision = notification_preferences.revision + 1
             `,
             [authUserId, category, enabled],
           );

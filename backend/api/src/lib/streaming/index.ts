@@ -1,10 +1,8 @@
-export {
+export type {
   LiveStreamProvider,
-  LiveKitStreamProvider,
-  MockStreamProvider,
   StreamRoom,
   StreamTokenRequest,
   StreamTokenResult,
   CreateStreamRequest,
-  getStreamProvider,
 } from './streamProvider.js';
+export { LiveKitStreamProvider, MockStreamProvider, getStreamProvider } from './streamProvider.js';

@@ -41,6 +41,12 @@ describe('auction contract types', () => {
       isWatched: false,
       cancelledAt: null,
       settledAt: null,
+      paidAt: null,
+      paymentDeadlineAt: null,
+      secondChanceOfferedTo: null,
+      cancelledBy: null,
+      cancelledReason: null,
+      antiSniping: null,
       createdAt: '2025-01-01T00:00:00Z',
     };
 
@@ -100,6 +106,12 @@ describe('auction contract types', () => {
       winnerBidderId: 'bidder_1',
       settledAt: '2025-01-01T06:01:00Z',
       cancelledAt: null,
+      paidAt: null,
+      paymentDeadlineAt: null,
+      secondChanceOfferedTo: null,
+      cancelledBy: null,
+      cancelledReason: null,
+      antiSniping: null,
       createdAt: '2025-01-01T00:00:00Z',
     };
 

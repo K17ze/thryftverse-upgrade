@@ -61,6 +61,7 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { PosterViewerSkeleton } from '../components/skeletons/PosterViewerSkeleton';
 import { PosterProgressSegments } from '../components/poster/PosterProgressSegments';
 import { PosterStickerLayer } from '../components/poster/PosterStickerLayer';
+import { MoodboardPosterFrame } from '../components/poster/MoodboardPosterFrame';
 import { PosterReactionReplyBar } from '../components/poster/PosterReactionReplyBar';
 import { ShareSheet } from '../components/ShareSheet';
 import { CachedImage } from '../components/CachedImage';
@@ -1125,7 +1126,13 @@ export default function PosterViewerScreen() {
       {/* Background — canonical composition or legacy media.
           Wrapped in a Reanimated.View for the flat scale/fade story transition. */}
       <Reanimated.View style={[styles.mediaFull, storyAnimatedStyle]}>
-      {compositionDoc && compositionPage ? (
+      {activeStory?.contentType === 'moodboard' && activeStory.moodboardId ? (
+        <MoodboardPosterFrame
+          moodboardId={activeStory.moodboardId}
+          width={SCREEN_WIDTH}
+          height={SCREEN_HEIGHT}
+        />
+      ) : compositionDoc && compositionPage ? (
         <CreatorCanvas
           document={compositionDoc}
           page={compositionPage}

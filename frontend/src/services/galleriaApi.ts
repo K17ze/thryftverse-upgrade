@@ -85,7 +85,7 @@ export interface GalleriaCollectionDetail {
 // True only when the last fetch fell back to mock data.
 // ---------------------------------------------------------------------------
 
-export const GALLERIA_DEMO_MODE = __DEV__;
+export let GALLERIA_DEMO_MODE = false;
 
 // ---------------------------------------------------------------------------
 // Mock data (fallback only — used when the API is unreachable)
@@ -395,6 +395,36 @@ function mapApiAsset(raw: ApiCollectionDetailResponse['items'][number]): Galleri
   };
 }
 
+interface ApiEditorialResponse {
+  items: Array<{
+    id: string;
+    title: string;
+    excerpt: string;
+    heroImageUrl: string;
+    authorName: string;
+    authorAvatar: string;
+    publishedAt: string;
+    readTimeMinutes: number;
+    bodyContent: string[];
+    theme: string;
+  }>;
+}
+
+function mapApiEditorial(raw: ApiEditorialResponse['items'][number]): GalleriaEditorial {
+  return {
+    id: raw.id,
+    title: raw.title,
+    excerpt: raw.excerpt,
+    heroImage: raw.heroImageUrl,
+    author: raw.authorName,
+    authorAvatar: raw.authorAvatar,
+    publishedAt: raw.publishedAt,
+    readTime: `${raw.readTimeMinutes} min read`,
+    content: raw.bodyContent,
+    isDemo: false,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -407,9 +437,11 @@ function mapApiAsset(raw: ApiCollectionDetailResponse['items'][number]): Galleri
 export async function fetchGalleriaCollections(): Promise<GalleriaCollection[]> {
   try {
     const data = await fetchJson<ApiCollectionResponse>('/galleria/collections?limit=24');
+    GALLERIA_DEMO_MODE = false;
     return data.items.map(mapApiCollection);
   } catch {
     await delay(420);
+    GALLERIA_DEMO_MODE = true;
     return [...MOCK_COLLECTIONS].sort(
       (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
     );
@@ -419,13 +451,20 @@ export async function fetchGalleriaCollections(): Promise<GalleriaCollection[]> 
 /**
  * Fetch editorial pieces for the Galleria.
  * Returns editorials sorted by most recently published.
- * Editorials are not yet backed by a backend table — falls back to mock.
+ * Falls back to mock data when the API is unreachable.
  */
 export async function fetchGalleriaEditorials(): Promise<GalleriaEditorial[]> {
-  await delay(380);
-  return [...MOCK_EDITORIALS].sort(
-    (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
-  );
+  try {
+    const data = await fetchJson<ApiEditorialResponse>('/galleria/editorials?limit=24');
+    GALLERIA_DEMO_MODE = false;
+    return data.items.map(mapApiEditorial);
+  } catch {
+    await delay(380);
+    GALLERIA_DEMO_MODE = true;
+    return [...MOCK_EDITORIALS].sort(
+      (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+    );
+  }
 }
 
 /**
@@ -447,10 +486,15 @@ export async function fetchFeaturedAssets(): Promise<GalleriaFeaturedAsset[]> {
         assets.push({ ...mapApiAsset(item), collection: detail.collection.title });
       }
     }
-    if (assets.length > 0) return assets;
+    if (assets.length > 0) {
+      GALLERIA_DEMO_MODE = false;
+      return assets;
+    }
+    GALLERIA_DEMO_MODE = true;
     return [...MOCK_FEATURED_ASSETS];
   } catch {
     await delay(360);
+    GALLERIA_DEMO_MODE = true;
     return [...MOCK_FEATURED_ASSETS];
   }
 }
@@ -463,12 +507,14 @@ export async function fetchFeaturedAssets(): Promise<GalleriaFeaturedAsset[]> {
 export async function fetchCollectionDetail(id: string): Promise<GalleriaCollectionDetail | null> {
   try {
     const data = await fetchJson<ApiCollectionDetailResponse>(`/galleria/collections/${id}`);
+    GALLERIA_DEMO_MODE = false;
     return {
       collection: mapApiCollection(data.collection),
       items: data.items.map(mapApiAsset),
     };
   } catch {
     await delay(320);
+    GALLERIA_DEMO_MODE = true;
     const collection = MOCK_COLLECTIONS.find((c) => c.id === id) ?? null;
     if (!collection) return null;
     const items = MOCK_FEATURED_ASSETS.filter((a) => collection.itemIds.includes(a.id));

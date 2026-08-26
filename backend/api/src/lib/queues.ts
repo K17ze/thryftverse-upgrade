@@ -44,6 +44,18 @@ export interface RetentionSweepJobData {
   reason: 'scheduled' | 'manual';
 }
 
+export interface AnalyticsAggregationJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface PushReceiptReconciliationJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface ScheduledPublicationSweepJobData {
+  reason: 'scheduled' | 'manual';
+}
+
 export interface MediaIngestJobData {
   assetId: string;
   reason: string;
@@ -64,18 +76,20 @@ export interface MediaEmbeddingJobData {
 }
 
 // ---------------------------------------------------------------------------
-// Importer assisted extraction queue — ML-assisted structured extraction from
-// catalogue photos. Kept separate from catalog_import so extraction model
-// latency never blocks the import saga. Every extracted field is advisory
-// until the seller confirms it through the human confirmation gate.
+// Importer extraction intelligence queue — ML-assisted structured extraction
+// from catalogue photos. Kept separate from catalog_import so extraction
+// model latency never blocks the import saga. Every candidate is advisory
+// until the seller accepts it through the revision-checked field-decision
+// command. Model identity is server-owned; the job carries the runId and
+// the server-selected model bundle.
 // ---------------------------------------------------------------------------
 
 export interface ImporterExtractionJobData {
-  extractionId: string;
+  runId: string;
   itemId: string;
   mediaAssetId: string | null;
-  modelId: string;
-  modelVersion: string;
+  modelBundleId: string;
+  modelBundleVersion: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +155,10 @@ type InfraJobData =
   | OnezeMintReserveJobData
   | ReconciliationJobData
   | OutboxDrainJobData
-  | RetentionSweepJobData;
+  | RetentionSweepJobData
+  | AnalyticsAggregationJobData
+  | PushReceiptReconciliationJobData
+  | ScheduledPublicationSweepJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
@@ -151,6 +168,9 @@ interface QueueHandlers {
   handleReconciliationJob: (job: ReconciliationJobData) => Promise<void>;
   handleOutboxDrainJob: (job: OutboxDrainJobData) => Promise<void>;
   handleRetentionSweepJob: (job: RetentionSweepJobData) => Promise<void>;
+  handleAnalyticsAggregationJob: (job: AnalyticsAggregationJobData) => Promise<void>;
+  handlePushReceiptReconciliationJob: (job: PushReceiptReconciliationJobData) => Promise<void>;
+  handleScheduledPublicationSweepJob: (job: ScheduledPublicationSweepJobData) => Promise<void>;
   handleMediaIngestJob: (job: MediaIngestJobData) => Promise<void>;
   handleMediaEmbeddingJob: (job: MediaEmbeddingJobData) => Promise<void>;
   handleModerationTriageJob: (job: ModerationTriageJobData) => Promise<void>;
@@ -430,6 +450,12 @@ export function startBackgroundWorkers(
             await handlers.handleOutboxDrainJob(job.data as OutboxDrainJobData);
           } else if (job.name === 'retention_sweep') {
             await handlers.handleRetentionSweepJob(job.data as RetentionSweepJobData);
+          } else if (job.name === 'analytics_aggregation') {
+            await handlers.handleAnalyticsAggregationJob(job.data as AnalyticsAggregationJobData);
+          } else if (job.name === 'push_receipt_reconciliation') {
+            await handlers.handlePushReceiptReconciliationJob(job.data as PushReceiptReconciliationJobData);
+          } else if (job.name === 'scheduled_publication_sweep') {
+            await handlers.handleScheduledPublicationSweepJob(job.data as ScheduledPublicationSweepJobData);
           }
 
           const durationMs = Date.now() - jobStart;
@@ -864,6 +890,67 @@ export async function enqueueRetentionSweepJob(
   );
 }
 
+export async function enqueueAnalyticsAggregationJob(
+  reason: AnalyticsAggregationJobData['reason'] = 'scheduled',
+): Promise<void> {
+  const timeBucket = Math.floor(Date.now() / (15 * 60 * 1000));
+  await infraQueue.add(
+    'analytics_aggregation',
+    { reason },
+    {
+      jobId: `analytics_aggregation_${reason}_${timeBucket}`,
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 10_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 100,
+    },
+  );
+}
+
+export async function enqueuePushReceiptReconciliationJob(
+  reason: PushReceiptReconciliationJobData['reason'] = 'scheduled',
+): Promise<void> {
+  const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+  await infraQueue.add(
+    'push_receipt_reconciliation',
+    { reason },
+    {
+      jobId: `push_receipt_reconciliation_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 100,
+    },
+  );
+}
+
+export async function enqueueScheduledPublicationSweepJob(
+  reason: ScheduledPublicationSweepJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // Run every 30 seconds — the SLO target is "within 60 seconds of due time".
+  const timeBucket = Math.floor(Date.now() / 30_000);
+  await infraQueue.add(
+    'scheduled_publication_sweep',
+    { reason },
+    {
+      jobId: `scheduled_publication_sweep_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 10_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 100,
+    },
+  );
+}
+
 export async function enqueueMediaIngestJob(input: MediaIngestJobData): Promise<void> {
   await mediaIngestQueue.add(
     'media_ingest',
@@ -923,9 +1010,9 @@ export async function enqueueModerationTriageJob(input: ModerationTriageJobData)
 }
 
 export async function enqueueImporterExtractionJob(input: ImporterExtractionJobData): Promise<void> {
-  // Deterministic job id: the extractionId is unique per run, so re-queuing
-  // the same extraction is a no-op.
-  const jobId = `importer_extraction_${input.extractionId}`;
+  // Deterministic job id: the runId is unique per run, so re-queuing
+  // the same run is a no-op.
+  const jobId = `importer_extraction_${input.runId}`;
   await importerExtractionQueue.add(
     'importer_extraction_run',
     input,

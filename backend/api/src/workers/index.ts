@@ -5,6 +5,7 @@ import { closeRedis } from '../lib/redis.js';
 import { closeRealtimeConnections } from '../lib/realtime.js';
 import {
   processPushQueueJob,
+  processPushReceiptReconciliation,
   sweepExpiredAuctions,
   runPlatformReconciliation,
   processDomainOutboxBatch,
@@ -14,6 +15,7 @@ import {
   processMediaEmbeddingJob,
   processModerationTriageJob,
   processImporterExtraction,
+  processExtractionIntelligenceJob,
   processCatalogImportDiscovery,
   processCatalogImportHydration,
   processCatalogImportMedia,
@@ -22,6 +24,8 @@ import {
   processCatalogImportRetention,
   processCatalogImportReconcile,
   processRetentionSweep,
+  aggregateAnalyticsDaily,
+  sweepScheduledPublications,
 } from './handlers/index.js';
 
 /**
@@ -79,7 +83,10 @@ async function main(): Promise<void> {
         await processModerationTriageJob(job);
       },
       handleImporterExtractionJob: async (job) => {
-        await processImporterExtraction(job);
+        // Route to the new extraction intelligence handler. The job data
+        // shape (runId/modelBundle) is the converged format; the old
+        // handler is retained for legacy rows only.
+        await processExtractionIntelligenceJob(job as unknown as Parameters<typeof processExtractionIntelligenceJob>[0]);
       },
       handleCatalogImportDiscoveryJob: async ({ batchId }) => {
         await processCatalogImportDiscovery({ batchId });
@@ -104,6 +111,15 @@ async function main(): Promise<void> {
       },
       handleRetentionSweepJob: async ({ reason }) => {
         await processRetentionSweep({ reason });
+      },
+      handleAnalyticsAggregationJob: async ({ reason }) => {
+        await aggregateAnalyticsDaily();
+      },
+      handlePushReceiptReconciliationJob: async () => {
+        await processPushReceiptReconciliation();
+      },
+      handleScheduledPublicationSweepJob: async ({ reason }) => {
+        await sweepScheduledPublications(reason);
       },
     },
     logger,

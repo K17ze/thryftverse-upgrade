@@ -141,10 +141,20 @@ export function resolveTimeLabel(timing: { effectiveState: AuctionEffectiveState
       return 'Settled';
     case 'ended':
       return 'Ended';
+    case 'reserve_not_met':
+      return 'Reserve not met';
+    case 'awaiting_payment':
+      return 'Awaiting payment';
+    case 'payment_expired':
+      return 'Payment expired';
+    case 'second_chance_offered':
+      return 'Second chance';
     case 'upcoming':
       return `Starts in ${formatDurationShort(timing.msToStart)}`;
     case 'live':
       return `${formatDurationShort(timing.msToEnd)} left`;
+    default:
+      return '';
   }
 }
 

@@ -261,10 +261,6 @@ export type RootStackParamList = {
   CategoryTree: { categoryPrefix: string };
   // Phase 24 new screens
   GlobalSearch: { initialQuery?: string } | undefined;
-  /** Unified discovery surface — combines Galleria editorial, personalised
-   *  listings, looks, mood boards, pulse and curated collections into one
-   *  flagship discovery entry from the Home search button. */
-  UnifiedDiscovery: { initialQuery?: string } | undefined;
   // Collections feature
   CollectionDetail: { collectionId: string };
   // Phase 25 new screens
@@ -440,8 +436,12 @@ export type RootStackParamList = {
     fee: number;
     netValue: number;
     orderMode: 'market' | 'limit';
-    ticketOrderType: 'protected_instant' | 'limit';
+    ticketOrderType: 'protected_market' | 'protected_instant' | 'limit';
+    // P0.1: backend order type — 'protected_market' for protected_instant
+    backendOrderType?: 'market' | 'limit' | 'protected_market';
     limitPriceGbp: number;
+    // P0.1: protection cap price for protected_market orders
+    protectionPriceGbp?: number;
     averageFillPriceGbp: number;
     worstPriceGbp: number;
     estimatedFilledUnits: number;
@@ -610,7 +610,6 @@ export const ROOT_STACK_ROUTES = [
   'Withdraw',
   'CategoryTree',
   'GlobalSearch',
-  'UnifiedDiscovery',
   'CollectionDetail',
   'Filter',
   'ListingSuccess',

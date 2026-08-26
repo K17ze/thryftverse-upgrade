@@ -77,6 +77,15 @@ export interface NotificationRowBaseProps {
   style?: StyleProp<ViewStyle>;
 }
 
+const DELIVERY_STATUS_CONFIG: Record<
+  string,
+  { label: string; icon: keyof typeof Ionicons.glyphMap; colorKey: 'textMuted' | 'danger' | 'textSecondary' }
+> = {
+  suppressed: { label: 'Silenced', icon: 'moon-outline', colorKey: 'textMuted' },
+  failed: { label: 'Delivery failed', icon: 'alert-circle-outline', colorKey: 'danger' },
+  queued: { label: 'Pending', icon: 'time-outline', colorKey: 'textSecondary' },
+};
+
 export function NotificationRowBase({
   event,
   time,
@@ -95,6 +104,7 @@ export function NotificationRowBase({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isUnread = !event.readAt;
   const timeColor = resolveTimestampColor(event.createdAt, colors);
+  const deliveryConfig = DELIVERY_STATUS_CONFIG[event.status];
 
   return (
     <AnimatedPressable
@@ -132,6 +142,18 @@ export function NotificationRowBase({
           {aggregatedCount && aggregatedCount > 1 ? (
             <View style={styles.aggregatedBadge}>
               <Text style={styles.aggregatedText}>+{aggregatedCount - 1}</Text>
+            </View>
+          ) : null}
+          {deliveryConfig ? (
+            <View style={styles.deliveryStatus}>
+              <Ionicons
+                name={deliveryConfig.icon}
+                size={16}
+                color={colors[deliveryConfig.colorKey]}
+              />
+              <Text style={[styles.deliveryStatusText, { color: colors[deliveryConfig.colorKey] }]}>
+                {deliveryConfig.label}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -317,6 +339,15 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size - 2,
       fontFamily: FontFamily.bold,
       color: colors.background,
+    },
+    deliveryStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs / 2,
+    },
+    deliveryStatusText: {
+      fontSize: Type.meta.size,
+      fontFamily: FontFamily.regular,
     },
     trailing: {
       alignItems: 'center',

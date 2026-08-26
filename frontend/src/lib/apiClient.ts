@@ -1017,6 +1017,142 @@ export async function fetchJson<T>(
 }
 
 /**
+ * Performs an authenticated fetch and returns the raw `Response` without
+ * parsing the body or throwing on non-OK status codes.
+ *
+ * This is the low-level counterpart to `fetchJson`: it shares the same
+ * auth-token hydration, proactive refresh, X-Request-Id tagging, timeout,
+ * and retry-on-transient-failure behaviour, but hands the caller the
+ * `Response` so it can branch on status codes before consuming the body.
+ *
+ * Use this (instead of `fetchJson`) for endpoints whose contract requires
+ * status-code-based branching — e.g. the unknown-result lookup that returns
+ * 200 / 202 / 404 with distinct semantics. For the common case where a
+ * non-2xx is an error, prefer `fetchJson`.
+ *
+ * Note: unlike `fetchJson`, this function does NOT deduplicate GET
+ * requests, does NOT enqueue writes when offline, and does NOT throw on
+ * non-OK responses. Network-level failures still surface as
+ * `ApiRequestError` (with `status === undefined`).
+ */
+export async function fetchWithAuth(
+  path: string,
+  init?: RequestInit,
+  options?: FetchJsonOptions
+): Promise<Response> {
+  await hydrateAuthSession();
+
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxRetries = options?.maxRetries ?? DEFAULT_MAX_RETRIES;
+
+  const mergedInit: RequestInit = options?.signal
+    ? { ...init, signal: init?.signal ?? options.signal }
+    : init ?? {};
+
+  const requestId = generateRequestId();
+  lastRequestId = requestId;
+
+  const method = mergedInit.method?.toUpperCase();
+  Sentry.addBreadcrumb!({
+    category: 'api',
+    message: `${method ?? 'GET'} ${path}`,
+    level: 'info',
+    data: { requestId, url },
+  });
+
+  // Proactively check if the refresh token has expired
+  if (
+    authSessionState?.refreshTokenExpiresAt &&
+    !shouldSkipTokenRefresh(path)
+  ) {
+    const expiresAtMs = new Date(authSessionState.refreshTokenExpiresAt).getTime();
+    if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+      await clearAuthSession();
+    }
+  }
+
+  // Proactively refresh access token if it is close to expiry
+  if (
+    authSessionState?.accessTokenExpiresInSeconds &&
+    authSessionPersistedAtMs &&
+    !shouldSkipTokenRefresh(path) &&
+    authSessionState.refreshToken
+  ) {
+    const elapsedSincePersistedSec = (Date.now() - authSessionPersistedAtMs) / 1000;
+    const bufferSec = 30;
+    if (elapsedSincePersistedSec >= authSessionState.accessTokenExpiresInSeconds - bufferSec) {
+      await refreshAccessToken(baseUrl);
+    }
+  }
+
+  const execute = async (overrideAccessToken?: string): Promise<Response> => {
+    const headers = new Headers(mergedInit.headers ?? {});
+    const token = overrideAccessToken ?? authSessionState?.accessToken;
+
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    if (!headers.has('X-Request-Id')) {
+      headers.set('X-Request-Id', requestId);
+    }
+
+    return fetchWithRetry(
+      url,
+      { ...mergedInit, headers },
+      maxRetries,
+      timeoutMs
+    );
+  };
+
+  let response: Response;
+  try {
+    response = await execute();
+  } catch (error) {
+    if (error instanceof ApiRequestError) {
+      throw error;
+    }
+    const errorType = classifyNetworkError(error);
+    const label = errorType === 'timeout' ? 'Request timed out' : 'Network request failed';
+    throw new ApiRequestError(`${label} for ${url}: ${(error as Error).message}`);
+  }
+
+  if (
+    response.status === 401 &&
+    !shouldSkipTokenRefresh(path) &&
+    authSessionState?.refreshToken
+  ) {
+    const refreshedAccessToken = await refreshAccessToken(baseUrl);
+    if (refreshedAccessToken) {
+      try {
+        response = await execute(refreshedAccessToken);
+      } catch (error) {
+        const errorType = classifyNetworkError(error);
+        const label = errorType === 'timeout' ? 'Request timed out' : 'Network request failed';
+        throw new ApiRequestError(`${label} for ${url}: ${(error as Error).message}`);
+      }
+    } else {
+      try {
+        const { useStore } = await import('../store/useStore');
+        useStore.getState().logout();
+      } catch {
+        // Store not available (e.g. during app bootstrap) — safe to ignore.
+      }
+    }
+  }
+
+  const backendRequestId = response.headers.get('X-Request-Id');
+  if (backendRequestId) {
+    lastRequestId = backendRequestId;
+  }
+
+  return response;
+}
+
+/**
  * Produces a `RequestInit` safe for persisting into the offline queue.
  * Stream-based bodies (which cannot be re-read after the first fetch) are
  * serialised to a string so the queued request can be replayed later.

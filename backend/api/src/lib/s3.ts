@@ -19,6 +19,8 @@ const internalS3 = new S3Client({
   },
 });
 
+export { internalS3 };
+
 const signingS3 = new S3Client({
   region: config.s3Region,
   endpoint: config.s3PublicEndpoint,
@@ -40,6 +42,9 @@ export function maxUploadBytesForContentType(contentType: string): number {
   }
   if (normalized.startsWith('video/')) {
     return config.s3MaxVideoUploadBytes;
+  }
+  if (normalized.startsWith('audio/')) {
+    return config.s3MaxAudioUploadBytes;
   }
   return config.s3MaxDocumentUploadBytes;
 }

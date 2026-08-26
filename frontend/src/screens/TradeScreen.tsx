@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, Keyboard, AppState, AppStateStatus } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -20,6 +20,7 @@ import {
   computeReservation,
   estimateFill,
   computeDepthWithinBand,
+  isBookFresh,
   DEFAULT_FEE_SCHEDULE,
 } from '../utils/tradeFlow';
 import { parseApiError } from '../lib/apiClient';
@@ -62,7 +63,9 @@ import { createStableId } from '../utils/createStableId';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
+import { parseGbpToMinor, minorToGbp } from '../utils/money';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useCoOwnFeatureFlags } from '../hooks/useCoOwnFeatureFlags';
 import { t } from '../i18n';
 
 
@@ -80,6 +83,16 @@ const ORDER_TYPE_OPTIONS: Array<{ value: CoOwnTicketOrderType; label: string; ac
   { value: 'limit', label: t('trade.orderType.limit'), accessibilityLabel: t('trade.orderType.limitA11y') },
 ];
 
+/** P0.8: Prefer exact decimal string from backend, fall back to number.
+ * Routes monetary values through BigInt minor-unit parsing to eliminate
+ * IEEE 754 representation errors introduced by JSON.parse on numbers. */
+function exactGbp(str?: string | null, num?: number): number | undefined {
+  if (str != null && str !== '') {
+    return minorToGbp(parseGbpToMinor(str));
+  }
+  return num;
+}
+
 export default function TradeScreen() {
   useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
@@ -90,6 +103,7 @@ export default function TradeScreen() {
   const { isVeryCompact: isCompact } = useBreakpoint();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const { isOffline } = useConnectivity();
+  const featureFlags = useCoOwnFeatureFlags();
 
   const currentUser = useStore((state) => state.currentUser);
   const checkCoOwnEligibility = useStore((state) => state.checkCoOwnEligibility);
@@ -110,6 +124,9 @@ export default function TradeScreen() {
   const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
+  const [isForegroundStale, setIsForegroundStale] = React.useState(false);
+  const [hasSequenceGap, setHasSequenceGap] = React.useState(false);
+  const lastSequenceRef = useRef<number | null>(null);
 
   const tradeAssetId = route.params?.assetId;
 
@@ -158,10 +175,52 @@ export default function TradeScreen() {
     return () => { cancelled = true; clearInterval(intervalId); };
   }, [tradeAssetId]);
 
+  // Foreground revalidation: when the app returns to active, mark the book
+  // stale until a fresh fetch completes, and trigger an immediate re-fetch.
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        setIsForegroundStale(true);
+        if (tradeAssetId) {
+          fetchCoOwnOrderBook(tradeAssetId, { limit: 40 })
+            .then((book) => setOrderBook(book))
+            .catch(() => undefined);
+        }
+      }
+    });
+    return () => subscription?.remove();
+  }, [tradeAssetId]);
+
+  // Clear foreground staleness once a fresh book arrives.
+  React.useEffect(() => {
+    if (orderBook?.serverTimestamp && isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)) {
+      setIsForegroundStale(false);
+    }
+  }, [orderBook?.serverTimestamp, orderBook?.stalenessThresholdSeconds]);
+
+  // Sequence gap detection: snapshots should advance contiguously. A gap or
+  // regression indicates data loss and forces revalidation.
+  React.useEffect(() => {
+    if (orderBook?.snapshotSequence != null) {
+      const seq = orderBook.snapshotSequence;
+      if (lastSequenceRef.current != null) {
+        if (seq > lastSequenceRef.current + 1) {
+          setHasSequenceGap(true);
+        } else if (seq <= lastSequenceRef.current) {
+          return;
+        }
+      }
+      lastSequenceRef.current = seq;
+      setHasSequenceGap(false);
+    }
+  }, [orderBook?.snapshotSequence]);
+
   const marketPrice = asset ? asset.unitPriceGbp : 0;
+  // P0.1: protected_instant is now a distinct order type — NOT mapped to 'market'.
+  // The backend accepts 'protected_market' with maxPriceGbp (buy) / minPriceGbp (sell).
   const orderMode: 'market' | 'limit' = ticketOrderType === 'protected_instant' ? 'market' : 'limit';
-  const bestBid = orderBook?.bids[0]?.unitPriceGbp ?? 0;
-  const bestAsk = orderBook?.asks[0]?.unitPriceGbp ?? 0;
+  const bestBid = exactGbp(orderBook?.bids[0]?.unitPriceGbpStr, orderBook?.bids[0]?.unitPriceGbp) ?? 0;
+  const bestAsk = exactGbp(orderBook?.asks[0]?.unitPriceGbpStr, orderBook?.asks[0]?.unitPriceGbp) ?? 0;
   const protectedReferencePrice = side === 'buy' ? bestAsk : bestBid;
   const protectedLimitPrice = protectedReferencePrice > 0
     ? Number((protectedReferencePrice * (side === 'buy' ? 1.02 : 0.98)).toFixed(4))
@@ -170,6 +229,9 @@ export default function TradeScreen() {
   const effectiveLimitPrice = ticketOrderType === 'protected_instant'
     ? protectedLimitPrice
     : Number.isFinite(enteredLimitPrice) ? enteredLimitPrice : 0;
+  // P0.1: The backend order type for protected_instant is 'protected_market'.
+  // It uses maxPriceGbp (buy) / minPriceGbp (sell), NOT limitPriceGbp.
+  const backendOrderType = ticketOrderType === 'protected_instant' ? 'protected_market' : 'limit';
 
   // Spec 10 §9.3: "TBC only for prelaunch preview; blocks trading on live."
   // If any rights row is TBC, trading is blocked — even if navigated directly.
@@ -206,8 +268,8 @@ export default function TradeScreen() {
   );
 
   const visibleBook = React.useMemo(() => ({
-    bids: (orderBook?.bids ?? []).map((level) => ({ price: level.unitPriceGbp, size: level.units })),
-    asks: (orderBook?.asks ?? []).map((level) => ({ price: level.unitPriceGbp, size: level.units })),
+    bids: (orderBook?.bids ?? []).map((level) => ({ price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0, size: level.units })),
+    asks: (orderBook?.asks ?? []).map((level) => ({ price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0, size: level.units })),
   }), [orderBook]);
 
   const protectionPrice = quote.hasLimitPrice ? quote.limitPrice : 0;
@@ -240,22 +302,33 @@ export default function TradeScreen() {
   }, [side, quote.quantity, yourUnits, asset?.totalUnits]);
 
   const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: t('trade.error.assetNotFound') };
+  const bookAgeSeconds = orderBook?.serverTimestamp
+    ? Math.floor((Date.now() - new Date(orderBook.serverTimestamp).getTime()) / 1000)
+    : 0;
   const marketIsAuthoritative = orderBook?.source === 'live'
     && orderBook.reconciliationState === 'reconciled'
-    && Boolean(orderBook.serverTimestamp);
+    && isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)
+    && !isForegroundStale
+    && !hasSequenceGap;
   const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote })
     && !hasIncompleteRights
     && marketIsAuthoritative
     && !isOffline;
   const submitDisabledReason = React.useMemo(() => {
+    if (!featureFlags.canPlaceOrders) return 'Trading temporarily unavailable';
     const tradeReason = getTradeSubmitDisabledReason({ assetFound: !!asset, eligibility, quote, hasIncompleteRights });
     if (tradeReason) return tradeReason;
+    if (featureFlags.maxOrderSize !== null && quote.quantity > featureFlags.maxOrderSize) {
+      return `Maximum ${featureFlags.maxOrderSize} units per order`;
+    }
     if (isOffline) return t('trade.error.reconnectToReview');
+    if (isForegroundStale) return 'Reconnecting to live market…';
+    if (hasSequenceGap) return 'Market data interrupted — refreshing…';
     if (orderBook?.source !== 'live') return t('trade.error.liveDataUnavailable');
     if (orderBook.reconciliationState !== 'reconciled') return t('trade.error.reconciliationInProgress');
-    if (!orderBook.serverTimestamp) return t('trade.error.timestampUnavailable');
+    if (!isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)) return t('trade.error.timestampUnavailable');
     return null;
-  }, [asset, eligibility, hasIncompleteRights, isOffline, orderBook, quote]);
+  }, [asset, eligibility, hasIncompleteRights, isOffline, orderBook, quote, isForegroundStale, hasSequenceGap, featureFlags.canPlaceOrders, featureFlags.maxOrderSize]);
 
   // Thin market: no opposite side → substitute "Review order" with "Request quote"
   const isThinMarket = (side === 'buy' && visibleBook.asks.length === 0)
@@ -286,12 +359,18 @@ export default function TradeScreen() {
     }
     const idempotencyKey = idempotencyKeyRef.current;
     try {
+      // P0.1: Send protected_market with maxPriceGbp/minPriceGbp instead of
+      // market + limitPriceGbp (which the backend rejects as contract-invalid).
       const command = {
         userId: currentUser.id,
         side,
         units: quote.quantity,
-        orderType: orderMode,
-        limitPriceGbp: effectiveLimitPrice,
+        orderType: backendOrderType,
+        ...(backendOrderType === 'protected_market'
+          ? (side === 'buy'
+            ? { maxPriceGbp: effectiveLimitPrice }
+            : { minPriceGbp: effectiveLimitPrice })
+          : { limitPriceGbp: effectiveLimitPrice }),
       } as const;
       const previewResponse = await previewCoOwnOrder(asset.id, command);
       const preview = previewResponse.preview;
@@ -299,6 +378,13 @@ export default function TradeScreen() {
         show(preview.eligibility.message || t('trade.error.notEligible'), 'error');
         return;
       }
+      // P0.8: Route preview monetary values through exact BigInt parsing
+      // to eliminate IEEE 754 representation errors from the wire format.
+      const previewGrossNotional = exactGbp(preview.estimatedFill.grossNotionalGbpStr, preview.estimatedFill.grossNotional) ?? 0;
+      const previewFee = exactGbp(preview.feeGbpStr, preview.fee) ?? 0;
+      const previewTotal = exactGbp(preview.totalGbpStr, preview.total) ?? 0;
+      const previewAvgFillPrice = exactGbp(preview.estimatedFill.avgFillPriceGbpStr, preview.estimatedFill.avgFillPrice) ?? 0;
+      const previewWorstPrice = exactGbp(preview.estimatedFill.worstPriceGbpStr, preview.estimatedFill.worstPrice) ?? 0;
       const reservationResponse = await reserveCoOwnOrder(asset.id, {
         ...command,
         idempotencyKey,
@@ -311,14 +397,17 @@ export default function TradeScreen() {
         assetImageUrl: asset.imageUrl,
         side,
         quantity: quote.quantity,
-        totalValue: preview.estimatedFill.grossNotional,
-        fee: preview.fee,
-        netValue: preview.total,
+        totalValue: previewGrossNotional,
+        fee: previewFee,
+        netValue: previewTotal,
         orderMode,
         ticketOrderType,
+        // P0.1: pass the backend order type and protection price
+        backendOrderType,
         limitPriceGbp: effectiveLimitPrice,
-        averageFillPriceGbp: preview.estimatedFill.avgFillPrice,
-        worstPriceGbp: preview.estimatedFill.worstPrice,
+        protectionPriceGbp: backendOrderType === 'protected_market' ? effectiveLimitPrice : undefined,
+        averageFillPriceGbp: previewAvgFillPrice,
+        worstPriceGbp: previewWorstPrice,
         estimatedFilledUnits: preview.estimatedFill.filledUnits,
         estimatedRemainingUnits: preview.estimatedFill.remainingUnits,
         reservationId: reserved.id,
@@ -484,6 +573,15 @@ export default function TradeScreen() {
           </View>
         )}
 
+        {featureFlags.isPaperMode && (
+          <View style={[styles.paperBanner, { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder }]}>
+            <Ionicons name="school-outline" size={14} color={colors.brand} />
+            <Text style={[styles.paperBannerText, { color: colors.textSecondary }]} numberOfLines={2} maxFontSizeMultiplier={2}>
+              Paper trading — no real money is at risk. Orders simulate the full flow.
+            </Text>
+          </View>
+        )}
+
         <View style={[
           styles.illustrativeBanner,
           {
@@ -498,8 +596,12 @@ export default function TradeScreen() {
           />
           <Text style={[styles.illustrativeBannerText, { color: colors.textSecondary }]} numberOfLines={3} maxFontSizeMultiplier={2}>
             {marketIsAuthoritative
-              ? `Live order book · snapshot ${orderBook?.snapshotSequence ?? 0}. A server preview and reservation are required before confirmation.`
-              : 'Trading paused. Displayed depth may be a development fallback and is never treated as an executable quote.'}
+              ? `Live · updated ${bookAgeSeconds}s ago`
+              : isForegroundStale
+                ? 'Updating market…'
+                : hasSequenceGap
+                  ? 'Market data interrupted — refreshing…'
+                  : 'Trading paused. Displayed depth is not an executable quote.'}
           </Text>
         </View>
 
@@ -540,6 +642,8 @@ export default function TradeScreen() {
             duration={ticketDuration}
             postTradePreview={postTradePreview}
             rightsVersion={asset.rights?.version ? `v${asset.rights.version}` : undefined}
+            // P0.3: Pass the book source so the composer shows truth language
+            bookSource={orderBook?.source ?? 'development-fallback'}
           />
         </View>
 
@@ -802,6 +906,22 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.body.letterSpacing,
+  },
+  paperBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: Space.sm,
+  },
+  paperBannerText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   // ── Illustrative banner — calm market status indicator ──
   // Per spec 11_COOWN: "Calm presentation." Subtle background, not aggressive.

@@ -13,7 +13,7 @@ export interface CoOwnTradeReceiptProps {
   title: string;
   orderId?: string | number;
   side: 'buy' | 'sell';
-  orderType: 'market' | 'limit' | 'protected_instant';
+  orderType: 'market' | 'limit' | 'protected_instant' | 'protected_market';
   units: number;
   filledUnits?: number;
   remainingUnits?: number;

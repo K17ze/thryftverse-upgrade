@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
@@ -70,7 +70,7 @@ export function FlagshipHeroSection({
   );
 }
 
-const createStyles = (colors: any) => StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     position: 'relative',
     overflow: 'hidden',

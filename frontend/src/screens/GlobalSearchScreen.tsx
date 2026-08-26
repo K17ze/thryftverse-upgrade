@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Motion } from '../constants/motion';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
+import { useScrollRestoration } from '../hooks/useScrollRestoration';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -32,7 +34,6 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { CachedImage } from '../components/CachedImage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppButton } from '../components/ui/AppButton';
@@ -44,6 +45,7 @@ import {
   type SearchAutocompleteSuggestion,
 } from '../services/feedApi';
 import { friendlyBackendError } from '../services/listingMapper';
+import { loadRecentSearchStrings, recordRecentSearch, clearRecentSearches } from '../services/searchHistory';
 import type { ListingCondition } from '../services/listingsApi';
 import { searchUsers, type UserSearchResult, followUser, unfollowUser } from '../services/profileApi';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
@@ -62,8 +64,6 @@ import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GlobalSearch'>;
-
-const RECENT_SEARCHES_KEY = '@thryftverse_recent_searches';
 
 // Masonry column width — matches the grid layout (paddingHorizontal: 20,
 // gap: 8). Used to compute deterministic image heights from real aspect
@@ -179,8 +179,8 @@ function getBroadenedSuggestions(rawQuery: string): string[] {
     // Offer the individual tokens (shorter / broader) as suggestions
     return tokens.slice(0, 2);
   }
-  // Single token ΓÇö surface a couple of trending categories as alternatives
-  return ['women', 'men'];
+  // Single token — surface a couple of trending categories as alternatives
+  return CATEGORIES.slice(0, 2).map((cat) => cat.id);
 }
 
 /**
@@ -351,6 +351,12 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const focusProgress = useSharedValue(0);
 
+  const { scrollRef, onScroll, captureScroll, restoreScroll } = useScrollRestoration<ScrollView>({
+    storageKey: 'global_search_results',
+    persistToStorage: true,
+  });
+  const discoverLenRef = useRef(0);
+
   // Apply initial query passed from Explore search to browse filters so
   // results render immediately on mount.
   useEffect(() => {
@@ -516,7 +522,15 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
 
   const rankedListings = useMemo<RankedListing[]>(() => {
     if (normalizedQuery && backendSearchResults.length > 0) {
-      return backendSearchResults;
+      // Server owns the result order for "Recommended". The client does NOT
+      // rerank with affinity/recency heuristics the server can't reproduce.
+      // Score is derived purely from the server's position so downstream
+      // "Recommended" sort stays a stable no-op (server order preserved).
+      return backendSearchResults.map((listing, index) => ({
+        ...listing,
+        score: Math.max(0, 100 - index),
+        reason: listing.reason || 'Search match',
+      }));
     }
     return listings
       .filter((listing) => !(wishlistIds?.includes(listing.id) ?? false))
@@ -651,12 +665,39 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
         break;
       case 'Recommended':
       default:
-        sorted.sort((a, b) => b.score - a.score || b.likes - a.likes);
+        // Server owns the order for "Recommended" when we have backend
+        // search results — do not re-sort by the client-derived score.
+        // The local-listings fallback (no backend results) still uses the
+        // heuristic blended score since there is no server order to honor.
+        if (!(normalizedQuery && backendSearchResults.length > 0)) {
+          sorted.sort((a, b) => b.score - a.score || b.likes - a.likes);
+        }
         break;
     }
 
-    return normalizedQuery ? sorted.slice(0, 16) : sorted;
-  }, [browseFilters.brands, browseFilters.condition, browseFilters.sizes, browseFilters.sort, browseFilters.priceMin, browseFilters.priceMax, rankedListings, listings, normalizedQuery]);
+    return sorted;
+  }, [browseFilters.brands, browseFilters.condition, browseFilters.sizes, browseFilters.sort, browseFilters.priceMin, browseFilters.priceMax, rankedListings, listings, normalizedQuery, backendSearchResults]);
+
+  discoverLenRef.current = discoverListings.length;
+
+  // Layer 2: capture scroll offset on blur; Layer 3: restore on re-focus
+  // when the list already has data.
+  useFocusEffect(
+    useCallback(() => {
+      if (discoverLenRef.current > 0) {
+        requestAnimationFrame(() => restoreScroll());
+      }
+      return () => captureScroll();
+    }, [restoreScroll, captureScroll]),
+  );
+
+  // Layer 3: restore after data first arrives (covers cold load where the
+  // list was empty at focus time).
+  useEffect(() => {
+    if (discoverListings.length > 0) {
+      restoreScroll();
+    }
+  }, [discoverListings.length, restoreScroll]);
 
   useEffect(() => {
     focusProgress.value = withTiming(isSearchFocused ? 1 : 0, { duration: reducedMotion ? 0 : Motion.timing.focus });
@@ -679,44 +720,34 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
 
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [recentSearchesHydrated, setRecentSearchesHydrated] = useState(false);
-  const recentSearchesKey = `${RECENT_SEARCHES_KEY}:${currentUser?.id ?? 'guest'}`;
 
   useEffect(() => {
     let cancelled = false;
     setRecentSearches([]);
     setRecentSearchesHydrated(false);
-    AsyncStorage.getItem(recentSearchesKey)
-      .then((raw) => {
-        if (cancelled || !raw) return;
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            setRecentSearches(parsed.filter((value): value is string => typeof value === 'string').slice(0, 8));
-          }
-        } catch {
-          setRecentSearches([]);
-        }
+    loadRecentSearchStrings(currentUser?.id)
+      .then((loaded) => {
+        if (cancelled) return;
+        setRecentSearches(loaded.slice(0, 8));
       })
+      .catch(() => undefined)
       .finally(() => {
         if (!cancelled) setRecentSearchesHydrated(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [recentSearchesKey]);
+  }, [currentUser?.id]);
 
   const saveRecentSearch = (term: string) => {
-    setRecentSearches((current) => {
-      const normalized = term.trim().toLowerCase();
-      const updated = [term, ...current.filter((value) => value.trim().toLowerCase() !== normalized)].slice(0, 8);
-      void AsyncStorage.setItem(recentSearchesKey, JSON.stringify(updated));
-      return updated;
-    });
+    recordRecentSearch(term, currentUser?.id)
+      .then((updated) => setRecentSearches(updated.map((e) => e.query)))
+      .catch(() => undefined);
   };
 
-  const clearRecentSearches = async () => {
+  const handleClearRecentSearches = async () => {
     setRecentSearches([]);
-    await AsyncStorage.removeItem(recentSearchesKey);
+    await clearRecentSearches(currentUser?.id);
   };
 
   // Live search suggestions ΓÇö derived from listing titles, brands, and categories
@@ -1041,6 +1072,8 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
       <CommerceDetailOfflineBanner isOffline={isOffline} />
 
       <ScrollView
+        ref={scrollRef}
+        onScroll={onScroll}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -1167,7 +1200,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                             ))}
                           <AnimatedPressable
                             style={styles.focusClearRow}
-                            onPress={clearRecentSearches}
+                            onPress={handleClearRecentSearches}
                             accessibilityLabel="Clear recent searches"
                             accessibilityRole="button"
                           >
@@ -1335,7 +1368,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                       ))}
                       <AnimatedPressable
                         style={[styles.recentRow, { justifyContent: 'center' }]}
-                        onPress={clearRecentSearches}
+                        onPress={handleClearRecentSearches}
                         accessibilityLabel="Clear recent searches"
                         accessibilityRole="button"
                       >

@@ -49,7 +49,9 @@ interface RegisterNotificationDeviceResponse {
     userId: string;
     provider: PushProvider;
     platform: PushPlatform;
-    token: string;
+    token?: string;
+    tokenRedacted?: boolean;
+    platformLabel?: string;
     isActive: boolean;
     appVersion: string | null;
     createdAt: string;
@@ -63,7 +65,9 @@ interface ListNotificationDevicesResponse {
     id: number;
     provider: PushProvider;
     platform: PushPlatform;
-    token: string;
+    token?: string;
+    tokenRedacted?: boolean;
+    platformLabel?: string;
     isActive: boolean;
     appVersion: string | null;
     createdAt: string;
@@ -80,7 +84,7 @@ export interface NotificationEvent {
   title: string;
   body: string;
   payload: Record<string, unknown>;
-  status: 'queued' | 'sent' | 'failed';
+  status: 'queued' | 'ticketed' | 'sent' | 'failed' | 'suppressed';
   providerMessageId: string | null;
   providerError: string | null;
   createdAt: string;
@@ -598,8 +602,8 @@ export async function listNotificationDevices() {
   return payload.devices;
 }
 
-export async function deactivateNotificationDevice(token: string): Promise<void> {
-  await fetchJson<{ ok: true }>(`/notifications/devices/${encodeURIComponent(token)}`, {
+export async function deactivateNotificationDevice(deviceId: number): Promise<void> {
+  await fetchJson<{ ok: true }>(`/notifications/devices/${deviceId}`, {
     method: 'DELETE',
   });
 }

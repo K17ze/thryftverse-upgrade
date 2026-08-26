@@ -1,4 +1,19 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+/**
+ * AI Photo Enhancement Screen — fail-closed per report #14 / AGENTS.md §11/§37.
+ * Fetches capability from the backend and shows an honest "not yet available"
+ * state when no provider is configured. Never claims an enhancement was
+ * applied when nothing happened — no false success, no scanline theatre.
+ *
+ * Before/after comparison: a draggable slider (WCAG 2.2 §2.5.7 draggable
+ * movement) plus a press-and-hold secondary gesture and three quick-position
+ * buttons (Before / Split / After) as the §2.5.7 non-drag alternative.
+ *
+ * State machine (report §7.2):
+ *   checking → unavailable | available
+ *   available → submitting → candidate_ready | error | outcome_unknown
+ *   candidate_ready → applied (Use Photo) | available (Revert)
+ */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,424 +22,629 @@ import {
   Image,
   ScrollView,
   Pressable,
+  AccessibilityInfo,
   ActivityIndicator,
-  RefreshControl,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-  interpolate,
-} from 'react-native-reanimated';
 
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
-import { AITrustSignal } from '../components/ai/AITrustSignal';
-import { EmptyState as CanonicalEmptyState } from '../components/EmptyState';
-import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Motion } from '../theme/motionTokens';
 import {
-  AI_PHOTO_DEMO_MODE,
-  fetchEnhancementOptions,
-  fetchBackgroundScenes,
-  fetchEnhancementPresets,
+  fetchEnhancementCapability,
+  invalidateEnhancementCapabilityCache,
+  derivePresetsFromOperations,
+  getBackgroundScenes,
   applyEnhancement,
   applyPreset,
   replaceBackground,
   revertEnhancement,
+  cancelEnhancementJob,
+  EnhancementCapabilityError,
   type EnhancementOption,
+  type EnhancementOptionType,
   type EnhancementPreset,
   type BackgroundScene,
   type EnhancementResult,
+  type EnhancementCapability,
+  type EnhancementProvenance,
 } from '../services/aiPhotoEnhancementApi';
+import { setEnhancementResult } from '../services/enhancementResultHandoff';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIPhotoEnhancement'>;
 
 const { width: SCREEN_W } = Dimensions.get('window');
 /** 4:5 aspect ratio preview — marketplace standard (Depop, Vinted, Instagram). */
 const PREVIEW_HEIGHT = Math.round(SCREEN_W * (5 / 4));
+/** Media stage width — screen minus the scroll content horizontal padding. */
+const MEDIA_WIDTH = SCREEN_W - Space.md * 2;
 
 type ScreenPhase =
-  | 'loading' // initial data fetch
-  | 'populated' // image + options ready
-  | 'empty' // no image URI passed
-  | 'error' // fetch or processing error
-  | 'applied'; // enhancement applied (demo)
+  | 'checking' // fetching capability from server
+  | 'unavailable' // server says not available (fail-closed)
+  | 'available' // capability confirmed, tools ready
+  | 'submitting' // job submitted, honest stage text
+  | 'candidate_ready' // enhancement complete, show before/after
+  | 'error' // honest error with retry
+  | 'outcome_unknown'; // network dropped during submit
+
+// -- Operation-specific copy (report §7.2 + §6) ----------------------------
+
+function getStageText(type: EnhancementOptionType | null): string {
+  switch (type) {
+    case 'background_removal': return 'Removing background…';
+    case 'color_correction': return 'Correcting colour…';
+    case 'auto_crop': return 'Cropping and centring…';
+    case 'background_replace': return 'Replacing background…';
+    default: return 'Processing…';
+  }
+}
+
+function getOperationSummary(type: EnhancementOptionType | null): string {
+  switch (type) {
+    case 'background_removal': return 'Background removed, item preserved.';
+    case 'color_correction': return 'Colours adjusted for accuracy.';
+    case 'background_replace': return 'Background replaced with a new scene.';
+    default: return 'Photo enhanced.';
+  }
+}
+
+function disclosureLabel(type: EnhancementProvenance['disclosureType']): string {
+  switch (type) {
+    case 'standard_editing': return 'Standard editing';
+    case 'ai_assisted': return 'AI-assisted edit';
+    case 'ai_generated': return 'AI-generated';
+    default: return 'Edited';
+  }
+}
 
 export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
-  const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
 
   const imageUri = route.params.imageUri;
-  const itemId = route.params.itemId;
 
-  const [phase, setPhase] = useState<ScreenPhase>('loading');
+  const [phase, setPhase] = useState<ScreenPhase>('checking');
+  const [capability, setCapability] = useState<EnhancementCapability | null>(null);
   const [options, setOptions] = useState<EnhancementOption[]>([]);
   const [presets, setPresets] = useState<EnhancementPreset[]>([]);
   const [scenes, setScenes] = useState<BackgroundScene[]>([]);
-  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+  const [selectedOperationId, setSelectedOperationId] = useState<string | null>(null);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
-  const [showBackgroundPicker, setShowBackgroundPicker] = useState(false);
+  const [showScenes, setShowScenes] = useState(false);
   const [result, setResult] = useState<EnhancementResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showAfter, setShowAfter] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isApplying, setIsApplying] = useState(false);
+  const [stageText, setStageText] = useState('Preparing…');
+  const [activeOperationType, setActiveOperationType] = useState<EnhancementOptionType | null>(null);
 
-  // -- Initial data fetch --------------------------------------------------
-  const loadAll = useCallback(async () => {
-    if (!imageUri) {
-      setPhase('empty');
-      return;
-    }
-    setPhase('loading');
+  // -- Before/after comparison state (WCAG 2.2 §2.5.7) ---------------------
+  // sliderPosition: 0 = full Before, 100 = full After, 50 = split.
+  const [sliderPosition, setSliderPosition] = useState(50);
+  const [isHolding, setIsHolding] = useState(false);
+  const [stageWidth, setStageWidth] = useState(MEDIA_WIDTH);
+
+  const sliderPosRef = useRef(50);
+  const stageWidthRef = useRef(MEDIA_WIDTH);
+  const dragStartPosRef = useRef(50);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelledRef = useRef(false);
+  const hapticRef = useRef(haptic);
+  hapticRef.current = haptic;
+  stageWidthRef.current = stageWidth;
+
+  const updateSliderPosition = useCallback((next: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(next)));
+    sliderPosRef.current = clamped;
+    setSliderPosition(clamped);
+  }, []);
+
+  // PanResponder drives the draggable slider handle. Uses refs so the
+  // responder (created once) never reads stale state.
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_evt, gestureState) => Math.abs(gestureState.dx) > 2,
+      onPanResponderGrant: () => {
+        dragStartPosRef.current = sliderPosRef.current;
+      },
+      onPanResponderMove: (_evt, gestureState) => {
+        const pct = (gestureState.dx / stageWidthRef.current) * 100;
+        updateSliderPosition(dragStartPosRef.current + pct);
+      },
+      onPanResponderRelease: () => {
+        hapticRef.current.light();
+      },
+      onPanResponderTerminationRequest: () => false,
+    }),
+  ).current;
+
+  // -- Capability check -----------------------------------------------------
+  const checkCapability = useCallback(async () => {
+    setPhase('checking');
     setError(null);
     try {
-      const [opts, pres, scns] = await Promise.all([
-        fetchEnhancementOptions(),
-        fetchEnhancementPresets(),
-        fetchBackgroundScenes(),
-      ]);
-      setOptions(opts);
-      setPresets(pres);
-      setScenes(scns);
-      setPhase('populated');
-    } catch (e: unknown) {
-      const msg =
-        typeof e === 'object' && e && 'message' in e
-          ? (e as Error).message
-          : 'Could not load enhancement options. Try again.';
-      setError(msg);
-      setPhase('error');
+      const cap = await fetchEnhancementCapability();
+      setCapability(cap);
+      if (cap.available) {
+        setOptions(cap.operations);
+        setPresets(derivePresetsFromOperations(cap.operations));
+        setScenes(getBackgroundScenes());
+        setPhase('available');
+      } else {
+        setPhase('unavailable');
+      }
+    } catch {
+      // Fail-closed: any error → unavailable
+      setPhase('unavailable');
     }
-  }, [imageUri]);
+  }, []);
 
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    if (!imageUri) return;
+    checkCapability();
+  }, [checkCapability, imageUri]);
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadAll();
-    setRefreshing(false);
-  }, [loadAll]);
-
-  // -- Option selection ----------------------------------------------------
-  const handleSelectOption = useCallback(
-    (option: EnhancementOption) => {
+  // -- Operation selection --------------------------------------------------
+  const handleSelectOperation = useCallback(
+    (op: EnhancementOption) => {
       haptic.patterns.tabSwitch();
-      setSelectedOptionId(option.id);
+      setSelectedOperationId(op.id);
       setSelectedPresetId(null);
-      if (option.type === 'background_replace') {
-        setShowBackgroundPicker(true);
-      } else {
-        setShowBackgroundPicker(false);
+      setShowScenes(op.type === 'background_replace');
+      if (op.type !== 'background_replace') {
+        setSelectedSceneId(null);
       }
     },
     [haptic],
   );
 
-  const handleSelectPreset = useCallback((preset: EnhancementPreset) => {
-    haptic.patterns.tabSwitch();
-    setSelectedPresetId(preset.id);
-    setSelectedOptionId(null);
-    setShowBackgroundPicker(false);
-  }, [haptic]);
+  const handleSelectPreset = useCallback(
+    (preset: EnhancementPreset) => {
+      haptic.patterns.tabSwitch();
+      setSelectedPresetId(preset.id);
+      setSelectedOperationId(null);
+      setShowScenes(false);
+      setSelectedSceneId(null);
+    },
+    [haptic],
+  );
 
-  const handleSelectScene = useCallback((scene: BackgroundScene) => {
-    haptic.patterns.tabSwitch();
-    setSelectedSceneId(scene.id);
-  }, [haptic]);
+  const handleSelectScene = useCallback(
+    (scene: BackgroundScene) => {
+      haptic.patterns.tabSwitch();
+      setSelectedSceneId(scene.id);
+    },
+    [haptic],
+  );
 
-  // -- Apply enhancement ---------------------------------------------------
+  // -- Apply enhancement ----------------------------------------------------
   const handleApply = useCallback(async () => {
     if (!imageUri) return;
     if (isOffline) {
       setError('You appear to be offline. Check your connection and try again.');
       haptic.error();
+      setPhase('error');
       return;
     }
-    setIsApplying(true);
+
+    const selectedOp = options.find((o) => o.id === selectedOperationId);
+    const selectedPreset = presets.find((p) => p.id === selectedPresetId);
+
+    // Resolve the dominant operation type for honest stage text + summary.
+    let activeType: EnhancementOptionType | null = null;
+    if (showScenes && selectedSceneId) {
+      activeType = 'background_replace';
+    } else if (selectedOp) {
+      activeType = selectedOp.type;
+    } else if (selectedPreset) {
+      const firstOp = options.find((o) => o.id === selectedPreset.operationIds[0]);
+      activeType = firstOp?.type ?? null;
+    }
+    setActiveOperationType(activeType);
+
+    setPhase('submitting');
     setError(null);
+    setStageText(getStageText(activeType));
+    cancelledRef.current = false;
+
     try {
       let res: EnhancementResult;
       if (selectedPresetId) {
         res = await applyPreset(imageUri, selectedPresetId);
-      } else if (showBackgroundPicker && selectedSceneId) {
+      } else if (showScenes && selectedSceneId) {
         res = await replaceBackground(imageUri, selectedSceneId);
-      } else if (selectedOptionId) {
-        res = await applyEnhancement(imageUri, selectedOptionId);
+      } else if (selectedOperationId) {
+        res = await applyEnhancement(imageUri, selectedOperationId);
       } else {
-        setIsApplying(false);
+        setPhase('available');
         return;
       }
+
+      // If the user cancelled during submitting, abandon the candidate and
+      // ask the backend to cancel the now-known job id.
+      if (cancelledRef.current) {
+        cancelEnhancementJob(res.jobId).catch(() => {});
+        setPhase('available');
+        return;
+      }
+
       setResult(res);
-      setShowAfter(true);
-      setPhase('applied');
+      updateSliderPosition(50);
+      setIsHolding(false);
+      setPhase('candidate_ready');
       haptic.patterns.save();
+      AccessibilityInfo.announceForAccessibility(
+        `Enhancement complete: ${res.appliedOperationLabel}. ${getOperationSummary(activeType)} Use the slider or buttons to compare before and after.`,
+      );
     } catch (e: unknown) {
+      if (e instanceof EnhancementCapabilityError) {
+        setError('AI photo enhancement is not available right now.');
+        setPhase('unavailable');
+        haptic.error();
+        return;
+      }
+      // Network drop during submit → outcome_unknown (not error, not success)
       const msg =
         typeof e === 'object' && e && 'message' in e
           ? (e as Error).message
-          : 'Enhancement failed. Try again.';
-      setError(msg);
-      setPhase('error');
+          : 'Enhancement failed.';
+      // If the error looks like a network issue, show outcome_unknown
+      if (msg.includes('network') || msg.includes('fetch') || msg.includes('timeout')) {
+        setError('The connection dropped. The enhancement may still be processing.');
+        setPhase('outcome_unknown');
+      } else {
+        setError(msg);
+        setPhase('error');
+      }
       haptic.error();
-    } finally {
-      setIsApplying(false);
     }
-  }, [imageUri, isOffline, selectedOptionId, selectedPresetId, selectedSceneId, showBackgroundPicker, haptic]);
+  }, [imageUri, isOffline, options, presets, selectedOperationId, selectedPresetId, selectedSceneId, showScenes, haptic, updateSliderPosition]);
 
-  // -- Revert --------------------------------------------------------------
+  // -- Cancel an in-flight submit (local abandon; server cancel on result) -
+  const handleCancelSubmit = useCallback(() => {
+    cancelledRef.current = true;
+    haptic.light();
+    setPhase('available');
+  }, [haptic]);
+
+  // -- Revert ---------------------------------------------------------------
   const handleRevert = useCallback(async () => {
     if (!result) return;
     haptic.patterns.toggle();
-    setShowAfter(false);
+    await revertEnhancement(result.id);
     setResult(null);
-    setPhase('populated');
-  }, [result, haptic]);
+    updateSliderPosition(50);
+    setIsHolding(false);
+    setPhase('available');
+  }, [result, haptic, updateSliderPosition]);
 
-  // -- Save (return to listing flow) ---------------------------------------
-  const handleSave = useCallback(() => {
-    haptic.light();
-    // In demo mode, no real enhancement was applied — we return the original
-    // URI truthfully. The listing flow continues with the original image.
+  // -- Use Photo (save enhanced result to listing flow) ---------------------
+  const handleUsePhoto = useCallback(() => {
+    if (!result) return;
+    haptic.patterns.save();
+    // Hand off the result to the caller via the module-level store.
+    // The parent screen consumes it in useFocusEffect when it regains focus.
+    setEnhancementResult({
+      originalUri: result.originalUri,
+      enhancedUri: result.enhancedUri,
+      appliedOperationLabel: result.appliedOperationLabel,
+    });
     navigation.goBack();
-  }, [navigation]);
+  }, [result, haptic, navigation]);
 
-  // -- Comparison toggle ---------------------------------------------------
-  const handleToggleCompare = useCallback(() => {
-    haptic.light();
-    setShowAfter((prev) => !prev);
+  // -- Before/after comparison (press-and-hold secondary gesture) -----------
+  // Hold = reveal full Before; release = return to slider position.
+  const handlePressInCompare = useCallback(() => {
+    if (phase !== 'candidate_ready' || !result) return;
+    holdTimerRef.current = setTimeout(() => {
+      setIsHolding(true);
+      haptic.light();
+    }, 150);
+  }, [phase, result, haptic]);
+
+  const handlePressOutCompare = useCallback(() => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    setIsHolding(false);
   }, []);
+
+  const handleToggleCompare = useCallback(() => {
+    if (phase !== 'candidate_ready' || !result) return;
+    haptic.light();
+    updateSliderPosition(sliderPosRef.current >= 50 ? 0 : 100);
+  }, [phase, result, haptic, updateSliderPosition]);
+
+  useEffect(() => {
+    return () => {
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    };
+  }, []);
+
+  // -- Retry ----------------------------------------------------------------
+  const handleRetry = useCallback(() => {
+    invalidateEnhancementCapabilityCache();
+    setError(null);
+    setResult(null);
+    setSelectedOperationId(null);
+    setSelectedPresetId(null);
+    setSelectedSceneId(null);
+    setShowScenes(false);
+    updateSliderPosition(50);
+    setIsHolding(false);
+    checkCapability();
+  }, [checkCapability, updateSliderPosition]);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const selectedOption = useMemo(
-    () => options.find((o) => o.id === selectedOptionId) ?? null,
-    [options, selectedOptionId],
-  );
   const selectedPreset = useMemo(
     () => presets.find((p) => p.id === selectedPresetId) ?? null,
     [presets, selectedPresetId],
   );
-  const selectedScene = useMemo(
-    () => scenes.find((s) => s.id === selectedSceneId) ?? null,
-    [scenes, selectedSceneId],
-  );
 
-  const canApply = (selectedOptionId || selectedPresetId) && phase === 'populated';
-  const canRevert = result !== null && phase === 'applied';
+  const canApply = (selectedOperationId || selectedPresetId) && phase === 'available';
 
-  // The displayed image — in demo mode, before and after are the same image.
-  const displayUri = imageUri;
+  // Reveal math: sliderPosition = % After visible. Before sits on the left,
+  // clipped to (100 - sliderPosition)%. Holding overrides to full Before.
+  const beforePct = isHolding ? 100 : 100 - sliderPosition;
+  const afterPct = isHolding ? 0 : sliderPosition;
+  const descriptiveText = `${beforePct}% before, ${afterPct}% after`;
+  const isShowingAfter = sliderPosition >= 50;
 
-  // -- Render --------------------------------------------------------------
-  if (phase === 'empty' || !imageUri) {
+  // -- Empty state (no image URI) -------------------------------------------
+  if (!imageUri) {
     return (
-      <View style={[styles.root, styles.centerContent, { backgroundColor: colors.background }]}>
-        <Header
-          title="Enhance Photo"
-          onBack={() => navigation.goBack()}
-          colors={colors}
-          styles={styles}
-        />
-        <CanonicalEmptyState
-          icon="image-outline"
-          title="Select an image to enhance"
-          subtitle="Choose a photo from the listing flow to access AI enhancement tools."
-        />
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <Header title="Enhance Photo" onBack={() => navigation.goBack()} colors={colors} styles={styles} />
+        <View style={styles.emptyWrap}>
+          <Ionicons name="image-outline" size={40} color={colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+            No photo selected
+          </Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+            Choose a photo from the listing flow to enhance.
+          </Text>
+        </View>
       </View>
     );
   }
 
+  // -- Render ---------------------------------------------------------------
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <Header
-        title="Enhance Photo"
-        onBack={() => navigation.goBack()}
-        colors={colors}
-        styles={styles}
-      />
+      <Header title="Enhance Photo" onBack={() => navigation.goBack()} colors={colors} styles={styles} />
 
-      {isOffline && <OfflineBanner colors={colors} styles={styles} />}
-
-      {/* Demo mode banner — truthful labelling per AGENTS.md §11 */}
-      {AI_PHOTO_DEMO_MODE && <DemoBanner colors={colors} styles={styles} />}
+      {isOffline && phase !== 'candidate_ready' && (
+        <OfflineNotice colors={colors} styles={styles} />
+      )}
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 180 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.textSecondary}
-          />
-        }
       >
-        {/* -- Image preview (top ~50% of screen) -- */}
-        <View style={styles.previewWrap}>
-          <View
-            style={styles.previewFrame}
+        {/* ── Media stage — the dominant object ── */}
+        <View
+          style={styles.mediaStage}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width;
+            stageWidthRef.current = w;
+            setStageWidth(w);
+          }}
+        >
+          <Pressable
+            onPressIn={handlePressInCompare}
+            onPressOut={handlePressOutCompare}
+            delayLongPress={150}
+            accessibilityRole="image"
+            accessibilityLabel={
+              result
+                ? `Comparison photo. ${descriptiveText}. Drag the slider to compare before and after.`
+                : 'Photo preview'
+            }
           >
+            {/* After image — base layer (full) */}
             <Image
-              source={{ uri: displayUri }}
-              style={styles.previewImage}
+              source={{ uri: result?.enhancedUri ?? imageUri }}
+              style={styles.mediaImage}
               resizeMode="cover"
-              accessible
-              accessibilityLabel={
-                showAfter && result
-                  ? 'Enhanced photo preview (demo — no changes applied)'
-                  : 'Original photo preview'
-              }
             />
-            {/* Before/After label overlay */}
-            <View style={styles.previewLabelRow}>
-              <View
-                style={[
-                  styles.previewLabel,
-                  {
-                    backgroundColor: showAfter && result ? colors.surfaceAlt : colors.brand,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.previewLabelText,
-                    { color: showAfter && result ? colors.textPrimary : colors.textInverse },
-                  ]}
-                >
-                  {showAfter && result ? 'After (Demo)' : 'Before'}
+            {/* Before image — clipped overlay on the left portion */}
+            {result && (
+              <View style={[styles.beforeOverlay, { width: `${beforePct}%` }]}>
+                <Image
+                  source={{ uri: result.originalUri }}
+                  style={[styles.mediaImage, { width: stageWidth }]}
+                  resizeMode="cover"
+                />
+              </View>
+            )}
+            {/* Before / After labels */}
+            {result && (
+              <View style={styles.mediaLabelRow}>
+                <View style={[styles.mediaLabel, { backgroundColor: colors.surfaceAlt }]}>
+                  <Text style={[styles.mediaLabelText, { color: colors.textPrimary }]}>
+                    Before
+                  </Text>
+                </View>
+                <View style={[styles.mediaLabel, { backgroundColor: colors.brand }]}>
+                  <Text style={[styles.mediaLabelText, { color: colors.textInverse }]}>
+                    After
+                  </Text>
+                </View>
+              </View>
+            )}
+          </Pressable>
+
+          {/* Draggable slider handle — vertical 2pt line with a 44pt target */}
+          {result && (
+            <View
+              style={[styles.sliderHandle, { left: `${sliderPosition}%` }]}
+              {...panResponder.panHandlers}
+              accessibilityRole="adjustable"
+              accessibilityLabel="Before and after comparison slider"
+              accessibilityValue={{ min: 0, max: 100, now: sliderPosition, text: descriptiveText }}
+              accessibilityActions={[
+                { name: 'increment', label: 'Show more after' },
+                { name: 'decrement', label: 'Show more before' },
+              ]}
+              onAccessibilityAction={(e) => {
+                if (e.nativeEvent.actionName === 'increment') {
+                  updateSliderPosition(sliderPosRef.current + 10);
+                } else if (e.nativeEvent.actionName === 'decrement') {
+                  updateSliderPosition(sliderPosRef.current - 10);
+                }
+              }}
+            >
+              <View style={styles.sliderLine} />
+              <View style={[styles.sliderKnob, { backgroundColor: colors.brand }]}>
+                <Ionicons name="swap-horizontal" size={16} color={colors.textInverse} />
+              </View>
+            </View>
+          )}
+
+          {/* Submitting overlay — honest stage text + spinner, no scanline */}
+          {phase === 'submitting' && (
+            <View style={[styles.submittingOverlay, { backgroundColor: colors.overlay }]}>
+              <View style={styles.submittingRow}>
+                <ActivityIndicator size="small" color={colors.textInverse} />
+                <Text style={[styles.submittingText, { color: colors.textInverse }]}>
+                  {stageText}
                 </Text>
               </View>
-              {result && (
-                <Pressable
-                  style={[styles.compareToggle, { borderColor: colors.border }]}
-                  onPress={handleToggleCompare}
-                  accessibilityRole="button"
-                  accessibilityLabel="Toggle before and after comparison"
-                  accessibilityHint="Switches between the original and enhanced preview"
-                >
-                  <Ionicons
-                    name={showAfter ? 'eye-off-outline' : 'eye-outline'}
-                    size={16}
-                    color={colors.textPrimary}
-                  />
-                  <Text style={[styles.compareToggleText, { color: colors.textPrimary }]}>
-                    {showAfter ? 'Show Before' : 'Show After'}
-                  </Text>
-                </Pressable>
-              )}
+              <Text style={[styles.submittingHint, { color: colors.scrimTextSecondary }]}>
+                Keep the app open
+              </Text>
+              <Pressable
+                onPress={handleCancelSubmit}
+                hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel enhancement"
+              >
+                <Text style={[styles.cancelLink, { color: colors.textInverse }]}>
+                  Cancel
+                </Text>
+              </Pressable>
             </View>
-          </View>
-
-          {/* Processing overlay */}
-          {isApplying && (
-            <ProcessingOverlay colors={colors} styles={styles} reducedMotion={reducedMotion} />
           )}
         </View>
 
-        {/* -- Error state -- */}
-        {phase === 'error' && error && (
-          <ErrorBanner
-            message={error}
-            onRetry={() => {
-              setError(null);
-              loadAll();
-            }}
-            onDismiss={() => {
-              setError(null);
-              setPhase('populated');
-            }}
-            colors={colors}
-            styles={styles}
-          />
-        )}
-
-        {/* -- Loading skeleton -- */}
-        {phase === 'loading' && <LoadingSkeleton colors={colors} styles={styles} />}
-
-        {/* -- Enhancement options rail -- */}
-        {(phase === 'populated' || phase === 'applied') && options.length > 0 && (
-          <View>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-              Enhancements
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.optionsRail}
-            >
-              {options.map((option) => {
-              const isSelected = selectedOptionId === option.id;
+        {/* ── Quick-position buttons (WCAG §2.5.7 non-drag alternative) ── */}
+        {phase === 'candidate_ready' && result && (
+          <View style={styles.quickPosRow}>
+            {([
+              { label: 'Before', pos: 0, hint: 'Show the original photo' },
+              { label: 'Split', pos: 50, hint: 'Show a 50/50 split' },
+              { label: 'After', pos: 100, hint: 'Show the enhanced photo' },
+            ] as const).map(({ label, pos, hint }) => {
+              const isSelected = sliderPosition === pos;
               return (
                 <Pressable
-                  key={option.id}
-                  onPress={() => handleSelectOption(option)}
+                  key={label}
+                  onPress={() => { haptic.light(); updateSliderPosition(pos); }}
+                  style={styles.quickPosBtn}
                   accessibilityRole="button"
-                  accessibilityLabel={option.label}
-                  accessibilityHint={option.description}
+                  accessibilityLabel={`${label} view`}
+                  accessibilityHint={hint}
                   accessibilityState={{ selected: isSelected }}
                 >
-                  <View
-                    style={[
-                      styles.optionChip,
-                      {
-                        backgroundColor: isSelected ? colors.brand : colors.surface,
-                        borderColor: isSelected ? colors.brand : colors.border,
-                      },
-                    ]}
+                  <Text
+                    style={[styles.quickPosText, { color: isSelected ? colors.brand : colors.textSecondary }]}
                   >
-                    <Ionicons
-                      name={option.icon as any}
-                      size={22}
-                      color={isSelected ? colors.textInverse : colors.textPrimary}
-                    />
-                    <Text
-                      style={[
-                        styles.optionLabel,
-                        { color: isSelected ? colors.textInverse : colors.textPrimary },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {option.label}
-                    </Text>
-                  </View>
+                    {label}
+                  </Text>
                 </Pressable>
               );
             })}
+          </View>
+        )}
+
+        {/* ── Checking state ── */}
+        {phase === 'checking' && (
+          <View style={styles.stateBlock}>
+            <Text style={[styles.stateTitle, { color: colors.textSecondary }]}>Checking availability…</Text>
+          </View>
+        )}
+
+        {/* ── Unavailable state — honest, fail-closed ── */}
+        {phase === 'unavailable' && (
+          <View style={styles.stateBlock}>
+            <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Not yet available</Text>
+            <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
+              AI photo enhancement is being prepared. Your original photo is unchanged — you can still use it in your listing.
+            </Text>
+            <RetryLink label="Check again" onPress={handleRetry} colors={colors} styles={styles} />
+          </View>
+        )}
+
+        {/* ── Error state ── */}
+        {phase === 'error' && error && (
+          <View style={styles.stateBlock}>
+            <Text style={[styles.stateTitle, { color: colors.danger }]}>Something went wrong</Text>
+            <Text style={[styles.stateBody, { color: colors.textSecondary }]}>{error}</Text>
+            <RetryLink label="Try again" onPress={handleRetry} colors={colors} styles={styles} />
+          </View>
+        )}
+
+        {/* ── Outcome unknown — network dropped during submit ── */}
+        {phase === 'outcome_unknown' && (
+          <View style={styles.stateBlock}>
+            <Ionicons name="help-circle-outline" size={24} color={colors.warning} />
+            <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Check result</Text>
+            <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
+              {error ?? 'The connection dropped during enhancement. The job may still be processing.'}
+            </Text>
+            <View style={styles.unknownActions}>
+              <RetryLink label="Retry safely" onPress={handleRetry} colors={colors} styles={styles} />
+            </View>
+          </View>
+        )}
+
+        {/* ── Tool strip — operations (only when available) ── */}
+        {phase === 'available' && options.length > 0 && (
+          <View style={styles.toolStrip}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolStripContent}>
+              {options.map((op) => {
+                const isSelected = selectedOperationId === op.id;
+                return (
+                  <Pressable
+                    key={op.id}
+                    onPress={() => handleSelectOperation(op)}
+                    accessibilityRole="button"
+                    accessibilityLabel={op.label}
+                    accessibilityHint={op.description}
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <View style={[styles.toolChip, {
+                      backgroundColor: isSelected ? colors.brand : 'transparent',
+                      borderColor: isSelected ? colors.brand : colors.borderSubtle,
+                    }]}>
+                      <Text style={[styles.toolChipText, { color: isSelected ? colors.textInverse : colors.textPrimary }]} numberOfLines={1}>
+                        {op.label}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
           </View>
         )}
 
-        {/* -- Presets section -- */}
-        {(phase === 'populated' || phase === 'applied') && presets.length > 0 && (
-          <View
-            style={styles.presetsSection}
-          >
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-              Presets
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.presetsRail}
-            >
+        {/* ── Presets — contextual, not a competing rail ── */}
+        {phase === 'available' && presets.length > 0 && (
+          <View style={styles.presetsRow}>
+            <Text style={[styles.presetsLabel, { color: colors.textMuted }]}>Presets</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetsContent}>
               {presets.map((preset) => {
                 const isSelected = selectedPresetId === preset.id;
                 return (
@@ -436,22 +656,11 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                     accessibilityHint={preset.description}
                     accessibilityState={{ selected: isSelected }}
                   >
-                    <View
-                      style={[
-                        styles.presetChip,
-                        {
-                          backgroundColor: isSelected ? colors.brand : colors.surface,
-                          borderColor: isSelected ? colors.brand : colors.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.presetLabel,
-                          { color: isSelected ? colors.textInverse : colors.textPrimary },
-                        ]}
-                        numberOfLines={1}
-                      >
+                    <View style={[styles.presetChip, {
+                      backgroundColor: isSelected ? colors.brandSubtle : 'transparent',
+                      borderColor: isSelected ? colors.brand : colors.borderSubtle,
+                    }]}>
+                      <Text style={[styles.presetChipText, { color: isSelected ? colors.brand : colors.textSecondary }]} numberOfLines={1}>
                         {preset.label}
                       </Text>
                     </View>
@@ -467,15 +676,11 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
           </View>
         )}
 
-        {/* -- Background scene picker -- */}
-        {showBackgroundPicker && scenes.length > 0 && (phase === 'populated' || phase === 'applied') && (
-          <View
-            style={styles.scenePickerSection}
-          >
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-              Background Scene
-            </Text>
-            <View style={styles.sceneGrid}>
+        {/* ── Scene picker — only when background replace is selected ── */}
+        {showScenes && phase === 'available' && scenes.length > 0 && (
+          <View style={styles.sceneSection}>
+            <Text style={[styles.sceneLabel, { color: colors.textMuted }]}>Background</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sceneContent}>
               {scenes.map((scene) => {
                 const isSelected = selectedSceneId === scene.id;
                 return (
@@ -483,137 +688,121 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                     key={scene.id}
                     onPress={() => handleSelectScene(scene)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Background scene: ${scene.label}`}
+                    accessibilityLabel={`Background: ${scene.label}`}
                     accessibilityHint={`Category: ${scene.category}`}
                     accessibilityState={{ selected: isSelected }}
                   >
-                    <View
-                      style={[
-                        styles.sceneTile,
-                        {
-                          borderColor: isSelected ? colors.brand : colors.border,
-                          borderWidth: isSelected ? Stroke.emphasis : Stroke.standard,
-                        },
-                      ]}
-                    >
-                      <Image
-                        source={{ uri: scene.thumbnailUri }}
-                        style={styles.sceneThumb}
-                        resizeMode="cover"
-                      />
-                      <Text
-                        style={[
-                          styles.sceneLabel,
-                          { color: colors.textPrimary },
-                        ]}
-                        numberOfLines={1}
-                      >
+                    <View style={[styles.sceneChip, {
+                      backgroundColor: isSelected ? colors.brand : colors.surfaceAlt,
+                      borderColor: isSelected ? colors.brand : colors.borderSubtle,
+                    }]}>
+                      <Text style={[styles.sceneChipText, { color: isSelected ? colors.textInverse : colors.textPrimary }]} numberOfLines={1}>
                         {scene.label}
                       </Text>
                     </View>
                   </Pressable>
                 );
               })}
-            </View>
+            </ScrollView>
           </View>
         )}
 
-        {/* -- Applied result message (truthful demo) -- */}
-        {/* 15 = 8% opacity, 40 = 25% opacity (hex alpha suffix) */}
-        {phase === 'applied' && result && (
-          <View
-            style={[styles.appliedMessage, { backgroundColor: `${colors.warning}15`, borderColor: `${colors.warning}40` }]}
-          >
-            <Ionicons name="information-circle-outline" size={18} color={colors.warning} />
-            <Text style={[styles.appliedMessageText, { color: colors.textPrimary }]}>
-              {AI_PHOTO_DEMO_MODE
-                ? 'Demo: No changes were made to your image. Connect the AI service to enable real enhancement.'
-                : 'Enhancement applied. Compare, revert, or save.'}
+        {/* ── Candidate ready — comparison hint + verification + provenance ── */}
+        {phase === 'candidate_ready' && result && (
+          <View style={styles.candidateInfo}>
+            <View style={styles.compareHint}>
+              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} />
+              <Text style={[styles.compareHintText, { color: colors.textMuted }]}>
+                Drag the slider to compare · {result.appliedOperationLabel}
+              </Text>
+              <Pressable
+                onPress={handleToggleCompare}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={isShowingAfter ? 'Show original photo' : 'Show enhanced photo'}
+              >
+                <Text style={[styles.compareToggleLink, { color: colors.brand }]}>
+                  {isShowingAfter ? 'Show Before' : 'Show After'}
+                </Text>
+              </Pressable>
+            </View>
+            <Text style={[styles.verifyText, { color: colors.textMuted }]}>
+              Review the edges around the product to ensure nothing was cut off.
+            </Text>
+            <Text style={[styles.provenanceText, { color: colors.textMuted }]}>
+              {disclosureLabel(result.provenance.disclosureType)} · {result.provenance.provider}
             </Text>
           </View>
         )}
-
-        {/* -- AI trust signal (confidence + source + undo) -- */}
-        {phase === 'applied' && result && (
-          <AITrustSignal
-            confidence="low"
-            source={
-              AI_PHOTO_DEMO_MODE
-                ? 'Demo mode — no actual enhancement performed'
-                : 'Applied selected enhancement preset'
-            }
-            context={
-              AI_PHOTO_DEMO_MODE
-                ? 'Your original image is unchanged'
-                : 'Enhancement applied to the selected photo'
-            }
-            expandedReasoning={
-              AI_PHOTO_DEMO_MODE
-                ? 'This is a demo surface. The preview shows your original image unchanged. Connect the AI photo-enhancement service to perform real edits.'
-                : 'The selected enhancement options were applied to your photo. Use Revert to restore the original.'
-            }
-            isDemo={AI_PHOTO_DEMO_MODE}
-            onUndo={canRevert ? () => void handleRevert() : undefined}
-            style={styles.appliedTrustSignal}
-          />
-        )}
       </ScrollView>
 
-      {/* -- Sticky action footer -- */}
-      {(phase === 'populated' || phase === 'applied') && (
-        <View
-          style={[
-            styles.footer,
-            {
-              backgroundColor: colors.background,
-              borderTopColor: colors.border,
-              paddingBottom: insets.bottom + Space.sm,
-            },
-          ]}
-        >
-          <View style={styles.footerActionRow}>
+      {/* ── Footer ── */}
+      {(phase === 'available' || phase === 'candidate_ready') && (
+        <View style={[styles.footer, {
+          backgroundColor: colors.background,
+          borderTopColor: colors.borderSubtle,
+          paddingBottom: insets.bottom + Space.sm,
+        }]}>
+          {phase === 'candidate_ready' ? (
+            <View style={styles.footerRow}>
+              <AppButton
+                title="Revert"
+                onPress={handleRevert}
+                variant="ghost"
+                size="md"
+                accessibilityLabel="Revert enhancement"
+                accessibilityHint="Discards the enhanced result and returns to the original"
+                style={styles.footerSecondaryBtn}
+              />
+              <AppButton
+                title="Use Photo"
+                onPress={handleUsePhoto}
+                variant="primary"
+                size="md"
+                accessibilityLabel="Use enhanced photo"
+                accessibilityHint="Saves the enhanced photo and returns to the listing flow"
+                style={styles.footerPrimaryBtn}
+              />
+            </View>
+          ) : (
             <AppButton
-              title="Revert"
-              onPress={handleRevert}
-              disabled={!canRevert}
-              variant="secondary"
-              size="md"
-              accessibilityLabel="Revert enhancement"
-              accessibilityHint="Restores the original image"
-              hapticFeedback="light"
-              style={styles.footerSecondaryBtn}
-            />
-            <AppButton
-              title={AI_PHOTO_DEMO_MODE ? 'Coming Soon' : 'Apply'}
+              title="Generate Preview"
               onPress={handleApply}
-              disabled={AI_PHOTO_DEMO_MODE || !canApply}
-              loading={isApplying}
+              disabled={!canApply}
               variant="primary"
               size="md"
-              accessibilityLabel={
-                AI_PHOTO_DEMO_MODE ? 'AI enhancement coming soon' : 'Apply enhancement'
-              }
-              accessibilityHint={
-                AI_PHOTO_DEMO_MODE
-                  ? 'AI photo enhancement is not yet available'
-                  : 'Applies the selected enhancement to the photo'
-              }
-              icon={<Ionicons name="color-filter-outline" size={16} color={colors.textInverse} />}
-              style={styles.footerPrimaryBtn}
+              accessibilityLabel="Generate preview"
+              accessibilityHint="Applies the selected enhancement and shows a before/after preview"
+              style={styles.footerFullBtn}
             />
-          </View>
-          <AppButton
-            title="Save"
-            onPress={handleSave}
-            variant="ghost"
-            size="md"
-            accessibilityLabel="Save and return to listing"
-            accessibilityHint="Returns to the listing creation flow"
-            hapticFeedback="light"
-          />
+          )}
         </View>
       )}
     </View>
+  );
+}
+
+// ===========================================================================
+// Retry link — shared by unavailable / error / outcome_unknown states
+// ===========================================================================
+
+interface RetryLinkProps {
+  label: string;
+  onPress: () => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}
+
+function RetryLink({ label, onPress, colors, styles }: RetryLinkProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Text style={[styles.retryLink, { color: colors.brand }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -630,9 +819,9 @@ interface HeaderProps {
 
 function Header({ title, onBack, colors, styles }: HeaderProps) {
   return (
-    <View style={[styles.header, { borderBottomColor: colors.border }]}>
+    <View style={[styles.header, { borderBottomColor: colors.borderSubtle }]}>
       <AnimatedPressable
-        style={styles.iconBtn}
+        style={styles.headerBack}
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Go back"
@@ -642,155 +831,30 @@ function Header({ title, onBack, colors, styles }: HeaderProps) {
       >
         <Ionicons name="arrow-back" size={Control.icon} color={colors.textPrimary} />
       </AnimatedPressable>
-      <View style={styles.headerTitleWrap}>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-          {title}
-        </Text>
-      </View>
-      <View style={styles.iconBtnPlaceholder} />
-    </View>
-  );
-}
-
-// ===========================================================================
-// Demo banner — truthful labelling per AGENTS.md §11
-// ===========================================================================
-
-interface DemoBannerProps {
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}
-
-function DemoBanner({ colors, styles }: DemoBannerProps) {
-  // 15 = 8% opacity, 30 = 19% opacity (hex alpha suffix)
-  return (
-    <View style={[styles.demoBanner, { backgroundColor: `${colors.warning}15`, borderBottomColor: `${colors.warning}30` }]}>
-      <Ionicons name="flask-outline" size={16} color={colors.warning} />
-      <Text style={[styles.demoBannerText, { color: colors.textPrimary }]}>
-        Demo Mode — AI enhancement is not yet connected. This preview shows the planned capability.
+      <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+        {title}
       </Text>
+      <View style={styles.headerBack} />
     </View>
   );
 }
 
 // ===========================================================================
-// Offline banner
+// Offline notice
 // ===========================================================================
 
-interface OfflineBannerProps {
+interface OfflineNoticeProps {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }
 
-function OfflineBanner({ colors, styles }: OfflineBannerProps) {
+function OfflineNotice({ colors, styles }: OfflineNoticeProps) {
   return (
-    <View style={[styles.offlineBanner, { backgroundColor: `${colors.danger}10`, borderBottomColor: `${colors.danger}30` }]}>
+    <View style={[styles.offlineNotice, { backgroundColor: colors.dangerSubtle }]}>
       <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
-      <Text style={[styles.offlineBannerText, { color: colors.danger }]}>
-        You appear to be offline. Enhancement requires a connection.
+      <Text style={[styles.offlineNoticeText, { color: colors.danger }]}>
+        Offline — enhancement requires a connection
       </Text>
-    </View>
-  );
-}
-
-// ===========================================================================
-// Loading skeleton
-// ===========================================================================
-
-function LoadingSkeleton({ colors, styles }: { colors: ThemeColors; styles: ReturnType<typeof createStyles> }) {
-  return (
-    <View style={styles.skeletonWrap}>
-      {/* Options rail skeleton */}
-      <SkeletonLoader width={80} height={64} borderRadius={Radius.md} />
-      <SkeletonLoader width={80} height={64} borderRadius={Radius.md} />
-      <SkeletonLoader width={80} height={64} borderRadius={Radius.md} />
-      {/* Presets skeleton */}
-      <SkeletonLoader width={120} height={36} borderRadius={Radius.md} style={{ marginTop: Space.md }} />
-      <SkeletonLoader width={120} height={36} borderRadius={Radius.md} />
-    </View>
-  );
-}
-
-// ===========================================================================
-// Processing overlay
-// ===========================================================================
-
-interface ProcessingOverlayProps {
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-  reducedMotion: boolean;
-}
-
-function ProcessingOverlay({ colors, styles, reducedMotion }: ProcessingOverlayProps) {
-  const scanY = useSharedValue(0);
-
-  useEffect(() => {
-    if (reducedMotion) return;
-    scanY.value = withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) });
-  }, [reducedMotion, scanY]);
-
-  const scanStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: interpolate(scanY.value, [0, 1], [0, PREVIEW_HEIGHT - 4]),
-      },
-    ],
-  }));
-
-  return (
-    <View style={styles.processingOverlay}>
-      <View style={styles.processingContent}>
-        <ActivityIndicator size="large" color={colors.textInverse} />
-        <Text style={[styles.processingText, { color: colors.textInverse }]}>
-          Processing…
-        </Text>
-      </View>
-      {!reducedMotion && (
-        <Reanimated.View
-          style={[styles.scanLineOverlay, { backgroundColor: colors.textInverse }, scanStyle]}
-        />
-      )}
-    </View>
-  );
-}
-
-// ===========================================================================
-// Error banner
-// ===========================================================================
-
-interface ErrorBannerProps {
-  message: string;
-  onRetry: () => void;
-  onDismiss: () => void;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}
-
-function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBannerProps) {
-  return (
-    <View style={[styles.errorBanner, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
-      <View style={styles.errorHeader}>
-        <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
-        <Text style={[styles.errorText, { color: colors.danger }]} numberOfLines={3}>
-          {message}
-        </Text>
-        <Pressable
-          hitSlop={8}
-          onPress={onDismiss}
-          accessibilityRole="button"
-          accessibilityLabel="Dismiss error"
-        >
-          <Ionicons name="close" size={16} color={colors.textMuted} />
-        </Pressable>
-      </View>
-      <Pressable
-        style={[styles.errorRetryBtn, { borderColor: colors.danger }]}
-        onPress={onRetry}
-        accessibilityRole="button"
-        accessibilityLabel="Retry"
-      >
-        <Text style={[styles.errorRetryText, { color: colors.danger }]}>Retry</Text>
-      </Pressable>
     </View>
   );
 }
@@ -801,301 +865,156 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    root: {
-      flex: 1,
-    },
-    centerContent: {
-      justifyContent: 'center',
-    },
+    root: { flex: 1 },
     // Header
     header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
+      flexDirection: 'row', alignItems: 'center',
+      paddingHorizontal: Space.sm, paddingVertical: Space.sm,
+      borderBottomWidth: Stroke.hairline,
     },
-    iconBtn: {
-      width: Control.hit,
-      height: Control.hit,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    iconBtnPlaceholder: {
-      width: Control.hit,
-      height: Control.hit,
-    },
-    headerTitleWrap: {
-      flex: 1,
-      alignItems: 'center',
-      marginHorizontal: Space.sm,
+    headerBack: {
+      width: Control.hit, height: Control.hit,
+      justifyContent: 'center', alignItems: 'center',
     },
     headerTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
+      flex: 1, textAlign: 'center',
+      fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold,
+      letterSpacing: Type.subtitle.letterSpacing, marginHorizontal: Space.sm,
     },
-    // Demo banner
-    demoBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderBottomWidth: Stroke.standard,
+    // Offline notice
+    offlineNotice: {
+      flexDirection: 'row', alignItems: 'center', gap: Space.xs,
+      paddingHorizontal: Space.md, paddingVertical: Space.sm,
     },
-    demoBannerText: {
-      flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      lineHeight: Type.caption.lineHeight,
-    },
-    // Offline banner
-    offlineBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderBottomWidth: Stroke.standard,
-    },
-    offlineBannerText: {
-      flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-    },
+    offlineNoticeText: { flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
     // Scroll
-    scrollContent: {
-      paddingHorizontal: Space.md,
-      paddingTop: Space.md,
+    scrollContent: { paddingHorizontal: Space.md, paddingTop: Space.md },
+    // Empty state
+    emptyWrap: {
+      flex: 1, alignItems: 'center', justifyContent: 'center',
+      paddingHorizontal: Space.xl, gap: Space.sm,
     },
-    // Preview
-    previewWrap: {
-      marginBottom: Space.md,
+    emptyTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold },
+    emptySubtitle: { fontSize: Type.body.size, fontFamily: Typography.family.regular, textAlign: 'center' },
+    // Media stage — the dominant object
+    mediaStage: {
+      width: '100%', height: PREVIEW_HEIGHT, borderRadius: Radius.lg,
+      overflow: 'hidden', backgroundColor: colors.surfaceAlt,
     },
-    previewFrame: {
-      width: '100%',
-      height: PREVIEW_HEIGHT,
-      borderRadius: Radius.lg,
-      overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
+    mediaImage: { width: '100%', height: '100%' },
+    beforeOverlay: { position: 'absolute', top: 0, left: 0, bottom: 0, overflow: 'hidden' },
+    mediaLabelRow: {
+      position: 'absolute', top: Space.sm, left: Space.sm, right: Space.sm,
+      flexDirection: 'row', justifyContent: 'space-between',
     },
-    previewImage: {
-      width: '100%',
-      height: '100%',
-    },
-    previewLabelRow: {
-      position: 'absolute',
-      top: Space.sm,
-      left: Space.sm,
-      right: Space.sm,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    previewLabel: {
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-    },
-    previewLabelText: {
-      fontSize: Type.meta.size,
-      fontWeight: '700',
+    mediaLabel: { paddingHorizontal: Space.sm, paddingVertical: Space.xs, borderRadius: Radius.full },
+    mediaLabelText: {
+      fontSize: Type.meta.size, fontFamily: Typography.family.semibold,
       letterSpacing: Type.meta.letterSpacing,
     },
-    compareToggle: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-      borderWidth: Stroke.standard,
-      backgroundColor: `${colors.background}E6`,
+    // Draggable slider handle — 44pt transparent target, 2pt visible line
+    sliderHandle: {
+      position: 'absolute', top: 0, bottom: 0, width: Control.hit,
+      justifyContent: 'center', alignItems: 'center',
+      transform: [{ translateX: -Control.hit / 2 }],
     },
-    compareToggleText: {
-      fontSize: Type.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+    sliderLine: {
+      position: 'absolute', top: 0, bottom: 0, width: Stroke.emphasis,
+      backgroundColor: colors.textInverse,
     },
-    // Processing overlay
-    processingOverlay: {
-      ...StyleSheet.absoluteFill,
-      backgroundColor: colors.overlay,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderRadius: Radius.lg,
-      overflow: 'hidden',
+    sliderKnob: {
+      width: Control.chrome, height: Control.chrome, borderRadius: Radius.full,
+      justifyContent: 'center', alignItems: 'center',
     },
-    processingContent: {
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    processingText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
-    scanLineOverlay: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      height: Stroke.emphasis,
-      opacity: 0.6,
-    },
-    // Section label
-    sectionLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-      marginBottom: Space.sm,
-    },
-    // Options rail
-    optionsRail: {
-      gap: Space.sm,
-      paddingRight: Space.md,
-    },
-    optionChip: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.xs,
-      width: Space.xl + Control.hit,
+    // Quick-position buttons (Before / Split / After)
+    quickPosRow: { flexDirection: 'row', marginTop: Space.sm, gap: Space.sm },
+    quickPosBtn: {
+      flex: 1, minHeight: Control.hit, justifyContent: 'center', alignItems: 'center',
       paddingVertical: Space.sm,
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
     },
-    optionLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      textAlign: 'center',
+    quickPosText: { fontSize: Type.caption.size, fontFamily: Typography.family.semibold },
+    // Submitting overlay — honest stage text + spinner, no scanline
+    submittingOverlay: {
+      ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', gap: Space.xs,
     },
-    // Presets
-    presetsSection: {
-      marginTop: Space.lg,
+    submittingRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+    submittingText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold },
+    submittingHint: { fontSize: Type.caption.size, fontFamily: Typography.family.regular },
+    cancelLink: {
+      fontSize: Type.caption.size, fontFamily: Typography.family.semibold,
+      paddingVertical: Space.xs, marginTop: Space.xs,
     },
-    presetsRail: {
-      gap: Space.sm,
-      paddingRight: Space.md,
+    // State blocks (checking, unavailable, error, outcome_unknown)
+    stateBlock: { paddingTop: Space.lg, paddingHorizontal: Space.sm, gap: Space.sm },
+    stateTitle: {
+      fontSize: Type.itemTitle.size, fontFamily: Typography.family.semibold,
+      letterSpacing: Type.itemTitle.letterSpacing,
     },
+    stateBody: {
+      fontSize: Type.body.size, fontFamily: Typography.family.regular,
+      lineHeight: Type.body.lineHeight + 2,
+    },
+    retryLink: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, paddingVertical: Space.xs },
+    unknownActions: { flexDirection: 'row', gap: Space.lg },
+    // Tool strip — flat, hairline-separated, not carded
+    toolStrip: {
+      marginTop: Space.lg, paddingVertical: Space.sm,
+      borderTopWidth: Stroke.hairline, borderTopColor: colors.borderSubtle,
+    },
+    toolStripContent: { gap: Space.sm, paddingRight: Space.md },
+    toolChip: {
+      paddingHorizontal: Space.md, paddingVertical: Space.sm + 2,
+      borderRadius: Radius.md, borderWidth: Stroke.standard,
+    },
+    toolChipText: { fontSize: Type.body.size, fontFamily: Typography.family.medium },
+    // Presets — contextual, not a competing rail
+    presetsRow: { marginTop: Space.md, gap: Space.xs },
+    presetsLabel: {
+      fontSize: Type.meta.size, fontFamily: Typography.family.medium,
+      letterSpacing: Type.meta.letterSpacing, textTransform: 'uppercase',
+    },
+    presetsContent: { gap: Space.sm, paddingRight: Space.md, paddingVertical: Space.xs },
     presetChip: {
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm + 2,
-      borderRadius: Radius.full,
-      borderWidth: Stroke.standard,
+      paddingHorizontal: Space.md, paddingVertical: Space.sm,
+      borderRadius: Radius.full, borderWidth: Stroke.standard,
     },
-    presetLabel: {
-      fontSize: Type.body.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+    presetChipText: { fontSize: Type.caption.size, fontFamily: Typography.family.medium },
     presetDescription: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      marginTop: Space.sm,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: Type.caption.size, fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight + 2, paddingTop: Space.xs,
     },
-    // Scene picker
-    scenePickerSection: {
-      marginTop: Space.lg,
-    },
-    sceneGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.sm,
-    },
-    sceneTile: {
-      width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
-      borderRadius: Radius.lg,
-      overflow: 'hidden',
-      borderWidth: Stroke.standard,
-    },
-    sceneThumb: {
-      width: '100%',
-      height: Space.xxl + Space.xxl + Space.xs,
-      backgroundColor: colors.surfaceAlt,
-    },
+    // Scene picker — contextual expansion
+    sceneSection: { marginTop: Space.md, gap: Space.xs },
     sceneLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      paddingVertical: Space.xs,
-      paddingHorizontal: Space.sm,
+      fontSize: Type.meta.size, fontFamily: Typography.family.medium,
+      letterSpacing: Type.meta.letterSpacing, textTransform: 'uppercase',
     },
-    // Applied message
-    appliedMessage: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: Space.xs,
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
-      padding: Space.sm + 2,
-      marginTop: Space.lg,
+    sceneContent: { gap: Space.sm, paddingRight: Space.md, paddingVertical: Space.xs },
+    sceneChip: {
+      paddingHorizontal: Space.md, paddingVertical: Space.sm,
+      borderRadius: Radius.md, borderWidth: Stroke.standard,
     },
-    appliedMessageText: {
-      flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      lineHeight: Type.caption.lineHeight,
+    sceneChipText: { fontSize: Type.caption.size, fontFamily: Typography.family.medium },
+    // Candidate info (candidate_ready)
+    candidateInfo: { paddingTop: Space.md, gap: Space.xs },
+    compareHint: {
+      flexDirection: 'row', alignItems: 'center', gap: Space.xs, flexWrap: 'wrap',
     },
-    appliedTrustSignal: {
-      marginTop: Space.sm,
+    compareHintText: { flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.regular },
+    compareToggleLink: { fontSize: Type.caption.size, fontFamily: Typography.family.semibold },
+    verifyText: {
+      fontSize: Type.caption.size, fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight + 2,
     },
-    // Skeleton
-    skeletonWrap: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.sm,
-      marginTop: Space.md,
-    },
-    skeletonBlock: {
-      borderRadius: Radius.md,
-    },
-    // Error banner
-    errorBanner: {
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
-      padding: Space.sm + 2,
-      marginBottom: Space.md,
-    },
-    errorHeader: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: Space.xs,
-    },
-    errorText: {
-      flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
-    },
-    errorRetryBtn: {
-      alignSelf: 'flex-start',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.sm,
-      borderWidth: Stroke.standard,
-      marginTop: Space.xs,
-    },
-    errorRetryText: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
+    provenanceText: {
+      fontSize: Type.meta.size, fontFamily: Typography.family.medium,
+      letterSpacing: Type.meta.letterSpacing,
     },
     // Footer
-    footer: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-      gap: Space.xs,
-    },
-    footerActionRow: {
-      flexDirection: 'row',
-      gap: Space.sm,
-    },
-    footerPrimaryBtn: {
-      flex: 1,
-    },
-    footerSecondaryBtn: {
-      flex: 0,
-      minWidth: Space.xxl + Space.xxl + Space.xs,
-    },
+    footer: { borderTopWidth: Stroke.hairline, paddingHorizontal: Space.md, paddingTop: Space.sm },
+    footerRow: { flexDirection: 'row', gap: Space.sm },
+    footerPrimaryBtn: { flex: 1 },
+    footerSecondaryBtn: { flex: 0, minWidth: 100 },
+    footerFullBtn: { width: '100%' },
   });
 }

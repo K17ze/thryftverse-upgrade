@@ -39,6 +39,8 @@ import {
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ImportedFieldDiff } from '../components/catalogImport/ImportedFieldDiff';
 import { ImportIssueNavigator } from '../components/catalogImport/ImportIssueNavigator';
+import { ExtractionCandidateRow } from '../components/catalogImport/ExtractionCandidateRow';
+import { ExtractionStatusBanner } from '../components/catalogImport/ExtractionStatusBanner';
 import {
   fetchImportItem,
   patchImportItem,
@@ -47,7 +49,9 @@ import {
   type ImportMediaDTO,
   type BlockingIssue,
   type SellerDecision,
+  type FieldCandidateDTO,
 } from '../services/catalogImportApi';
+import { useExtractionCandidates } from '../hooks/useExtractionCandidates';
 import type { CatalogImportStackParamList } from './CatalogImportStartScreen';
 
 type Nav = NativeStackNavigationProp<CatalogImportStackParamList, 'CatalogImportItem'>;
@@ -133,9 +137,20 @@ export default function CatalogImportItemScreen() {
   const [patching, setPatching] = useState(false);
   const [issueIndex, setIssueIndex] = useState(0);
 
-  // Inline edit modal state
-  const [editing, setEditing] = useState<{ fieldKey: string; label: string; current: string } | null>(null);
+  // Inline edit modal state. When fromExtraction is set, the edit modal
+  // was opened from an extraction candidate — saving routes through the
+  // extraction decision path ('edited'), not the normal patch endpoint.
+  const [editing, setEditing] = useState<{
+    fieldKey: string;
+    label: string;
+    current: string;
+    fromExtraction?: { candidateId: string };
+  } | null>(null);
   const [draftValue, setDraftValue] = useState('');
+
+  // Extraction intelligence — advisory candidates from the item's photo.
+  // Not auto-triggered; the seller explicitly requests extraction.
+  const extraction = useExtractionCandidates(item?.id ?? null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -228,16 +243,66 @@ export default function CatalogImportItemScreen() {
 
   const handleSaveEdit = useCallback(() => {
     if (!editing) return;
-    const { fieldKey, current } = editing;
+    const { fieldKey, current, fromExtraction } = editing;
     const next = draftValue.trim();
     if (next === current) {
       handleCancelEdit();
       return;
     }
-    const fieldsPatch: Record<string, unknown> = { [fieldKey]: next };
-    void applyPatch({ fields: fieldsPatch });
+    if (fromExtraction && item) {
+      // The edit modal was opened from an extraction candidate. Route the
+      // save through the extraction decision path as 'edited' so the
+      // decision is recorded against the candidate with provenance.
+      void extraction
+        .decide(fieldKey, 'edited', item.fieldRevision, next, fromExtraction.candidateId)
+        .then(() => {
+          // Reload the item to get the fresh field_revision — the
+          // extraction decision bumped it. Without this, the next
+          // decision would send a stale revision and fail with 409.
+          if (isMountedRef.current) void load();
+        });
+    } else {
+      const fieldsPatch: Record<string, unknown> = { [fieldKey]: next };
+      void applyPatch({ fields: fieldsPatch });
+    }
     handleCancelEdit();
-  }, [editing, draftValue, applyPatch, handleCancelEdit]);
+  }, [editing, draftValue, applyPatch, handleCancelEdit, item, extraction, load]);
+
+  // ── Extraction decision handlers ───────────────────────────────────────
+  const handleExtractionDecide = useCallback(
+    (fieldName: string, decision: 'accepted' | 'rejected' | 'edited', candidateId: string, value: unknown) => {
+      if (!item) return;
+      void extraction
+        .decide(fieldName, decision, item.fieldRevision, value, candidateId)
+        .then(() => {
+          // Reload the item to get the fresh field_revision after an
+          // accepted/edited decision (which bumps the revision).
+          if (isMountedRef.current) void load();
+        });
+    },
+    [item, extraction, load],
+  );
+
+  const handleExtractionEdit = useCallback(
+    (fieldName: string, label: string, candidateId: string, currentValue: string) => {
+      // Open the edit modal pre-filled with the candidate value. The
+      // fromExtraction flag routes the save through the extraction decision
+      // path as 'edited', preserving the provenance chain.
+      setEditing({ fieldKey: fieldName, label, current: currentValue, fromExtraction: { candidateId } });
+      setDraftValue(currentValue);
+    },
+    [],
+  );
+
+  const handleExtractionTrigger = useCallback(() => {
+    void extraction.triggerExtraction();
+  }, [extraction]);
+
+  const handleShowEvidence = useCallback((_candidate: FieldCandidateDTO) => {
+    // Evidence sheet opens on demand — not implemented in this pass.
+    // The candidate row shows an info icon when evidence exists; tapping it
+    // would open a bottom sheet with OCR regions, barcode rects, etc.
+  }, []);
 
   const handleInclude = useCallback(() => {
     if (sellerDecision === 'selected') return;
@@ -354,6 +419,25 @@ export default function CatalogImportItemScreen() {
           )}
         </ScrollView>
 
+        {/* ── Extraction status — honest state, not auto-triggered ── */}
+        <ExtractionStatusBanner
+          run={extraction.run}
+          loading={extraction.loading}
+          triggering={extraction.triggering}
+          isRunning={extraction.isRunning}
+          onTrigger={handleExtractionTrigger}
+        />
+
+        {/* ── Extraction error — compact inline, no toast ── */}
+        {extraction.error ? (
+          <View style={styles.extractionErrorRow}>
+            <Ionicons name="alert-circle" size={14} color={colors.warning} />
+            <Text style={styles.extractionErrorText} numberOfLines={2}>
+              {extraction.error}
+            </Text>
+          </View>
+        ) : null}
+
         {/* ── Seller decision — two-state, no decorative chrome ── */}
         <View style={styles.decisionRow}>
           <DecisionButton
@@ -407,22 +491,38 @@ export default function CatalogImportItemScreen() {
         <View style={styles.diffList}>
           {FIELD_SPECS.map((spec) => {
             const field = fields[spec.key];
-            if (!field) return null;
-            const imported = stringify(field.sourceValue);
-            const resolved = stringify(field.value);
-            // Skip fields with neither a resolved nor imported value — they
-            // add noise without information.
-            if (imported === null && resolved === null) return null;
+            const imported = stringify(field?.sourceValue);
+            const resolved = stringify(field?.value);
+            const hasFieldData = imported !== null || resolved !== null;
+            // Extraction candidate for this field (top-ranked, non-abstained).
+            const candidate = extraction.topCandidateFor(spec.key);
+
+            // Skip fields with no data AND no candidate — they add noise.
+            if (!hasFieldData && !candidate) return null;
             return (
-              <ImportedFieldDiff
-                key={spec.key}
-                fieldName={spec.key}
-                label={spec.label}
-                importedValue={imported}
-                resolvedValue={resolved}
-                confidence={normaliseConfidence(field.confidence)}
-                onEdit={() => handleStartEdit(spec.key, spec.label)}
-              />
+              <React.Fragment key={spec.key}>
+                {hasFieldData ? (
+                  <ImportedFieldDiff
+                    fieldName={spec.key}
+                    label={spec.label}
+                    importedValue={imported}
+                    resolvedValue={resolved}
+                    confidence={normaliseConfidence(field?.confidence)}
+                    onEdit={() => handleStartEdit(spec.key, spec.label)}
+                  />
+                ) : null}
+                {candidate ? (
+                  <ExtractionCandidateRow
+                    candidate={candidate}
+                    fieldName={spec.key}
+                    label={spec.label}
+                    deciding={extraction.deciding}
+                    onDecide={handleExtractionDecide}
+                    onEdit={handleExtractionEdit}
+                    onShowEvidence={handleShowEvidence}
+                  />
+                ) : null}
+              </React.Fragment>
             );
           })}
         </View>
@@ -633,6 +733,21 @@ const createStyles = (colors: ThemeColors) =>
     mediaRail: {
       paddingVertical: Space.md,
       gap: Space.sm,
+    },
+    extractionErrorRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+    },
+    extractionErrorText: {
+      flex: 1,
+      fontFamily: FontFamily.regular,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      color: colors.warning,
     },
     thumb: {
       width: THUMB_SIZE,

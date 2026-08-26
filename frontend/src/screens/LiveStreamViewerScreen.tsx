@@ -41,11 +41,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Reanimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  runOnJS,
   FadeIn,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -73,10 +68,13 @@ import {
   subscribeToBids,
   subscribeToLotChanges,
   placeStreamBid,
+  checkBidStatus,
   buyNowDuringStream,
   sendStreamChatMessage,
   likeStream,
   fetchStreamChatHistory,
+  settleLot,
+  type LotStatus,
 } from '../services/liveShoppingApi';
 
 // ---------------------------------------------------------------------------
@@ -86,6 +84,56 @@ import {
 type LiveStreamViewerRoute = RouteProp<RootStackParamList, 'LiveStreamViewer'>;
 
 type ConnectionState = 'connecting' | 'live' | 'error' | 'ended' | 'offline';
+
+type BidOutcome = 'idle' | 'submitting' | 'accepted' | 'rejected' | 'unknown';
+
+function lotStatusLabel(status: LotStatus, currentPrice: number): string {
+  switch (status) {
+    case 'scheduled':
+      return 'Coming up';
+    case 'open':
+      return 'Open for bidding';
+    case 'closing':
+      return 'Closing soon!';
+    case 'sold':
+      return `Sold for \u00A3${currentPrice}`;
+    case 'passed':
+      return 'Passed (reserve not met)';
+    case 'cancelled':
+      return 'Cancelled';
+  }
+}
+
+function lotStatusBgColor(status: LotStatus, colors: ThemeColors): string {
+  switch (status) {
+    case 'scheduled':
+      return 'rgba(0,0,0,0.45)';
+    case 'open':
+      return colors.success;
+    case 'closing':
+      return colors.warning;
+    case 'sold':
+      return colors.success;
+    case 'passed':
+    case 'cancelled':
+      return 'rgba(0,0,0,0.45)';
+  }
+}
+
+function lotStatusTextColor(status: LotStatus, colors: ThemeColors): string {
+  switch (status) {
+    case 'scheduled':
+      return colors.scrimTextPrimary;
+    case 'open':
+    case 'sold':
+      return colors.textInverse;
+    case 'closing':
+      return colors.textInverse;
+    case 'passed':
+    case 'cancelled':
+      return colors.scrimTextSecondary;
+  }
+}
 
 export function LiveStreamViewerScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -113,34 +161,13 @@ export function LiveStreamViewerScreen() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [bidPending, setBidPending] = useState(false);
   const [buyNowPending, setBuyNowPending] = useState(false);
+  const [bidOutcome, setBidOutcome] = useState<BidOutcome>('idle');
+  const [lastBidId, setLastBidId] = useState<string | null>(null);
+  const [lastBidAmount, setLastBidAmount] = useState<number>(0);
+  const [bidCheckPending, setBidCheckPending] = useState(false);
   const [streamEndSummary, setStreamEndSummary] = useState<StreamEndEventPayload | null>(null);
   const [currentLot, setCurrentLot] = useState<LiveLot | null>(null);
-  const [floatingHearts, setFloatingHearts] = useState<{ id: number; x: number }[]>([]);
-
-  // ── Heart animation — floating heart on double-tap or like ──
-  const heartIdRef = useRef(0);
-  const heartScale = useSharedValue(0);
-  const heartOpacity = useSharedValue(0);
-
-  const triggerHeartAnimation = useCallback(() => {
-    if (reducedMotion) return;
-    const id = ++heartIdRef.current;
-    const xOffset = Math.random() * 60 - 30;
-    setFloatingHearts((prev) => [...prev.slice(-4), { id, x: xOffset }]);
-    heartScale.value = withSpring(1, { damping: 12, stiffness: 200 });
-    heartOpacity.value = withTiming(0, { duration: 1200 }, () => {
-      runOnJS(setFloatingHearts)((prev) => prev.filter((h) => h.id !== id));
-    });
-    setTimeout(() => {
-      heartScale.value = withTiming(0, { duration: 100 });
-      heartOpacity.value = 0;
-    }, 100);
-  }, [reducedMotion, heartScale, heartOpacity]);
-
-  const heartAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: heartScale.value }],
-    opacity: heartOpacity.value,
-  }));
+  const [settlePending, setSettlePending] = useState(false);
 
   const chatListRef = useRef<FlatList<LiveStreamChatMessage>>(null);
   const isDemo = stream?.isDemo ?? LIVE_SHOPPING_DEMO_MODE;
@@ -252,32 +279,66 @@ export function LiveStreamViewerScreen() {
     if (!currentLot) return;
     if (!requireAuth('place_bid')) return;
     setBidPending(true);
+    setBidOutcome('submitting');
     haptic.medium();
     try {
       const result = await placeStreamBid(sessionId, currentLot.id, amount);
-      if (result.success && result.lot) {
-        setCurrentLot({ ...result.lot });
+      setLastBidId(result.clientBidId);
+      setLastBidAmount(amount);
+      if (result.success) {
+        if (result.lot) {
+          setCurrentLot({ ...result.lot });
+        }
+        setBidOutcome('accepted');
+        haptic.success();
       } else {
+        setBidOutcome('rejected');
         show(result.error ?? 'Bid failed', 'error');
+        haptic.error();
       }
     } catch {
-      show('Could not place bid', 'error');
+      setBidOutcome('unknown');
+      haptic.warning();
     } finally {
       setBidPending(false);
       setBidSheetVisible(false);
     }
   }, [currentLot, haptic, sessionId, show]);
 
+  const handleCheckBidStatus = useCallback(async () => {
+    if (!currentLot || !lastBidId) return;
+    setBidCheckPending(true);
+    haptic.light();
+    try {
+      const result = await checkBidStatus(sessionId, currentLot.id, lastBidAmount, lastBidId);
+      if (result.status === 'accepted') {
+        if (result.lot) {
+          setCurrentLot({ ...result.lot });
+        }
+        setBidOutcome('accepted');
+        haptic.success();
+      } else if (result.status === 'rejected') {
+        setBidOutcome('rejected');
+        show(result.error ?? 'Bid was not accepted', 'error');
+        haptic.error();
+      } else {
+        show('Still checking — your bid may have been placed', 'info');
+      }
+    } catch {
+      show('Still checking — your bid may have been placed', 'info');
+    } finally {
+      setBidCheckPending(false);
+    }
+  }, [currentLot, haptic, lastBidAmount, lastBidId, sessionId, show]);
+
   const handleLike = useCallback(async () => {
     if (hasLiked) {
       haptic.light();
-      triggerHeartAnimation();
       return;
     }
     setHasLiked(true);
     setLikeCount((c) => c + 1);
     haptic.light();
-    triggerHeartAnimation();
     try {
       const result = await likeStream(sessionId);
       if (result.success) {
@@ -288,7 +349,7 @@ export function LiveStreamViewerScreen() {
       setHasLiked(false);
       setLikeCount((c) => Math.max(0, c - 1));
     }
-  }, [hasLiked, haptic, sessionId, triggerHeartAnimation]);
+  }, [hasLiked, haptic, sessionId]);
 
   const handleBuyNow = useCallback(async () => {
     if (!currentLot) return;
@@ -343,6 +404,39 @@ export function LiveStreamViewerScreen() {
       },
     });
   }, [haptic, isDemo, followMutation, isFollowing, show, stream?.sellerId]);
+
+  const derivedLotStatus: LotStatus | null = useMemo(() => {
+    if (!currentLot) return null;
+    if (currentLot.status === 'upcoming') return 'scheduled';
+    if (currentLot.status === 'active') {
+      if (currentLot.timeRemaining != null && currentLot.timeRemaining <= 10) return 'closing';
+      return 'open';
+    }
+    if (currentLot.status === 'sold') return 'sold';
+    if (currentLot.status === 'passed') return 'passed';
+    return null;
+  }, [currentLot]);
+
+  const isWinner = currentLot?.status === 'sold' && currentLot?.currentHighBidder === 'You';
+
+  const handleCompleteCheckout = useCallback(async () => {
+    if (!currentLot) return;
+    if (!requireAuth('purchase')) return;
+    setSettlePending(true);
+    haptic.medium();
+    try {
+      const result = await settleLot(sessionId, currentLot.id);
+      if (result.orderId) {
+        haptic.success();
+        navigation.navigate('Checkout', { itemId: currentLot.listingId });
+      }
+    } catch {
+      show('Could not start checkout. Please try again.', 'error');
+      haptic.error();
+    } finally {
+      setSettlePending(false);
+    }
+  }, [currentLot, haptic, navigation, requireAuth, sessionId, show]);
 
   const handleRetry = useCallback(() => {
     setConnectionState('connecting');
@@ -591,20 +685,6 @@ export function LiveStreamViewerScreen() {
           </View>
         </View>
 
-        {/* ── Floating heart animation ── */}
-        {!reducedMotion && (
-          <View style={styles.heartAnimationContainer} pointerEvents="none">
-            {floatingHearts.map((heart) => (
-              <Reanimated.View
-                key={heart.id}
-                style={[styles.floatingHeart, heartAnimStyle, { left: 50 + heart.x }]}
-              >
-                <Ionicons name="heart" size={32} color={colors.danger} />
-              </Reanimated.View>
-            ))}
-          </View>
-        )}
-
         {/* ── Bottom overlay: chat (semi-transparent) + product showcase panel ── */}
         <KeyboardAvoidingView
           style={styles.bottomOverlay}
@@ -623,6 +703,48 @@ export function LiveStreamViewerScreen() {
               showsVerticalScrollIndicator={false}
             />
           </View>
+
+          {/* Lot status badge — commerce-critical lifecycle state */}
+          {currentLot && derivedLotStatus && (
+            <View style={styles.lotStatusRow}>
+              <View
+                style={[
+                  styles.lotStatusBadge,
+                  { backgroundColor: lotStatusBgColor(derivedLotStatus, colors) },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.lotStatusText,
+                    { color: lotStatusTextColor(derivedLotStatus, colors) },
+                  ]}
+                >
+                  {lotStatusLabel(derivedLotStatus, currentLot.currentPrice)}
+                </Text>
+              </View>
+              {isWinner && (
+                <Pressable
+                  onPress={handleCompleteCheckout}
+                  disabled={settlePending}
+                  style={({ pressed }) => [
+                    styles.checkoutBtn,
+                    { backgroundColor: colors.success },
+                    pressed && { opacity: 0.85 },
+                    settlePending && { opacity: 0.6 },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Complete checkout for won lot"
+                  accessibilityState={{ busy: settlePending }}
+                >
+                  {settlePending ? (
+                    <ActivityIndicator size="small" color={colors.textInverse} />
+                  ) : (
+                    <Text style={styles.checkoutBtnText}>Complete checkout</Text>
+                  )}
+                </Pressable>
+              )}
+            </View>
+          )}
 
           {/* Product showcase panel — floating, semi-transparent */}
           {currentLot && (
@@ -712,6 +834,51 @@ export function LiveStreamViewerScreen() {
           </View>
         </KeyboardAvoidingView>
       </View>
+
+      {bidOutcome === 'unknown' && (
+        <View style={[styles.unknownBanner, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder, top: insets.top + Space.lg }]} pointerEvents="box-none">
+          <View style={styles.unknownBannerContent}>
+            <Ionicons name="cloud-offline-outline" size={20} color={colors.warning} />
+            <View style={styles.unknownBannerText}>
+              <Text style={[styles.unknownBannerTitle, { color: colors.textPrimary }]}>
+                Bid status unknown
+              </Text>
+              <Text style={[styles.unknownBannerSubtitle, { color: colors.textSecondary }]}>
+                Your bid may have been placed. We couldn't confirm the result.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.unknownBannerActions}>
+            <Pressable
+              onPress={handleCheckBidStatus}
+              disabled={bidCheckPending}
+              style={({ pressed }) => [
+                styles.unknownCheckBtn,
+                { backgroundColor: colors.warning },
+                pressed && { opacity: 0.85 },
+                bidCheckPending && { opacity: 0.6 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Check bid status"
+              accessibilityState={{ busy: bidCheckPending }}
+            >
+              {bidCheckPending ? (
+                <ActivityIndicator size="small" color={colors.textInverse} />
+              ) : (
+                <Text style={styles.unknownCheckBtnText}>Check result</Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => { setBidOutcome('idle'); setLastBidId(null); }}
+              style={({ pressed }) => [styles.unknownDismissBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss unknown bid status"
+            >
+              <Text style={[styles.unknownDismissBtnText, { color: colors.textSecondary }]}>Dismiss</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       {/* ── Item detail sheet (in-stream, not navigation away) ── */}
       {itemSheetVisible && currentLot && (
@@ -1000,17 +1167,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.scrimTextPrimary,
     fontVariant: ['tabular-nums'],
   },
-  // ── Heart animation ──
-  heartAnimationContainer: {
-    position: 'absolute',
-    bottom: SCREEN_HEIGHT * 0.35,
-    right: Space.xl,
-    zIndex: 5,
-  },
-  floatingHeart: {
-    position: 'absolute',
-    bottom: 0,
-  },
   // ── Bottom overlay (chat + product panel + input) ──
   bottomOverlay: {
     position: 'absolute',
@@ -1088,6 +1244,36 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
+  },
+  lotStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    marginBottom: Space.xs,
+  },
+  lotStatusBadge: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2 + 1,
+    borderRadius: Radius.sm,
+  },
+  lotStatusText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.label.letterSpacing,
+  },
+  checkoutBtn: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs / 2 + 1,
+    borderRadius: Radius.sm,
+    minHeight: Control.chrome,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkoutBtnText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.bold,
+    color: colors.textInverse,
   },
   productShowcasePress: {
     flexDirection: 'row',
@@ -1419,6 +1605,62 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
   },
   cancelBidText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  unknownBanner: {
+    position: 'absolute',
+    left: Space.sm,
+    right: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
+    padding: Space.md,
+    gap: Space.sm,
+    zIndex: 20,
+  },
+  unknownBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+  },
+  unknownBannerText: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  unknownBannerTitle: {
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
+    fontFamily: Typography.family.bold,
+  },
+  unknownBannerSubtitle: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  unknownBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingLeft: Space.xl + Space.xs,
+  },
+  unknownCheckBtn: {
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.lg,
+    minHeight: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unknownCheckBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.bold,
+    color: colors.textInverse,
+  },
+  unknownDismissBtn: {
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+  },
+  unknownDismissBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
   },

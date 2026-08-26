@@ -26,6 +26,8 @@ const createPosterBodySchema = z.object({
   layout: z.string().max(30).default('single'),
   status: z.enum(['draft', 'published', 'archived']).default('published'),
   expiryHours: z.number().int().min(1).max(720).default(24),
+  contentType: z.enum(['media', 'moodboard']).default('media'),
+  moodboardId: z.string().min(2).max(120).optional(),
 });
 
 const listPostersQuerySchema = z.object({
@@ -53,6 +55,8 @@ type PosterRow = {
   status: string;
   expiry_hours: number;
   created_at: string;
+  content_type: string;
+  moodboard_id: string | null;
 };
 
 const mapPosterRow = (row: PosterRow) => ({
@@ -68,10 +72,12 @@ const mapPosterRow = (row: PosterRow) => ({
   status: row.status,
   expiryHours: row.expiry_hours,
   createdAt: row.created_at,
+  contentType: row.content_type,
+  moodboardId: row.moodboard_id,
 });
 
 const POSTER_SELECT_COLUMNS = `
-  id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, created_at
+  id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, created_at, content_type, moodboard_id
 `;
 
 /**
@@ -91,48 +97,84 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
     const payload = createPosterBodySchema.parse(request.body);
 
     let mediaUrl = payload.mediaUrl;
+    let moodboardId: string | null = null;
 
-    if (payload.mediaFinalizationId) {
-      const finalization = await db.query<{
-        owner_id: string;
-        status: string;
-        public_url: string;
-      }>(
-        `SELECT owner_id, status, public_url
-         FROM upload_finalizations
-         WHERE id = $1
-         LIMIT 1`,
-        [payload.mediaFinalizationId]
-      );
-      const receipt = finalization.rows[0];
-      if (
-        !receipt
-        || receipt.owner_id !== actorUserId
-        || receipt.status !== 'finalized'
-      ) {
-        reply.code(422);
-        return {
-          ok: false,
-          error: 'Media finalization receipt could not be verified',
-          code: 'MEDIA_RECEIPT_MISMATCH',
-        };
+    if (payload.contentType === 'moodboard') {
+      if (!payload.moodboardId) {
+        reply.code(400);
+        return { ok: false, error: 'moodboardId required for moodboard content' };
       }
-      mediaUrl = receipt.public_url;
-    } else {
-      console.warn(
-        '[posters] DEPRECATION: POST /posters called without mediaFinalizationId — relying on client-supplied mediaUrl'
-      );
-    }
 
-    if (!mediaUrl) {
-      reply.code(400);
-      return { ok: false, error: 'mediaUrl or mediaFinalizationId required' };
+      const boardResult = await db.query<{
+        id: string;
+        creator_id: string;
+        deleted_at: string | null;
+      }>(
+        `SELECT id, creator_id, deleted_at FROM moodboards WHERE id = $1`,
+        [payload.moodboardId]
+      );
+      const board = boardResult.rows[0];
+      if (!board || board.deleted_at) {
+        reply.code(404);
+        return { ok: false, error: 'Moodboard not found' };
+      }
+
+      if (board.creator_id !== actorUserId) {
+        const membershipResult = await db.query(
+          `SELECT 1 FROM moodboard_members WHERE board_id = $1 AND user_id = $2 AND state = 'active'`,
+          [payload.moodboardId, actorUserId]
+        );
+        if (!membershipResult.rowCount) {
+          reply.code(403);
+          return { ok: false, error: 'Forbidden' };
+        }
+      }
+
+      moodboardId = payload.moodboardId;
+      mediaUrl = '';
+    } else {
+      if (payload.mediaFinalizationId) {
+        const finalization = await db.query<{
+          owner_id: string;
+          status: string;
+          public_url: string;
+        }>(
+          `SELECT owner_id, status, public_url
+           FROM upload_finalizations
+           WHERE id = $1
+           LIMIT 1`,
+          [payload.mediaFinalizationId]
+        );
+        const receipt = finalization.rows[0];
+        if (
+          !receipt
+          || receipt.owner_id !== actorUserId
+          || receipt.status !== 'finalized'
+        ) {
+          reply.code(422);
+          return {
+            ok: false,
+            error: 'Media finalization receipt could not be verified',
+            code: 'MEDIA_RECEIPT_MISMATCH',
+          };
+        }
+        mediaUrl = receipt.public_url;
+      } else {
+        console.warn(
+          '[posters] DEPRECATION: POST /posters called without mediaFinalizationId — relying on client-supplied mediaUrl'
+        );
+      }
+
+      if (!mediaUrl) {
+        reply.code(400);
+        return { ok: false, error: 'mediaUrl or mediaFinalizationId required' };
+      }
     }
 
     await db.query(
       `
-        INSERT INTO posters (id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO posters (id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, content_type, moodboard_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (id) DO UPDATE
         SET media_url = EXCLUDED.media_url,
             caption = EXCLUDED.caption,
@@ -140,7 +182,9 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
             background_color = EXCLUDED.background_color,
             layout = EXCLUDED.layout,
             status = EXCLUDED.status,
-            expiry_hours = EXCLUDED.expiry_hours
+            expiry_hours = EXCLUDED.expiry_hours,
+            content_type = EXCLUDED.content_type,
+            moodboard_id = EXCLUDED.moodboard_id
       `,
       [
         payload.id,
@@ -152,8 +196,17 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
         payload.layout,
         payload.status,
         payload.expiryHours,
+        payload.contentType,
+        moodboardId,
       ]
     );
+
+    if (moodboardId) {
+      await db.query(
+        `UPDATE moodboards SET published_poster_id = $1 WHERE id = $2`,
+        [payload.id, moodboardId]
+      );
+    }
 
     reply.code(201);
     return { ok: true, posterId: payload.id };
@@ -214,6 +267,79 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
       poster: mapPosterRow(result.rows[0]),
     };
   });
+
+  // GET /posters/:posterId/moodboard — full moodboard data for a moodboard-type poster
+  app.get<{ Params: { posterId: string } }>(
+    '/posters/:posterId/moodboard',
+    async (request, reply) => {
+      const { posterId } = posterIdParamsSchema.parse(request.params);
+
+      const posterResult = await db.query<{ content_type: string; moodboard_id: string | null }>(
+        `SELECT content_type, moodboard_id FROM posters WHERE id = $1 LIMIT 1`,
+        [posterId]
+      );
+      if (!posterResult.rowCount) {
+        reply.code(404);
+        return { ok: false, error: 'Poster not found' };
+      }
+      const poster = posterResult.rows[0];
+      if (poster.content_type !== 'moodboard' || !poster.moodboard_id) {
+        reply.code(400);
+        return { ok: false, error: 'Poster is not moodboard content' };
+      }
+
+      // Fetch the moodboard with items
+      const boardResult = await db.query<{
+        id: string; creator_id: string; title: string; description: string;
+        theme: string; visibility: string; cover_image: string; revision: number;
+        deleted_at: string | null;
+      }>(
+        `SELECT id, creator_id, title, description, theme, visibility, cover_image, revision, deleted_at
+         FROM moodboards WHERE id = $1 LIMIT 1`,
+        [poster.moodboard_id]
+      );
+      if (!boardResult.rowCount || boardResult.rows[0].deleted_at) {
+        reply.code(404);
+        return { ok: false, error: 'Moodboard not found' };
+      }
+      const board = boardResult.rows[0];
+
+      // Fetch items
+      const itemsResult = await db.query(
+        `SELECT id, listing_id, media_url, title, price_gbp, position_x, position_y, rotation, scale, sort_order
+         FROM moodboard_items
+         WHERE board_id = $1 AND deleted_at IS NULL
+         ORDER BY sort_order ASC`,
+        [board.id]
+      );
+
+      return {
+        ok: true,
+        moodboard: {
+          id: board.id,
+          creatorId: board.creator_id,
+          title: board.title,
+          description: board.description,
+          theme: board.theme,
+          visibility: board.visibility,
+          coverImage: board.cover_image,
+          revision: board.revision,
+          items: itemsResult.rows.map((row: any) => ({
+            id: row.id,
+            listingId: row.listing_id,
+            mediaUrl: row.media_url,
+            title: row.title,
+            priceGbp: Number(row.price_gbp),
+            positionX: Number(row.position_x),
+            positionY: Number(row.position_y),
+            rotation: Number(row.rotation),
+            scale: Number(row.scale),
+            sortOrder: row.sort_order,
+          })),
+        },
+      };
+    }
+  );
 
   app.delete('/posters/:posterId', async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);

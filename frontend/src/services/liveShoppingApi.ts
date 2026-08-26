@@ -15,8 +15,9 @@
 
 import { formatFiatAmount } from '../utils/currency';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
-import { fetchJson } from '../lib/apiClient';
+import { fetchJson, ApiRequestError, parseApiError } from '../lib/apiClient';
 import { getRealtimeClient, type RealtimeEnvelope } from '../platform/realtime';
+import { createStableId } from '../utils/createStableId';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -438,7 +439,7 @@ interface BackendCurrentLotResponse {
 
 interface BackendBidResponse {
   ok: boolean;
-  bid: {
+  bid?: {
     id: string;
     sessionId: string;
     listingId: string;
@@ -448,8 +449,13 @@ interface BackendBidResponse {
     amount: number;
     createdAt: string;
   };
-  lot: BackendCurrentLot;
+  lot?: BackendCurrentLot;
   error?: string;
+  success?: boolean;
+  idempotent?: boolean;
+  currentBid?: number;
+  bidCount?: number;
+  isHighBidder?: boolean;
 }
 
 interface BackendViewerCountResponse {
@@ -545,18 +551,37 @@ async function setCurrentLotOnBackend(
 async function placeBidOnBackend(
   sessionId: string,
   amount: number,
-): Promise<{ success: boolean; lot: LiveLot | null; bid: LiveBid | null; error?: string }> {
+  clientBidId?: string,
+): Promise<BidResult> {
+  const bidId = clientBidId ?? createStableId();
   try {
     const response = await fetchJson<BackendBidResponse>(
       `/streaming/sessions/${encodeURIComponent(sessionId)}/bids`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ amount, clientBidId: bidId }),
       },
     );
+
+    if (response.idempotent && response.success) {
+      const lot: LiveLot | null = response.lot
+        ? {
+            id: response.lot.listingId,
+            listingId: response.lot.listingId,
+            title: '',
+            imageUri: '',
+            startingPrice: response.lot.currentPrice,
+            currentPrice: response.lot.currentPrice,
+            bidCount: response.lot.bidCount,
+            status: 'active',
+          }
+        : null;
+      return { success: true, lot, bid: null, clientBidId: bidId, idempotent: true };
+    }
+
     if (!response.ok || !response.bid) {
-      return { success: false, lot: null, bid: null, error: response.error ?? 'Bid failed' };
+      return { success: false, lot: null, bid: null, error: response.error ?? 'Bid failed', clientBidId: bidId };
     }
     const bid: LiveBid = {
       id: response.bid.id,
@@ -567,18 +592,22 @@ async function placeBidOnBackend(
       timestamp: response.bid.createdAt,
     };
     const lot: LiveLot = {
-      id: response.lot.listingId,
-      listingId: response.lot.listingId,
+      id: response.lot!.listingId,
+      listingId: response.lot!.listingId,
       title: '',
       imageUri: '',
-      startingPrice: response.lot.currentPrice,
-      currentPrice: response.lot.currentPrice,
-      bidCount: response.lot.bidCount,
+      startingPrice: response.lot!.currentPrice,
+      currentPrice: response.lot!.currentPrice,
+      bidCount: response.lot!.bidCount,
       status: 'active',
     };
-    return { success: true, lot, bid };
-  } catch {
-    return { success: false, lot: null, bid: null, error: 'Could not place bid' };
+    return { success: true, lot, bid, clientBidId: bidId };
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status !== undefined) {
+      const parsed = parseApiError(error, 'Bid failed');
+      return { success: false, lot: null, bid: null, error: parsed.message, clientBidId: bidId };
+    }
+    throw error;
   }
 }
 
@@ -599,8 +628,7 @@ async function leaveSessionOnBackend(sessionId: string): Promise<void> {
  *  snapshot suitable for the viewer screen. */
 async function connectToStreamFromBackend(streamId: string): Promise<LiveStream | null> {
   try {
-    // Request a viewer token (increments viewer count on the backend).
-    await fetchJson<BackendStreamTokenResponse>(
+    const tokenResponse = await fetchJson<BackendStreamTokenResponse>(
       `/streaming/sessions/${encodeURIComponent(streamId)}/token`,
       {
         method: 'POST',
@@ -608,6 +636,7 @@ async function connectToStreamFromBackend(streamId: string): Promise<LiveStream 
         body: JSON.stringify({ role: 'viewer' }),
       },
     );
+    const tokenData = tokenResponse.ok ? tokenResponse.token : null;
 
     // Fetch the session metadata.
     const sessionResponse = await fetchJson<{
@@ -646,6 +675,8 @@ async function connectToStreamFromBackend(streamId: string): Promise<LiveStream 
       lots,
       chatEnabled: true,
       isDemo: false,
+      token: tokenData?.token,
+      wsUrl: tokenData?.wsUrl,
     };
     return stream;
   } catch {
@@ -867,6 +898,10 @@ export interface LiveStream {
   chatEnabled: boolean;
   /** Truthful flag — true while this stream comes from mock data. */
   isDemo: boolean;
+  /** Viewer connection token issued by the backend (non-demo only). */
+  token?: string;
+  /** WebSocket URL for the realtime side-channel (non-demo only). */
+  wsUrl?: string;
 }
 
 export interface LiveLot {
@@ -884,6 +919,48 @@ export interface LiveLot {
   buyNowPrice?: number;
 }
 
+export type LotStatus = 'scheduled' | 'open' | 'closing' | 'sold' | 'passed' | 'cancelled';
+
+export type LotSettlementStatus = 'none' | 'settling' | 'order_created' | 'payment_reserved' | 'payment_failed' | 'completed';
+
+export interface LotSnapshot {
+  lotId: string;
+  listingId: string;
+  sellerId: string;
+  title: string;
+  description: string | null;
+  condition: string | null;
+  category: string | null;
+  brand: string | null;
+  size: string | null;
+  priceGbp: number;
+  imageUrl: string | null;
+  images: string[];
+}
+
+export interface LiveLotAggregate {
+  id: string;
+  sessionId: string;
+  listingId: string;
+  lotNumber: number;
+  position: number;
+  status: LotStatus;
+  currency: string;
+  startPriceMinor: number;
+  reservePriceMinor: number | null;
+  minIncrementMinor: number;
+  highBidMinor: number;
+  highBidderId: string | null;
+  winnerId: string | null;
+  orderId: string | null;
+  version: number;
+  opensAt: string | null;
+  closesAt: string | null;
+  closedAt: string | null;
+  extensionCount: number;
+  snapshot: LotSnapshot | null;
+}
+
 export interface LiveBid {
   id: string;
   lotId: string;
@@ -891,6 +968,23 @@ export interface LiveBid {
   bidderName: string;
   amount: number;
   timestamp: string;
+}
+
+export interface BidResult {
+  success: boolean;
+  lot: LiveLot | null;
+  bid: LiveBid | null;
+  error?: string;
+  clientBidId: string;
+  idempotent?: boolean;
+}
+
+export type BidCheckStatus = 'accepted' | 'rejected' | 'unknown';
+
+export interface BidCheckResult {
+  status: BidCheckStatus;
+  lot: LiveLot | null;
+  error?: string;
 }
 
 export interface LiveStreamChatMessage {
@@ -1434,27 +1528,27 @@ export async function placeStreamBid(
   streamId: string,
   lotId: string,
   amount: number,
-): Promise<{ success: boolean; lot: LiveLot | null; bid: LiveBid | null; error?: string }> {
+  clientBidId?: string,
+): Promise<BidResult> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
-    // lotId is the current lot's listingId — the backend operates on the
-    // session's current lot, so we only need the amount here.
     void lotId;
-    return placeBidOnBackend(streamId, amount);
+    return placeBidOnBackend(streamId, amount, clientBidId);
   }
+  const bidId = clientBidId ?? createStableId();
   await delay(400);
   const conn = connections.get(streamId);
   if (!conn) {
-    return { success: false, lot: null, bid: null, error: 'Not connected to stream' };
+    return { success: false, lot: null, bid: null, error: 'Not connected to stream', clientBidId: bidId };
   }
   const lot = conn.stream.lots.find((l) => l.id === lotId);
   if (!lot) {
-    return { success: false, lot: null, bid: null, error: 'Lot not found' };
+    return { success: false, lot: null, bid: null, error: 'Lot not found', clientBidId: bidId };
   }
   if (lot.status !== 'active') {
-    return { success: false, lot, bid: null, error: 'Lot is not active' };
+    return { success: false, lot, bid: null, error: 'Lot is not active', clientBidId: bidId };
   }
   if (amount <= lot.currentPrice) {
-    return { success: false, lot, bid: null, error: 'Bid must be higher than current price' };
+    return { success: false, lot, bid: null, error: 'Bid must be higher than current price', clientBidId: bidId };
   }
 
   const bid = makeBid(lotId, 'me', 'You', amount);
@@ -1462,7 +1556,6 @@ export async function placeStreamBid(
   lot.currentHighBidder = 'You';
   lot.bidCount += 1;
 
-  // Emit bid event to all subscribers
   emitEvent(conn, 'bid', {
     lotId,
     bid,
@@ -1470,7 +1563,6 @@ export async function placeStreamBid(
     newBidCount: lot.bidCount,
   });
 
-  // Emit a system chat message for the bid
   const bidMsg = makeStreamChatMessage({
     streamId,
     userId: 'me',
@@ -1481,7 +1573,38 @@ export async function placeStreamBid(
   });
   emitEvent(conn, 'chat', { message: bidMsg });
 
-  return { success: true, lot, bid };
+  return { success: true, lot, bid, clientBidId: bidId };
+}
+
+/**
+ * Check the outcome of a bid whose response was lost (unknown outcome).
+ *
+ * Per the live-signs-convergence-loop workflow: "Unknown outcome means the
+ * request may have committed but the response was lost. It is neither success
+ * nor failure. Preserve the operation key, provide 'Check result,' and retry
+ * only through the same idempotent contract. Never fabricate confirmation."
+ *
+ * This re-POSTs the bid with the same `clientBidId`. The backend deduplicates
+ * via the idempotency key — if the bid was already committed, it returns the
+ * existing state; if it was not, it places the bid now. A network error during
+ * the check returns `status: 'unknown'` so the UI can honestly tell the user
+ * the result is still unknown rather than fabricating success or failure.
+ */
+export async function checkBidStatus(
+  streamId: string,
+  lotId: string,
+  amount: number,
+  clientBidId: string,
+): Promise<BidCheckResult> {
+  try {
+    const result = await placeStreamBid(streamId, lotId, amount, clientBidId);
+    if (result.success) {
+      return { status: 'accepted', lot: result.lot };
+    }
+    return { status: 'rejected', lot: result.lot, error: result.error };
+  } catch {
+    return { status: 'unknown', lot: null };
+  }
 }
 
 /**
@@ -1898,4 +2021,244 @@ function emitEvent<T>(conn: StreamConnection, type: StreamEventType, payload: T)
       // Listener errors don't crash the stream
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Lot engine API — schedule, open, close, cancel, list, settle
+// ---------------------------------------------------------------------------
+// These functions call the backend lot engine route and return
+// LiveLotAggregate snapshots. In demo mode they return mock data that
+// follows the same types so the UI can be built and validated.
+// ---------------------------------------------------------------------------
+
+interface BackendLotAggregate {
+  id: string;
+  sessionId: string;
+  listingId: string;
+  lotNumber: number;
+  position: number;
+  status: LotStatus;
+  currency: string;
+  startPriceMinor: number;
+  reservePriceMinor: number | null;
+  minIncrementMinor: number;
+  highBidMinor: number;
+  highBidderId: string | null;
+  winnerId: string | null;
+  orderId: string | null;
+  version: number;
+  opensAt: string | null;
+  closesAt: string | null;
+  closedAt: string | null;
+  extensionCount: number;
+  snapshot: LotSnapshot | null;
+  settlementStatus?: LotSettlementStatus;
+}
+
+interface BackendLotListResponse {
+  ok: boolean;
+  lots: BackendLotAggregate[];
+}
+
+interface BackendLotActionResponse {
+  ok: boolean;
+  lot: BackendLotAggregate;
+  settlementStatus?: LotSettlementStatus;
+}
+
+interface BackendSettleLotResponse {
+  ok: boolean;
+  orderId: string;
+  status: LotSettlementStatus;
+}
+
+const mapBackendLotToAggregate = (lot: BackendLotAggregate): LiveLotAggregate => ({
+  id: lot.id,
+  sessionId: lot.sessionId,
+  listingId: lot.listingId,
+  lotNumber: lot.lotNumber,
+  position: lot.position,
+  status: lot.status,
+  currency: lot.currency,
+  startPriceMinor: lot.startPriceMinor,
+  reservePriceMinor: lot.reservePriceMinor,
+  minIncrementMinor: lot.minIncrementMinor,
+  highBidMinor: lot.highBidMinor,
+  highBidderId: lot.highBidderId,
+  winnerId: lot.winnerId,
+  orderId: lot.orderId,
+  version: lot.version,
+  opensAt: lot.opensAt,
+  closesAt: lot.closesAt,
+  closedAt: lot.closedAt,
+  extensionCount: lot.extensionCount,
+  snapshot: lot.snapshot,
+});
+
+const mockLotAggregate = (
+  sessionId: string,
+  lotId: string,
+  listingId: string,
+  lotNumber: number,
+  status: LotStatus,
+  highBidMinor: number,
+  startPriceMinor: number,
+): LiveLotAggregate => ({
+  id: lotId,
+  sessionId,
+  listingId,
+  lotNumber,
+  position: lotNumber,
+  status,
+  currency: 'GBP',
+  startPriceMinor,
+  reservePriceMinor: startPriceMinor,
+  minIncrementMinor: 500,
+  highBidMinor,
+  highBidderId: status === 'sold' || status === 'open' || status === 'closing' ? 'me' : null,
+  winnerId: status === 'sold' ? 'me' : null,
+  orderId: null,
+  version: 1,
+  opensAt: status === 'open' || status === 'closing' || status === 'sold' || status === 'passed'
+    ? new Date(Date.now() - 60000).toISOString()
+    : null,
+  closesAt: status === 'closing' ? new Date(Date.now() + 15000).toISOString() : null,
+  closedAt: status === 'sold' || status === 'passed' || status === 'cancelled'
+    ? new Date().toISOString()
+    : null,
+  extensionCount: 0,
+  snapshot: {
+    lotId,
+    listingId,
+    sellerId: 'me',
+    title: `Lot ${lotNumber}`,
+    description: null,
+    condition: null,
+    category: null,
+    brand: null,
+    size: null,
+    priceGbp: startPriceMinor / 100,
+    imageUrl: null,
+    images: [],
+  },
+});
+
+export async function scheduleLot(
+  sessionId: string,
+  params: {
+    listingId: string;
+    lotNumber: number;
+    startPriceMinor?: number;
+    reservePriceMinor?: number;
+  },
+): Promise<LiveLotAggregate> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    const response = await fetchJson<BackendLotActionResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/lots`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      },
+    );
+    return mapBackendLotToAggregate(response.lot);
+  }
+  await delay(200);
+  return mockLotAggregate(
+    sessionId,
+    `lot-${sessionId}-${params.lotNumber}`,
+    params.listingId,
+    params.lotNumber,
+    'scheduled',
+    0,
+    params.startPriceMinor ?? 5000,
+  );
+}
+
+export async function openLot(
+  sessionId: string,
+  lotId: string,
+): Promise<LiveLotAggregate> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    const response = await fetchJson<BackendLotActionResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/lots/${encodeURIComponent(lotId)}/open`,
+      { method: 'POST' },
+    );
+    return mapBackendLotToAggregate(response.lot);
+  }
+  await delay(150);
+  return mockLotAggregate(sessionId, lotId, 'listing-1', 1, 'open', 5000, 5000);
+}
+
+export async function closeLot(
+  sessionId: string,
+  lotId: string,
+): Promise<LiveLotAggregate & { settlementStatus: LotSettlementStatus }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    const response = await fetchJson<BackendLotActionResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/lots/${encodeURIComponent(lotId)}/close`,
+      { method: 'POST' },
+    );
+    return {
+      ...mapBackendLotToAggregate(response.lot),
+      settlementStatus: response.settlementStatus ?? 'none',
+    };
+  }
+  await delay(200);
+  return {
+    ...mockLotAggregate(sessionId, lotId, 'listing-1', 1, 'sold', 9500, 5000),
+    settlementStatus: 'none',
+  };
+}
+
+export async function cancelLot(
+  sessionId: string,
+  lotId: string,
+): Promise<LiveLotAggregate> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    const response = await fetchJson<BackendLotActionResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/lots/${encodeURIComponent(lotId)}/cancel`,
+      { method: 'POST' },
+    );
+    return mapBackendLotToAggregate(response.lot);
+  }
+  await delay(150);
+  return mockLotAggregate(sessionId, lotId, 'listing-1', 1, 'cancelled', 0, 5000);
+}
+
+export async function fetchSessionLots(
+  sessionId: string,
+): Promise<{ lots: LiveLotAggregate[] }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    const response = await fetchJson<BackendLotListResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/lots`,
+    );
+    return { lots: (response.lots ?? []).map(mapBackendLotToAggregate) };
+  }
+  await delay(200);
+  return {
+    lots: [
+      mockLotAggregate(sessionId, 'lot-1', 'l1', 1, 'open', 21000, 15000),
+      mockLotAggregate(sessionId, 'lot-2', 'l6', 2, 'scheduled', 0, 6000),
+      mockLotAggregate(sessionId, 'lot-3', 'l4', 3, 'scheduled', 0, 3000),
+    ],
+  };
+}
+
+export async function settleLot(
+  sessionId: string,
+  lotId: string,
+): Promise<{ orderId: string; status: LotSettlementStatus }> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    const response = await fetchJson<BackendSettleLotResponse>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/lots/${encodeURIComponent(lotId)}/settle`,
+      { method: 'POST' },
+    );
+    return { orderId: response.orderId, status: response.status };
+  }
+  await delay(300);
+  return {
+    orderId: `order-${lotId}-${Date.now()}`,
+    status: 'order_created',
+  };
 }

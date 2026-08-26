@@ -227,7 +227,6 @@ export default function AppNavigator() {
       <Stack.Screen name="CategoryTree" getComponent={() => require('../screens/CategoryTreeScreen').default} />
       <Stack.Screen name="Filter" getComponent={() => require('../screens/FilterScreen').default} options={formSheetScreenOptions} />
       <Stack.Screen name="GlobalSearch" getComponent={() => require('../screens/GlobalSearchScreen').default} />
-      <Stack.Screen name="UnifiedDiscovery" getComponent={() => require('../screens/UnifiedDiscoveryScreen').default} />
       <Stack.Screen name="NotificationsList" getComponent={() => require('../screens/NotificationsScreen').default} />
 
       {/* ── Creator Studio ── */}
@@ -448,7 +447,7 @@ export default function AppNavigator() {
       {/* Moodboard editor — modal editor (home list is in the Home tab stack) */}
       <Stack.Screen name="MoodboardEditor" getComponent={() => require('../screens/MoodboardEditorScreen').default} options={modalScreenOptions} />
 
-      {/* Galleria collection detail — accessible from UnifiedDiscovery (root) and HomeStack */}
+      {/* Galleria collection detail — accessible from HomeStack and GalleriaScreen */}
       <Stack.Screen name="GalleriaCollectionDetail" getComponent={() => require('../screens/GalleriaCollectionDetailScreen').default} />
 
       {/* ── Discovery & Editorial ── (galleria, algorithm, moodboards, explore, AI search) */}

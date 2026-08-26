@@ -86,6 +86,8 @@ type NotificationCard = {
   aggregatedActors?: string[];
   /** V2 structured event — passed to role-specific row presenters. */
   v2Event: NotificationEventV2;
+  /** Delivery status from the push pipeline — drives the status indicator. */
+  deliveryStatus: 'queued' | 'ticketed' | 'sent' | 'failed' | 'suppressed';
 };
 
 /**
@@ -253,6 +255,7 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     attention: v2.attention,
     objectRef: v2.objectRef,
     v2Event: v2,
+    deliveryStatus: event.status,
   };
 }
 

@@ -40,6 +40,7 @@ const uploadRequestSchema = z.object({
       'evidence',
       'review',
       'smoke',
+      'voice',
     ])
     .default('uploads'),
 });
@@ -54,6 +55,7 @@ const finalizeScopeEnum = z.enum([
   'look',
   'evidence',
   'review',
+  'voice',
 ]);
 
 const finalizeRequestSchema = z.object({
@@ -74,6 +76,7 @@ const finalizeRequestSchema = z.object({
       'evidence',
       'review',
       'smoke',
+      'voice',
     ])
     .default('uploads'),
   scope: finalizeScopeEnum.default('general'),
@@ -374,7 +377,7 @@ export const registerUploadRoutes = ({
       let mediaAsset: {
         id: string;
         status: string;
-        mediaKind: 'image' | 'video' | 'document';
+        mediaKind: 'image' | 'video' | 'audio' | 'document';
         canonicalUrl: string | null;
       } | null = null;
 
@@ -391,7 +394,7 @@ export const registerUploadRoutes = ({
         const assetResult = await client.query<{
           id: string;
           status: string;
-          media_kind: 'image' | 'video' | 'document';
+          media_kind: 'image' | 'video' | 'audio' | 'document';
           canonical_url: string | null;
         }>(
           `INSERT INTO media_assets (
@@ -410,7 +413,7 @@ export const registerUploadRoutes = ({
            DO UPDATE SET
              intended_purpose = EXCLUDED.intended_purpose,
              metadata = media_assets.metadata || EXCLUDED.metadata
-           RETURNING id, status, media_kind, canonical_url`,
+           RETURNING id, status, media_kind::text, canonical_url`,
           [
             mediaAssetId,
             row.id,

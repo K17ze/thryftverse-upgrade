@@ -43,6 +43,13 @@ const pushDeliveriesTotal = new Counter({
   registers: [registry],
 });
 
+const pushTicketErrorsTotal = new Counter({
+  name: 'thryftverse_push_ticket_errors_total',
+  help: 'Push ticket errors by provider and error code (e.g. DeviceNotRegistered)',
+  labelNames: ['provider', 'error'] as const,
+  registers: [registry],
+});
+
 const backgroundJobsTotal = new Counter({
   name: 'thryftverse_background_jobs_total',
   help: 'Background job executions by queue/job/result',
@@ -171,12 +178,25 @@ export function recordAuctionSettlement(result: 'settled' | 'no_action' | 'faile
 
 export function recordPushDelivery(input: {
   provider: string;
-  status: 'sent' | 'failed' | 'queued';
+  status: 'sent' | 'failed' | 'queued' | 'ticketed' | 'suppressed';
 }): void {
   pushDeliveriesTotal.inc(
     {
       provider: input.provider,
       status: input.status,
+    },
+    1
+  );
+}
+
+export function recordPushTicketError(input: {
+  provider: string;
+  error: string;
+}): void {
+  pushTicketErrorsTotal.inc(
+    {
+      provider: input.provider,
+      error: input.error,
     },
     1
   );

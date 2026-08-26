@@ -679,6 +679,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     retryAgentDraft,
     sendMessage: hookSendMessage,
     sendMediaMessage,
+    sendVoiceMessage,
+    handleSendVoice,
+    createVoiceMessage,
     handleRetryUpload,
     handleRetrySendMessage,
     createMediaMessage,
@@ -1370,6 +1373,8 @@ export default function ChatScreen({ navigation, route }: Props) {
           ]}
         >
           <MessageBubble
+            id={msg.id}
+            conversationId={conversationId ?? ''}
             text={msg.text ?? ""}
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
@@ -1445,6 +1450,9 @@ export default function ChatScreen({ navigation, route }: Props) {
             uploadStatus={msg.uploadStatus}
             voiceDurationMs={msg.voiceDurationMs}
             voiceWaveform={msg.voiceWaveform}
+            voiceContainer={msg.voiceContainer}
+            voiceCodec={msg.voiceCodec}
+            voiceModerationState={msg.voiceModerationState}
             onRetry={
               msg.uploadStatus === "failed"
                 ? () => handleRetryUpload(msg.id)
@@ -2082,6 +2090,9 @@ export default function ChatScreen({ navigation, route }: Props) {
             onSend={handleSend}
             onAttachmentPress={() => setAttachmentPickerVisible(true)}
             onCameraPress={() => handleAttachmentSelect("camera")}
+            onVoiceRecord={handleSendVoice}
+            isVoiceRecording={isVoiceRecording}
+            onVoiceRecordingChange={setIsVoiceRecording}
             placeholder="Message..."
             isSending={composerSending}
             quickReplies={
