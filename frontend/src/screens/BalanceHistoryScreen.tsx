@@ -9,7 +9,7 @@ import { useStore } from '../store/useStore';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { listUserTransactions, UserTransaction } from '../services/commerceApi';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
-import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
+import { Space, Type, Typography, IconGrammar } from '../theme/designTokens';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { useToast } from '../context/ToastContext';
 
@@ -189,7 +189,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
             {transactions.map((tx, idx) => (
               <View key={tx.id}>
                 <View style={styles.txRow}>
-                  <View style={[styles.txIcon, { backgroundColor: colorForType(tx.type, tx.lineType, colors) + '22' }]}>
+                  <View style={styles.txIcon}>
                     <Ionicons name={iconForType(tx.type, tx.lineType)} size={IconGrammar.metadata} color={colorForType(tx.type, tx.lineType, colors)} />
                   </View>
                   <View style={styles.txInfo}>
@@ -277,7 +277,6 @@ function createStyles(colors: ThemeColors) {
   txIcon: {
     width: 36,
     height: 36,
-    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },

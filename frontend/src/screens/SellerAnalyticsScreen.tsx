@@ -23,8 +23,6 @@ import { useA11yAudit } from '../hooks/useA11yAudit';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-const TOP_LISTING_CARD_WIDTH = 140;
-
 interface KpiRow {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
@@ -118,10 +116,13 @@ function computeActivityBuckets(listings: ListingApiItem[], period: Period): Cha
 // ── Activity chart component ──
 // Simple View-based bar chart. No external library. Uses theme colors.
 // Per AGENTS.md §4: flat, no card chrome. Hierarchy from typography.
+// Branded bar colour, light grid lines, Y-axis (0 / max) and X-axis labels.
 function ActivityChart({ buckets, colors, accessibilitySummary }: { buckets: ChartBucket[]; colors: ThemeColors; accessibilitySummary: string }) {
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
   const hasData = buckets.some((b) => b.count > 0);
   const isCompact = buckets.length > 10;
+  // Grid line positions as fractions of plot height (top → bottom)
+  const gridFracs = [1, 0.5, 0];
 
   if (!hasData) {
     return (
@@ -141,43 +142,72 @@ function ActivityChart({ buckets, colors, accessibilitySummary }: { buckets: Cha
         accessibilityRole="text"
         style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
       />
-      {/* Bars row */}
-      <View style={chartStyles.barsRow}>
-        {buckets.map((bucket, i) => {
-          const heightPct = (bucket.count / maxCount) * 100;
-          return (
-            <View key={i} style={chartStyles.barColumn}>
-              <View style={chartStyles.barTrack}>
-                <View
-                  style={[
-                    chartStyles.bar,
-                    {
-                      height: `${heightPct}%`,
-                      backgroundColor: bucket.count > 0 ? colors.brand : colors.surfaceAlt,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          );
-        })}
+      {/* Chart area: Y-axis labels + plot */}
+      <View style={chartStyles.chartArea}>
+        {/* Y-axis labels (max / 0) */}
+        <View style={chartStyles.yAxis}>
+          <Text style={[chartStyles.yAxisLabel, { color: colors.textMuted }]} numberOfLines={1}>
+            {maxCount}
+          </Text>
+          <Text style={[chartStyles.yAxisLabel, { color: colors.textMuted }]} numberOfLines={1}>
+            0
+          </Text>
+        </View>
+        {/* Plot area: grid lines + bars */}
+        <View style={chartStyles.plotArea}>
+          {/* Horizontal grid lines */}
+          {gridFracs.map((frac, i) => (
+            <View
+              key={i}
+              pointerEvents="none"
+              style={[
+                chartStyles.gridLine,
+                { bottom: `${frac * 100}%`, backgroundColor: colors.border, opacity: 0.5 },
+              ]}
+            />
+          ))}
+          {/* Bars row */}
+          <View style={chartStyles.barsRow}>
+            {buckets.map((bucket, i) => {
+              const heightPct = (bucket.count / maxCount) * 100;
+              return (
+                <View key={i} style={chartStyles.barColumn}>
+                  <View style={chartStyles.barTrack}>
+                    <View
+                      style={[
+                        chartStyles.bar,
+                        {
+                          height: `${heightPct}%`,
+                          backgroundColor: bucket.count > 0 ? colors.brand : colors.surfaceAlt,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
       </View>
-      {/* Labels row — show every Nth label for compact charts */}
+      {/* X-axis labels — offset to align with plot area */}
       <View style={chartStyles.labelsRow}>
-        {buckets.map((bucket, i) => {
-          const showLabel = isCompact
-            ? i % Math.ceil(buckets.length / 6) === 0 || i === buckets.length - 1
-            : true;
-          return (
-            <View key={i} style={chartStyles.labelColumn}>
-              {showLabel && (
-                <Text style={[chartStyles.labelText, { color: colors.textMuted }]} numberOfLines={1}>
-                  {bucket.label}
-                </Text>
-              )}
-            </View>
-          );
-        })}
+        <View style={chartStyles.yAxisSpacer} />
+        <View style={chartStyles.labelsTrack}>
+          {buckets.map((bucket, i) => {
+            const showLabel = isCompact
+              ? i % Math.ceil(buckets.length / 6) === 0 || i === buckets.length - 1
+              : true;
+            return (
+              <View key={i} style={chartStyles.labelColumn}>
+                {showLabel && (
+                  <Text style={[chartStyles.labelText, { color: colors.textMuted }]} numberOfLines={1}>
+                    {bucket.label}
+                  </Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -187,10 +217,39 @@ const chartStyles = StyleSheet.create({
   container: {
     paddingVertical: Space.sm,
   },
+  chartArea: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  yAxis: {
+    width: 26,
+    height: 80,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingRight: Space.xs,
+  },
+  yAxisLabel: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.size + 2,
+    fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+  },
+  plotArea: {
+    flex: 1,
+    height: 80,
+    position: 'relative',
+  },
+  gridLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
+  },
   barsRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    height: 80,
+    height: '100%',
     gap: 2,
   },
   barColumn: {
@@ -204,12 +263,20 @@ const chartStyles = StyleSheet.create({
   },
   bar: {
     width: '100%',
-    borderRadius: 2,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
     minHeight: 2,
   },
   labelsRow: {
     flexDirection: 'row',
     marginTop: Space.xs - 2,
+  },
+  yAxisSpacer: {
+    width: 26,
+  },
+  labelsTrack: {
+    flex: 1,
+    flexDirection: 'row',
     gap: 2,
   },
   labelColumn: {
@@ -217,7 +284,7 @@ const chartStyles = StyleSheet.create({
     alignItems: 'center',
   },
   labelText: {
-    fontSize: 9,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   emptyWrap: {
@@ -465,17 +532,16 @@ export default function SellerAnalyticsScreen() {
           <View style={{ height: Space.lg }} />
           <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: '40%', borderRadius: Radius.sm }} />
           <View style={{ height: Space.sm }} />
-          <View style={{ flexDirection: 'row', gap: Space.sm }}>
-            {[0, 1, 2].map((i) => (
-              <View key={i} style={styles.skeletonTopCard}>
-                <View style={{ backgroundColor: colors.surfaceAlt, width: '100%', height: 90, borderRadius: Radius.md }} />
-                <View style={{ height: Space.xs }} />
-                <View style={{ backgroundColor: colors.surfaceAlt, height: 12, width: '80%', borderRadius: Radius.sm }} />
-                <View style={{ height: 4 }} />
-                <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: 50, borderRadius: Radius.sm }} />
+          {[0, 1, 2].map((i) => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+              <View style={{ backgroundColor: colors.surfaceAlt, width: 48, height: 48, borderRadius: Radius.sm }} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: '60%', borderRadius: Radius.sm }} />
+                <View style={{ backgroundColor: colors.surfaceAlt, height: 11, width: '35%', borderRadius: Radius.sm }} />
               </View>
-            ))}
-          </View>
+              <View style={{ backgroundColor: colors.surfaceAlt, height: 16, width: 50, borderRadius: Radius.sm }} />
+            </View>
+          ))}
         </ScrollView>
       </FlagshipScreen>
     );
@@ -637,52 +703,50 @@ export default function SellerAnalyticsScreen() {
           </View>
         ) : null}
 
-        {/* ── Top listings — horizontal scroll of compact cards ── */}
+        {/* ── Top listings — media-first rows with hairline dividers ── */}
         <View>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Top listings</Text>
           </View>
           {topPerformers.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.topListingsScroll}
-            >
+            <View style={styles.topListingsList}>
               {topPerformers.map((item) => (
                 <Pressable
                   key={item.id}
                   style={({ pressed }) => [
-                    styles.topListingCard,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
-                    pressed && { opacity: 0.7 },
+                    styles.topListingRow,
+                    { borderBottomColor: colors.border },
+                    pressed && { opacity: 0.6 },
                   ]}
                   onPress={() => handleListingPress(item.id)}
                   accessibilityRole="button"
                   accessibilityLabel={`Listing: ${item.title}, ${item.views} views, ${currencySymbol}${item.price.toFixed(0)} revenue`}
                 >
-                  <View style={[styles.topListingImageWrap, { backgroundColor: colors.surfaceAlt }]}>
+                  <View style={[styles.topListingThumb, { backgroundColor: colors.surfaceAlt }]}>
                     {item.imageUrl ? (
                       <CachedImage
                         uri={item.imageUrl}
-                        style={styles.topListingImage}
+                        style={styles.topListingThumbImage}
                         contentFit="cover"
                       />
                     ) : (
-                      <View style={styles.topListingImagePlaceholder}>
-                        <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+                      <View style={styles.topListingThumbPlaceholder}>
+                        <Ionicons name="image-outline" size={18} color={colors.textMuted} />
                       </View>
                     )}
                   </View>
-                  <Text style={[styles.topListingTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-                  <Text style={[styles.topListingRevenue, { color: colors.brand }]}>
+                  <View style={styles.topListingInfo}>
+                    <Text style={[styles.topListingRowTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+                    <Text style={[styles.topListingRowMeta, { color: colors.textMuted }]}>
+                      {item.views} views · {item.likes} likes
+                    </Text>
+                  </View>
+                  <Text style={[styles.topListingRowPrice, { color: colors.brand }]}>
                     {currencySymbol}{item.price.toFixed(0)}
-                  </Text>
-                  <Text style={[styles.topListingMeta, { color: colors.textMuted }]}>
-                    {item.views} views
                   </Text>
                 </Pressable>
               ))}
-            </ScrollView>
+            </View>
           ) : (
             <EmptyState
               icon="bar-chart-outline"
@@ -895,48 +959,48 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
     },
 
-    // ── Top listings — horizontal scroll cards ──
-    topListingsScroll: {
+    // ── Top listings — media-first rows with hairline dividers ──
+    topListingsList: {
+      gap: 0,
+    },
+    topListingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
       gap: Space.sm,
-      paddingRight: Space.md,
+      paddingVertical: Space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    topListingCard: {
-      width: TOP_LISTING_CARD_WIDTH,
-      borderRadius: Radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.sm,
-      gap: Space.xs - 1,
-    },
-    topListingImageWrap: {
-      width: '100%',
-      height: 90,
+    topListingThumb: {
+      width: 48,
+      height: 48,
       borderRadius: Radius.sm,
       overflow: 'hidden',
-      marginBottom: Space.xs - 1,
     },
-    topListingImage: {
+    topListingThumbImage: {
       width: '100%',
       height: '100%',
     },
-    topListingImagePlaceholder: {
+    topListingThumbPlaceholder: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    topListingTitle: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+    topListingInfo: {
+      flex: 1,
+      gap: Space.xs - 2,
+    },
+    topListingRowTitle: {
+      fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
     },
-    topListingRevenue: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
-    topListingMeta: {
+    topListingRowMeta: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
+      fontVariant: ['tabular-nums'],
+    },
+    topListingRowPrice: {
+      fontSize: Type.bodyStrong.size,
+      fontFamily: Typography.family.bold,
       fontVariant: ['tabular-nums'],
     },
 
@@ -989,10 +1053,6 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.sm + 2,
-    },
-    skeletonTopCard: {
-      width: TOP_LISTING_CARD_WIDTH,
-      padding: Space.sm,
     },
   });
 }

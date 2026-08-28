@@ -44,14 +44,11 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
         <Reanimated.View entering={enter}>
           {graphic}
         </Reanimated.View>
-      ) : (
-        <Reanimated.View
-          entering={enter}
-          style={[styles.iconRing, compact && styles.iconRingCompact]}
-        >
-          <Ionicons name={icon ?? 'cube-outline'} size={compact ? 24 : 38} color={resolvedIconColor} />
+      ) : icon ? (
+        <Reanimated.View entering={enter}>
+          <Ionicons name={icon} size={compact ? 22 : 28} color={resolvedIconColor} />
         </Reanimated.View>
-      )}
+      ) : null}
 
       <Reanimated.Text
         entering={enter}
@@ -263,23 +260,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md + Space.sm,
     gap: Space.xs + 2,
-  },
-  iconRing: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.md,
-  },
-  iconRingCompact: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.full,
-    marginBottom: Space.sm,
   },
   title: {
     fontSize: Type.priceList.size,

@@ -10,7 +10,7 @@ function resolveAgentIcon(category?: string, name?: string): AgentIconName {
     return 'shield-checkmark-outline';
   }
   if (identity.includes('trade') || identity.includes('market')) {
-    return 'pulse-outline';
+    return 'trending-up-outline';
   }
   if (identity.includes('brief') || identity.includes('digest')) {
     return 'newspaper-outline';

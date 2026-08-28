@@ -462,6 +462,7 @@ export default function AppNavigator() {
       <Stack.Screen name="GalleriaCollectionDetail" getComponent={() => require('../screens/GalleriaCollectionDetailScreen').default} />
 
       {/* ── Discovery & Editorial ── (galleria, algorithm, moodboards, explore, AI search) */}
+      <Stack.Screen name="UnifiedDiscovery" getComponent={() => require('../screens/UnifiedDiscoveryScreen').default} options={{ headerShown: false }} />
       <Stack.Screen name="Galleria" getComponent={() => require('../screens/GalleriaScreen').default} />
       <Stack.Screen name="YourAlgorithm" getComponent={() => require('../screens/YourAlgorithmScreen').default} />
       <Stack.Screen name="ConversationalSearch" getComponent={() => require('../screens/ConversationalSearchScreen').default} />

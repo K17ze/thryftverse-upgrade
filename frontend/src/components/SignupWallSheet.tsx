@@ -88,13 +88,14 @@ export function SignupWallSheet({
     >
       {copy ? (
         <View style={styles.content}>
-          <View
-            style={styles.iconWrap}
+          <Ionicons
+            name={copy.icon}
+            size={28}
+            color={colors.brand}
+            style={styles.icon}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
-          >
-            <Ionicons name={copy.icon} size={28} color={colors.brand} />
-          </View>
+          />
 
           <Text style={styles.title} maxFontSizeMultiplier={1.2}>
             {copy.title}
@@ -143,13 +144,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingTop: Space.sm,
       paddingBottom: Space.lg,
     },
-    iconWrap: {
-      width: 56,
-      height: 56,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.brandSubtle,
+    icon: {
       marginBottom: Space.md,
     },
     title: {

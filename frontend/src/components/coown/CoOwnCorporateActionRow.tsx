@@ -106,9 +106,7 @@ export function CoOwnCorporateActionRow({
       accessibilityLabel={`${actionCfg.label}, ${statusCfg.label}, ${dateLabel}. ${effectLabel}${amountLabel ? `, ${amountLabel}` : ''}${recordDateLabel ? `, ${recordDateLabel}` : ''}${paymentDateLabel ? `, ${paymentDateLabel}` : ''}`}
     >
       {/* Icon */}
-      <View style={[styles.iconWrap, { backgroundColor: colors.brandSubtle }]}>
-        <Ionicons name={actionCfg.icon} size={16} color={colors.brand} />
-      </View>
+      <Ionicons name={actionCfg.icon} size={20} color={colors.brand} />
 
       {/* Body */}
       <View style={styles.body}>
@@ -171,14 +169,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-  },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
   body: {
     flex: 1,

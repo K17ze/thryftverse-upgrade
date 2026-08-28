@@ -976,10 +976,10 @@ export default function HomeScreen() {
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
-              onPress={() => rootNavigation?.navigate('MainTabs', { screen: 'Explore' })}
+              onPress={() => rootNavigation?.navigate('UnifiedDiscovery')}
               accessibilityLabel="Search and discover"
               accessibilityRole="button"
-              accessibilityHint="Opens search and discovery"
+              accessibilityHint="Opens discovery — explore items, looks, mood boards, editorials and more"
             >
               <Ionicons name="search" size={22} color={colors.textPrimary} />
             </AnimatedPressable>
@@ -1148,7 +1148,7 @@ export default function HomeScreen() {
                 <View style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
-                    icon="sparkles-outline"
+                    icon="compass-outline"
                     title="No recommendations yet"
                     subtitle="We're learning what you like. Browse listings and save items to build your feed."
                     ctaLabel="Browse all"

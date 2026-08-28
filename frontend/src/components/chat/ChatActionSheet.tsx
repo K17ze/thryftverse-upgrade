@@ -86,19 +86,11 @@ export function ChatActionSheet({
                 accessibilityState={action.disabled ? { disabled: true } : undefined}
                 disabled={action.disabled}
               >
-                <View
-                  style={[
-                    styles.iconCircle,
-                    { backgroundColor: `${colors.brand}14` },
-                    action.disabled && { backgroundColor: colors.surfaceAlt },
-                  ]}
-                >
-                  <Ionicons
-                    name={action.icon}
-                    size={22}
-                    color={action.disabled ? colors.textMuted : colors.brand}
-                  />
-                </View>
+                <Ionicons
+                  name={action.icon}
+                  size={22}
+                  color={action.disabled ? colors.textMuted : colors.brand}
+                />
                 <View style={styles.rowText}>
                   <Text
                     style={[
@@ -198,13 +190,6 @@ const styles = StyleSheet.create({
   },
   rowDisabled: {
     opacity: 0.6,
-  },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    justifyContent: "center",
-    alignItems: "center",
   },
   rowText: {
     flex: 1,

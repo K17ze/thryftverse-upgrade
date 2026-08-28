@@ -302,37 +302,48 @@ export function ProfileHero({
             </Pressable>
           ) : null}
 
-          {/* Seller trust line — compact, no badge container */}
+          {/* Seller trust header — rating row + joined caption on separate lines.
+              The rating is part of the identity block, not a lonely chip: star +
+              score + review count give the 5.0 context. Joined date is a less
+              prominent caption below, not equal weight to the rating. */}
           {trustLine ? (
-            <View style={styles.trustRow}>
-              {hasRating ? (
-                <Pressable
-                  onPress={() => onTabSelect('Reviews')}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
-                  style={({ pressed }) => [styles.trustRatingWrap, pressed && { opacity: 0.6 }]}
-                >
-                  <Text style={styles.trustLink}>{ratingValue!.toFixed(1)}</Text>
-                  <Ionicons name="star" size={12} color={colors.warning} aria-hidden={true} />
-                </Pressable>
-              ) : null}
-              {hasRating && soldCount > 0 ? <Text style={styles.trustDot}> · </Text> : null}
-              {soldCount > 0 ? (
-                <Pressable
-                  onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('sold'); }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${soldCount} sold — view sold items`}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
-                >
-                  <Text style={styles.trustLink}>{soldCount} sold</Text>
-                </Pressable>
-              ) : null}
-              {(hasRating || soldCount > 0) && memberSince ? <Text style={styles.trustDot}> · </Text> : null}
-              {memberSince ? <Text style={styles.trustStatic}>Joined {memberSince}</Text> : null}
-              {(hasRating || soldCount > 0 || memberSince) && sellerTrust?.responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
-              {sellerTrust?.responseTimeLabel ? (
-                <Text style={styles.trustResponse}>Replies {sellerTrust.responseTimeLabel}</Text>
-              ) : null}
+            <View style={styles.trustBlock}>
+              {/* Rating row — star + score + review count (or "No reviews yet").
+                  Secondary trust signals (sold, response time) stay on this row
+                  separated by dots; they are marketplace proof, not identity. */}
+              <View style={styles.trustRatingRow}>
+                {hasRating ? (
+                  <Pressable
+                    onPress={() => onTabSelect('Reviews')}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
+                    style={({ pressed }) => [styles.trustRatingWrap, pressed && { opacity: 0.6 }]}
+                  >
+                    <Ionicons name="star" size={16} color={colors.brand} aria-hidden={true} />
+                    <Text style={styles.trustRatingValue}>{ratingValue!.toFixed(1)}</Text>
+                    <Text style={styles.trustReviewCount}>({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={styles.trustNoReviews}>No reviews yet</Text>
+                )}
+                {soldCount > 0 ? <Text style={styles.trustDot}> · </Text> : null}
+                {soldCount > 0 ? (
+                  <Pressable
+                    onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('sold'); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${soldCount} sold — view sold items`}
+                    style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  >
+                    <Text style={styles.trustLink}>{soldCount} sold</Text>
+                  </Pressable>
+                ) : null}
+                {sellerTrust?.responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
+                {sellerTrust?.responseTimeLabel ? (
+                  <Text style={styles.trustResponse}>Replies {sellerTrust.responseTimeLabel}</Text>
+                ) : null}
+              </View>
+              {/* Joined — less prominent caption on its own line, no dot separator */}
+              {memberSince ? <Text style={styles.trustJoined}>Joined {memberSince}</Text> : null}
             </View>
           ) : null}
 
@@ -599,28 +610,47 @@ function createStyles(colors: ThemeColors) {
     textDecorationLine: 'underline',
   },
 
-  // Seller trust line — compact, no badge container
-  trustRow: {
+  // Seller trust header — rating row + joined caption on separate lines
+  trustBlock: {
+    paddingVertical: 2,
+    marginBottom: Space.xs,
+  },
+  trustRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    paddingVertical: 2,
-    marginBottom: Space.xs,
+  },
+  trustRatingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  trustRatingValue: {
+    fontSize: Type.bodyStrong.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    letterSpacing: -0.1,
+  },
+  trustReviewCount: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+  },
+  trustNoReviews: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
   },
   trustLink: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
-  trustRatingWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  trustStatic: {
+  trustJoined: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
+    marginTop: 2,
   },
   trustResponse: {
     fontSize: Type.caption.size,

@@ -19,7 +19,7 @@ $$ LANGUAGE plpgsql;
 DO $$
 DECLARE
   rec RECORD;
-  trigger_name text;
+  trg_name text;
 BEGIN
   FOR rec IN
     SELECT t.table_schema, t.table_name
@@ -31,19 +31,19 @@ BEGIN
       AND t.table_type = 'BASE TABLE'
       AND t.table_schema NOT IN ('information_schema', 'pg_catalog')
   LOOP
-    trigger_name := 'trg_' || rec.table_name || '_updated_at';
+    trg_name := 'trg_' || rec.table_name || '_updated_at';
 
     IF NOT EXISTS (
       SELECT 1
-      FROM information_schema.triggers
-      WHERE event_object_schema = rec.table_schema
-        AND event_object_table = rec.table_name
-        AND trigger_name = trigger_name
+      FROM information_schema.triggers tr
+      WHERE tr.event_object_schema = rec.table_schema
+        AND tr.event_object_table = rec.table_name
+        AND tr.trigger_name = trg_name
     ) THEN
       EXECUTE format(
         'CREATE TRIGGER %I BEFORE UPDATE ON %I.%I '
         'FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()',
-        trigger_name, rec.table_schema, rec.table_name
+        trg_name, rec.table_schema, rec.table_name
       );
     END IF;
   END LOOP;

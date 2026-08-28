@@ -119,18 +119,11 @@ export function AttachmentMenu({
                 scaleValue={0.95}
                 hapticFeedback="light"
               >
-                <View
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: `${option.color}15` },
-                  ]}
-                >
-                  <Ionicons
-                    name={option.icon}
-                    size={28}
-                    color={option.color}
-                  />
-                </View>
+                <Ionicons
+                  name={option.icon}
+                  size={28}
+                  color={option.color}
+                />
                 <Caption color={colors.textPrimary} style={styles.optionLabel}>{option.label}</Caption>
               </AnimatedPressable>
             ))}
@@ -193,14 +186,6 @@ function createStyles(colors: ThemeColors) {
       width: '30%',
       alignItems: 'center',
       marginBottom: Space.md + 4,
-    },
-    iconContainer: {
-      width: 60,
-      height: 60,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: Space.sm,
     },
     optionLabel: {
       fontFamily: Typography.family.medium,

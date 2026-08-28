@@ -7,6 +7,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-thryftverse}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-thryftverse}
       POSTGRES_DB: ${POSTGRES_DB:-thryftverse}
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "work_mem=16MB", "-c", "maintenance_work_mem=128MB", "-c", "effective_cache_size=768MB", "-c", "random_page_cost=1.1", "-c", "log_min_duration_statement=1000", "-c", "checkpoint_completion_target=0.9", "-c", "wal_buffers=16MB", "-c", "max_connections=200"]
     ports:
       - "5432:5432"
     volumes:
@@ -41,7 +42,7 @@ services:
   # mode for BullMQ compatibility. The API connects to pgbouncer:6432 when
   # PGBOUNCER_ENABLED=true (src/db/pool.ts rewrites the port automatically).
   pgbouncer:
-    image: edoburu/pgbouncer:1.23.1-pgbouncer
+    image: edoburu/pgbouncer:latest
     container_name: thryftverse-pgbouncer
     restart: unless-stopped
     depends_on:
@@ -53,16 +54,17 @@ services:
       DB_USER: ${POSTGRES_USER:-thryftverse}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-thryftverse}
       DB_NAME: ${POSTGRES_DB:-thryftverse}
-      AUTH_TYPE: trust
+      AUTH_TYPE: plain
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 1000
       DEFAULT_POOL_SIZE: 25
       RESERVE_POOL_SIZE: 5
       MAX_DB_CONNECTIONS: 100
+      IGNORE_STARTUP_PARAMETERS: statement_timeout,extra_float_digits,search_path
     ports:
-      - "6432:6432"
+      - "6432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432"]
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -166,9 +168,10 @@ services:
       # PgBouncer — pool.ts rewrites the port to 6432 when enabled.
       # DATABASE_URL points at the pgbouncer container; PGBOUNCER_ENABLED
       # also caps the client-side pool_max to 10 (see src/db/pool.ts).
-      DATABASE_URL: postgresql://${POSTGRES_USER:-thryftverse}:${POSTGRES_PASSWORD:-thryftverse}@pgbouncer:6432/${POSTGRES_DB:-thryftverse}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-thryftverse}:${POSTGRES_PASSWORD:-thryftverse}@pgbouncer:5432/${POSTGRES_DB:-thryftverse}
+      MIGRATE_DATABASE_URL: postgresql://${POSTGRES_USER:-thryftverse}:${POSTGRES_PASSWORD:-thryftverse}@postgres:5432/${POSTGRES_DB:-thryftverse}
       PGBOUNCER_ENABLED: "true"
-      PGBOUNCER_PORT: "6432"
+      PGBOUNCER_PORT: "5432"
       DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
       REDIS_URL: redis://redis:6379
       KEY_SERVICE_URL: http://key-service:4100
@@ -217,7 +220,7 @@ services:
     ports:
       - "4000:4000"
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:4000/health || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then((r)=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -275,7 +278,7 @@ services:
     ports:
       - "8000:8000"
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:8000/health || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 5s
       retries: 5

@@ -26,13 +26,12 @@ export function MessageStatusIndicator({
     switch (status) {
       case 'sending':
         return (
-          <View style={styles.sendingContainer}>
-            <Ionicons
-              name="time-outline"
-              size={iconSize}
-              color={colors.textMuted}
-            />
-          </View>
+          <Ionicons
+            name="time-outline"
+            size={iconSize}
+            color={colors.textMuted}
+            style={styles.sendingIcon}
+          />
         );
 
       case 'sent':
@@ -83,7 +82,7 @@ export function MessageStatusIndicator({
           {timestamp}
         </Caption>
       )}
-      <View style={styles.iconContainer}>{renderIcon()}</View>
+      {renderIcon()}
     </View>
   );
 }
@@ -98,13 +97,7 @@ function createStyles(colors: ThemeColors) {
     timestamp: {
       fontSize: Type.meta.size,
     },
-    iconContainer: {
-      width: 14,
-      height: 14,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    sendingContainer: {
+    sendingIcon: {
       opacity: 0.7,
     },
   });

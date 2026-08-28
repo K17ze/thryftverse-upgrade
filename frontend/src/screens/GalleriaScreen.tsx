@@ -15,7 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -661,9 +661,7 @@ export default function GalleriaScreen() {
             accessibilityLabel="Open Poster Studio"
             accessibilityHint="Create posters, looks, and moodboard collages"
           >
-            <View style={styles.moodboardCtaIconWrap}>
-              <Ionicons name="create-outline" size={22} color={colors.brand} />
-            </View>
+            <Ionicons name="create-outline" size={22} color={colors.brand} />
             <View style={styles.moodboardCtaCopy}>
               <Text style={styles.moodboardCtaTitle} numberOfLines={1}>
                 Poster Studio
@@ -1171,14 +1169,6 @@ function useStyles() {
           borderWidth: Stroke.hairline,
           borderColor: colors.border,
           backgroundColor: colors.surface,
-        },
-        moodboardCtaIconWrap: {
-          width: Control.hit,
-          height: Control.hit,
-          borderRadius: Radius.md,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.surfaceAlt,
         },
         moodboardCtaCopy: {
           flex: 1,

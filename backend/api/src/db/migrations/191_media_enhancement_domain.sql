@@ -143,16 +143,16 @@ CREATE INDEX IF NOT EXISTS idx_listing_media_revisions_listing
 
 CREATE TRIGGER trg_enh_jobs_updated_at
   BEFORE UPDATE ON media_enhancement_jobs
-  FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trg_enh_ops_updated_at
   BEFORE UPDATE ON media_enhancement_operations
-  FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trg_derivations_updated_at
   BEFORE UPDATE ON media_derivations
-  FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trg_listing_media_revisions_updated_at
   BEFORE UPDATE ON listing_media_revisions
-  FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

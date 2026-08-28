@@ -217,14 +217,13 @@ export function InAppNotificationBanner({
             app icon. The type icon sits inside with the accent colour.
             This replaces the custom-toast accent stripe. */}
         <View style={styles.content}>
-          <View style={[styles.iconContainer, { backgroundColor: `${accentColor}18` }]}>
-            <Ionicons
-              name={config.icon}
-              size={Control.iconCompact}
-              color={accentColor}
-              accessibilityLabel={undefined}
-            />
-          </View>
+          <Ionicons
+            name={config.icon}
+            size={Control.iconCompact}
+            color={accentColor}
+            style={styles.typeIcon}
+            accessibilityLabel={undefined}
+          />
 
           <View style={styles.textColumn}>
             <Text
@@ -307,12 +306,7 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
     gap: Space.sm,
   },
-  iconContainer: {
-    width: Control.chromeCompact,
-    height: Control.chromeCompact,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+  typeIcon: {
     marginTop: 1,
   },
   textColumn: {

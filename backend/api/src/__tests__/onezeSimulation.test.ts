@@ -1,154 +1,142 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  calculateCountryPricing,
   calculateAtParPricing,
-  findPricingArbitrageViolations,
-  type OnezePricingQuote,
+  PLATFORM_LOAD_FEE_BPS,
+  PLATFORM_WITHDRAW_FEE_BPS,
 } from '../lib/pricingEngine.js';
 
-function buildQuote(input: {
-  countryCode: string;
-  currency: string;
-  anchorValueInInr: number;
-  fxRateInrToLocal: number;
-  markupBps: number;
-  markdownBps: number;
-  crossBorderFeeBps: number;
-  pppFactor: number;
-}): OnezePricingQuote {
-  const pricing = calculateCountryPricing({
-    anchorValue: input.anchorValueInInr,
-    fxRate: input.fxRateInrToLocal,
-    markupBps: input.markupBps,
-    markdownBps: input.markdownBps,
-    crossBorderFeeBps: input.crossBorderFeeBps,
-    pppFactor: input.pppFactor,
+test('at-par cross-country simulation: principal is FX-convertible and fee-transparent', () => {
+  // Simulate two countries with different FX rates.
+  // At-par model: 1 1ZE = $1.00 USD. The principal is anchor * fxRate.
+  // The fee is transparent and does not affect the principal.
+  const inrQuote = calculateAtParPricing({
+    anchorValue: 100,
+    fxRate: 83,
+    feeBps: PLATFORM_LOAD_FEE_BPS,
+    direction: 'load',
+    loadFeeBps: PLATFORM_LOAD_FEE_BPS,
+  });
+  const gbpQuote = calculateAtParPricing({
+    anchorValue: 100,
+    fxRate: 0.79,
+    feeBps: PLATFORM_LOAD_FEE_BPS,
+    direction: 'load',
+    loadFeeBps: PLATFORM_LOAD_FEE_BPS,
   });
 
-  const atPar = calculateAtParPricing({
-    anchorValue: input.anchorValueInInr,
-    fxRate: input.fxRateInrToLocal,
-    feeBps: 200,
-  });
+  // Principal is deterministic from anchor * fxRate
+  assert.equal(inrQuote.principalAmount, 8300);
+  assert.equal(gbpQuote.principalAmount, 79);
 
-  return {
-    countryCode: input.countryCode,
-    currency: input.currency,
-    anchorCurrency: 'INR',
-    anchorValueInInr: input.anchorValueInInr,
-    fxRateInrToLocal: input.fxRateInrToLocal,
-    buyPrice: pricing.buyPrice,
-    sellPrice: pricing.sellPrice,
-    crossBorderSellPrice: pricing.crossBorderSellPrice,
-    buyPriceInAnchor: pricing.buyPriceInAnchor,
-    sellPriceInAnchor: pricing.sellPriceInAnchor,
-    crossBorderSellPriceInAnchor: pricing.crossBorderSellPriceInAnchor,
-    markupBps: input.markupBps,
-    markdownBps: input.markdownBps,
-    crossBorderFeeBps: input.crossBorderFeeBps,
-    pppFactor: input.pppFactor,
-    source: 'simulation',
-    updatedAt: new Date().toISOString(),
-    principalRate: 1,
-    fxRate: input.fxRateInrToLocal,
-    platformFeeBps: 200,
-    loadFeeBps: 200,
-    withdrawFeeBps: 200,
-    principalAmount: atPar.principalAmount,
-    feeAmount: atPar.feeAmount,
-    totalCost: atPar.totalCost,
-    netRedemption: atPar.netRedemption,
-  };
-}
+  // Fee is always principal * feeBps / 10000
+  assert.equal(inrQuote.feeAmount, 166);
+  assert.equal(gbpQuote.feeAmount, 1.58);
 
-test('cross-country arbitrage simulation: seeded profile matrix is non-profitable', () => {
-  const quotes = [
-    buildQuote({
-      countryCode: 'IN',
-      currency: 'INR',
-      anchorValueInInr: 1000,
-      fxRateInrToLocal: 1,
-      markupBps: 1500,
-      markdownBps: 2000,
-      crossBorderFeeBps: 1000,
-      pppFactor: 0.9,
-    }),
-    buildQuote({
-      countryCode: 'GB',
-      currency: 'GBP',
-      anchorValueInInr: 1000,
-      fxRateInrToLocal: 0.011,
-      markupBps: 1500,
-      markdownBps: 1800,
-      crossBorderFeeBps: 1000,
-      pppFactor: 0.9,
-    }),
-  ];
-
-  const violations = findPricingArbitrageViolations(quotes);
-  assert.equal(violations.length, 0);
+  // Total cost = principal + fee (what the user pays to load)
+  assert.equal(inrQuote.totalCost, 8466);
+  assert.equal(gbpQuote.totalCost, 80.58);
 });
 
-test('FX fluctuation impact simulation: shocks preserve negative arbitrage envelope', () => {
+test('at-par FX fluctuation simulation: principal tracks FX rate, fee is proportional', () => {
   const fxScenarios = [0.0095, 0.0105, 0.011, 0.012, 0.0135];
 
   for (const gbpFx of fxScenarios) {
-    const quotes = [
-      buildQuote({
-        countryCode: 'IN',
-        currency: 'INR',
-        anchorValueInInr: 1000,
-        fxRateInrToLocal: 1,
-        markupBps: 1700,
-        markdownBps: 1500,
-        crossBorderFeeBps: 1200,
-        pppFactor: 0.9,
-      }),
-      buildQuote({
-        countryCode: 'GB',
-        currency: 'GBP',
-        anchorValueInInr: 1000,
-        fxRateInrToLocal: gbpFx,
-        markupBps: 1700,
-        markdownBps: 1500,
-        crossBorderFeeBps: 1200,
-        pppFactor: 0.9,
-      }),
-    ];
+    const quote = calculateAtParPricing({
+      anchorValue: 100,
+      fxRate: gbpFx,
+      feeBps: PLATFORM_LOAD_FEE_BPS,
+      direction: 'load',
+      loadFeeBps: PLATFORM_LOAD_FEE_BPS,
+    });
 
-    const violations = findPricingArbitrageViolations(quotes);
+    // Principal = anchor * fxRate (at-par, no markup/markdown distortion)
+    const expectedPrincipal = Math.round(gbpFx * 100 * 1e6) / 1e6;
     assert.equal(
-      violations.length,
-      0,
-      `Expected no arbitrage violations under FX scenario INR/GBP=${gbpFx}`
+      quote.principalAmount,
+      expectedPrincipal,
+      `Principal should equal anchor * fxRate for FX=${gbpFx}`
+    );
+
+    // Fee is always exactly principal * feeBps / 10000
+    const expectedFee = Math.round(expectedPrincipal * (PLATFORM_LOAD_FEE_BPS / 10_000) * 1e6) / 1e6;
+    assert.equal(
+      quote.feeAmount,
+      expectedFee,
+      `Fee should be proportional to principal for FX=${gbpFx}`
+    );
+
+    // Total cost = principal + fee
+    assert.equal(
+      quote.totalCost,
+      Math.round((expectedPrincipal + expectedFee) * 1e6) / 1e6,
+      `Total cost should equal principal + fee for FX=${gbpFx}`
     );
   }
 });
 
-test('mass withdrawal and liquidity stress simulation: spread stays positive at scale', () => {
-  const quote = buildQuote({
-    countryCode: 'IN',
-    currency: 'INR',
-    anchorValueInInr: 1000,
-    fxRateInrToLocal: 1,
-    markupBps: 2000,
-    markdownBps: 1500,
-    crossBorderFeeBps: 1000,
-    pppFactor: 0.9,
+test('at-par mass withdrawal stress simulation: principal is preserved at scale', () => {
+  // Use anchorValue=1 so principalAmount=1 (1 1ZE = $1 at par)
+  const quote = calculateAtParPricing({
+    anchorValue: 1,
+    fxRate: 1,
+    feeBps: PLATFORM_WITHDRAW_FEE_BPS,
+    direction: 'withdraw',
+    withdrawFeeBps: PLATFORM_WITHDRAW_FEE_BPS,
   });
 
   const mintedIze = 125_000;
   const redeemedIze = 82_500;
 
-  const buyNotional = mintedIze * quote.buyPrice;
-  const sellNotional = redeemedIze * quote.sellPrice;
-  const stressRevenue = buyNotional - sellNotional;
+  // At-par: each 1ZE redeems at principal minus withdraw fee
+  const grossRedemption = redeemedIze * quote.principalAmount;
+  const feeDeducted = redeemedIze * quote.feeAmount;
+  const netRedemptionTotal = grossRedemption - feeDeducted;
 
-  assert.ok(stressRevenue > 0, 'Stress scenario should preserve positive spread revenue');
-  assert.ok(quote.buyPrice > quote.sellPrice, 'Buy price must remain above sell price');
-  assert.ok(
-    quote.sellPrice > quote.crossBorderSellPrice,
-    'Cross-border sell price must remain below domestic sell price'
+  // The outstanding liability reduced by redemption is exactly the principal
+  assert.equal(
+    redeemedIze * quote.principalAmount,
+    82_500,
+    'Liability reduction equals principal times units redeemed'
   );
+
+  // Net redemption is positive (user always gets value back)
+  assert.ok(netRedemptionTotal > 0, 'Net redemption should be positive under stress');
+
+  // Fee revenue is proportional, not spread-based
+  assert.equal(
+    feeDeducted,
+    redeemedIze * 0.02,
+    'Fee deducted should be exactly withdrawFeeBps * principal per unit'
+  );
+});
+
+test('at-par invariant: no arbitrage is possible because all countries use the same anchor', () => {
+  // In the at-par model, 1 1ZE = $1.00 USD everywhere.
+  // FX rates convert the local currency equivalent, but the principal
+  // (the 1ZE amount) is identical across countries. There is no
+  // markup/markdown/PPP spread to exploit.
+  const countries = [
+    { code: 'IN', fxRate: 83 },
+    { code: 'GB', fxRate: 0.79 },
+    { code: 'US', fxRate: 1 },
+    { code: 'KE', fxRate: 129 },
+  ];
+
+  const principals = countries.map((c) =>
+    calculateAtParPricing({
+      anchorValue: 100,
+      fxRate: c.fxRate,
+      feeBps: 0,
+    }).principalAmount
+  );
+
+  // Converting any country's principal back to USD yields the same anchor value
+  for (let i = 0; i < countries.length; i++) {
+    const backToUsd = principals[i] / countries[i].fxRate;
+    assert.ok(
+      Math.abs(backToUsd - 100) < 0.01,
+      `Country ${countries[i].code}: round-trip to USD should preserve anchor value`
+    );
+  }
 });

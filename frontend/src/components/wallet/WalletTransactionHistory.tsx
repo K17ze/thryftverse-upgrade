@@ -123,14 +123,11 @@ export function WalletTransactionHistory({
     // Direction-aware icon color: inflows use success, outflows use textPrimary,
     // neutral trades use brand. This pairs glyph + colour per AGENTS.md §13.
     const iconColor = isPositive ? colors.success : kindInfo.direction === 'neutral' ? colors.brand : colors.textSecondary;
-    const iconBg = isPositive ? `${colors.success}15` : kindInfo.direction === 'neutral' ? `${colors.brand}15` : colors.surfaceAlt;
     const amountColor = isPositive ? colors.success : colors.textPrimary;
 
     return (
       <View style={styles.txRow} accessibilityRole="text" accessibilityLabel={`${kindInfo.label}, ${amountText}, ${formatRelativeTime(item.createdAt)}`}>
-        <View style={[styles.txIconWrap, { backgroundColor: iconBg }]}>
-          <Ionicons name={kindInfo.icon} size={IconGrammar.metadata} color={iconColor} />
-        </View>
+        <Ionicons name={kindInfo.icon} size={IconGrammar.metadata} color={iconColor} />
         <View style={styles.txContent}>
           <Text style={styles.txLabel} numberOfLines={1}>{kindInfo.label}</Text>
           <Text style={styles.txTime}>{formatRelativeTime(item.createdAt)}</Text>
@@ -251,13 +248,6 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm + 2,
       gap: Space.sm + 2,
       minHeight: 56,
-    },
-    txIconWrap: {
-      width: 36,
-      height: 36,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
     txContent: {
       flex: 1,

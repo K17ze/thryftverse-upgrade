@@ -561,6 +561,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           onClose={() => setAgentPickerVisible(false)}
           onDeploy={handleDeployAgent}
           deployedAgentIds={deployedAgents.map((agent) => agent.id)}
+          conversationId={conversationId}
         />
 
         <MessageContextMenu

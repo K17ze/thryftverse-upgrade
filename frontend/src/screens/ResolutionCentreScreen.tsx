@@ -16,6 +16,7 @@ import { Space, Typography, Radius, Type, Stroke } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import type { SupportTicket } from '../store/useStore';
 
 type TicketFilter = 'all' | 'open' | 'resolved' | 'closed';
@@ -94,14 +95,12 @@ export default function ResolutionCentreScreen() {
     return (
       <View>
         <Pressable
-          style={styles.ticketCard}
+          style={styles.ticketRow}
           onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
           accessibilityRole="button"
           accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
         >
-          <View style={[styles.statusIconWrap, { backgroundColor: `${statusCfg.color}15` }]}>
-            <Ionicons name={statusCfg.icon} size={18} color={statusCfg.color} />
-          </View>
+          <Ionicons name={statusCfg.icon} size={24} color={statusCfg.color} />
           <View style={styles.ticketInfo}>
             <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
             <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
@@ -112,7 +111,7 @@ export default function ResolutionCentreScreen() {
               <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
         </Pressable>
       </View>
     );
@@ -127,22 +126,13 @@ export default function ResolutionCentreScreen() {
         />
       }
     >
-      {/* Hero summary — open ticket count */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: openCount > 0 ? colors.brand : colors.surfaceAlt }]}>
-              <Ionicons name="headset" size={18} color={openCount > 0 ? colors.textInverse : colors.textMuted} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {openCount > 0 ? `${openCount} open request${openCount === 1 ? '' : 's'}` : 'No open requests'}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {supportTickets.length} total ticket{supportTickets.length === 1 ? '' : 's'}
-              </Text>
-            </View>
-          </View>
-        </View>
+      {/* Posture summary — flat canvas, no card chrome */}
+      <SettingsInfoBanner
+        tone="info"
+        icon="headset"
+        title={openCount > 0 ? `${openCount} open request${openCount !== 1 ? 's' : ''}` : 'No open requests'}
+        description={`${supportTickets.length} total ticket${supportTickets.length !== 1 ? 's' : ''}`}
+      />
 
       {/* Filter rail */}
       <ScrollView
@@ -206,35 +196,6 @@ export default function ResolutionCentreScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xl + Space.xs + 4,
-    height: Space.xl + Space.xs + 4,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-  },
   filterRail: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
@@ -276,25 +237,14 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
   },
-  ticketCard: {
+  ticketRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.smMd,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    marginBottom: Space.sm,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  statusIconWrap: {
-    width: Space.xl + Space.xs + 4,
-    height: Space.xl + Space.xs + 4,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   ticketInfo: {
     flex: 1,

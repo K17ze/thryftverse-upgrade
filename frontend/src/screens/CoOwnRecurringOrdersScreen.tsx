@@ -31,6 +31,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
+import { SettingsSection } from '../components/settings/SettingsSection';
 import {
   fetchCoOwnRecurringOrders,
   createCoOwnRecurringOrder,
@@ -185,21 +186,14 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
           showsVerticalScrollIndicator={false}
         >
-        {/* Hero summary */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroIconRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="repeat" size={22} color={colors.brand} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={styles.heroTitle}>Auto-invest plans</Text>
-              <Text style={styles.heroSubtitle}>
-                {activeOrders.length === 0
-                  ? 'No active plans'
-                  : `${activeOrders.length} active plan${activeOrders.length !== 1 ? 's' : ''}`}
-              </Text>
-            </View>
-          </View>
+        {/* Hero summary — flat, no card */}
+        <View style={styles.heroWrap}>
+          <Text style={styles.heroTitle}>Auto-invest plans</Text>
+          <Text style={styles.heroSubtitle}>
+            {activeOrders.length === 0
+              ? 'No active plans'
+              : `${activeOrders.length} active plan${activeOrders.length !== 1 ? 's' : ''}`}
+          </Text>
         </View>
 
         <Text style={styles.introText}>
@@ -224,109 +218,106 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           <>
             {/* Active orders */}
             {activeOrders.length > 0 && (
-              <View>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Active</Text>
-                  <View style={styles.sectionCount}>
-                    <Text style={styles.sectionCountText}>{activeOrders.length}</Text>
-                  </View>
-                </View>
-                {activeOrders.map((order) => (
-                  <View key={order.id}>
-                    <View style={styles.orderCard}>
-                      <Pressable
-                        style={({ pressed }) => [styles.orderInfo, pressed && { opacity: 0.85 }]}
-                        onPress={() => { haptic.light(); navigation.navigate('AssetDetail', { assetId: order.assetId }); }}
+              <SettingsSection title="Active">
+                {activeOrders.map((order, i) => (
+                  <View
+                    key={order.id}
+                    style={[
+                      styles.orderRow,
+                      i < activeOrders.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                    ]}
+                  >
+                    <Pressable
+                      style={({ pressed }) => [styles.orderInfo, pressed && { opacity: 0.85 }]}
+                      onPress={() => { haptic.light(); navigation.navigate('AssetDetail', { assetId: order.assetId }); }}
                       accessibilityLabel="View order details"
                       accessibilityRole="link"
-                      >
-                        <View style={styles.orderHeader}>
-                          {/* Frequency badge — visual identity */}
-                          <View style={[styles.freqBadge, { backgroundColor: colors.brandSubtle }]}>
-                            <Text style={styles.freqBadgeText}>
-                              {FREQUENCY_SHORT[order.frequency] ?? order.frequency}
-                            </Text>
-                          </View>
-                          <View style={styles.orderHeaderText}>
-                            <Text style={styles.orderAsset}>{order.assetId.slice(0, 16)}…</Text>
-                            <Text style={styles.orderDetail}>
-                              {order.unitsPerExecution} units · {FREQUENCY_LABELS[order.frequency]}
-                            </Text>
-                          </View>
-                        </View>
-                        {order.maxPriceGbpMinor != null && (
-                          <View style={styles.orderMetaRow}>
-                            <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} />
-                            <Text style={styles.orderMaxPrice}>
-                              Max {formatGbp(order.maxPriceGbpMinor)}/unit
-                            </Text>
-                          </View>
-                        )}
-                        <View style={styles.orderMetaRow}>
-                          <Ionicons name="calendar-outline" size={12} color={colors.brand} />
-                          <Text style={styles.orderNext}>
-                            Next {formatDate(order.nextExecutionAt)}
+                    >
+                      <View style={styles.orderHeader}>
+                        {/* Frequency badge — visual identity */}
+                        <View style={[styles.freqBadge, { backgroundColor: colors.brandSubtle }]}>
+                          <Text style={styles.freqBadgeText}>
+                            {FREQUENCY_SHORT[order.frequency] ?? order.frequency}
                           </Text>
                         </View>
-                        <View style={styles.orderMetaRow}>
-                          <Ionicons name="checkmark-circle-outline" size={12} color={colors.textMuted} />
-                          <Text style={styles.orderExecutions}>
-                            {order.executionsCount} execution{order.executionsCount !== 1 ? 's' : ''} completed
+                        <View style={styles.orderHeaderText}>
+                          <Text style={styles.orderAsset}>{order.assetId.slice(0, 16)}…</Text>
+                          <Text style={styles.orderDetail}>
+                            {order.unitsPerExecution} units · {FREQUENCY_LABELS[order.frequency]}
                           </Text>
                         </View>
-                      </Pressable>
-                      <Pressable
-                        style={styles.cancelButton}
-                        onPress={() => { haptic.light(); handleCancel(order); }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Cancel recurring order"
-                        hitSlop={12}
-                      >
-                        <Ionicons name="close-circle-outline" size={24} color={colors.danger} />
-                      </Pressable>
-                    </View>
+                      </View>
+                      {order.maxPriceGbpMinor != null && (
+                        <View style={styles.orderMetaRow}>
+                          <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} />
+                          <Text style={styles.orderMaxPrice}>
+                            Max {formatGbp(order.maxPriceGbpMinor)}/unit
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.orderMetaRow}>
+                        <Ionicons name="calendar-outline" size={12} color={colors.brand} />
+                        <Text style={styles.orderNext}>
+                          Next {formatDate(order.nextExecutionAt)}
+                        </Text>
+                      </View>
+                      <View style={styles.orderMetaRow}>
+                        <Ionicons name="checkmark-circle-outline" size={12} color={colors.textMuted} />
+                        <Text style={styles.orderExecutions}>
+                          {order.executionsCount} execution{order.executionsCount !== 1 ? 's' : ''} completed
+                        </Text>
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      style={styles.cancelButton}
+                      onPress={() => { haptic.light(); handleCancel(order); }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel recurring order"
+                      hitSlop={12}
+                    >
+                      <Ionicons name="close-circle-outline" size={24} color={colors.danger} />
+                    </Pressable>
                   </View>
                 ))}
-              </View>
+              </SettingsSection>
             )}
 
             {/* Inactive orders */}
             {inactiveOrders.length > 0 && (
-              <View>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Cancelled</Text>
-                  <View style={styles.sectionCount}>
-                    <Text style={styles.sectionCountText}>{inactiveOrders.length}</Text>
-                  </View>
-                </View>
-                {inactiveOrders.map((order) => (
-                  <View key={order.id}>
-                    <View style={[styles.orderCard, { opacity: 0.55 }]}>
-                      <View style={styles.orderInfo}>
-                        <View style={styles.orderHeader}>
-                          <View style={[styles.freqBadge, { backgroundColor: colors.surfaceAlt }]}>
-                            <Text style={[styles.freqBadgeText, { color: colors.textMuted }]}>
-                              {FREQUENCY_SHORT[order.frequency] ?? order.frequency}
-                            </Text>
-                          </View>
-                          <View style={styles.orderHeaderText}>
-                            <Text style={styles.orderAsset}>{order.assetId.slice(0, 16)}…</Text>
-                            <Text style={styles.orderDetail}>
-                              {order.unitsPerExecution} units · {FREQUENCY_LABELS[order.frequency]}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.orderMetaRow}>
-                          <Ionicons name="checkmark-circle-outline" size={12} color={colors.textMuted} />
-                          <Text style={styles.orderExecutions}>
-                            {order.executionsCount} execution{order.executionsCount !== 1 ? 's' : ''} completed
+              <SettingsSection title="Cancelled">
+                {inactiveOrders.map((order, i) => (
+                  <View
+                    key={order.id}
+                    style={[
+                      styles.orderRow,
+                      { opacity: 0.55 },
+                      i < inactiveOrders.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                    ]}
+                  >
+                    <View style={styles.orderInfo}>
+                      <View style={styles.orderHeader}>
+                        <View style={[styles.freqBadge, { backgroundColor: colors.surfaceAlt }]}>
+                          <Text style={[styles.freqBadgeText, { color: colors.textMuted }]}>
+                            {FREQUENCY_SHORT[order.frequency] ?? order.frequency}
                           </Text>
                         </View>
+                        <View style={styles.orderHeaderText}>
+                          <Text style={styles.orderAsset}>{order.assetId.slice(0, 16)}…</Text>
+                          <Text style={styles.orderDetail}>
+                            {order.unitsPerExecution} units · {FREQUENCY_LABELS[order.frequency]}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.orderMetaRow}>
+                        <Ionicons name="checkmark-circle-outline" size={12} color={colors.textMuted} />
+                        <Text style={styles.orderExecutions}>
+                          {order.executionsCount} execution{order.executionsCount !== 1 ? 's' : ''} completed
+                        </Text>
                       </View>
                     </View>
                   </View>
                 ))}
-              </View>
+              </SettingsSection>
             )}
           </>
         )}
@@ -349,13 +340,8 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <View style={[styles.modalIconWrap, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="add-circle" size={22} color={colors.brand} />
-              </View>
-              <View style={styles.modalHeaderText}>
-                <Text style={styles.modalTitle}>New auto-invest plan</Text>
-                <Text style={styles.modalSubtitle}>Automatically buy units on a schedule</Text>
-              </View>
+              <Text style={styles.modalTitle}>New auto-invest plan</Text>
+              <Text style={styles.modalSubtitle}>Automatically buy units on a schedule</Text>
             </View>
 
             <Text style={styles.inputLabel}>Asset ID</Text>
@@ -438,28 +424,11 @@ function createStyles(colors: ThemeColors) {
     loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
-    // Hero summary
-    heroCard: {
-      borderRadius: Radius.xl,
-      backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.lg,
+    // Hero summary — flat, no card
+    heroWrap: {
       marginTop: Space.sm,
+      paddingHorizontal: Space.xs,
     },
-    heroIconRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.lg,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
     heroTitle: {
       fontSize: Type.subtitle.size,
       fontFamily: Typography.family.semibold,
@@ -486,51 +455,13 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md,
     },
 
-    // Section headers
-    sectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      marginTop: Space.lg,
-      marginBottom: Space.sm,
-      paddingHorizontal: Space.xs,
-    },
-    sectionTitle: {
-      fontSize: Type.label.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
-      lineHeight: Type.label.lineHeight,
-      opacity: 0.7,
-    },
-    sectionCount: {
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.full,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs / 2,
-      minWidth: 24,
-      alignItems: 'center',
-    },
-    sectionCountText: {
-      fontSize: Type.label.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-      fontVariant: ['tabular-nums'],
-      letterSpacing: Type.label.letterSpacing,
-    },
-
-    // Order cards
-    orderCard: {
+    // Order rows — flat canvas, hairline separators
+    orderRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.md,
-      marginBottom: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md,
     },
     orderInfo: { flex: 1 },
     orderHeader: {
@@ -613,20 +544,8 @@ function createStyles(colors: ThemeColors) {
       padding: Space.lg,
     },
     modalHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
       marginBottom: Space.lg,
     },
-    modalIconWrap: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.lg,
-      backgroundColor: colors.surfaceAlt,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    modalHeaderText: { flex: 1 },
     modalTitle: {
       fontSize: Type.subtitle.size,
       fontFamily: Typography.family.semibold,

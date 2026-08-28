@@ -47,9 +47,7 @@ export function BuyerProtectionStrip({
 
   return (
     <View style={styles.container}>
-      <View style={styles.iconWrap}>
-        <Ionicons name="checkmark-circle-outline" size={18} color={colors.success} />
-      </View>
+      <Ionicons name="checkmark-circle-outline" size={20} color={colors.success} style={styles.startIcon} />
       <View style={styles.textWrap}>
         <Text style={styles.title}>{label}</Text>
         <Text style={styles.subtitle} numberOfLines={2}>
@@ -76,13 +74,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: `${colors.success}20`,
   },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: `${colors.success}18`,
-    alignItems: 'center',
-    justifyContent: 'center',
+  startIcon: {
     flexShrink: 0,
   },
   textWrap: {

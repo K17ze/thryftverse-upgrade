@@ -879,9 +879,8 @@ export default function InboxScreen() {
                     case 'selling':
                       return (
                         <EmptyState
-                          icon="pricetag-outline"
+                          icon="chatbubbles-outline"
                           title="No selling conversations"
-                          subtitle="When buyers message you about your listings, they'll appear here."
                           ctaLabel="View all"
                           onCtaPress={() => setSegment('all')}
                         />

@@ -29,6 +29,14 @@ export type {
   Conversation,
 } from './conversation';
 
-export type { ChatAgentConfig, ChatBot } from './chat';
+export type {
+  ChatAgentConfig,
+  ChatBot,
+  AgentCategory,
+  AgentStatus,
+  AgentRuntimeMode,
+  CanonicalAgentContract,
+  ConversationBotDeployment,
+} from './chat';
 
 export type { Notification } from './notification';

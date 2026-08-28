@@ -1,16 +1,16 @@
 /**
- * 1ze Token Pricing Engine — Authoritative Non-ML Commerce Logic
+ * 1ze At-Par Pricing Engine — Authoritative Non-ML Commerce Logic
  *
- * This module is the authoritative source for 1ze token buy/sell/cross-border
- * pricing. All calculations are deterministic: prices are derived from
- * operator-set anchor values, FX rates, and bounded markup/markdown/PPP
- * parameters. No ML model participates in price determination.
+ * This module is the authoritative source for 1ze at-par e-money pricing.
+ * All calculations are deterministic: 1 1ZE = $1.00 USD at par. Prices are
+ * derived from the anchor value, FX rates, and transparent platform fees.
+ * No ML model participates in price determination. There is no
+ * markup/markdown/PPP token economics model — 1ZE is at-par e-money.
  *
  * Per the authoritative boundaries policy (docs/AUTHORITATIVE_BOUNDARIES.md),
  * 1ze pricing is a High-tier system: the model may provide evidence only;
- * authoritative policy and deterministic code own the action. Parameter
- * bounds are enforced by validatePricingProfileInput(), and arbitrage is
- * detected deterministically by findPricingArbitrageViolations().
+ * authoritative policy and deterministic code own the action. Fee bounds
+ * are enforced by validatePricingProfileInput().
  */
 type Queryable = {
   query: <T = Record<string, unknown>>(
@@ -26,40 +26,14 @@ export const PLATFORM_LOAD_FEE_BPS = 200;
 export const PLATFORM_WITHDRAW_FEE_BPS = 200;
 export const PLATFORM_CONVERT_FEE_BPS = 150;
 
-const MARKUP_MIN_BPS = 1500;
-const MARKUP_MAX_BPS = 2500;
-const MARKDOWN_MIN_BPS = 1000;
-const MARKDOWN_MAX_BPS = 2000;
-const CROSS_BORDER_FEE_MIN_BPS = 500;
-const CROSS_BORDER_FEE_MAX_BPS = 1500;
-const PPP_MIN = 0.7;
-const PPP_MAX = 1.0;
-
 export const PRICING_PARAMETER_BOUNDS = {
   platformFeeBps: {
     min: PLATFORM_FEE_MIN_BPS,
     max: PLATFORM_FEE_MAX_BPS,
   },
-  markupBps: {
-    min: MARKUP_MIN_BPS,
-    max: MARKUP_MAX_BPS,
-  },
-  markdownBps: {
-    min: MARKDOWN_MIN_BPS,
-    max: MARKDOWN_MAX_BPS,
-  },
-  crossBorderFeeBps: {
-    min: CROSS_BORDER_FEE_MIN_BPS,
-    max: CROSS_BORDER_FEE_MAX_BPS,
-  },
-  pppFactor: {
-    min: PPP_MIN,
-    max: PPP_MAX,
-  },
 } as const;
 
 const ROUND_DECIMALS = 6;
-const ARBITRAGE_TOLERANCE = 1e-6;
 
 function roundTo(value: number, decimals = ROUND_DECIMALS): number {
   const factor = 10 ** decimals;
@@ -94,10 +68,6 @@ export interface OnezeAnchorConfig {
 export interface OnezeCountryPricingProfile {
   countryCode: string;
   currency: string;
-  markupBps: number;
-  markdownBps: number;
-  crossBorderFeeBps: number;
-  pppFactor: number;
   fxFeeBps: number;
   loadFeeBps: number;
   withdrawFeeBps: number;
@@ -115,18 +85,6 @@ export interface OnezePricingQuote {
   anchorCurrency: string;
   anchorValueInInr: number;
   fxRateInrToLocal: number;
-  /** @deprecated Use totalCost (at-par load cost). */
-  buyPrice: number;
-  /** @deprecated Use netRedemption (at-par withdraw proceeds). */
-  sellPrice: number;
-  crossBorderSellPrice: number;
-  buyPriceInAnchor: number;
-  sellPriceInAnchor: number;
-  crossBorderSellPriceInAnchor: number;
-  markupBps: number;
-  markdownBps: number;
-  crossBorderFeeBps: number;
-  pppFactor: number;
   source: string;
   updatedAt: string;
   principalRate: number;
@@ -138,44 +96,6 @@ export interface OnezePricingQuote {
   feeAmount: number;
   totalCost: number;
   netRedemption: number;
-}
-
-export interface PricingArbitrageViolation {
-  buyCountry: string;
-  sellCountry: string;
-  buyPriceInAnchor: number;
-  crossBorderSellPriceInAnchor: number;
-  guaranteedProfitInAnchor: number;
-}
-
-export function calculateCountryPricing(input: {
-  anchorValue: number;
-  fxRate: number;
-  markupBps: number;
-  markdownBps: number;
-  crossBorderFeeBps: number;
-  pppFactor: number;
-}) {
-  const markup = input.markupBps / 10_000;
-  const markdown = input.markdownBps / 10_000;
-  const crossBorderFee = input.crossBorderFeeBps / 10_000;
-
-  const buyPrice = roundTo(input.anchorValue * input.fxRate * (1 + markup) * input.pppFactor);
-  const sellPrice = roundTo(input.anchorValue * input.fxRate * (1 - markdown) * input.pppFactor);
-  const crossBorderSellPrice = roundTo(sellPrice * (1 - crossBorderFee));
-
-  const buyPriceInAnchor = roundTo(buyPrice / input.fxRate);
-  const sellPriceInAnchor = roundTo(sellPrice / input.fxRate);
-  const crossBorderSellPriceInAnchor = roundTo(crossBorderSellPrice / input.fxRate);
-
-  return {
-    buyPrice,
-    sellPrice,
-    crossBorderSellPrice,
-    buyPriceInAnchor,
-    sellPriceInAnchor,
-    crossBorderSellPriceInAnchor,
-  };
 }
 
 export function calculateAtParPricing(input: {
@@ -205,35 +125,11 @@ export function calculateAtParPricing(input: {
 }
 
 export function validatePricingProfileInput(input: {
-  markupBps: number;
-  markdownBps: number;
-  crossBorderFeeBps: number;
-  pppFactor: number;
   platformFeeBps?: number;
   loadFeeBps?: number;
   withdrawFeeBps?: number;
+  fxFeeBps?: number;
 }): void {
-  if (input.markupBps < MARKUP_MIN_BPS || input.markupBps > MARKUP_MAX_BPS) {
-    throw new Error(`markupBps must be between ${MARKUP_MIN_BPS} and ${MARKUP_MAX_BPS}`);
-  }
-
-  if (input.markdownBps < MARKDOWN_MIN_BPS || input.markdownBps > MARKDOWN_MAX_BPS) {
-    throw new Error(`markdownBps must be between ${MARKDOWN_MIN_BPS} and ${MARKDOWN_MAX_BPS}`);
-  }
-
-  if (
-    input.crossBorderFeeBps < CROSS_BORDER_FEE_MIN_BPS
-    || input.crossBorderFeeBps > CROSS_BORDER_FEE_MAX_BPS
-  ) {
-    throw new Error(
-      `crossBorderFeeBps must be between ${CROSS_BORDER_FEE_MIN_BPS} and ${CROSS_BORDER_FEE_MAX_BPS}`
-    );
-  }
-
-  if (input.pppFactor < PPP_MIN || input.pppFactor > PPP_MAX) {
-    throw new Error(`pppFactor must be between ${PPP_MIN} and ${PPP_MAX}`);
-  }
-
   const platformFeeBps = input.platformFeeBps ?? PLATFORM_LOAD_FEE_BPS;
   if (platformFeeBps < PLATFORM_FEE_MIN_BPS || platformFeeBps > PLATFORM_FEE_MAX_BPS) {
     throw new Error(`platformFeeBps must be between ${PLATFORM_FEE_MIN_BPS} and ${PLATFORM_FEE_MAX_BPS}`);
@@ -248,31 +144,11 @@ export function validatePricingProfileInput(input: {
   if (withdrawFeeBps < PLATFORM_FEE_MIN_BPS || withdrawFeeBps > PLATFORM_FEE_MAX_BPS) {
     throw new Error(`withdrawFeeBps must be between ${PLATFORM_FEE_MIN_BPS} and ${PLATFORM_FEE_MAX_BPS}`);
   }
-}
 
-export function findPricingArbitrageViolations(quotes: OnezePricingQuote[]): PricingArbitrageViolation[] {
-  const violations: PricingArbitrageViolation[] = [];
-
-  for (const buyCountry of quotes) {
-    for (const sellCountry of quotes) {
-      const guaranteedProfit = roundTo(
-        sellCountry.crossBorderSellPriceInAnchor - buyCountry.buyPriceInAnchor,
-        8
-      );
-
-      if (guaranteedProfit > ARBITRAGE_TOLERANCE) {
-        violations.push({
-          buyCountry: buyCountry.countryCode,
-          sellCountry: sellCountry.countryCode,
-          buyPriceInAnchor: buyCountry.buyPriceInAnchor,
-          crossBorderSellPriceInAnchor: sellCountry.crossBorderSellPriceInAnchor,
-          guaranteedProfitInAnchor: guaranteedProfit,
-        });
-      }
-    }
+  const fxFeeBps = input.fxFeeBps ?? PLATFORM_CONVERT_FEE_BPS;
+  if (fxFeeBps < PLATFORM_FEE_MIN_BPS || fxFeeBps > PLATFORM_FEE_MAX_BPS) {
+    throw new Error(`fxFeeBps must be between ${PLATFORM_FEE_MIN_BPS} and ${PLATFORM_FEE_MAX_BPS}`);
   }
-
-  return violations;
 }
 
 export async function pricingTablesAvailable(client: Queryable): Promise<boolean> {
@@ -369,10 +245,6 @@ export async function setOnezeAnchorConfig(
 async function mapCountryProfileRow(row: {
   country_code: string;
   currency: string;
-  markup_bps: number;
-  markdown_bps: number;
-  cross_border_fee_bps: number;
-  ppp_factor: string | number;
   fx_fee_bps: number;
   load_fee_bps: number;
   withdraw_fee_bps: number;
@@ -386,10 +258,6 @@ async function mapCountryProfileRow(row: {
   return {
     countryCode: row.country_code,
     currency: row.currency,
-    markupBps: row.markup_bps,
-    markdownBps: row.markdown_bps,
-    crossBorderFeeBps: row.cross_border_fee_bps,
-    pppFactor: parseNumeric(row.ppp_factor),
     fxFeeBps: row.fx_fee_bps,
     loadFeeBps: row.load_fee_bps,
     withdrawFeeBps: row.withdraw_fee_bps,
@@ -411,10 +279,6 @@ export async function getCountryPricingProfile(
   const result = await client.query<{
     country_code: string;
     currency: string;
-    markup_bps: number;
-    markdown_bps: number;
-    cross_border_fee_bps: number;
-    ppp_factor: string | number;
     fx_fee_bps: number;
     load_fee_bps: number;
     withdraw_fee_bps: number;
@@ -429,10 +293,6 @@ export async function getCountryPricingProfile(
       SELECT
         country_code,
         currency,
-        markup_bps,
-        markdown_bps,
-        cross_border_fee_bps,
-        ppp_factor::text,
         fx_fee_bps,
         load_fee_bps,
         withdraw_fee_bps,
@@ -466,10 +326,6 @@ export async function getCountryPricingProfileByCurrency(
   const result = await client.query<{
     country_code: string;
     currency: string;
-    markup_bps: number;
-    markdown_bps: number;
-    cross_border_fee_bps: number;
-    ppp_factor: string | number;
     fx_fee_bps: number;
     load_fee_bps: number;
     withdraw_fee_bps: number;
@@ -484,10 +340,6 @@ export async function getCountryPricingProfileByCurrency(
       SELECT
         country_code,
         currency,
-        markup_bps,
-        markdown_bps,
-        cross_border_fee_bps,
-        ppp_factor::text,
         fx_fee_bps,
         load_fee_bps,
         withdraw_fee_bps,
@@ -519,10 +371,6 @@ export async function upsertCountryPricingProfile(
   input: {
     countryCode: string;
     currency: string;
-    markupBps: number;
-    markdownBps: number;
-    crossBorderFeeBps: number;
-    pppFactor: number;
     fxFeeBps?: number;
     loadFeeBps?: number;
     withdrawFeeBps?: number;
@@ -546,10 +394,6 @@ export async function upsertCountryPricingProfile(
       INSERT INTO oneze_country_pricing_profiles (
         country_code,
         currency,
-        markup_bps,
-        markdown_bps,
-        cross_border_fee_bps,
-        ppp_factor,
         fx_fee_bps,
         load_fee_bps,
         withdraw_fee_bps,
@@ -560,15 +404,11 @@ export async function upsertCountryPricingProfile(
         metadata,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW())
       ON CONFLICT (country_code)
       DO UPDATE
         SET
           currency = EXCLUDED.currency,
-          markup_bps = EXCLUDED.markup_bps,
-          markdown_bps = EXCLUDED.markdown_bps,
-          cross_border_fee_bps = EXCLUDED.cross_border_fee_bps,
-          ppp_factor = EXCLUDED.ppp_factor,
           fx_fee_bps = EXCLUDED.fx_fee_bps,
           load_fee_bps = EXCLUDED.load_fee_bps,
           withdraw_fee_bps = EXCLUDED.withdraw_fee_bps,
@@ -582,10 +422,6 @@ export async function upsertCountryPricingProfile(
     [
       normalizedCountry,
       normalizedCurrency,
-      input.markupBps,
-      input.markdownBps,
-      input.crossBorderFeeBps,
-      input.pppFactor,
       fxFeeBps,
       loadFeeBps,
       withdrawFeeBps,
@@ -744,26 +580,12 @@ export async function resolveCountryPricingQuote(
     withdrawFeeBps: profile.withdrawFeeBps,
   });
 
-  const buyPriceInAnchor = roundTo(loadAtPar.totalCost / fx.rate);
-  const sellPriceInAnchor = roundTo(withdrawAtPar.netRedemption / fx.rate);
-  const crossBorderSellPriceInAnchor = sellPriceInAnchor;
-
   return {
     countryCode: profile.countryCode,
     currency: profile.currency,
     anchorCurrency: anchor.anchorCurrency,
     anchorValueInInr: anchor.anchorValue,
     fxRateInrToLocal: fx.rate,
-    buyPrice: loadAtPar.totalCost,
-    sellPrice: withdrawAtPar.netRedemption,
-    crossBorderSellPrice: withdrawAtPar.netRedemption,
-    buyPriceInAnchor,
-    sellPriceInAnchor,
-    crossBorderSellPriceInAnchor,
-    markupBps: profile.markupBps,
-    markdownBps: profile.markdownBps,
-    crossBorderFeeBps: profile.crossBorderFeeBps,
-    pppFactor: profile.pppFactor,
     source: `internal_pricing:${profile.countryCode}`,
     updatedAt: profile.updatedAt,
     principalRate: 1,
@@ -795,10 +617,6 @@ export async function listCountryPricingQuotes(client: Queryable): Promise<Oneze
   const profilesResult = await client.query<{
     country_code: string;
     currency: string;
-    markup_bps: number;
-    markdown_bps: number;
-    cross_border_fee_bps: number;
-    ppp_factor: string | number;
     fx_fee_bps: number;
     load_fee_bps: number;
     withdraw_fee_bps: number;
@@ -813,10 +631,6 @@ export async function listCountryPricingQuotes(client: Queryable): Promise<Oneze
       SELECT
         country_code,
         currency,
-        markup_bps,
-        markdown_bps,
-        cross_border_fee_bps,
-        ppp_factor::text,
         fx_fee_bps,
         load_fee_bps,
         withdraw_fee_bps,
@@ -856,26 +670,12 @@ export async function listCountryPricingQuotes(client: Queryable): Promise<Oneze
       withdrawFeeBps: profile.withdrawFeeBps,
     });
 
-    const buyPriceInAnchor = roundTo(loadAtPar.totalCost / fx.rate);
-    const sellPriceInAnchor = roundTo(withdrawAtPar.netRedemption / fx.rate);
-    const crossBorderSellPriceInAnchor = sellPriceInAnchor;
-
     quotes.push({
       countryCode: profile.countryCode,
       currency: profile.currency,
       anchorCurrency: anchor.anchorCurrency,
       anchorValueInInr: anchor.anchorValue,
       fxRateInrToLocal: fx.rate,
-      buyPrice: loadAtPar.totalCost,
-      sellPrice: withdrawAtPar.netRedemption,
-      crossBorderSellPrice: withdrawAtPar.netRedemption,
-      buyPriceInAnchor,
-      sellPriceInAnchor,
-      crossBorderSellPriceInAnchor,
-      markupBps: profile.markupBps,
-      markdownBps: profile.markdownBps,
-      crossBorderFeeBps: profile.crossBorderFeeBps,
-      pppFactor: profile.pppFactor,
       source: `internal_pricing:${profile.countryCode}`,
       updatedAt: profile.updatedAt,
       principalRate: 1,

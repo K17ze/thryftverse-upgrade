@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Alert,
   Platform,
-  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -23,10 +22,10 @@ import {
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { useToast } from '../context/ToastContext';
 import { AppButton } from '../components/ui/AppButton';
-import { SettingsCell } from '../components/SettingsCell';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { AppListSection } from '../components/ui/AppListSection';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
@@ -198,63 +197,37 @@ export default function PaymentsScreen({ navigation }: Props) {
   const renderPaymentMethodRows = (
     methods: CommercePaymentMethod[],
     allow: boolean,
-    emptyTitle: string,
-    emptySub: string,
     unavailableTitle: string,
     unavailableSub: string,
     iconOutline: React.ComponentProps<typeof Ionicons>['name']
   ) => {
     if (!allow) {
       return (
-        <View
-          style={styles.paymentRow}
-        >
-          <View style={styles.iconCircle}>
-            <Ionicons name={iconOutline} size={20} color={colors.textPrimary} aria-hidden={true} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.paymentTitle}>{unavailableTitle}</Text>
-            <Text style={styles.paymentSub}>{unavailableSub}</Text>
-          </View>
-        </View>
+        <SettingsRow
+          icon={iconOutline}
+          title={unavailableTitle}
+          subtitle={unavailableSub}
+          isFirst
+          isLast
+        />
       );
     }
-    if (methods.length > 0) {
-      return methods.map((method, idx) => {
-        const brand = getCardBrand(method.brand);
-        return (
-          <AnimatedPressable
-            key={method.id}
-            style={[styles.paymentRow, idx < methods.length - 1 && styles.paymentRowBorder]}
-            onPress={() => handlePaymentMethodPress(method)}
-            scaleValue={0.98}
-            hapticFeedback="light"
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: `${brand.color}12` }]}>
-              <Ionicons name={brand.icon} size={20} color={brand.color} aria-hidden={true} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.paymentTitle}>{method.label}</Text>
-              <Text style={styles.paymentSub}>{method.details}</Text>
-            </View>
-            {method.isDefault ? (
-              <View style={[styles.defaultBadge, { backgroundColor: `${colors.success}12` }]}>
-                <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
-                <Text style={[styles.defaultText, { color: colors.success }]}>{t('payments.label.default')}</Text>
-              </View>
-            ) : null}
-          </AnimatedPressable>
-        );
-      });
-    }
-    return (
-      <View style={styles.emptyState}>
-        <Ionicons name={iconOutline} size={28} color={colors.textMuted} aria-hidden={true} />
-        <Text style={styles.emptyStateTitle}>{emptyTitle}</Text>
-        <Text style={styles.emptyStateSub}>{emptySub}</Text>
-      </View>
-    );
+    return methods.map((method, idx) => {
+      const brand = getCardBrand(method.brand);
+      return (
+        <SettingsRow
+          key={method.id}
+          icon="card-outline"
+          iconColor={brand.color}
+          title={method.label}
+          subtitle={method.details}
+          value={method.isDefault ? t('payments.label.default') : undefined}
+          onPress={() => handlePaymentMethodPress(method)}
+          isFirst={idx === 0}
+          isLast={idx === methods.length - 1}
+        />
+      );
+    });
   };
 
   const hasError = !isSyncing && backendPaymentMethods.length === 0 && countryCapabilities === null;
@@ -313,31 +286,6 @@ export default function PaymentsScreen({ navigation }: Props) {
         <Text style={styles.policyLabel}>{t('payments.policyLabel', { scope: policyLabel })}</Text>
       ) : null}
 
-      {/* Hero summary — payment methods count + security status */}
-      <View>
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-              <Ionicons name="card" size={20} color={colors.textInverse} aria-hidden={true} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {defaultMethod ? t('payments.hero.methodCount', { count: backendPaymentMethods.length, plural: backendPaymentMethods.length === 1 ? '' : 's' }) : t('payments.hero.noMethod')}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {defaultMethod ? t('payments.hero.defaultSubtitle', { label: defaultMethod.label }) : t('payments.hero.addCardHint')}
-              </Text>
-            </View>
-            {defaultMethod && (
-              <View style={[styles.heroBadge, { backgroundColor: colors.successSubtle }]}>
-                <Ionicons name="lock-closed-outline" size={12} color={colors.success} aria-hidden={true} />
-                <Text style={[styles.heroBadgeText, { color: colors.success }]}>{t('payments.label.secure')}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
-
       {isSyncing && backendPaymentMethods.length === 0 && (
         <FlagshipState variant="loading" />
       )}
@@ -353,46 +301,30 @@ export default function PaymentsScreen({ navigation }: Props) {
       ) : (
         <>
           {/* Digital wallets — Apple Pay / Google Pay shown FIRST per 2026 UX
-              research: "Place Google Pay at the top of the list of payment
-              options, above manual entry fields for payment information."
-              These are device-native biometric payment methods managed by the
-              OS, not stored cards. Shown when the capability is allowed for
-              the user's region and the platform supports it. */}
+              research. Flat rows, no card wrapper or decorative icon circles. */}
           {(allowApplePay || allowGooglePay) && (
-            <View>
-              <AppListSection title={t('payments.section.digitalWallets')}>
-                {allowApplePay && Platform.OS === 'ios' && (
-                  <View style={styles.walletRow}>
-                    <View style={[styles.walletIcon, { backgroundColor: colors.textPrimary }]}>
-                      <Ionicons name="logo-apple" size={20} color={colors.textInverse} aria-hidden={true} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.walletTitle}>{t('payments.wallet.applePay')}</Text>
-                      <Text style={styles.walletSub}>{t('payments.wallet.applePaySub')}</Text>
-                    </View>
-                    <View style={[styles.walletBadge, { backgroundColor: colors.successSubtle }]}>
-                      <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
-                      <Text style={[styles.walletBadgeText, { color: colors.success }]}>{t('payments.wallet.ready')}</Text>
-                    </View>
-                  </View>
-                )}
-                {allowGooglePay && Platform.OS === 'android' && (
-                  <View style={styles.walletRow}>
-                    <View style={[styles.walletIcon, { backgroundColor: colors.textPrimary }]}>
-                      <Ionicons name="logo-google" size={18} color={colors.textInverse} aria-hidden={true} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.walletTitle}>{t('payments.wallet.googlePay')}</Text>
-                      <Text style={styles.walletSub}>{t('payments.wallet.googlePaySub')}</Text>
-                    </View>
-                    <View style={[styles.walletBadge, { backgroundColor: colors.successSubtle }]}>
-                      <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
-                      <Text style={[styles.walletBadgeText, { color: colors.success }]}>{t('payments.wallet.ready')}</Text>
-                    </View>
-                  </View>
-                )}
-              </AppListSection>
-            </View>
+            <SettingsSection title={t('payments.section.digitalWallets')}>
+              {allowApplePay && Platform.OS === 'ios' && (
+                <SettingsRow
+                  icon="logo-apple"
+                  title={t('payments.wallet.applePay')}
+                  subtitle={t('payments.wallet.applePaySub')}
+                  value={t('payments.wallet.ready')}
+                  isFirst
+                  isLast
+                />
+              )}
+              {allowGooglePay && Platform.OS === 'android' && (
+                <SettingsRow
+                  icon="logo-google"
+                  title={t('payments.wallet.googlePay')}
+                  subtitle={t('payments.wallet.googlePaySub')}
+                  value={t('payments.wallet.ready')}
+                  isFirst
+                  isLast
+                />
+              )}
+            </SettingsSection>
           )}
 
           {/* Inline trust signal — placed near payment methods where card-
@@ -406,117 +338,95 @@ export default function PaymentsScreen({ navigation }: Props) {
             </Text>
           </View>
 
-          {/* Primary Payment Method Summary */}
-          <View>
+          {/* Primary Payment Method — flat row, no card or decorative icon circle */}
+          <SettingsSection title={t('payments.label.primaryMethod')}>
             {defaultMethod ? (
-              <AnimatedPressable
-                style={[styles.primaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              <SettingsRow
+                icon="card-outline"
+                iconColor={getCardBrand(defaultMethod.brand).color}
+                title={defaultMethod.label}
+                subtitle={defaultMethod.details ?? (defaultMethod.type === 'card' ? t('payments.label.cardEnding') : t('payments.label.bankAccount'))}
+                value={t('payments.label.default')}
                 onPress={() => handlePaymentMethodPress(defaultMethod)}
-                activeOpacity={0.8}
-                hapticFeedback="light"
-                accessibilityRole="button"
                 accessibilityLabel={`Manage ${defaultMethod.label}`}
-              >
-                <View style={styles.primaryCardHeader}>
-                  <Text style={[styles.primaryCardLabel, { color: colors.textMuted }]}>{t('payments.label.primaryMethod')}</Text>
-                  <View style={[styles.defaultBadge, { backgroundColor: `${colors.success}12` }]}>
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
-                    <Text style={[styles.defaultText, { color: colors.success }]}>{t('payments.label.default')}</Text>
-                  </View>
-                </View>
-                <View style={styles.primaryCardBody}>
-                  <View style={[styles.brandIconCircle, { backgroundColor: `${getCardBrand(defaultMethod.brand).color}15` }]}>
-                    <Ionicons
-                      name="card"
-                      size={22}
-                      color={getCardBrand(defaultMethod.brand).color}
-                      aria-hidden={true}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.primaryCardTitle}>{defaultMethod.label}</Text>
-                    <Text style={styles.primaryCardSub}>{defaultMethod.details ?? (defaultMethod.type === 'card' ? t('payments.label.cardEnding') : t('payments.label.bankAccount'))}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-                </View>
-              </AnimatedPressable>
-            ) : (
-              <View style={[styles.primaryCard, styles.primaryCardEmpty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.brandIconCircle, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="card-outline" size={24} color={colors.textMuted} aria-hidden={true} />
-                </View>
-                <Text style={styles.primaryCardTitle}>{t('payments.hero.noMethod')}</Text>
-                <Text style={styles.primaryCardSub}>{t('payments.hero.addCardHint')}</Text>
-                <AnimatedPressable
-                  style={[styles.primaryCardCta, { backgroundColor: colors.brand }]}
-                  onPress={() => setAddCardSheetVisible(true)}
-                  activeOpacity={0.85}
-                  hapticFeedback="medium"
-                >
-                  <Ionicons name="add" size={16} color={colors.background} aria-hidden={true} />
-                  <Text style={[styles.primaryCardCtaText, { color: colors.background }]}>{t('payments.a11y.addPaymentMethod')}</Text>
-                </AnimatedPressable>
-              </View>
-            )}
-          </View>
-
-          {/* Preferences */}
-          <View>
-            <AppListSection title={t('payments.section.preferences')}>
-              <SettingsCell
-                icon="wallet-outline"
-                iconColor={colors.brand}
-                title={t('payments.preferences.useBalance')}
-                subtitle={t('payments.preferences.useBalanceSub')}
-                variant="toggle"
-                toggleValue={useBalance}
-                onToggle={(v) => updatePaymentPreferences({ useBalance: v })}
                 isFirst
                 isLast
               />
-            </AppListSection>
-          </View>
+            ) : (
+              <SettingsRow
+                icon="card-outline"
+                title={t('payments.hero.noMethod')}
+                subtitle={t('payments.hero.addCardHint')}
+                isFirst
+                isLast
+              />
+            )}
+          </SettingsSection>
+          {!defaultMethod && (
+            <AppButton
+              title="Add payment method"
+              onPress={() => setAddCardSheetVisible(true)}
+              variant="primary"
+              hapticFeedback="medium"
+              accessibilityLabel="Add payment method"
+              style={styles.addPaymentMethodBtn}
+            />
+          )}
 
-          {/* Cards */}
-          <View>
-            <AppListSection title={t('payments.section.cards')}>
+          {/* Preferences — flat row with toggle, no card wrapper */}
+          <SettingsSection title={t('payments.section.preferences')}>
+            <SettingsRow
+              icon="wallet-outline"
+              iconColor={colors.brand}
+              title={t('payments.preferences.useBalance')}
+              subtitle={t('payments.preferences.useBalanceSub')}
+              toggleValue={useBalance}
+              onToggle={(v) => updatePaymentPreferences({ useBalance: v })}
+              isFirst
+              isLast
+            />
+          </SettingsSection>
+
+          {/* Cards — flat rows, no card wrapper or decorative icon circles.
+              When cards are allowed but empty, render a standalone empty
+              state instead of nesting FlagshipState inside SettingsSection. */}
+          {cardMethods.length > 0 || !allowCards ? (
+            <SettingsSection
+              title={t('payments.section.cards')}
+              description={cardMethods.length > 0 ? `${cardMethods.length} payment method${cardMethods.length !== 1 ? 's' : ''}` : undefined}
+            >
               {renderPaymentMethodRows(
                 cardMethods,
                 allowCards,
-                t('payments.cards.emptyTitle'),
-                t('payments.cards.emptySub'),
                 t('payments.cards.unavailableTitle'),
                 t('payments.cards.unavailableSub'),
                 'card-outline'
               )}
-              {allowCards ? (
-                <AppButton
-                  title={t('payments.cards.addNew')}
-                  icon={<Ionicons name="add" size={18} color={colors.textPrimary} aria-hidden={true} />}
-                  style={styles.addBtn}
-                  variant="secondary"
-                  size="sm"
-                  titleStyle={styles.addText}
-                  contentStyle={styles.addBtnContent}
-                  iconContainerStyle={styles.addIconWrap}
-                  onPress={() => setAddCardSheetVisible(true)}
-                  accessibilityLabel={t('payments.cards.addNew')}
-                  accessibilityHint={t('payments.cards.a11y.opensCardSetup')}
-                />
-              ) : null}
-            </AppListSection>
-          </View>
+            </SettingsSection>
+          ) : (
+            <FlagshipState
+              variant="empty"
+              icon="card-outline"
+              title={t('payments.cards.emptyTitle')}
+              subtitle={t('payments.cards.emptySub')}
+            />
+          )}
 
-          {/* Security note — retained below for detailed disclosure, but the
-              primary trust signal now lives inline near the payment methods. */}
-          <View>
-            <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} aria-hidden={true} />
-              <Text style={styles.trustNoteText}>
-                {t('payments.trust.note')}
-              </Text>
-            </View>
-          </View>
+          {allowCards ? (
+            <AppButton
+              title={t('payments.cards.addNew')}
+              icon={<Ionicons name="add" size={18} color={colors.textPrimary} aria-hidden={true} />}
+              style={styles.addBtn}
+              variant="secondary"
+              size="sm"
+              titleStyle={styles.addText}
+              contentStyle={styles.addBtnContent}
+              iconContainerStyle={styles.addIconWrap}
+              onPress={() => setAddCardSheetVisible(true)}
+              accessibilityLabel={t('payments.cards.addNew')}
+              accessibilityHint={t('payments.cards.a11y.opensCardSetup')}
+            />
+          ) : null}
 
         </>
       )}
@@ -534,64 +444,6 @@ export default function PaymentsScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-  },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-  },
-  heroBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
-  securityBanner: {
-    alignItems: 'center',
-    marginBottom: Space.sm,
-  },
-  securityPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.full,
-  },
-  securityText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
   policyLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
@@ -600,46 +452,6 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
     marginLeft: Space.xs,
     letterSpacing: Type.caption.letterSpacing,
-  },
-  // ── Digital wallet rows ──
-  walletRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.md - Space.xs,
-  },
-  walletIcon: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Space.sm + Space.xs,
-  },
-  walletTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    marginBottom: Space.xs,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  walletSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  walletBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-  },
-  walletBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
   },
   // ── Inline trust signal ──
   inlineTrustRow: {
@@ -658,135 +470,13 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
   },
-  primaryCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.lg,
-    marginBottom: Space.md,
-  },
-  primaryCardEmpty: {
-    alignItems: 'center',
-    paddingVertical: Space.xl,
-  },
-  primaryCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Space.md,
-  },
-  primaryCardLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: Type.meta.letterSpacing,
-  },
-  primaryCardBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  primaryCardTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  primaryCardSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-    marginTop: Space.xs / 2,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  primaryCardCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm,
-    marginTop: Space.md,
-  },
-  primaryCardCtaText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  brandIconCircle: {
-    width: Space.xxl,
-    height: Space.xxl,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trustNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  trustNoteText: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  skeletonWrap: {
-    marginBottom: Space.md,
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.md - Space.xs,
-  },
-  paymentRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  iconCircle: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Space.sm + Space.xs,
-  },
-  paymentTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    marginBottom: Space.xs,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  paymentSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-    paddingRight: Space.sm + 2,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  defaultBadge: {
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-  },
-  defaultText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    letterSpacing: Type.meta.letterSpacing,
-  },
   addBtn: {
     borderRadius: Radius.md,
     marginTop: Space.xs,
     alignSelf: 'flex-start',
+  },
+  addPaymentMethodBtn: {
+    marginTop: Space.sm,
   },
   addBtnContent: {
     gap: Space.sm,
@@ -801,48 +491,6 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xl,
-  },
-  emptyStateTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-    marginTop: Space.md,
-    textAlign: 'center',
-    letterSpacing: Type.body.letterSpacing,
-  },
-  emptyStateSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    marginTop: Space.xs,
-    textAlign: 'center',
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  trustBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
-  trustBannerText: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  paymentText: {
-    flex: 1,
   },
   });
 }

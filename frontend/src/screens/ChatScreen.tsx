@@ -1933,6 +1933,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           onClose={() => setChatAgentPickerVisible(false)}
           onDeploy={handleDeployChatAgent}
           deployedAgentIds={deployedChatAgents.map((a) => a.id)}
+          conversationId={conversationId}
         />
 
         <ScrollToBottomFAB

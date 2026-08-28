@@ -21,6 +21,7 @@ import { clearUserScopedQueryCache } from '../platform/server';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { SettingsSection } from '../components/settings/SettingsSection';
 
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'AccountControl'>;
@@ -93,120 +94,72 @@ export default function AccountControlScreen({ navigation }: Props) {
 
   const renderOverview = () => (
     <>
-      {/* Hero summary — account control status */}
-      <View>
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-              <Ionicons name="shield-outline" size={18} color={colors.textInverse} accessible={false} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Account control</Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                Data and account control
-              </Text>
-            </View>
-          </View>
+      {/* Download data — flat section, no card wrapper or decorative icon circle */}
+      <SettingsSection
+        title="Download your data"
+        description="We'll generate a data export covering your addresses, payment methods, orders, bids, co-own holdings and consent records. A request ID is issued for tracking."
+      >
+        <View style={styles.optionActionWrap}>
+          <AnimatedPressable
+            style={[styles.optionBtn, { borderColor: colors.border }]}
+            onPress={handleDownloadData}
+            disabled={isExporting}
+            activeOpacity={0.8}
+            scaleValue={0.98}
+            hapticFeedback="medium"
+            accessibilityRole="button"
+            accessibilityLabel="Download your data"
+            accessibilityState={{ disabled: isExporting }}
+          >
+            {isExporting ? (
+              <ActivityIndicator size="small" color={colors.textPrimary} />
+            ) : (
+              <Text style={[styles.optionBtnText, { color: colors.textPrimary }]}>Request export</Text>
+            )}
+          </AnimatedPressable>
         </View>
-      </View>
+      </SettingsSection>
 
-      {/* Download data — supported, compact row */}
-      <View>
-      <View style={[styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.optionHeader}>
-          <View style={[styles.optionIcon, { borderColor: colors.border }]}>
-            <Ionicons name="download-outline" size={20} color={colors.textPrimary} />
-          </View>
-          <View style={styles.optionHeaderText}>
-            <Text style={[styles.optionTitle, { color: colors.textPrimary }]}>Download your data</Text>
-            <Text style={[styles.optionSubtitle, { color: colors.textMuted }]}>
-              Export a copy of your account data
-            </Text>
-          </View>
+      {/* Delete — flat section, no card wrapper or decorative icon circle */}
+      <SettingsSection
+        title="Delete account permanently"
+        description="This permanently erases your account, personal data, addresses, payment methods and wallet history. This action cannot be undone."
+      >
+        <View style={styles.optionActionWrap}>
+          <AnimatedPressable
+            style={[styles.optionBtn, { borderColor: colors.border }]}
+            onPress={() => { haptic.medium(); setPhase('delete-info'); }}
+            activeOpacity={0.8}
+            scaleValue={0.98}
+            hapticFeedback="medium"
+            accessibilityRole="button"
+            accessibilityLabel="Continue to account deletion"
+          >
+            <Text style={[styles.optionBtnText, { color: colors.textPrimary }]}>Review deletion details</Text>
+          </AnimatedPressable>
         </View>
-        <Text style={[styles.optionBody, { color: colors.textSecondary }]}>
-          We'll generate a data export covering your addresses, payment methods, orders, bids, co-own holdings and consent records. A request ID is issued for tracking.
-        </Text>
-        <AnimatedPressable
-          style={[styles.optionBtn, { borderColor: colors.border }]}
-          onPress={handleDownloadData}
-          disabled={isExporting}
-          activeOpacity={0.8}
-          scaleValue={0.98}
-          hapticFeedback="medium"
-          accessibilityRole="button"
-          accessibilityLabel="Download your data"
-          accessibilityState={{ disabled: isExporting }}
-        >
-          {isExporting ? (
-            <ActivityIndicator size="small" color={colors.textPrimary} />
-          ) : (
-            <Text style={[styles.optionBtnText, { color: colors.textPrimary }]}>Request export</Text>
-          )}
-        </AnimatedPressable>
-      </View>
-      </View>
-
-      {/* Delete — restrained navigation entry, not a giant red card */}
-      <View>
-      <View style={[styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.optionHeader}>
-          <View style={[styles.optionIcon, { borderColor: colors.border }]}>
-            <Ionicons name="trash-outline" size={20} color={colors.textSecondary} />
-          </View>
-          <View style={styles.optionHeaderText}>
-            <Text style={[styles.optionTitle, { color: colors.textPrimary }]}>Delete account permanently</Text>
-            <Text style={[styles.optionSubtitle, { color: colors.textMuted }]}>
-              Erase your account and data
-            </Text>
-          </View>
-        </View>
-        <Text style={[styles.optionBody, { color: colors.textSecondary }]}>
-          This permanently erases your account, personal data, addresses, payment methods and wallet history. This action cannot be undone.
-        </Text>
-        <AnimatedPressable
-          style={[styles.optionBtn, { borderColor: colors.border }]}
-          onPress={() => { haptic.medium(); setPhase('delete-info'); }}
-          activeOpacity={0.8}
-          scaleValue={0.98}
-          hapticFeedback="medium"
-          accessibilityRole="button"
-          accessibilityLabel="Continue to account deletion"
-        >
-          <Text style={[styles.optionBtnText, { color: colors.textPrimary }]}>Review deletion details</Text>
-        </AnimatedPressable>
-      </View>
-      </View>
+      </SettingsSection>
     </>
   );
 
   const renderDeleteInfo = () => (
     <>
-      <View>
       <View style={styles.introBlock}>
-        <View style={[styles.phaseBadge, { backgroundColor: `${colors.danger}15` }]}>
-          <Ionicons name="warning-outline" size={16} color={colors.danger} accessible={false} />
-          <Text style={[styles.phaseBadgeText, { color: colors.danger }]}>Permanent action</Text>
-        </View>
         <Text style={styles.introTitle}>Before you delete</Text>
         <Text style={[styles.introBody, { color: colors.textSecondary }]}>
           Review what happens when you permanently delete your Thryftverse account.
         </Text>
       </View>
-      </View>
 
-      <View>
-      <View style={[styles.consequenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <ConsequenceRow icon="person-remove-outline" text="Your username, email, password and profile are erased immediately." />
+      <SettingsSection title="What happens when you delete">
+        <ConsequenceRow icon="person-remove-outline" text="Your username, email, password and profile are erased immediately." isFirst />
         <ConsequenceRow icon="location-outline" text="All saved delivery addresses are removed." />
         <ConsequenceRow icon="card-outline" text="Saved payment methods and bank details are removed." />
         <ConsequenceRow icon="wallet-outline" text="Wallet history and payout records are deleted." />
         <ConsequenceRow icon="cube-outline" text="Active listings remain visible to buyers until they expire, but you'll no longer manage them from this account." />
         <ConsequenceRow icon="alert-circle-outline" text="Pending payouts, open disputes or active orders may need to be resolved before full erasure. Contact support if you have outstanding obligations." isLast />
-      </View>
-      </View>
+      </SettingsSection>
 
-      <View>
       <Text style={[styles.consequenceFootnote, { color: colors.textMuted }]}>
         If you have unresolved orders or payouts, we recommend resolving them before deletion. Contact support for help too.
       </Text>
@@ -235,26 +188,18 @@ export default function AccountControlScreen({ navigation }: Props) {
           <Text style={[styles.dangerBtnText, { color: colors.textInverse }]}>Continue to confirm</Text>
         </AnimatedPressable>
       </View>
-      </View>
     </>
   );
 
   const renderDeleteConfirm = () => (
     <>
-      <View>
       <View style={styles.introBlock}>
-        <View style={[styles.phaseBadge, { backgroundColor: `${colors.danger}15` }]}>
-          <Ionicons name="warning-outline" size={16} color={colors.danger} accessible={false} />
-          <Text style={[styles.phaseBadgeText, { color: colors.danger }]}>Final confirmation</Text>
-        </View>
         <Text style={styles.introTitle}>Type DELETE to confirm</Text>
         <Text style={[styles.introBody, { color: colors.textSecondary }]}>
           This is your last chance to cancel. Once you confirm, your account cannot be recovered.
         </Text>
       </View>
-      </View>
 
-      <View>
       <View style={styles.confirmFieldWrap}>
         <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>
           Type {DELETE_CONFIRM_PHRASE} to permanently delete your account
@@ -280,9 +225,7 @@ export default function AccountControlScreen({ navigation }: Props) {
           </View>
         ) : null}
       </View>
-      </View>
 
-      <View>
       <View style={styles.deleteConfirmActions}>
         <AnimatedPressable
           style={[styles.secondaryBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
@@ -313,7 +256,6 @@ export default function AccountControlScreen({ navigation }: Props) {
             <Text style={[styles.dangerBtnText, { color: colors.textInverse }]}>Delete permanently</Text>
           )}
         </AnimatedPressable>
-      </View>
       </View>
     </>
   );
@@ -356,50 +298,21 @@ export default function AccountControlScreen({ navigation }: Props) {
   );
 }
 
-function ConsequenceRow({ icon, text, isLast }: { icon: React.ComponentProps<typeof Ionicons>['name']; text: string; isLast?: boolean }) {
+function ConsequenceRow({ icon, text, isFirst, isLast }: { icon: React.ComponentProps<typeof Ionicons>['name']; text: string; isFirst?: boolean; isLast?: boolean }) {
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
-    <View style={[styles.consequenceRow, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-      <View style={styles.consequenceIcon}>
-        <Ionicons name={icon} size={18} color={colors.textMuted} accessible={false} />
-      </View>
-      <Text style={[styles.consequenceText, { color: colors.textSecondary }]}>{text}</Text>
+    <View style={[
+      { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: Space.md, paddingHorizontal: Space.md, gap: Space.sm, paddingTop: isFirst ? Space.sm : Space.md },
+      !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+    ]}>
+      <Ionicons name={icon} size={20} color={colors.textMuted} accessible={false} />
+      <Text style={{ flex: 1, fontSize: Type.body.size, fontFamily: Typography.family.regular, lineHeight: Type.body.lineHeight + 2, letterSpacing: Type.body.letterSpacing, color: colors.textSecondary }}>{text}</Text>
     </View>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-  },
   introBlock: {
     paddingTop: Space.md,
     paddingBottom: Space.lg,
@@ -418,63 +331,9 @@ function createStyles(colors: ThemeColors) {
     lineHeight: Type.body.lineHeight + 2,
     letterSpacing: Type.body.letterSpacing,
   },
-  phaseBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    alignSelf: 'flex-start',
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-    marginBottom: Space.xs,
-  },
-  phaseBadgeText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  optionCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  optionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginBottom: Space.sm,
-  },
-  optionIcon: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  optionHeaderText: {
-    flex: 1,
-  },
-  optionTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
-  optionSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-  optionBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight + 2,
-    letterSpacing: Type.body.letterSpacing,
-    marginBottom: Space.md,
+  optionActionWrap: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
   },
   optionBtn: {
     borderRadius: Radius.md,
@@ -489,38 +348,13 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
-  consequenceCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    marginBottom: Space.md,
-  },
-  consequenceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
-  consequenceIcon: {
-    width: Space.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Space.xs / 4,
-  },
-  consequenceText: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight + 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
   consequenceFootnote: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     lineHeight: Type.caption.lineHeight + 2,
     letterSpacing: Type.caption.letterSpacing,
     marginBottom: Space.lg,
+    paddingHorizontal: Space.md,
   },
   deleteInfoActions: {
     flexDirection: 'row',

@@ -138,9 +138,7 @@ export default function CoOwnOnboardingScreen() {
           exiting={slideExit}
           style={styles.heroSlide}
         >
-          <View style={[styles.iconRing, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-            <Ionicons name={slide.icon} size={64} color={colors.brand} />
-          </View>
+          <Ionicons name={slide.icon} size={64} color={colors.brand} style={styles.slideIcon} />
 
           {/* Welcome badge — shown only on the first slide */}
           {index === 0 && (
@@ -241,13 +239,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconRing: {
-    width: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 8,
-    height: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 8,
-    borderRadius: Space.xxl + Space.xxl + Space.xxl + 8,
-    borderWidth: Stroke.standard,
-    alignItems: 'center',
-    justifyContent: 'center',
+  slideIcon: {
+    marginBottom: Space.md,
   },
   title: {
     marginTop: Space.lg,

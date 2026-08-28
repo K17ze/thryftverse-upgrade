@@ -71,13 +71,14 @@ function LookTile({
   const isMultiLayer = look.compositionDocument != null;
   const isShoppable = look.tags.length > 0;
   const creatorHandle = look.creator.username ?? 'unknown';
+  const creatorVerified = look.creator.verified === true;
 
   return (
     <Pressable
       style={styles.tile}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Look by ${creatorHandle}`}
+      accessibilityLabel={`Look by ${creatorHandle}${creatorVerified ? ', verified creator' : ''}`}
       accessibilityHint="Opens the look detail"
     >
       <View style={[styles.tileMedia, { aspectRatio: template.aspect }]}>
@@ -90,24 +91,37 @@ function LookTile({
           transition={180}
         />
 
-        {/* Bottom gradient scrim — Pinterest/Instagram approach for text
-            legibility without heavy overlay pills. Fades from transparent to
-            a subtle dark scrim at the bottom 40% of the tile. */}
+        {/* Bottom gradient scrim — guarantees text contrast across all
+            imagery (AGENTS.md §4: text on variable imagery MUST have a
+            contrast scrim). Fades from transparent to a 0.6 dark scrim
+            over the bottom 45% of the tile. */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.45)']}
-          locations={[0, 0.55, 1.0]}
+          colors={['transparent', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.6)']}
+          locations={[0, 0.5, 1.0]}
           style={styles.tileScrim}
           pointerEvents="none"
         />
 
-        {/* Creator identity — bottom-left, on the gradient scrim. No pill. */}
+        {/* Creator identity — bottom-left, on the gradient scrim. No pill.
+            Username is 12pt semibold white; the verified checkmark is 14pt
+            blue so it reads as a recognisable trust signal, not a tiny
+            inline glyph. */}
         <View style={styles.creatorOverlay}>
           <Text style={styles.creatorText} numberOfLines={1}>
             @{creatorHandle}
           </Text>
+          {creatorVerified && (
+            <Ionicons
+              name="checkmark-circle"
+              size={14}
+              color={colors.brand}
+              style={styles.verifiedIcon}
+              accessibilityLabel="Verified creator"
+            />
+          )}
           {isShoppable && (
             <View style={styles.shoppableInline}>
-              <Ionicons name="pricetag" size={9} color={colors.textInverse} />
+              <Ionicons name="pricetag" size={10} color={colors.textInverse} />
               <Text style={styles.shoppableText}>{look.tags.length}</Text>
             </View>
           )}
@@ -124,11 +138,12 @@ function LookTile({
           </View>
         )}
 
-        {/* Like count — bottom-right, on the gradient scrim. Pinterest-style
-            engagement cue without a heavy badge. */}
+        {/* Like count — bottom-right, on the gradient scrim. Heart icon is
+            14pt white with an 11pt regular white count — Pinterest-style
+            engagement cue with guaranteed contrast from the scrim. */}
         {look.likeCount > 0 && (
           <View style={styles.likeOverlay}>
-            <Ionicons name="heart" size={11} color={colors.textInverse} />
+            <Ionicons name="heart" size={14} color={colors.textInverse} />
             <Text style={styles.likeText}>
               {look.likeCount > 999 ? `${(look.likeCount / 1000).toFixed(1)}k` : look.likeCount}
             </Text>
@@ -655,12 +670,22 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: Space.xs,
     },
+    // Username — 12pt semibold white. Fixed white ink because the gradient
+    // scrim is always dark at the bottom; a theme text token (black in dark
+    // mode) would render invisible.
     creatorText: {
-      color: colors.textInverse,
-      fontSize: Type.meta.size,
+      color: '#FFFFFF',
+      fontSize: 12,
+      lineHeight: 16,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.meta.letterSpacing,
       flexShrink: 1,
+    },
+    // Verified checkmark — 14pt blue, recognisable trust signal (not a tiny
+    // inline glyph). Uses the brand blue so it reads as verification, not
+    // a decorative icon.
+    verifiedIcon: {
+      flexShrink: 0,
     },
     // Shoppable count — inline with creator handle, not a separate badge.
     shoppableInline: {
@@ -669,7 +694,7 @@ function createStyles(colors: ThemeColors) {
       gap: 2,
     },
     shoppableText: {
-      color: colors.textInverse,
+      color: '#FFFFFF',
       fontSize: 10,
       fontFamily: Typography.family.semibold,
     },
@@ -694,10 +719,13 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: 3,
     },
+    // Heart count — 11pt regular white. Fixed white ink because the gradient
+    // scrim guarantees contrast; a theme token would render black-on-dark in
+    // dark mode.
     likeText: {
-      color: colors.textInverse,
-      fontSize: 10,
-      fontFamily: Typography.family.semibold,
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontFamily: Typography.family.regular,
     },
   });
 }

@@ -139,9 +139,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
       >
         {/* Celebration Header */}
         <View style={styles.heroSection}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={28} color={colors.brand} aria-hidden={true} />
-          </View>
+          <Ionicons name="checkmark" size={28} color={colors.brand} style={styles.heroIcon} aria-hidden={true} />
           <Text style={styles.heroBigText}>Published</Text>
           <Text style={styles.heroSubText}>
             {isActive ? 'Your item is now live on Thryftverse.' : isPaused ? 'Your listing is paused and hidden from buyers.' : isSold ? 'Your item has been marked as sold.' : 'Your listing has been created.'}
@@ -395,13 +393,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     marginBottom: Space.xl,
   },
-  iconCircle: {
-    width: Space.xxl + Space.xxl + Space.xs,
-    height: Space.xxl + Space.xxl + Space.xs,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
+  heroIcon: {
     marginBottom: Space.md,
   },
   heroBigText: {

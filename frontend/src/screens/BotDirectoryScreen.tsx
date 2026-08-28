@@ -8,7 +8,7 @@ import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { fetchAiCapability, type AiCapabilitySummary } from '../services/aiTruthApi';
 
@@ -115,7 +115,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           accessibilityLabel="Open your agents"
         >
           <View style={styles.leadingIcon}>
-            <Ionicons name="person-outline" size={21} color={colors.textPrimary} />
+            <Ionicons name="person-outline" size={24} color={colors.textPrimary} />
           </View>
           <View style={styles.yourAgentsCopy}>
             <Text style={styles.yourAgentsTitle}>Your agents</Text>
@@ -133,33 +133,31 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           <Text style={styles.sectionDetail}>Built-in help for common chat workflows.</Text>
         </View>
 
-        <View style={styles.filterBackground}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filters}
-          >
-            {CATEGORIES.map((category) => {
-              const selected = selectedCategory === category.value;
-              return (
-                <AnimatedPressable
-                  key={category.value}
-                  onPress={() => setSelectedCategory(category.value)}
-                  style={[styles.filter, selected && styles.filterSelected]}
-                  scaleValue={0.98}
-                  hapticFeedback="selection"
-                  accessibilityRole="tab"
-                  accessibilityLabel={category.label}
-                  accessibilityState={{ selected }}
-                >
-                  <Text style={[styles.filterText, selected && styles.filterTextSelected]}>
-                    {category.label}
-                  </Text>
-                </AnimatedPressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filters}
+        >
+          {CATEGORIES.map((category) => {
+            const selected = selectedCategory === category.value;
+            return (
+              <AnimatedPressable
+                key={category.value}
+                onPress={() => setSelectedCategory(category.value)}
+                style={[styles.filterChip, selected && styles.filterChipSelected]}
+                scaleValue={0.96}
+                hapticFeedback="selection"
+                accessibilityRole="tab"
+                accessibilityLabel={category.label}
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>
+                  {category.label}
+                </Text>
+              </AnimatedPressable>
+            );
+          })}
+        </ScrollView>
 
         {isLoading && filteredAgents.length === 0 ? (
           <View style={styles.list}>
@@ -195,7 +193,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                     <AgentIcon
                       category={agent.category}
                       name={agent.name}
-                      size={21}
+                      size={24}
                       color={colors.textPrimary}
                     />
                   </View>
@@ -252,7 +250,7 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   leadingIcon: {
-    width: Control.chromeCompact,
+    width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
@@ -288,31 +286,32 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
   },
-  filterBackground: {
-    backgroundColor: colors.background,
-  },
   filters: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    gap: Space.sm + 1,
+    paddingVertical: Space.sm,
+    gap: Space.sm,
+    backgroundColor: colors.background,
   },
-  filter: {
-    minHeight: Control.chrome + 2,
+  filterChip: {
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
     justifyContent: 'center',
-    paddingHorizontal: Space.xs + 2,
-    borderBottomWidth: Stroke.emphasis,
-    borderBottomColor: 'transparent',
+    alignItems: 'center',
   },
-  filterSelected: {
-    borderBottomColor: colors.textPrimary,
+  filterChipSelected: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
-  filterText: {
-    color: colors.textMuted,
+  filterChipText: {
+    color: colors.textSecondary,
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
   },
-  filterTextSelected: {
-    color: colors.textPrimary,
+  filterChipTextSelected: {
+    color: colors.background,
     fontFamily: Typography.family.semibold,
   },
   list: {

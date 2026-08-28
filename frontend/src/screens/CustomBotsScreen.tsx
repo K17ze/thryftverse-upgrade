@@ -239,14 +239,12 @@ function BotRow({
       accessibilityLabel={`View ${bot.name}`}
     >
       <View style={styles.row}>
-        <View style={styles.iconWrap}>
-          <AgentIcon
-            category={bot.category}
-            name={bot.name}
-            size={21}
-            color={colors.textPrimary}
-          />
-        </View>
+        <AgentIcon
+          category={bot.category}
+          name={bot.name}
+          size={21}
+          color={colors.textPrimary}
+        />
 
         <View style={styles.botText}>
           <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
@@ -323,6 +321,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.sm + 2,
+    minHeight: Control.hit,
     gap: Space.sm,
   },
   loadingContainer: {
@@ -349,12 +348,6 @@ function createStyles(colors: ThemeColors) {
     height: 12,
     borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
-  },
-  iconWrap: {
-    width: Space.xl + Space.xs,
-    height: Control.hit,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   botText: {
     flex: 1,

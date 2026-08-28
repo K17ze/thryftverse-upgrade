@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 
 type SellerHubRouteDependencies = {
   app: FastifyInstance;

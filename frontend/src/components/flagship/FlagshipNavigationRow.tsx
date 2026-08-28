@@ -95,19 +95,17 @@ export function FlagshipNavigationRow({
 
   const resolvedLabel = accessibilityLabel ?? [title, subtitle].filter(Boolean).join(', ');
 
-  const leadingWidth = icon ? Control.iconCompact + Space.xs : 0;
+  const leadingWidth = icon ? Control.iconCompact : 0;
 
   const content = (
     <View style={[styles.inner, { minHeight }, style]}>
       <View style={styles.contentRow}>
         {icon ? (
-          <View style={styles.iconWrap}>
-            <Ionicons
-              name={icon}
-              size={Control.iconCompact}
-              color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
-            />
-          </View>
+          <Ionicons
+            name={icon}
+            size={Control.iconCompact}
+            color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
+          />
         ) : null}
 
         <View style={styles.textWrap}>
@@ -183,11 +181,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
     minHeight: Control.hit,
-  },
-  iconWrap: {
-    width: Control.iconCompact + Space.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   textWrap: {
     flex: 1,

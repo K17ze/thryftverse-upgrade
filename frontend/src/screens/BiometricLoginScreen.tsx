@@ -136,9 +136,7 @@ export default function BiometricLoginScreen() {
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <View style={styles.content}>
-        <View style={styles.iconWrap}>
-          <Ionicons name="finger-print-outline" size={56} color={colors.brand} />
-        </View>
+        <Ionicons name="finger-print-outline" size={56} color={colors.brand} style={styles.biometricIcon} />
 
         <Text style={styles.title} maxFontSizeMultiplier={1.3}>
           Welcome back
@@ -202,7 +200,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       paddingHorizontal: Space.xl,
     },
-    iconWrap: {
+    biometricIcon: {
       marginBottom: Space.lg,
     },
     title: {

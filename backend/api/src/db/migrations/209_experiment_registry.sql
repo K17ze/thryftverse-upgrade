@@ -65,7 +65,7 @@ DECLARE
 BEGIN
   start_date := DATE_TRUNC('month', NOW())::DATE;
   FOR i IN 0..3 LOOP
-    PERFORM create_partition_if_not_exists('experiment_guardrail_checks', start_date + (i || ' month')::INTERVAL);
+    PERFORM create_partition_if_not_exists('experiment_guardrail_checks', (start_date + (i || ' month')::INTERVAL)::DATE);
   END LOOP;
 
   CREATE TABLE IF NOT EXISTS experiment_guardrail_checks_default

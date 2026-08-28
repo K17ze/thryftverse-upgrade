@@ -328,20 +328,13 @@ export default function SavedAddressesScreen({ navigation }: Props) {
           />
         ) : (
           <View style={styles.listWrap}>
-              <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.heroRow}>
-                  <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                    <Ionicons name="location" size={18} color={colors.textInverse} />
-                  </View>
-                  <View style={styles.heroText}>
-                    <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                      {addresses.length} address{addresses.length === 1 ? '' : 'es'}
-                    </Text>
-                    <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                      {addresses.find((a) => a.isDefault) ? `${addresses.find((a) => a.isDefault)?.name} is default` : 'No default set'}
-                    </Text>
-                  </View>
-                </View>
+              <View style={styles.postureSummary}>
+                <Text style={[styles.postureTitle, { color: colors.textPrimary }]}>
+                  {addresses.length} address{addresses.length === 1 ? '' : 'es'}
+                </Text>
+                <Text style={[styles.postureSubtitle, { color: colors.textSecondary }]}>
+                  {addresses.find((a) => a.isDefault) ? `${addresses.find((a) => a.isDefault)?.name} is default` : 'No default set'}
+                </Text>
               </View>
             {addresses.map((address, index) => renderAddressCard(address, index))}
             <Text style={[styles.listFootnote, { color: colors.textMuted }]}>
@@ -363,30 +356,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+  postureSummary: {
+    paddingVertical: Space.sm,
   },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
+  postureTitle: {
     fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
-  heroSubtitle: {
+  postureSubtitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     marginTop: Space.xs / 2,

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Poster } from '../data/posters';
 import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tradeHub';
-import type { ChatBot, Conversation, Message as ConversationMessage } from '../domain';
+import type { ChatBot, Conversation, Message as ConversationMessage, ConversationBotDeployment } from '../domain';
 import type { ListingCondition } from '../contracts/taxonomy';
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
@@ -18,6 +18,24 @@ import {
   createCustomBotOnApi,
   updateCustomBotOnApi,
   deleteCustomBotOnApi,
+  fetchConversationDeploymentsFromApi,
+  publishBotFromApi,
+  fetchBotVersionsFromApi,
+  rollbackBotFromApi,
+  fetchConnectionsFromApi,
+  createConnectionFromApi,
+  deleteConnectionFromApi,
+  reverifyConnectionFromApi,
+  fetchAgentRunsFromApi,
+  cancelAgentRunFromApi,
+  fetchPendingApprovalsFromApi,
+  approveRequestFromApi,
+  rejectRequestFromApi,
+  runPlaygroundFromApi,
+  type ProviderConnectionInfo,
+  type AgentRunInfo,
+  type ApprovalRequestInfo,
+  type PlaygroundResult,
 } from '../services/botsApi';
 import {
   fetchChatBotsFromApi,
@@ -591,6 +609,48 @@ interface StoreState {
   updateCustomBot: (botId: string, updates: Partial<ChatBot>) => Promise<void>;
   deleteCustomBot: (botId: string) => Promise<void>;
   loadBotsFromApi: () => Promise<void>;
+  // Server-backed provider connections
+  providerConnections: ProviderConnectionInfo[];
+  loadProviderConnections: () => Promise<void>;
+  createProviderConnection: (input: {
+    provider: 'openai' | 'anthropic' | 'gemini' | 'custom';
+    apiKey: string;
+    label?: string;
+    baseUrl?: string;
+  }) => Promise<void>;
+  deleteProviderConnection: (connectionId: string) => Promise<string[]>;
+  reverifyProviderConnection: (connectionId: string) => Promise<void>;
+  // Agent runs (real server-backed execution records)
+  agentRuns: AgentRunInfo[];
+  loadAgentRuns: (params?: { conversationId?: string; botId?: string; status?: string; limit?: number }) => Promise<void>;
+  cancelAgentRun: (runId: string) => Promise<void>;
+  // Playground
+  playgroundResult: PlaygroundResult | null;
+  playgroundLoading: boolean;
+  runPlayground: (botId: string, message: string, conversationContext?: Array<{ role: 'user' | 'assistant'; content: string }>) => Promise<void>;
+  clearPlayground: () => void;
+  // Pending approval requests
+  pendingApprovals: ApprovalRequestInfo[];
+  loadPendingApprovals: () => Promise<void>;
+  approveRequest: (approvalId: string, editedArguments?: Record<string, unknown>) => Promise<void>;
+  rejectRequest: (approvalId: string) => Promise<void>;
+  // Agent versions
+  botVersions: Record<string, Array<{
+    id: string;
+    versionNumber: number;
+    publisherId: string;
+    configChecksum: string;
+    permissionsChecksum: string;
+    publishNotes: string | null;
+    createdAt: string;
+  }>>;
+  publishBot: (botId: string, publishNotes?: string) => Promise<{ versionId: string; versionNumber: number }>;
+  loadBotVersions: (botId: string) => Promise<void>;
+  rollbackBot: (botId: string, versionId: string) => Promise<void>;
+  // Conversation bot deployments (real backend state)
+  conversationDeployments: Record<string, ConversationBotDeployment[]>;
+  loadConversationDeployments: (conversationId: string) => Promise<void>;
+  clearConversationDeployments: (conversationId: string) => void;
 
   userLooks: UserLook[];
   /** Internal: IDs of looks the current user has liked. */
@@ -2028,6 +2088,142 @@ export const useStore = create<StoreState>()(
     } catch {
       // If API fails, keep existing persisted state as fallback
     }
+  },
+  providerConnections: [],
+  loadProviderConnections: async () => {
+    try {
+      const connections = await fetchConnectionsFromApi();
+      set({ providerConnections: connections });
+    } catch {
+      // Non-fatal
+    }
+  },
+  createProviderConnection: async (input) => {
+    const result = await createConnectionFromApi(input);
+    set((state) => ({
+      providerConnections: [...state.providerConnections, result.connection],
+    }));
+  },
+  deleteProviderConnection: async (connectionId) => {
+    const result = await deleteConnectionFromApi(connectionId);
+    set((state) => ({
+      providerConnections: state.providerConnections.filter((c) => c.id !== connectionId),
+    }));
+    return result.affectedAgents;
+  },
+  reverifyProviderConnection: async (connectionId) => {
+    const result = await reverifyConnectionFromApi(connectionId);
+    set((state) => ({
+      providerConnections: state.providerConnections.map((c) =>
+        c.id === connectionId ? result.connection : c
+      ),
+    }));
+  },
+  agentRuns: [],
+  loadAgentRuns: async (params) => {
+    try {
+      const runs = await fetchAgentRunsFromApi(params);
+      set({ agentRuns: runs });
+    } catch {
+      // Non-fatal
+    }
+  },
+  cancelAgentRun: async (runId) => {
+    await cancelAgentRunFromApi(runId);
+    set((state) => ({
+      agentRuns: state.agentRuns.map((r) =>
+        r.id === runId ? { ...r, status: 'cancelled' as const } : r
+      ),
+    }));
+  },
+  playgroundResult: null,
+  playgroundLoading: false,
+  runPlayground: async (botId, message, conversationContext) => {
+    set({ playgroundLoading: true });
+    try {
+      const result = await runPlaygroundFromApi(botId, message, conversationContext);
+      set({ playgroundResult: result, playgroundLoading: false });
+    } catch (error) {
+      set({ playgroundLoading: false });
+      throw error;
+    }
+  },
+  clearPlayground: () => {
+    set({ playgroundResult: null });
+  },
+  pendingApprovals: [],
+  loadPendingApprovals: async () => {
+    try {
+      const approvals = await fetchPendingApprovalsFromApi();
+      set({ pendingApprovals: approvals });
+    } catch {
+      // Non-fatal
+    }
+  },
+  approveRequest: async (approvalId, editedArguments) => {
+    await approveRequestFromApi(approvalId, editedArguments);
+    set((state) => ({
+      pendingApprovals: state.pendingApprovals.filter((a) => a.id !== approvalId),
+    }));
+  },
+  rejectRequest: async (approvalId) => {
+    await rejectRequestFromApi(approvalId);
+    set((state) => ({
+      pendingApprovals: state.pendingApprovals.filter((a) => a.id !== approvalId),
+    }));
+  },
+  botVersions: {},
+  publishBot: async (botId, publishNotes) => {
+    const result = await publishBotFromApi(botId, publishNotes);
+    // Update the bot's draft status in the store
+    set((state) => ({
+      customBots: state.customBots.map((b) =>
+        b.id === botId ? { ...b, isDraft: false } : b
+      ),
+    }));
+    // Reload versions
+    await get().loadBotVersions(botId);
+    return { versionId: result.versionId, versionNumber: result.versionNumber };
+  },
+  loadBotVersions: async (botId) => {
+    try {
+      const versions = await fetchBotVersionsFromApi(botId);
+      set((state) => ({
+        botVersions: {
+          ...state.botVersions,
+          [botId]: versions,
+        },
+      }));
+    } catch {
+      // Non-fatal
+    }
+  },
+  rollbackBot: async (botId, versionId) => {
+    await rollbackBotFromApi(botId, versionId);
+    // Reload the bot and its versions
+    await get().loadBotsFromApi();
+    await get().loadBotVersions(botId);
+  },
+  conversationDeployments: {},
+  loadConversationDeployments: async (conversationId) => {
+    try {
+      const deployments = await fetchConversationDeploymentsFromApi(conversationId);
+      set((state) => ({
+        conversationDeployments: {
+          ...state.conversationDeployments,
+          [conversationId]: deployments,
+        },
+      }));
+    } catch {
+      // Non-fatal — keep existing state
+    }
+  },
+  clearConversationDeployments: (conversationId) => {
+    set((state) => {
+      const next = { ...state.conversationDeployments };
+      delete next[conversationId];
+      return { conversationDeployments: next };
+    });
   },
 
   addMessageReaction: (conversationId, messageId, reaction) => {

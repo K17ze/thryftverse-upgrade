@@ -86,7 +86,7 @@ export function CoOwnWalletBreakdown({
       accessibilityLabel={`Wallet breakdown. Spendable now ${balance.available} 1ZE. Settled customer claim ${settledClaim} 1ZE. Withdrawable ${withdrawable} 1ZE.`}
     >
       {/* ── Spendable now hero — dominant object (spec 17 viewport 1) ── */}
-      <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.heroCard}>
         <View style={styles.heroHeader}>
           <Text style={[styles.heroLabel, { color: colors.textMuted }]}>Spendable now</Text>
           {onTogglePrivacy && (
@@ -134,7 +134,7 @@ export function CoOwnWalletBreakdown({
       </View>
 
       {/* ── Settled claim section ── */}
-      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[styles.sectionCard, { borderTopColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
             Settled claim
@@ -204,7 +204,7 @@ export function CoOwnWalletBreakdown({
 
       {/* ── Pending section (not yet settled — separate) ── */}
       {(balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.sectionCard, { borderTopColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
             Pending
           </Text>
@@ -293,8 +293,6 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.xs,
   },
@@ -335,10 +333,9 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
   },
   sectionCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingTop: Space.md,
     gap: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   sectionHeader: {
     flexDirection: 'row',

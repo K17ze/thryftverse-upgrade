@@ -466,6 +466,7 @@ function LookDiscoveryTile({
 }) {
   const { colors } = useAppTheme();
   const creator = unit.look.creator.username ?? 'creator';
+  const creatorVerified = unit.look.creator.verified === true;
   const tile = (
     <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
         <ExpoImage
@@ -477,18 +478,28 @@ function LookDiscoveryTile({
           transition={160}
         />
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.56)']}
+          colors={['transparent', 'rgba(0,0,0,0.6)']}
           locations={[0.48, 1]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd }}>
-          <Text style={{ color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
+          <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
             {unit.title}
           </Text>
-          <Text style={{ color: colors.scrimTextSecondary, fontFamily: Typography.family.regular, fontSize: Type.meta.size, lineHeight: Type.meta.lineHeight }} numberOfLines={1}>
-            @{creator}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xxs, marginTop: 2 }}>
+            <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: 12, lineHeight: 16 }} numberOfLines={1}>
+              @{creator}
+            </Text>
+            {creatorVerified && (
+              <Ionicons
+                name="checkmark-circle"
+                size={14}
+                color={colors.brand}
+                accessibilityLabel="Verified creator"
+              />
+            )}
+          </View>
         </View>
         {unit.itemIds.length > 0 ? (
           <View style={{ position: 'absolute', top: Space.sm, right: Space.sm }}>
@@ -499,7 +510,7 @@ function LookDiscoveryTile({
   );
   if (!onPress) {
     return (
-      <View accessible accessibilityRole="image" accessibilityLabel={`${unit.title}, look by ${creator}`}>
+      <View accessible accessibilityRole="image" accessibilityLabel={`${unit.title}, look by ${creator}${creatorVerified ? ', verified creator' : ''}`}>
         {tile}
       </View>
     );
@@ -508,7 +519,7 @@ function LookDiscoveryTile({
     <Pressable
       onPress={() => onPress(unit.look.id)}
       accessibilityRole="button"
-      accessibilityLabel={`${unit.title}, look by ${creator}`}
+      accessibilityLabel={`${unit.title}, look by ${creator}${creatorVerified ? ', verified creator' : ''}`}
       accessibilityHint="Opens the look"
       style={({ pressed }) => ({ opacity: pressed ? 0.86 : 1 })}
     >
@@ -526,6 +537,7 @@ function PosterDiscoveryTile({
 }) {
   const { colors } = useAppTheme();
   const creator = unit.story.creator.username ?? 'creator';
+  const creatorVerified = unit.story.creator.isVerified === true;
   const tile = (
     <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
         <ExpoImage
@@ -537,23 +549,33 @@ function PosterDiscoveryTile({
           transition={160}
         />
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.5)']}
-          locations={[0.55, 1]}
+          colors={['transparent', 'rgba(0,0,0,0.6)']}
+          locations={[0.5, 1]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
         <Ionicons name="play" size={16} color={colors.scrimTextPrimary} style={{ position: 'absolute', top: Space.sm, right: Space.sm }} />
-        <Text
-          style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd, color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, lineHeight: Type.captionElevated.lineHeight }}
-          numberOfLines={1}
-        >
-          @{creator}
-        </Text>
+        <View style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd, flexDirection: 'row', alignItems: 'center', gap: Space.xxs }}>
+          <Text
+            style={{ color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: 12, lineHeight: 16 }}
+            numberOfLines={1}
+          >
+            @{creator}
+          </Text>
+          {creatorVerified && (
+            <Ionicons
+              name="checkmark-circle"
+              size={14}
+              color={colors.brand}
+              accessibilityLabel="Verified creator"
+            />
+          )}
+        </View>
     </View>
   );
   if (!onPress) {
     return (
-      <View accessible accessibilityRole="image" accessibilityLabel={`Poster by ${creator}`}>
+      <View accessible accessibilityRole="image" accessibilityLabel={`Poster by ${creator}${creatorVerified ? ', verified creator' : ''}`}>
         {tile}
       </View>
     );
@@ -562,7 +584,7 @@ function PosterDiscoveryTile({
     <Pressable
       onPress={() => onPress(unit.story.id)}
       accessibilityRole="button"
-      accessibilityLabel={`Poster by ${creator}`}
+      accessibilityLabel={`Poster by ${creator}${creatorVerified ? ', verified creator' : ''}`}
       accessibilityHint="Opens the poster"
       style={({ pressed }) => ({ opacity: pressed ? 0.86 : 1 })}
     >

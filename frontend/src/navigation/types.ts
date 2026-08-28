@@ -257,6 +257,10 @@ export type RootStackParamList = {
   CategoryTree: { categoryPrefix: string };
   // Phase 24 new screens
   GlobalSearch: { initialQuery?: string } | undefined;
+  /** Unified discovery surface — combines Galleria editorial, personalised
+   *  listings, looks, mood boards, pulse and curated collections into one
+   *  flagship discovery entry from the Home search button. */
+  UnifiedDiscovery: { initialQuery?: string } | undefined;
   // Collections feature
   CollectionDetail: { collectionId: string };
   // Phase 25 new screens
@@ -682,6 +686,7 @@ export const ROOT_STACK_ROUTES = [
   'KYCVerification',
   'Galleria',
   'GalleriaCollectionDetail',
+  'UnifiedDiscovery',
   'YourAlgorithm',
   'AIPhotoEnhancement',
   'ConversationalSearch',

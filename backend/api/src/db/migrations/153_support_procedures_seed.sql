@@ -80,7 +80,7 @@ VALUES (
       jsonb_build_object('if', jsonb_build_object('order.status', 'cancelled'), 'then', 'NOT_ELIGIBLE_ALREADY_CANCELLED'),
       jsonb_build_object('if', jsonb_build_object('order.status', jsonb_build_array('created','paid','shipped')), 'then', 'NOT_ELIGIBLE_NOT_DELIVERED'),
       jsonb_build_object('if', jsonb_build_object('order.delivered_within_days', 'return_window_days'), 'then', 'ELIGIBLE_WITHIN_RETURN_WINDOW'),
-      jsonb_build_object('if', jsonb_build_object('order.delivered_within_days', 'gt', 'return_window_days'), 'then', 'NOT_ELIGIBLE_RETURN_WINDOW_EXPIRED')
+      jsonb_build_object('if', jsonb_build_object('order.delivered_within_days', jsonb_build_object('gt', 'return_window_days')), 'then', 'NOT_ELIGIBLE_RETURN_WINDOW_EXPIRED')
     ),
     'constants', jsonb_build_object('return_window_days', 14)
   ),
@@ -120,7 +120,7 @@ VALUES (
       jsonb_build_object('if', jsonb_build_object('order.status', jsonb_build_array('created','paid','shipped')), 'then', 'NOT_ELIGIBLE_NOT_DELIVERED'),
       jsonb_build_object('if', jsonb_build_object('order.buyer_protection_fee_gbp', 0), 'then', 'NOT_ELIGIBLE_NO_PROTECTION_FEE'),
       jsonb_build_object('if', jsonb_build_object('order.delivered_within_days', 'protection_window_days'), 'then', 'ELIGIBLE_WITHIN_PROTECTION_WINDOW'),
-      jsonb_build_object('if', jsonb_build_object('order.delivered_within_days', 'gt', 'protection_window_days'), 'then', 'NOT_ELIGIBLE_PROTECTION_WINDOW_EXPIRED')
+      jsonb_build_object('if', jsonb_build_object('order.delivered_within_days', jsonb_build_object('gt', 'protection_window_days')), 'then', 'NOT_ELIGIBLE_PROTECTION_WINDOW_EXPIRED')
     ),
     'constants', jsonb_build_object('protection_window_days', 2)
   ),

@@ -71,9 +71,12 @@ export function CommerceStateCanvas({
         },
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name={iconName} size={32} color={colors.textMuted} />
-      </View>
+      <Ionicons
+        name={iconName}
+        size={32}
+        color={colors.textMuted}
+        style={styles.icon}
+      />
 
       <Text style={[styles.title, { color: colors.textPrimary }]}>
         {title ?? defaultTitle}
@@ -195,12 +198,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
   },
-  iconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+  icon: {
     marginBottom: Space.md,
   },
   title: {

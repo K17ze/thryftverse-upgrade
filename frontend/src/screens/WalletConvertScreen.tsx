@@ -624,28 +624,14 @@ export default function WalletConvertScreen() {
         {/* ================================================================ */}
         {step === 'amount' && (
           <>
-            {/* Hero summary -- available 1ZE balance */}
-            <View>
-              <View
-                style={[
-                  styles.heroCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                ]}
-              >
-                <View style={styles.heroRow}>
-                  <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                    <Ionicons name="swap-horizontal" size={18} color={colors.textInverse} />
-                  </View>
-                  <View style={styles.heroText}>
-                    <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                      {formatIzeAmount(availableIze, 2)}
-                    </Text>
-                    <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                      Available 1ZE · {formatUsd(izeToUsd(availableIze))} at par
-                    </Text>
-                  </View>
-                </View>
-              </View>
+            {/* Available 1ZE balance — flat, no card or decorative icon circle */}
+            <View style={styles.balanceBlock}>
+              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                {formatIzeAmount(availableIze, 2)}
+              </Text>
+              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                Available 1ZE · {formatUsd(izeToUsd(availableIze))} at par
+              </Text>
             </View>
 
             {/* Amount input */}
@@ -682,12 +668,7 @@ export default function WalletConvertScreen() {
             {/* Live calculation summary -- transparent at-par breakdown */}
             {izeValue > 0 && !exceedsBalance && (
               <View>
-                <View
-                  style={[
-                    styles.calcCard,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
-                  ]}
-                >
+                <View style={styles.calcBlock}>
                   {isFetchingQuote ? (
                     <View style={styles.quoteLoadingRow}>
                       <ActivityIndicator size="small" color={colors.textMuted} />
@@ -724,7 +705,7 @@ export default function WalletConvertScreen() {
                       )}
                       {renderSummaryRow(
                         `Platform fee (${quote.feeBps} bps)`,
-                        `-${formatFromFiat(quote.feeAmount, currencyCode, { displayMode: 'fiat' })}`
+                        `−${formatFromFiat(quote.feeAmount, currencyCode, { displayMode: 'fiat' })}`
                       )}
                       {renderSummaryRow(
                         'You receive',
@@ -766,19 +747,10 @@ export default function WalletConvertScreen() {
         {/* STEP 2: REVIEW                                                    */}
         {/* ================================================================ */}
         {step === 'review' && quote && (
-          <View>
-            <View
-              style={[
-                styles.reviewCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
-            >
-              <View style={styles.reviewHeader}>
-                <Ionicons name="swap-horizontal" size={20} color={colors.brand} />
-                <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>
-                  Conversion summary
-                </Text>
-              </View>
+          <View style={styles.reviewBlock}>
+              <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>
+                Conversion summary
+              </Text>
 
               {renderSummaryRow('You convert', `${formatIzeAmount(izeValue, 2)} · ${formatUsd(usdEquivalent)}`, { emphasis: true })}
               {renderSummaryRow(
@@ -787,7 +759,7 @@ export default function WalletConvertScreen() {
               )}
               {renderSummaryRow(
                 `Platform fee (${quote.feeBps} bps)`,
-                `-${formatFromFiat(quote.feeAmount, currencyCode, { displayMode: 'fiat' })}`
+                `−${formatFromFiat(quote.feeAmount, currencyCode, { displayMode: 'fiat' })}`
               )}
               {renderSummaryRow(
                 'You receive',
@@ -796,7 +768,7 @@ export default function WalletConvertScreen() {
               )}
 
               <Text style={[styles.reviewHint, { color: colors.textMuted }]}>
-                1ZE is burned at par (100 1ZE = $1.00 USD) and converted to {currencyCode} at the
+                1ZE is burned at par (1 1ZE = $1.00 USD) and converted to {currencyCode} at the
                 prevailing rate. The fee is a transparent line item — you see exactly what you pay.
               </Text>
               {rateTimestampLabel ? (
@@ -823,7 +795,6 @@ export default function WalletConvertScreen() {
                 </View>
               ) : null}
             </View>
-          </View>
         )}
 
         {/* ================================================================ */}
@@ -833,9 +804,7 @@ export default function WalletConvertScreen() {
           <View
             style={styles.centeredStep}
           >
-            <View style={[styles.authIconCircle, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="lock-closed-outline" size={32} color={colors.textPrimary} />
-            </View>
+            <Ionicons name="lock-closed-outline" size={48} color={colors.textPrimary} style={styles.stepIcon} />
             <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>
               Authenticate to continue
             </Text>
@@ -882,9 +851,7 @@ export default function WalletConvertScreen() {
           <View
             style={styles.centeredStep}
           >
-            <View style={[styles.authIconCircle, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="swap-horizontal" size={32} color={colors.brand} />
-            </View>
+            <Ionicons name="swap-horizontal" size={48} color={colors.brand} style={styles.stepIcon} />
             <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>
               Converting 1ZE…
             </Text>
@@ -905,9 +872,7 @@ export default function WalletConvertScreen() {
         {step === 'receipt' && result && (
           <View>
             <View style={styles.receiptWrap}>
-              <View style={[styles.successIconCircle, { backgroundColor: `${colors.success}22` }]}>
-                <Ionicons name="checkmark-circle" size={40} color={colors.success} />
-              </View>
+              <Ionicons name="checkmark-circle" size={56} color={colors.success} style={styles.stepIcon} />
               <Text style={[styles.receiptTitle, { color: colors.textPrimary }]}>
                 Conversion complete
               </Text>
@@ -918,12 +883,7 @@ export default function WalletConvertScreen() {
                 })}
               </Text>
 
-              <View
-                style={[
-                  styles.receiptCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                ]}
-              >
+              <View style={styles.receiptBlock}>
                 {renderSummaryRow('Converted', `${formatIzeAmount(result.izeAmount, 2)} · ${formatUsd(izeToUsd(result.izeAmount))}`)}
                 {renderSummaryRow(
                   'Principal',
@@ -933,7 +893,7 @@ export default function WalletConvertScreen() {
                 )}
                 {renderSummaryRow(
                   `Platform fee (${result.feeBps} bps)`,
-                  `-${formatFromFiat(result.feeAmount, result.fiatCurrency as any, {
+                  `−${formatFromFiat(result.feeAmount, result.fiatCurrency as any, {
                     displayMode: 'fiat',
                   })}`
                 )}
@@ -967,9 +927,7 @@ export default function WalletConvertScreen() {
           <View
             style={styles.centeredStep}
           >
-            <View style={[styles.errorIconCircle, { backgroundColor: `${colors.danger}18` }]}>
-              <Ionicons name="close-circle-outline" size={40} color={colors.danger} />
-            </View>
+            <Ionicons name="close-circle-outline" size={56} color={colors.danger} style={styles.stepIcon} />
             <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>
               Conversion failed
             </Text>
@@ -1094,23 +1052,12 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md + Space.xs,
     },
 
-    // -- Hero card (flat canvas + hairline -- no shadow) --
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
+    // -- Hero balance (flat, no card or decorative icon circle) --
+    balanceBlock: {
       marginTop: Space.md,
       marginBottom: Space.lg,
+      paddingHorizontal: Space.xs,
     },
-    heroRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-    heroIcon: {
-      width: Space.xl + Space.sm,
-      height: Space.xl + Space.sm,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
     heroTitle: {
       fontSize: Type.priceHero.size,
       lineHeight: Type.priceHero.lineHeight,
@@ -1169,12 +1116,10 @@ function createStyles(colors: ThemeColors) {
       color: colors.danger,
     },
 
-    // -- Calculation / summary card --
-    calcCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
+    // -- Calculation / summary (flat, no card wrapper) --
+    calcBlock: {
       marginTop: Space.sm,
+      paddingHorizontal: Space.xs,
     },
     quoteLoadingRow: {
       flexDirection: 'row',
@@ -1194,18 +1139,10 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.medium,
       letterSpacing: Type.caption.letterSpacing,
     },
-    reviewCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
+    reviewBlock: {
       marginTop: Space.md,
       gap: Space.xs,
-    },
-    reviewHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      marginBottom: Space.sm,
+      paddingHorizontal: Space.xs,
     },
     reviewTitle: {
       fontSize: Type.bodyStrong.size,
@@ -1267,12 +1204,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.lg,
       paddingTop: Space.xxl,
     },
-    authIconCircle: {
-      width: 72,
-      height: 72,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
+    stepIcon: {
       marginBottom: Space.md,
     },
     stepTitle: {
@@ -1308,21 +1240,9 @@ function createStyles(colors: ThemeColors) {
       paddingTop: Space.xl,
       paddingHorizontal: Space.md,
     },
-    successIconCircle: {
-      width: 80,
-      height: 80,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Space.md,
-    },
-    errorIconCircle: {
-      width: 80,
-      height: 80,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Space.md,
+    receiptBlock: {
+      width: '100%',
+      paddingHorizontal: Space.xs,
     },
     receiptTitle: {
       fontSize: Type.title.size,
@@ -1342,14 +1262,6 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.lg,
       maxWidth: 320,
     },
-    receiptCard: {
-      width: '100%',
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-    },
-
-    // -- Footer --
     footer: {
       paddingVertical: Space.md + 4,
       paddingHorizontal: Space.md + Space.xs,

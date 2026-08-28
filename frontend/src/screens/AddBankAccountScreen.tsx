@@ -8,7 +8,6 @@ import {
   StyleSheet,
   TextInput,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -21,7 +20,9 @@ import { getUserCountryCapabilities, UserCountryCapabilities } from '../services
 import { parseApiError } from '../lib/apiClient';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
-import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { t } from '../i18n';
 
@@ -167,26 +168,15 @@ export default function AddBankAccountScreen({ navigation }: Props) {
           />
         ) : (
           <>
-            {/* Hero summary — bank account purpose */}
-              <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.heroRow}>
-                  <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                    <Ionicons name="business" size={18} color={colors.textInverse} />
-                  </View>
-                  <View style={styles.heroText}>
-                    <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                      Bank account for payouts
-                    </Text>
-                    <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                      Withdrawals take 1-3 business days
-                    </Text>
-                  </View>
-                  <View style={[styles.heroBadge, { backgroundColor: colors.successSubtle }]}>
-                    <Ionicons name="lock-closed" size={12} color={colors.success} />
-                    <Text style={[styles.heroBadgeText, { color: colors.success }]}>Secure</Text>
-                  </View>
-                </View>
-              </View>
+            {/* Posture summary — flat canvas, no card chrome */}
+            <View style={styles.postureSummary}>
+              <Text style={[styles.postureTitle, { color: colors.textPrimary }]}>
+                Bank account for payouts
+              </Text>
+              <Text style={[styles.postureSubtitle, { color: colors.textSecondary }]}>
+                Withdrawals take 1-3 business days
+              </Text>
+            </View>
 
             {policyLabel ? (
               <Text style={[styles.policyLabel, { color: colors.textMuted }]}>
@@ -194,85 +184,74 @@ export default function AddBankAccountScreen({ navigation }: Props) {
               </Text>
             ) : null}
 
-            {/* Form section */}
-              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-                ACCOUNT DETAILS
-              </Text>
-              <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.fieldRow}>
-                  <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Account holder name</Text>
-                  <TextInput
-                    style={[styles.fieldInput, { color: colors.textPrimary }]}
-                    value={accountName}
-                    onChangeText={setAccountName}
-                    placeholder="Full name on account"
-                    placeholderTextColor={colors.textMuted}
-                    autoCapitalize="words"
-                    selectionColor={colors.brand}
-                    accessibilityLabel="Account holder name"
-                    accessibilityHint="Enter the full legal name on the bank account"
-                  />
-                </View>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                <View style={styles.fieldRow}>
-                  <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Account number</Text>
-                  <TextInput
-                    style={[styles.fieldInput, { color: colors.textPrimary }]}
-                    value={accountNumber}
-                    onChangeText={v => setAccountNumber(v.replace(/\D/g, '').slice(0, 8))}
-                    placeholder="8 digits"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    selectionColor={colors.brand}
-                    maxLength={8}
-                    accessibilityLabel="Account number"
-                    accessibilityHint="Enter your 8-digit account number"
-                  />
-                </View>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                <View style={styles.fieldRow}>
-                  <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Sort code</Text>
-                  <TextInput
-                    style={[styles.fieldInput, { color: colors.textPrimary }]}
-                    value={sortCode}
-                    onChangeText={v => setSortCode(formatSortCode(v))}
-                    placeholder="00-00-00"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    selectionColor={colors.brand}
-                    maxLength={8}
-                    accessibilityLabel="Sort code"
-                    accessibilityHint="Enter the 6-digit sort code"
-                  />
-                </View>
+            {/* Form section — flat canvas, hairline separators */}
+            <SettingsSection title="Account details">
+              <View style={styles.fieldRow}>
+                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Account holder name</Text>
+                <TextInput
+                  style={[styles.fieldInput, { color: colors.textPrimary }]}
+                  value={accountName}
+                  onChangeText={setAccountName}
+                  placeholder="Full name on account"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="words"
+                  selectionColor={colors.brand}
+                  accessibilityLabel="Account holder name"
+                  accessibilityHint="Enter the full legal name on the bank account"
+                />
               </View>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View style={styles.fieldRow}>
+                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Account number</Text>
+                <TextInput
+                  style={[styles.fieldInput, { color: colors.textPrimary }]}
+                  value={accountNumber}
+                  onChangeText={v => setAccountNumber(v.replace(/\D/g, '').slice(0, 8))}
+                  placeholder="8 digits"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  selectionColor={colors.brand}
+                  maxLength={8}
+                  accessibilityLabel="Account number"
+                  accessibilityHint="Enter your 8-digit account number"
+                />
+              </View>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View style={styles.fieldRow}>
+                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Sort code</Text>
+                <TextInput
+                  style={[styles.fieldInput, { color: colors.textPrimary }]}
+                  value={sortCode}
+                  onChangeText={v => setSortCode(formatSortCode(v))}
+                  placeholder="00-00-00"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  selectionColor={colors.brand}
+                  maxLength={8}
+                  accessibilityLabel="Sort code"
+                  accessibilityHint="Enter the 6-digit sort code"
+                />
+              </View>
+            </SettingsSection>
 
-            {/* Security note */}
-              <View style={styles.secureRow}>
-                <Ionicons name="shield-checkmark-outline" size={14} color={colors.brand} />
-                <Text style={[styles.secureText, { color: colors.brand }]}>
-                  Protected by bank-level encryption
-                </Text>
-              </View>
-
-            {/* Info card */}
-              <View style={[styles.infoCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-                <Text style={[styles.infoText, { color: colors.textMuted }]}>
-                  Withdrawals typically take 1-3 business days to process.
-                </Text>
-              </View>
+            {/* Trust note — bank-level encryption */}
+            <SettingsInfoBanner
+              tone="success"
+              icon="shield-checkmark-outline"
+              title="Bank-level security"
+              description="Your account details are protected by bank-level encryption."
+            />
 
             {/* Save button */}
-              <AppButton
-                title={isSaving ? 'Saving...' : 'Save bank account'}
-                onPress={handleSaveBank}
-                disabled={!isComplete || isSaving || !bankAllowed}
-                loading={isSaving}
-                style={styles.saveBtn}
-                accessibilityLabel={isSaving ? 'Saving bank account' : 'Save bank account'}
-                accessibilityHint="Saves this bank account for withdrawals"
-              />
+            <AppButton
+              title={isSaving ? 'Saving...' : 'Save bank account'}
+              onPress={handleSaveBank}
+              disabled={!isComplete || isSaving || !bankAllowed}
+              loading={isSaving}
+              style={styles.saveBtn}
+              accessibilityLabel={isSaving ? 'Saving bank account' : 'Save bank account'}
+              accessibilityHint="Saves this bank account for withdrawals"
+            />
           </>
         )}
       </KeyboardAwareScrollView>
@@ -282,46 +261,18 @@ export default function AddBankAccountScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
+    postureSummary: {
+      paddingVertical: Space.sm,
     },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xxl - Space.sm,
-      height: Space.xxl - Space.sm,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
+    postureTitle: {
       fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
-    heroSubtitle: {
+    postureSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       marginTop: Space.xs / 2,
-    },
-    heroBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-    },
-    heroBadgeText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
     },
     policyLabel: {
       fontSize: Type.caption.size,
@@ -330,20 +281,6 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs,
       marginBottom: Space.md,
       letterSpacing: Type.caption.letterSpacing,
-    },
-    sectionLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: LetterSpacing.caps,
-      textTransform: 'uppercase',
-      marginBottom: Space.sm,
-      marginLeft: Space.xs,
-    },
-    card: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      overflow: 'hidden',
-      marginBottom: Space.md,
     },
     fieldRow: {
       paddingHorizontal: Space.md,
@@ -361,32 +298,6 @@ function createStyles(colors: ThemeColors) {
     },
     divider: {
       height: StyleSheet.hairlineWidth,
-    },
-    secureRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      justifyContent: 'center',
-      marginBottom: Space.md,
-    },
-    secureText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
-    infoCard: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: Space.sm,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: Radius.lg,
-      padding: Space.md,
-      marginBottom: Space.lg,
-    },
-    infoText: {
-      flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight + 2,
     },
     saveBtn: {
       borderRadius: Radius.full,

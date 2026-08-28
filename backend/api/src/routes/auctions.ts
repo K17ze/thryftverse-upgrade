@@ -281,7 +281,7 @@ app.get('/auctions/1ze-rates', async (request, reply) => {
 
     for (const quote of quotes) {
       rates[quote.currency] = {
-        rate: quote.sellPrice,
+        rate: quote.netRedemption,
         source: quote.source,
         updatedAt: quote.updatedAt,
         settlementSupported: true,

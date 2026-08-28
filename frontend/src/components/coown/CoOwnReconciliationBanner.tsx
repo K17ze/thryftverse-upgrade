@@ -41,9 +41,7 @@ export function CoOwnReconciliationBanner({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
-      <View style={styles.iconWrap}>
-        <Ionicons name="sync-circle-outline" size={18} color={colors.warning} />
-      </View>
+      <Ionicons name="sync-circle-outline" size={20} color={colors.warning} />
       <View style={styles.body}>
         <Text style={[styles.title, { color: colors.warning }]} numberOfLines={1}>
           Reconciling
@@ -81,9 +79,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     marginHorizontal: Space.md,
     marginTop: Space.sm,
-  },
-  iconWrap: {
-    flexShrink: 0,
   },
   body: {
     flex: 1,

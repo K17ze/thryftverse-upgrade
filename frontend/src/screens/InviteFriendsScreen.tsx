@@ -207,11 +207,8 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       header={<FlagshipHeader title="Invite friends" onBack={() => navigation.goBack()} />}
       contentStyle={styles.content}
     >
-      {/* Hero */}
-      <View
-        style={styles.heroCard}
-      >
-        <Ionicons name="gift-outline" size={48} color={ACCENT} />
+      {/* Hero — flat, no card */}
+      <View style={styles.heroWrap}>
         <Text style={styles.heroTitle}>Invite & earn</Text>
         <Text style={styles.heroSubtitle}>
           Invite friends to Thryftverse. When they make their first sale, you both earn Thryftverse credit — give credit, get credit.
@@ -254,9 +251,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             { icon: 'share-social-outline', label: 'More', color: MUTED },
           ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string }>).map(s => (
             <AnimatedPressable key={s.label} style={styles.shareIconBtn} onPress={handleShare} accessibilityLabel={`Share via ${s.label}`} accessibilityRole="button">
-              <View style={[styles.shareIconCircle, { borderColor: s.color }]}>
-                <Ionicons name={s.icon} size={22} color={s.color} />
-              </View>
+              <Ionicons name={s.icon} size={24} color={s.color} />
               <Text style={styles.shareIconLabel}>{s.label}</Text>
             </AnimatedPressable>
           ))}
@@ -349,9 +344,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       {loyaltyTier && (
         <View style={styles.flatSection}>
           <View style={styles.loyaltyHeader}>
-            <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
-              <Ionicons name={loyaltyTier.icon} size={24} color={loyaltyTier.color} />
-            </View>
+            <Ionicons name={loyaltyTier.icon} size={24} color={loyaltyTier.color} />
             <View style={styles.loyaltyInfo}>
               <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
               <Text style={styles.loyaltySubtext}>
@@ -380,9 +373,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
           { icon: 'gift-outline', text: 'You both earn Thryftverse credit' },
         ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
           <View key={i} style={[styles.stepRow, i < 3 && styles.stepRowBordered]}>
-            <View style={styles.stepIconWrap}>
-              <Ionicons name={step.icon} size={18} color={ACCENT} />
-            </View>
+            <Ionicons name={step.icon} size={20} color={ACCENT} />
             <Text style={styles.stepText}>{step.text}</Text>
           </View>
         ))}
@@ -400,13 +391,7 @@ function createStyles(colors: ThemeColors) {
       paddingTop: Space.lg,
       marginBottom: Space.lg,
     },
-    heroCard: {
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.xl,
-      padding: Space.xl,
-      alignItems: 'center',
+    heroWrap: {
       marginBottom: Space.xl,
     },
     heroTitle: {
@@ -415,7 +400,6 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: Type.title.letterSpacing,
       fontFamily: Typography.family.extrabold,
       color: colors.textPrimary,
-      marginTop: Space.md,
       marginBottom: Space.sm,
     },
     heroSubtitle: {
@@ -477,15 +461,6 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xl,
     },
     shareIconBtn: { alignItems: 'center', gap: Space.xs + 2 },
-    shareIconCircle: {
-      width: Space.xxl + Space.xxl + 8,
-      height: Space.xxl + Space.xxl + 8,
-      borderRadius: Space.lg + 4,
-      borderWidth: Stroke.emphasis,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.surfaceAlt,
-    },
     shareIconLabel: {
       fontSize: Type.meta.size,
       lineHeight: Type.meta.lineHeight,

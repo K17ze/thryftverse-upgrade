@@ -148,9 +148,6 @@ export default function VerificationScreen({ navigation }: Props) {
         description: 'Verify your identity with a government document to get the trust badge',
       };
 
-  const iconColor = hasVerification ? colors.brand : colors.textSecondary;
-  const iconBgColor = colors.surfaceAlt;
-
   const handleStartKyc = () => {
     if (effectiveKycVerified) {
       show('Your identity is already verified', 'info');
@@ -327,24 +324,13 @@ export default function VerificationScreen({ navigation }: Props) {
         keyboardDismissMode="on-drag"
         contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
       >
-      {/* ── STATUS CARD ── */}
-        <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.statusIconWrap, { backgroundColor: iconBgColor }]}>
-            <Ionicons
-              name={tierInfo.icon as keyof typeof Ionicons.glyphMap}
-              size={22}
-              color={iconColor}
-            />
-          </View>
-          <View style={styles.statusBody}>
-            <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>
-              {tierInfo.label}
-            </Text>
-            <Text style={[styles.statusDescription, { color: colors.textSecondary }]}>
-              {tierInfo.description}
-            </Text>
-          </View>
-        </View>
+      {/* ── STATUS BANNER ── */}
+      <SettingsInfoBanner
+        icon={tierInfo.icon as keyof typeof Ionicons.glyphMap}
+        title={tierInfo.label}
+        description={tierInfo.description}
+        tone={effectiveKycVerified ? 'success' : 'info'}
+      />
 
       {/* ── VERIFICATION STEPS ── */}
         <SettingsSection title="Verification steps">
@@ -818,33 +804,6 @@ export default function VerificationScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  statusCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-    marginBottom: Space.md,
-  },
-  statusIconWrap: {
-    width: Control.chrome + 2,
-    height: Control.chrome + 2,
-    borderRadius: Radius.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusBody: { flex: 1 },
-  statusTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    marginBottom: Space.xs / 2,
-  },
-  statusDescription: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
-  },
   flowCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,

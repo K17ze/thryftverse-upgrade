@@ -724,7 +724,6 @@ export default function FilterScreen() {
                               <AppButton
                                 title={s}
                                 icon={isMySize ? <Ionicons name="star" size={12} color={colors.brand} aria-hidden={true} /> : undefined}
-                                iconContainerStyle={styles.chipIconWrap}
                                 variant="secondary"
                                 size="sm"
                                 style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}
@@ -746,7 +745,6 @@ export default function FilterScreen() {
                         <AppButton
                           title={selectedSizes.every(s => mySizes.includes(s)) ? 'All saved' : 'Save as my sizes'}
                           icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={16} color={colors.brand} aria-hidden={true} /> : undefined}
-                          iconContainerStyle={styles.chipIconWrap}
                           variant="secondary"
                           size="sm"
                           style={styles.saveSizesBtn}
@@ -1364,12 +1362,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
   },
   chipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
-
-  chipIconWrap: {
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: Radius.full,
-  },
 
   chipText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
   chipTextActive: { color: colors.background, fontFamily: Typography.family.bold },

@@ -27,7 +27,6 @@ import {
   Radius,
   Type,
   FontFamily,
-  Stroke,
   Control,
   DockConstants,
 } from '../theme/designTokens';
@@ -338,10 +337,9 @@ const createStyles = (colors: ThemeColors) =>
       gap: Space.md,
       paddingVertical: Space.lg,
       paddingHorizontal: Space.md,
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
     },
     primarySourceText: {
       flex: 1,

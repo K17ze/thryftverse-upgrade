@@ -1,19 +1,33 @@
 /**
- * Agent Capability Broker — the single chokepoint that intercepts agent tool
- * calls, enforces permission tiers, and prevents agents from bypassing the
- * canonical transaction UI (spec 05: Capability Broker, Permissions &
- * Approvals).
+ * Agent Capability Broker — the UI-state chokepoint that intercepts agent
+ * tool calls in the local preview/simulation, records permission tiers,
+ * and prevents agents from bypassing the canonical transaction UI (spec 05:
+ * Capability Broker, Permissions & Approvals).
+ *
+ * IMPORTANT — the grant store here is UI-state only.
+ *
+ * The AsyncStorage-backed grants maintained by this module record what the
+ * user has configured in the builder and what consent they have given in
+ * the local preview. They are NOT an authorization boundary. No
+ * client-side grant store can authorize server-side access. The real
+ * authorization happens at the backend resource-owning handler at
+ * execution time, which independently verifies permissions against the
+ * backend's own permission vocabulary. These grants are a local
+ * convenience to drive the approval-prompt UI and must never be treated as
+ * authoritative or enforced on the server.
  *
  * Responsibilities:
  *  - Define a typed capability taxonomy grouped into four approval tiers.
  *  - Maintain a per-agent, per-capability grant store (persisted to
- *    AsyncStorage) that records explicit user consent.
+ *    AsyncStorage) that records the user's local consent for the preview
+ *    UI. This is UI-state only — not an authorization boundary.
  *  - Expose `requestCapability` / `resolveApproval` so the chat runtime can
- *    surface an approval prompt and record the user's decision.
+ *    surface an approval prompt and record the user's decision locally.
  *  - Guarantee that financial / high-risk capabilities can NEVER bypass the
  *    canonical transaction screens — agents always go through the real UI.
- *  - Record every material decision to the Agent Activity Ledger so the user
- *    has a truthful, append-only audit trail.
+ *  - Record every material decision to the Agent Activity Ledger (a
+ *    LOCAL-ONLY cache — see that module) so the user has a truthful view of
+ *    what happened on this device.
  *
  * Per AGENTS.md §11 (Truthful UI):
  *  - We never fabricate grants, approvals, or ledger entries.
@@ -119,7 +133,7 @@ export const CAPABILITY_TIER: Record<AgentCapability, ApprovalTier> = {
 export const TIER_D_NEVER_ALWAYS_ALLOW = true;
 
 // ---------------------------------------------------------------------------
-// 3. Grant store
+// 3. Grant store — UI-state only (NOT an authorization boundary)
 // ---------------------------------------------------------------------------
 
 export interface CapabilityGrant {
@@ -140,7 +154,11 @@ export interface CapabilityGrant {
 
 const GRANTS_STORAGE_KEY = '@thryftverse_agent_capability_grants/v1';
 
-/** In-memory grant store mirrored to AsyncStorage. key: `${agentId}:${capability}` */
+/**
+ * In-memory grant store mirrored to AsyncStorage. key: `${agentId}:${capability}`.
+ * UI-state only — records the user's local consent for the preview UI. This is
+ * NOT an authorization boundary; the backend authorizes access independently.
+ */
 const grants = new Map<string, CapabilityGrant>();
 
 function grantKey(agentId: string, capability: AgentCapability): string {
@@ -207,7 +225,7 @@ export async function clearGrants(agentId?: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Capability broker function
+// 4. Capability broker function — local approval-prompt orchestration
 // ---------------------------------------------------------------------------
 
 export interface ApprovalRequest {
@@ -229,10 +247,13 @@ export interface ApprovalResult {
 }
 
 /**
- * Ask the broker whether an agent may exercise a capability.
+ * Ask the broker whether an agent may exercise a capability in the local
+ * preview. This orchestrates the approval-prompt UI; it does not authorize
+ * server-side access.
  *
  * - If an `always_allow` grant already exists, the capability is auto-allowed
- *   and a `tool_called` ledger entry is recorded with `approval: 'granted'`.
+ *   for the preview and a `tool_called` ledger entry is recorded with
+ *   `approval: 'granted'`.
  * - Otherwise an `ApprovalRequest` is returned for the UI to present to the
  *   user, and an `approval_requested` ledger entry is recorded.
  *
@@ -295,15 +316,18 @@ export async function requestCapability(
 }
 
 /**
- * Resolve a pending approval request with the user's decision.
+ * Resolve a pending approval request with the user's decision for the local
+ * preview. This records the user's local consent; it does not authorize
+ * server-side access.
  *
  * If `approved` is true and `alwaysAllow` is requested for a non-Tier-D
- * capability, a persistent `always_allow` grant is recorded. Tier D always
- * resolves to `ask` policy — `alwaysAllow` is silently ignored for Tier D,
- * and the result reason reflects that explicit approval was still required.
+ * capability, a persistent `always_allow` grant is recorded in the local
+ * UI-state store. Tier D always resolves to `ask` policy — `alwaysAllow`
+ * is silently ignored for Tier D, and the result reason reflects that
+ * explicit approval was still required.
  *
- * The decision is recorded to the ledger as `approval_granted` or
- * `approval_denied`.
+ * The decision is recorded to the LOCAL-ONLY ledger as `approval_granted`
+ * or `approval_denied`.
  */
 export async function resolveApproval(
   request: ApprovalRequest,
@@ -359,7 +383,7 @@ export async function resolveApproval(
 }
 
 // ---------------------------------------------------------------------------
-// 5. Transaction bypass protection
+// 5. Transaction bypass protection — local preview guard
 // ---------------------------------------------------------------------------
 
 const FINANCIAL_CAPABILITIES: AgentCapability[] = [
@@ -375,14 +399,15 @@ const FINANCIAL_CAPABILITIES: AgentCapability[] = [
 
 /**
  * Whether an agent exercising `capability` may bypass the canonical
- * transaction UI and perform the action directly.
+ * transaction UI and perform the action directly in the local preview.
  *
  * Financial / high-risk capabilities can NEVER bypass canonical transaction
  * UI — the agent must always route the user through the real screens (offer
  * sheet, bid sheet, checkout, withdrawal flow, security settings, etc.).
  *
  * No capability currently bypasses canonical UI. This function exists as an
- * explicit, auditable security boundary so future relaxations are deliberate.
+ * explicit, auditable guard for the local preview so future relaxations are
+ * deliberate. The backend enforces the same constraint independently.
  */
 export function canAgentBypassCanonicalUI(capability: AgentCapability): boolean {
   if (FINANCIAL_CAPABILITIES.includes(capability)) return false;

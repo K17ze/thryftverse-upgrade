@@ -104,9 +104,7 @@ export function CoOwnConciergeCTA({
     <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {/* Header */}
       <View style={styles.headerRow}>
-        <View style={[styles.iconWrap, { backgroundColor: colors.brandSubtle }]}>
-          <Ionicons name={config.icon} size={20} color={colors.brand} />
-        </View>
+        <Ionicons name={config.icon} size={22} color={colors.brand} />
         <View style={styles.headerText}>
           <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
             {config.title}
@@ -216,14 +214,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
-  },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
   headerText: {
     flex: 1,

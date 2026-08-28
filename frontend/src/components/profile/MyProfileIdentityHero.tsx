@@ -274,28 +274,38 @@ export function MyProfileIdentityHero({
           </Pressable>
         ) : null}
 
-        {/* Trust line — one row, no chips, no second trust surface.
-            Hierarchy: rating (15pt, star icon) > sold (13pt) > joined/response (12pt).
+        {/* Trust header — rating row + joined caption on separate lines.
+            The rating is part of the identity block, not a lonely chip: star +
+            score + review count give the 5.0 context. Joined date is a less
+            prominent caption below, not equal weight to the rating.
             Response time is surfaced here (not buried in About) because Depop/Grailed
             2026 research shows it is a top-3 conversion signal for marketplace profiles. */}
         {(hasRating || completedSales > 0 || memberSince || responseTimeLabel) ? (
-          <View style={styles.trustRow}>
-            {hasRating && ratingAverage !== null && ratingAverage !== undefined ? (
-              <View style={styles.trustRatingWrap}>
-                <Ionicons name="star" size={12} color={colors.brand} aria-hidden={true} />
-                <Text style={styles.trustRating}>{ratingAverage.toFixed(1)}</Text>
-              </View>
-            ) : null}
-            {hasRating && completedSales > 0 ? <Text style={styles.trustDot}> · </Text> : null}
-            {completedSales > 0 ? (
-              <Text style={styles.trustSold}>{completedSales} sold</Text>
-            ) : null}
-            {(hasRating || completedSales > 0) && memberSince ? <Text style={styles.trustDot}> · </Text> : null}
-            {memberSince ? <Text style={styles.trustStatic}>Joined {memberSince}</Text> : null}
-            {(hasRating || completedSales > 0 || memberSince) && responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
-            {responseTimeLabel ? (
-              <Text style={styles.trustResponse}>Replies {responseTimeLabel}</Text>
-            ) : null}
+          <View style={styles.trustBlock}>
+            {/* Rating row — star + score + review count (or "No reviews yet").
+                Secondary trust signals (sold, response time) stay on this row
+                separated by dots; they are marketplace proof, not identity. */}
+            <View style={styles.trustRatingRow}>
+              {hasRating && ratingAverage !== null && ratingAverage !== undefined ? (
+                <>
+                  <Ionicons name="star" size={16} color={colors.brand} aria-hidden={true} />
+                  <Text style={styles.trustRating}>{ratingAverage.toFixed(1)}</Text>
+                  <Text style={styles.trustReviewCount}>({reviewCount} {(reviewCount ?? 0) === 1 ? 'review' : 'reviews'})</Text>
+                </>
+              ) : (
+                <Text style={styles.trustNoReviews}>No reviews yet</Text>
+              )}
+              {completedSales > 0 ? <Text style={styles.trustDot}> · </Text> : null}
+              {completedSales > 0 ? (
+                <Text style={styles.trustSold}>{completedSales} sold</Text>
+              ) : null}
+              {responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
+              {responseTimeLabel ? (
+                <Text style={styles.trustResponse}>Replies {responseTimeLabel}</Text>
+              ) : null}
+            </View>
+            {/* Joined — less prominent caption on its own line, no dot separator */}
+            {memberSince ? <Text style={styles.trustJoined}>Joined {memberSince}</Text> : null}
           </View>
         ) : null}
       </View>
@@ -504,17 +514,15 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
   },
 
-  // Trust line — 3-level hierarchy: rating (15pt) > sold (13pt) > joined/response (12pt)
-  trustRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+  // Trust header — rating row + joined caption on separate lines
+  trustBlock: {
     paddingVertical: 2,
     marginBottom: Space.xs,
   },
-  trustRatingWrap: {
+  trustRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 3,
   },
   trustRating: {
@@ -523,16 +531,27 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
     letterSpacing: -0.1,
   },
+  trustReviewCount: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+  },
+  trustNoReviews: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+  },
   trustSold: {
     fontSize: Type.numericMeta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  trustStatic: {
+  trustJoined: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
+    marginTop: 2,
   },
   trustResponse: {
     fontSize: Type.caption.size,

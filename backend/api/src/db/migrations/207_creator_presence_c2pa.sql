@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS creator_document_presence (
 
 CREATE INDEX IF NOT EXISTS creator_document_presence_doc_idx
   ON creator_document_presence (document_id, last_seen_at DESC)
-  WHERE last_seen_at > NOW() - INTERVAL '5 minutes';
+  WHERE last_seen_at IS NOT NULL;
 
 -- ── C2PA content credentials ─────────────────────────────────────────
 -- Stores C2PA 2.4 assertion manifests for media assets. Each row is an

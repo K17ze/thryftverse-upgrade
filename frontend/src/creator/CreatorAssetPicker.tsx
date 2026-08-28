@@ -2856,7 +2856,7 @@ const MusicPicker = React.memo(function MusicPicker({ onClose, onAddLayer }: { o
         <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
       </View>
       <View style={styles.musicAddBtn}>
-        <Ionicons name="checkmark" size={IconGrammar.standard} color={colors.textInverse} aria-hidden={true} />
+        <Ionicons name="checkmark" size={IconGrammar.standard} color={colors.brand} aria-hidden={true} />
       </View>
     </Pressable>
   ), [handleSelect, setPreviewTrack, styles, colors]);
@@ -2873,7 +2873,7 @@ const MusicPicker = React.memo(function MusicPicker({ onClose, onAddLayer }: { o
               <Text style={styles.musicPreviewArtistName} numberOfLines={1}>{previewTrack.artistName}</Text>
             </View>
             <View style={styles.musicPreviewPlayBtn}>
-              <Ionicons name="play" size={IconGrammar.metadata} color={colors.textInverse} aria-hidden={true} />
+              <Ionicons name="play" size={IconGrammar.metadata} color={colors.brand} aria-hidden={true} />
             </View>
           </>
         ) : (
@@ -2883,7 +2883,7 @@ const MusicPicker = React.memo(function MusicPicker({ onClose, onAddLayer }: { o
               <Text style={styles.musicPreviewTrackName}>Select a track</Text>
               <Text style={styles.musicPreviewArtistName}>Search to preview</Text>
             </View>
-            <View style={[styles.musicPreviewPlayBtn, { backgroundColor: colors.surfaceAlt }]}>
+            <View style={styles.musicPreviewPlayBtn}>
               <Ionicons name="play" size={IconGrammar.metadata} color={colors.textMuted} aria-hidden={true} />
             </View>
           </>
@@ -3952,9 +3952,7 @@ const StickerTray = React.memo(function StickerTray({ onClose, onAddLayer }: { o
                     accessibilityRole="button"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <View style={styles.stickerCellIcon}>
-                      <Ionicons name={sticker.icon} size={IconGrammar.hero} color={colors.brand} aria-hidden={true} />
-                    </View>
+                    <Ionicons name={sticker.icon} size={IconGrammar.hero} color={colors.brand} aria-hidden={true} />
                     <Text style={styles.stickerCellLabel} numberOfLines={1}>{sticker.label}</Text>
                   </Pressable>
                 ))}
@@ -4649,7 +4647,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   resultThumb: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   resultThumbImg: { width: '100%', height: '100%' },
-  resultAvatar: { width: 40, height: 40, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
+  resultAvatar: { width: 40, height: 40, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   resultAvatarText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
   resultInfo: { flex: 1, gap: 2 },
   resultName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
@@ -4758,7 +4756,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   musicPreviewInfo: { flex: 1, gap: 2 },
   musicPreviewTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary },
   musicPreviewArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
-  musicPreviewPlayBtn: { width: 32, height: 32, borderRadius: Radius.full, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
+  musicPreviewPlayBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   musicLoadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.sm },
   musicLoadingText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
   musicRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
@@ -4766,7 +4764,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   musicInfo: { flex: 1, gap: 2 },
   musicTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary },
   musicArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
-  musicAddBtn: { width: 36, height: 36, borderRadius: Radius.full, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
+  musicAddBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   // ── Quiz picker ──
   quizOptionRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
   quizCorrectDot: { width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
@@ -4782,7 +4780,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   stickerSearchClear: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
   stickerCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.xs },
   stickerCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
-  stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
+  stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   stickerCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
   stickerGridScroll: { flex: 1 },
   stickerGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
@@ -4790,7 +4788,6 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   stickerCategoryTitle: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
   stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
   stickerCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: 1, borderColor: colors.borderSubtle },
-  stickerCellIcon: { width: 48, height: 48, borderRadius: Radius.full, backgroundColor: withAlpha(colors.brand, 0.08), justifyContent: 'center', alignItems: 'center' },
   stickerCellLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   stickerEmptyState: { paddingVertical: Space.xxl, alignItems: 'center', gap: Space.md },
   stickerEmptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
@@ -4847,7 +4844,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   // ── GIF category chips ──
   gifCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.sm },
   gifCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
-  gifCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
+  gifCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   gifCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
   // ── Vote preview ──
   votePreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
@@ -4857,7 +4854,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   votePreviewOptionText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   addOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm, marginBottom: Space.xs },
   addOptionBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.brand },
-  timerChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: Space.sm },
+  timerChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm },
   timerChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
   // ── Quiz preview ──
   quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },

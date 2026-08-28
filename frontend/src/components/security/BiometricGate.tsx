@@ -2,7 +2,7 @@ import React, { useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Type, Typography } from '../../theme/designTokens';
 import { AppButton } from '../ui/AppButton';
 import { useBiometricGate, type UseBiometricGateResult } from '../../hooks/useBiometricGate';
 import { haptics } from '../../utils/haptics';
@@ -69,9 +69,12 @@ export function BiometricGatePrompt({
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {header}
       <View style={styles.center}>
-        <View style={[styles.iconCircle, { backgroundColor: colors.surfaceAlt }]}>
-          <Ionicons name="lock-closed-outline" size={32} color={colors.textPrimary} />
-        </View>
+        <Ionicons
+          name="lock-closed-outline"
+          size={32}
+          color={colors.textPrimary}
+          style={styles.icon}
+        />
         <Text style={[styles.title, { color: colors.textPrimary }]}>
           Authenticate to continue
         </Text>
@@ -179,12 +182,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Space.lg,
   },
-  iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+  icon: {
     marginBottom: Space.md,
   },
   title: {

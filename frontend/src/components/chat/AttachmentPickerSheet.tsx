@@ -138,9 +138,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
                 accessibilityRole="button"
                 accessibilityLabel={opt.label}
               >
-                <View style={[styles.iconCircle, { backgroundColor: colors[opt.colorKey] + '18' }]}>
-                  <Ionicons name={opt.icon} size={24} color={colors[opt.colorKey]} />
-                </View>
+                <Ionicons name={opt.icon} size={24} color={colors[opt.colorKey]} />
                 <Caption color={colors.textPrimary} style={styles.optionLabel}>{opt.label}</Caption>
               </AnimatedPressable>
             ))}
@@ -199,13 +197,6 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm,
     minHeight: 44,
-  },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   optionLabel: {
     fontSize: Type.meta.size,

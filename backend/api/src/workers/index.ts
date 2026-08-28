@@ -1,6 +1,6 @@
 import { startBackgroundWorkers, closeBackgroundQueues } from '../lib/queues.js';
 import { logger } from '../lib/logger.js';
-import { closeDb } from '../db/pool.js';
+import { closeDb, db } from '../db/pool.js';
 import { closeRedis } from '../lib/redis.js';
 import { closeRealtimeConnections } from '../lib/realtime.js';
 import {
@@ -128,6 +128,10 @@ async function main(): Promise<void> {
       },
       handleDsarExportJob: async ({ requestId, userId, reason }) => {
         await processDsarExport({ requestId, userId, reason });
+      },
+      handleAgentRunJob: async ({ runId }) => {
+        const { processAgentRun } = await import('../botRuntime/index.js');
+        await processAgentRun(db, runId);
       },
     },
     logger,

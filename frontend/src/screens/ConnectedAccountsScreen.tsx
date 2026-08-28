@@ -5,14 +5,13 @@
  * allows unlinking with safety checks (must keep at least one auth method),
  * and provides education about the security implications.
  *
- * Per Design.md: utility canvas mode. Quality from composition, hierarchy,
- * and visual identity — each provider has its own brand-coloured badge.
+ * Per Design.md: utility canvas mode. Flat settings rows, no decorative
+ * icon chrome, one icon family (Ionicons).
  */
 
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
@@ -21,11 +20,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
+import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { ConnectedAccountsSkeleton } from '../components/skeletons/ConnectedAccountsSkeleton';
 import { EmptyState } from '../components/EmptyState';
 import {
@@ -37,10 +39,10 @@ import { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ConnectedAccounts'>;
 
-const PROVIDER_META: Record<string, { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string; gradient: string }> = {
-  google: { label: 'Google', icon: 'logo-google', color: '#4285F4', gradient: '#4285F4' },
-  apple: { label: 'Apple', icon: 'logo-apple', color: '#000000', gradient: '#333333' },
-  facebook: { label: 'Facebook', icon: 'logo-facebook', color: '#1877F2', gradient: '#1877F2' },
+const PROVIDER_META: Record<string, { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string }> = {
+  google: { label: 'Google', icon: 'logo-google', color: '#4285F4' },
+  apple: { label: 'Apple', icon: 'logo-apple', color: '#000000' },
+  facebook: { label: 'Facebook', icon: 'logo-facebook', color: '#1877F2' },
 };
 
 function formatDate(iso: string): string {
@@ -132,27 +134,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero summary — visual identity for the screen */}
-          <View style={styles.heroCard}>
-            <View style={styles.heroIconRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="lock-closed" size={20} color={colors.textInverse} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={styles.heroTitle}>Sign-in methods</Text>
-                <Text style={styles.heroSubtitle}>
-                  {accounts.length === 0
-                    ? 'Email and password'
-                    : `${accounts.length} connected account${accounts.length !== 1 ? 's' : ''}`}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-        <Text style={styles.introText}>
-          Manage the third-party accounts you use to sign in. Unlink an account as long as you have another way to access your ThryftVerse account.
-        </Text>
-
         {error ? (
           <EmptyState
             icon="cloud-offline-outline"
@@ -161,47 +142,43 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
             ctaLabel="Retry"
             onCtaPress={() => { setIsLoading(true); void load(); }}
           />
-        ) : accounts.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <View style={styles.emptyIconWrap}>
-                <Ionicons name="link-outline" size={36} color={colors.textMuted} />
-              </View>
-              <Text style={styles.emptyTitle}>No connected accounts</Text>
-              <Text style={styles.emptyBody}>
-                You sign in with your email and password. Connect Google or Apple from the sign-in screen for faster access.
-              </Text>
-            </View>
         ) : (
-          <View style={styles.accountsList}>
-            {accounts.map((account, idx) => {
-              const meta = PROVIDER_META[account.provider] ?? {
-                label: account.provider,
-                icon: 'key-outline',
-                color: colors.textMuted,
-                gradient: colors.textMuted,
-              };
-              const isUnlinking = unlinkingId === account.id;
-              return (
-                <View
-                  key={account.id}
-                >
-                  <View style={styles.accountCard}>
-                    <View style={styles.accountHeader}>
-                      {/* Provider badge with brand colour */}
-                      <View style={[styles.providerIcon, { backgroundColor: meta.color + '18' }]}>
-                        <Ionicons name={meta.icon} size={24} color={meta.color} />
-                      </View>
-                      <View style={styles.accountInfo}>
-                        <Text style={styles.providerName}>{meta.label}</Text>
-                        {account.providerEmail ? (
-                          <Text style={styles.providerEmail}>{account.providerEmail}</Text>
-                        ) : null}
-                        <View style={styles.linkedRow}>
-                          <Ionicons name="checkmark-circle" size={12} color={colors.success} />
-                          <Text style={styles.linkedDate}>Linked {formatDate(account.linkedAt)}</Text>
-                        </View>
-                      </View>
-                    </View>
+          <SettingsSection
+            title="Sign-in methods"
+            description={`Manage the third-party accounts you use to sign in. Unlink an account as long as you have another way to access your ThryftVerse account.\n${accounts.length > 0 ? `${accounts.length} connected account${accounts.length !== 1 ? 's' : ''}` : 'Email and password'}`}
+          >
+            <SettingsRow
+              icon="mail-outline"
+              title="Email and password"
+              subtitle="Active"
+              isLast={accounts.length === 0}
+            />
+            {accounts.length === 0 ? (
+              <SettingsRow
+                icon="link-outline"
+                title="No connected accounts"
+                subtitle="Connect Google, Apple, or Facebook from the sign-in screen"
+                isLast
+              />
+            ) : (
+              accounts.map((account, idx) => {
+                const meta = PROVIDER_META[account.provider] ?? {
+                  label: account.provider,
+                  icon: 'key-outline',
+                  color: colors.textMuted,
+                };
+                const isUnlinking = unlinkingId === account.id;
+                const isLast = idx === accounts.length - 1;
+                return (
+                  <SettingsRow
+                    key={account.id}
+                    icon={meta.icon}
+                    iconColor={meta.color}
+                    title={meta.label}
+                    subtitle={account.providerEmail ?? `Linked ${formatDate(account.linkedAt)}`}
+                    value={account.providerEmail ? `Linked ${formatDate(account.linkedAt)}` : undefined}
+                    isLast={isLast}
+                  >
                     <AppButton
                       title={isUnlinking ? 'Unlinking…' : 'Unlink'}
                       onPress={() => { haptic.light(); handleUnlink(account); }}
@@ -209,25 +186,19 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                       size="sm"
                       disabled={isUnlinking}
                     />
-                  </View>
-                </View>
-              );
-            })}
-          </View>
+                  </SettingsRow>
+                );
+              })
+            )}
+          </SettingsSection>
         )}
 
-        {/* Security note — elevated with icon and card */}
-          <View style={styles.securityNote}>
-            <View style={styles.securityIconWrap}>
-              <Ionicons name="checkmark-done" size={20} color={colors.success} />
-            </View>
-            <View style={styles.securityTextWrap}>
-              <Text style={styles.securityTitle}>Account safety</Text>
-              <Text style={styles.securityNoteText}>
-                For your security, you must keep at least one way to sign in. If you unlink your only connected account, ensure you have a password set.
-              </Text>
-            </View>
-          </View>
+        <SettingsInfoBanner
+          tone="info"
+          icon="shield-checkmark-outline"
+          title="Account safety"
+          description="For your security, you must keep at least one way to sign in. You cannot unlink your last connected account without a password."
+        />
 
         <View style={{ height: Space.xxl }} />
       </ScrollView>
@@ -237,166 +208,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-
-    // Hero summary card
-    heroCard: {
-      borderRadius: Radius.xl,
-      backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.lg,
-      marginTop: Space.sm,
-    },
-    heroIconRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: {
-      flex: 1,
-    },
-    heroTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      marginTop: Space.xs / 2,
-    },
-
-    introText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
-      marginTop: Space.lg,
-      marginBottom: Space.md,
-    },
-
-    // Empty state
-    emptyCard: {
-      alignItems: 'center',
-      padding: Space.xl,
-      gap: Space.sm,
-    },
-    emptyIconWrap: {
-      width: Space.xl * 2,
-      height: Space.xl * 2,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surface,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: Space.xs,
-    },
-    emptyTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
-    emptyBody: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      textAlign: 'center',
-      lineHeight: Type.caption.lineHeight,
-      paddingHorizontal: Space.lg,
-    },
-
-    // Account cards
-    accountsList: { gap: Space.sm },
-    accountCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.md,
-    },
-    accountHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-      flex: 1,
-    },
-    providerIcon: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    accountInfo: { flex: 1 },
-    providerName: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
-    providerEmail: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      marginTop: Space.xs / 2,
-    },
-    linkedRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      marginTop: Space.xs,
-    },
-    linkedDate: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
-
-    // Security note — elevated card
-    securityNote: {
-      flexDirection: 'row',
-      gap: Space.md,
-      marginTop: Space.lg,
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.md,
-    },
-    securityIconWrap: {
-      width: Control.chrome,
-      height: Control.chrome,
-      borderRadius: Radius.full,
-      backgroundColor: colors.successSubtle,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    securityTextWrap: {
-      flex: 1,
-    },
-    securityTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      marginBottom: Space.xs / 2,
-    },
-    securityNoteText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      lineHeight: Type.caption.lineHeight + 1,
-    },
   });
 }

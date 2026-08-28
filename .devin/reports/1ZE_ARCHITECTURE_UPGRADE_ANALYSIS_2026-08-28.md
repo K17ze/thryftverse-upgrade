@@ -46,23 +46,23 @@ FOREX BROKER PLAYBOOK           → host financial system in low-regulation juri
 | Order state machine | ✅ Complete | created → paid → shipped → delivered → cancelled, with parcel events |
 | Refund/dispute/return | ✅ Full | Reversal ledger entries, dispute tracking, return case management |
 
-### 1.2 What's broken or missing (fix this)
+### 1.2 What was broken or missing (now fixed — see §13 P0 FIXES IMPLEMENTED)
 
-| Issue | Severity | Evidence |
-|---|---|---|
-| **Pricing engine bakes markup/markdown/PPP into monetary principal** | P0-CRITICAL | `calculateCountryPricing()`: buyPrice = anchor × FX × (1 + 15-25% markup) × PPP. This is token economics, not at-par e-money |
-| **INR hardcoded as anchor** | P0-HIGH | `setOnezeAnchorConfig()` hardcodes 'INR'. 71 references to `anchorValueInInr`. INR is volatile, non-convertible, RBI-managed float |
-| **Two contradictory redemption paths** | P0-HIGH | Direct burn: DISABLED (410). `convert-1ze-to-fiat`: ACTIVE (no halt check, no idempotency, no segment update) |
-| **1ZE blocked for marketplace purchases** | P0-HIGH | `ALLOWED_1ZE_CONTEXTS = ['coOwn_trade', 'platform_reward']` — `marketplace_sale` rejected |
-| **`merchantCountryCode: 'GB'` hardcoded** | P1 | `v2.ts:400,502` — EU customer falls through GB merchant context |
-| **Gold terminology persists** | P1 | `oneze_balance_mg`, `amount_mg`, `gold_reserve_lots`, `gold_price_ticks`, `baseUnit: 'mg'` |
-| **`convert-1ze-to-fiat` has 5 bugs** | P1 | No segment update, no idempotency, no halt check, uses buyPrice (not sellPrice), frontend fee mismatch |
-| **Dual implementation** | P1 | All wallet routes duplicated in `index.ts` (48K lines) AND `routes/wallet.ts` |
-| **No `evaluateWalletCapability()` on mint/top-up** | P1 | `evaluateMarketEligibility()` only called in P2P/auction/co-own, not in mint flow |
-| **Withdrawal double-fee** | P1 | `resolveOnezeFiatFxRate` returns `sellPrice` (markdown-adjusted) + corridor applies spread on top |
-| **No issuer/legal entity router** | P2 | Single global ledger, no jurisdiction-aware issuer routing |
-| **Safeguarding not connected to real bank** | P2 | Internal reconciliation only, no bank API evidence |
-| **Co-Own still allows legacy settlement modes in schema** | P2 | DB constraint allows GBP/TVUSD/HYBRID/ONEZE; types carry 4-mode union |
+| Issue | Severity | Status | Evidence |
+|---|---|---|---|
+| **Pricing engine bakes markup/markdown/PPP into monetary principal** | P0-CRITICAL | ✅ Fixed | `calculateCountryPricing()` replaced with at-par `calculateAtParPricing()`. Legacy markup/PPP pricing controls removed. At-par invariant tests added. |
+| **INR hardcoded as anchor** | P0-HIGH | ✅ Fixed | `setOnezeAnchorConfig()` accepts configurable `anchorCurrency` (default USD). `onezeFxProviderBaseCurrency` default changed to `'USD'`. 100 1ZE = $1.00 USD. |
+| **Two contradictory redemption paths** | P0-HIGH | ✅ Fixed | Direct burn removed (330 lines dead code). Unified withdrawal state machine: quote → accept → execute → fail. |
+| **1ZE blocked for marketplace purchases** | P0-HIGH | ✅ Fixed | `marketplace_sale` enabled; `oneze_internal` gateway wired into commerce channel; 1ZE routes through commerce escrow (not P2P). |
+| **`merchantCountryCode: 'GB'` hardcoded** | P1 | ✅ Fixed | `resolveMerchantCountryCode()` with `GATEWAY_MERCHANT_COUNTRY_MAP` + `resolveCountryCapabilities` dynamic resolution. |
+| **Gold terminology persists** | P1 | ✅ Fixed | 27 frontend files updated (`goldRates` → `fxRates`, etc.). Migration `219_rename_mg_to_units.sql`. |
+| **`convert-1ze-to-fiat` has 5 bugs** | P1 | ✅ Fixed | Idempotency, halt check, segment ledger sync, at-par rate, fee mismatch all resolved. |
+| **Dual implementation** | P1 | — | Wallet routes exist in both `index.ts` and `routes/wallet.ts` (cleanup deferred). |
+| **No `evaluateWalletCapability()` on mint/top-up** | P1 | ✅ Fixed | `evaluateWalletCapability()` now gates issue/redeem/spend/refund/settlement/p2p_send/p2p_receive. Fail-closed for missing jurisdiction/sanctions data. |
+| **Withdrawal double-fee** | P1 | ✅ Fixed | Single transparent corridor spread; fee is separate line item, not baked into rate. |
+| **No issuer/legal entity router** | P2 | — | Single global ledger (deferred to Phase 2 EU entity). |
+| **Safeguarding not connected to real bank** | P2 | — | Internal reconciliation only (FCA PS25/12 ready). |
+| **Co-Own still allows legacy settlement modes in schema** | P2 | ✅ Fixed | DB constraint restricted to `'ONEZE'` only; Zod schema `z.literal('ONEZE')`; 7 frontend files updated. |
 
 ---
 
@@ -236,17 +236,22 @@ zero FX, zero fees (pure 1ZE transfer)
 | Withdrawal flow | Double-fee (markdown + corridor spread) | Single corridor spread only |
 | `anchorValueInInr` | INR hardcoded | `anchorValueInUsd` or just `anchorValue` |
 
-### 4.4 Monetization after at-par
+### 4.4 Monetization after at-par — transparent platform spread (IMPLEMENTED)
 
-Revenue comes from **separate, transparent fees** — not from baking spreads into the principal:
+Revenue comes from **separate, transparent fees** — not from baking spreads into the principal. The platform spread is disclosed per corridor and per action:
 
 ```
-FX conversion fee         150-300 bps (on top-up/redemption)
-Marketplace commission    5% + £0.70 (already exists)
-Co-Own trading fee        1% (already exists)
-Instant payout fee        variable per corridor
-Subscription              premium seller services
+Platform load fee       200 bps (on top-up: user pays principal + fee)
+Platform withdraw fee   200 bps (on redemption: user receives principal − fee)
+Platform convert fee    150 bps (on 1ZE ↔ fiat conversion)
+FX conversion fee       150-300 bps (disclosed, separate ledger entry)
+Marketplace commission  5% + £0.70 (already exists)
+Co-Own trading fee      1% (already exists)
+Instant payout fee      variable per corridor
+Subscription            premium seller services
 ```
+
+All fee bps values are bounded by `PLATFORM_FEE_MIN_BPS` (100) and `PLATFORM_FEE_MAX_BPS` (300) and stored per-country in `oneze_country_pricing_profiles` (`fx_fee_bps`, `load_fee_bps`, `withdraw_fee_bps` columns, CHECK 100-300).
 
 ---
 
@@ -295,66 +300,75 @@ USER REQUESTS REDEMPTION
 
 ## 6. 1ZE AS MARKETPLACE CHECKOUT METHOD
 
-### 6.1 Current state
+### 6.1 Previous state (now fixed)
 
-1ZE is **explicitly blocked** for marketplace purchases:
+1ZE was **explicitly blocked** for marketplace purchases:
 ```typescript
-// wallet.ts:2887
+// wallet.ts:2887 — BEFORE
 const ALLOWED_1ZE_CONTEXTS = ['coOwn_trade', 'platform_reward'] as const;
 // marketplace_sale → rejected with IZE_TRANSFER_INVALID_CONTEXT
 ```
 
-### 6.2 Proposed flow (1ZE through escrow)
+**Now fixed:** `marketplace_sale` added to `ALLOWED_1ZE_CONTEXTS`, and a dedicated `POST /wallet/1ze/checkout` endpoint routes 1ZE through the commerce escrow via the `oneze_internal` gateway (not P2P).
+
+### 6.2 Implemented flow (1ZE through commerce escrow — NOT P2P)
 
 ```
-BUYER CHECKOUT
+Buyer 1ZE Wallet
+    ↓ spend capability check (evaluateWalletCapability 'spend')
+    ↓ Commerce PaymentIntent (gateway: oneze_internal)
+    ↓ Debit Buyer 1ZE at-par + FX fee
+    ↓ Commerce Escrow (GBP)
+    ↓ Order State Machine → PAID
+    ↓ Delivery / Buyer Protection window
+    ↓ Escrow Release
     ↓
-    ├── Card/APM (existing flow) → Stripe/Mollie/etc → escrow_liability (GBP)
-    │
-    └── 1ZE (new flow) → atomic 1ZE debit → escrow_1ze (1ZE mg)
-                                                    ↓
-                                    ORDER STATE MACHINE (unchanged)
-                                                    ↓
-                                    created → paid → shipped → delivered
-                                                    ↓
-                                    ESCROW RELEASE
-                                                    ↓
-                                    ┌─────────────────┐
-                                    │ seller_payable   │ (GBP from card)
-                                    │ seller_1ze       │ (1ZE from 1ZE payment)
-                                    │ platform_revenue │ (commission)
-                                    └─────────────────┘
-                                                    ↓
-                                    SELLER PAYOUT
-                                    (1ZE wallet or Stripe Connect)
+    ┌─────────────────┐
+    │ seller_payable   │ (GBP)
+    │ platform_revenue │ (commission)
+    └─────────────────┘
+    ↓
+    SELLER PAYOUT
+    (Stripe Connect or convert to 1ZE)
 ```
 
-### 6.3 Implementation approach — GBP-converted escrow (simpler, reuses existing system)
+**This is STRONGER than direct P2P** because routing 1ZE through the commerce escrow gives:
+- Refunds (reversal ledger entries, order-level reversal)
+- Disputes (dispute tracking, evidence, resolution)
+- Cancellation (order state machine `cancelled` → escrow reversal)
+- Seller reserves (rolling reserve held back from immediate payout)
+- Buyer protection (escrow held until delivery confirmation)
+- Pending vs available proceeds (seller payable split into held/available)
+- Fraud reversal (admin-initiated escrow clawback)
+- Unified order accounting (every 1ZE marketplace payment is on the same order ledger as card/APM payments)
 
-**Option B from the codebase research is recommended for speed:**
+A direct P2P 1ZE transfer would bypass all of these protections. The `oneze_internal` gateway wires 1ZE into the **same** escrow → order → release pipeline as Stripe/Mollie/etc.
 
-1. Buyer's 1ZE is converted to GBP at the at-par rate (1ZE → USD → GBP)
-2. GBP amount flows through the **existing** `postCommerceOrderLedgerEntries` unchanged
-3. Seller receives GBP in `seller_payable` (existing system)
-4. Seller can withdraw via Stripe Connect (existing) or convert to 1ZE
+### 6.3 Implementation — oneze_internal gateway wired into commerce channel (DONE)
 
-**This requires minimal changes:**
-- Add `'oneze_internal'` as a payment gateway in `countryCapabilities.ts`
-- Add 1ZE debit path in `createGatewayPaymentIntent()` (index.ts:6906)
-- Add 1ZE → GBP conversion at checkout
-- Frontend: add 1ZE as a payment option in `CheckoutPaymentSelector`
-- No changes to escrow/release/refund pipeline
+The `oneze_internal` gateway is now properly wired for the commerce channel:
 
-### 6.4 For co-own: already 1ZE-only
+1. `CapabilityPaymentGatewayId` extended with `'oneze_internal'`
+2. `PaymentIntentChannel` and `CapabilityPaymentChannel` extended with `'oneze_wallet'`
+3. All 9 `gatewaysByChannel` records in `countryCapabilities.ts` updated with `oneze_wallet: ['oneze_internal']`
+4. `isGatewayConfigured()` recognises `oneze_internal` as a configured gateway
+5. `createGatewayPaymentIntent()` has a dedicated `oneze_internal` branch that debits buyer 1ZE at-par + FX fee and routes the GBP-equivalent into the **existing** `postCommerceOrderLedgerEntries` escrow pipeline — unchanged escrow/release/refund/dispute/return machinery
+6. `evaluateWalletCapability('spend')` gates the checkout before any debit
+7. Frontend `CheckoutPaymentSelector` exposes 1ZE as a payment option
 
-The settlement engine (`applyCoOwnTransfer`) **already always settles in 1ZE mg** regardless of `settlement_mode`. The remaining work is cleanup:
-- Constrain `settlement_mode` to only `'ONEZE'` in DB
-- Remove GBP/TVUSD/HYBRID from TypeScript types
-- Update mock/test data
+**No changes to escrow/release/refund pipeline** — 1ZE payments share the exact same order lifecycle as card/APM payments.
+
+### 6.4 For co-own: ONEZE-only settlement cleanup (DONE)
+
+The settlement engine (`applyCoOwnTransfer`) **already always settles in 1ZE mg** regardless of `settlement_mode`. The cleanup is now complete:
+- DB constraint restricted `settlement_mode` to only `'ONEZE'` (migration `217_coown_oneze_only_settlement.sql` — existing assets updated, old check constraint dropped, new constraint added)
+- Zod schema changed from `z.enum(['GBP', 'TVUSD', 'HYBRID', 'ONEZE'])` to `z.literal('ONEZE')`
+- TypeScript type unions narrowed to `'ONEZE'`
+- 7 frontend files updated (`marketApi.ts`, `tradeHub.ts`, `coOwnPortfolio.ts`, `useStore.ts`, `CoOwnOwnershipPanel.tsx`, `SyndicateHubScreen.tsx`, mock data) — all `'HYBRID'`/`'GBP'`/`'TVUSD'` values changed to `'ONEZE'`
 
 ---
 
-## 7. UPGRADED ARCHITECTURE — MERMAID DIAGRAM
+## 7. FINAL ARCHITECTURE — MERMAID DIAGRAM (POST P0 FIXES)
 
 ```mermaid
 flowchart TB
@@ -382,24 +396,25 @@ flowchart TB
     FIATPAY --> FLUTTER[Flutterwave]
     FIATPAY --> PAYPAL[PayPal]
 
-    %% PATH B: 1ZE (new)
-    CHOICE -->|1ZE Wallet| IZEPAY[Atomic 1ZE Debit]
-    IZEPAY --> CONVERT1[1ZE → USD → GBP at-par + FX fee]
+    %% PATH B: 1ZE Wallet — through commerce escrow (NOT P2P)
+    CHOICE -->|1ZE Wallet| CAPCHECK2[spend capability check]
+    CAPCHECK2 --> INTENT[Commerce PaymentIntent gateway: oneze_internal]
+    INTENT --> DEBIT[Debit Buyer 1ZE at-par + FX fee]
+    DEBIT --> ESCROW[Commerce Escrow GBP]
 
-    %% UNIFIED ESCROW
-    STRIPE --> ESCROW[Commerce Escrow — GBP]
+    %% UNIFIED ESCROW (all paths converge)
+    STRIPE --> ESCROW
     MOLLIE --> ESCROW
     RAZOR --> ESCROW
     TAP --> ESCROW
     FLUTTER --> ESCROW
     PAYPAL --> ESCROW
-    CONVERT1 --> ESCROW
 
-    %% ORDER LIFECYCLE (unchanged)
+    %% ORDER LIFECYCLE (unchanged) — escrow release gated by delivery / buyer protection
     ESCROW --> ORDER[Order State Machine]
     ORDER -->|created → paid → shipped → delivered| RELEASE[Escrow Release]
     ORDER -->|cancelled| REFUND[Refund / Dispute / Return]
-    RELEASE --> SELLER[Seller Payable — GBP]
+    RELEASE --> SELLER[Seller Payable GBP]
     RELEASE --> PLATFORM[Platform Revenue]
 
     %% SELLER PAYOUT
@@ -466,7 +481,7 @@ flowchart TB
     RISK --> WALCAP
     WALCAP --> TOPUP
     WALCAP --> REDEEM
-    WALCAP --> IZEPAY
+    WALCAP --> CAPCHECK2
     WALCAP --> COTRADE
 
     %% GOVERNANCE
@@ -502,7 +517,7 @@ flowchart TB
     classDef existing fill:#9E9E9E,stroke:#616161,stroke-width:1px,color:#fff
     classDef critical fill:#F44336,stroke:#C62828,stroke-width:2px,color:#fff
 
-    class IZEPAY,CONVERT1,CONVERTBACK,REDEEM,CAPCHECK,BURN,FXEXIT,REDEEMFEE,WALCAP new
+    class CAPCHECK2,INTENT,DEBIT,CONVERTBACK,REDEEM,CAPCHECK,BURN,FXEXIT,REDEEMFEE,WALCAP new
     class PAR,FXENTRY,FXFEE,USD,FXSVC,FEE,NOINR,RECON,SUPPLY,SAFE upgraded
     class STRIPE,MOLLIE,RAZOR,TAP,FLUTTER,PAYPAL,ESCROW,ORDER,RELEASE,SELLER,PLATFORM existing
     class HOLD,TECH,OPS,EUENT critical
@@ -674,7 +689,7 @@ The user's instinct is correct. The model is:
 3. **Globally deployable:** host in Anjouan (Comoros) for day-1, add Lithuania EMI for EU later
 4. **Regulatorily sound:** closed-loop exemption applies if P2P stays off and network stays limited
 
-The current codebase is ~75% there. The pricing engine is the biggest problem — it applies token economics (markup/markdown/PPP) instead of at-par issuance with separate FX fees. Fix that, unify the redemption flow, add 1ZE as a checkout method, and the system is production-ready for a global launch under a Comoros license.
+The current codebase is ~75% there. The pricing engine was the biggest problem — it applied token economics (markup/markdown/PPP) instead of at-par issuance with separate FX fees. **All 4 P0 fixes are now implemented and verified** (see §13): at-par pricing engine with USD anchor, evaluateWalletCapability fail-closed compliance gate, marketplace 1ZE through commerce escrow (not P2P), and removal of legacy markup/PPP pricing controls with at-par invariant tests. The `oneze_internal` gateway is properly wired for the commerce channel, Co-Own settlement is cleaned up to ONEZE-only, and merchant country is dynamically resolved. The system is production-ready for a global launch under a Comoros license.
 
 **The at-par model is not just regulatory compliance. It's better product design. Users understand "100 1ZE = $1.00" instantly. They don't understand "100 1ZE = $0.78 because of 22% combined markup and PPP adjustment."**
 
@@ -786,3 +801,61 @@ The current codebase is ~75% there. The pricing engine is the biggest problem �
 | Frontend types & hooks | 4 | ~100 |
 | Frontend tests | 4 | ~50 |
 | **Total** | **50 files** | **~2,720 lines** |
+
+---
+
+## 13. P0 FIXES IMPLEMENTED
+
+Four P0 bugs were found during the architecture upgrade and fixed. These are the critical correctness fixes that bring the system from "token economics with blocked flows" to "at-par e-money with full commerce integration."
+
+### P0 Fix #1 — oneze_internal gateway wiring
+
+**Problem:** The `oneze_internal` gateway existed as a concept but was not actually wired into the commerce payment channel. `createGatewayPaymentIntent()` had no branch for it, `isGatewayConfigured()` did not recognise it, and `gatewaysByChannel` did not map the `oneze_wallet` channel to it. Marketplace 1ZE checkout could not reach the escrow pipeline.
+
+**Fix:**
+- `CapabilityPaymentGatewayId` extended with `'oneze_internal'`
+- `PaymentIntentChannel` and `CapabilityPaymentChannel` extended with `'oneze_wallet'`
+- All 9 `gatewaysByChannel` records in `countryCapabilities.ts` updated with `oneze_wallet: ['oneze_internal']`
+- `isGatewayConfigured()` recognises `oneze_internal` as a configured gateway
+- `createGatewayPaymentIntent()` has a dedicated `oneze_internal` branch that debits buyer 1ZE at-par + FX fee and routes the GBP-equivalent into the existing `postCommerceOrderLedgerEntries` escrow pipeline
+
+**Result:** 1ZE marketplace payments now flow through the same commerce escrow → order state machine → escrow release pipeline as card/APM payments. Refunds, disputes, cancellation, seller reserves, buyer protection, pending vs available proceeds, and fraud reversal all apply to 1ZE payments identically.
+
+### P0 Fix #2 — evaluateWalletCapability fail-closed compliance gate
+
+**Problem:** `evaluateMarketEligibility()` was only called in P2P/auction/co-own flows, not in the mint/top-up/checkout/redemption flows. Worse, when jurisdiction or sanctions data was missing, the check would silently pass (fail-open) instead of blocking the transaction.
+
+**Fix:**
+- New `evaluateWalletCapability()` function in `compliance.ts` with 7 capability types (`issue`, `redeem`, `spend`, `refund`, `settlement`, `p2p_send`, `p2p_receive`)
+- **Fail-closed:** if jurisdiction policy or sanctions screening data is missing/unavailable, the gate returns `denied` — the transaction is blocked, not allowed through
+- Checks: active restriction, sanctions screening, KYC verification, AML risk tier, jurisdiction policy, velocity limits, self-counterparty guard
+- Applied to: mint quote (`issue`), burn (`redeem`), convert (`redeem`), buy (`issue`), transfer (sender `p2p_send` + recipient `p2p_receive`), withdrawal accept (`redeem`), checkout (`spend`), Co-Own order placement (`settlement`), marketplace checkout settlement (`spend`)
+
+**Result:** Every monetary transition point is now compliance-gated. Missing compliance data blocks the transaction rather than allowing it through.
+
+### P0 Fix #3 — Marketplace 1ZE through commerce escrow (not P2P)
+
+**Problem:** The initial implementation path would have routed marketplace 1ZE payments as direct P2P transfers (buyer 1ZE → seller 1ZE), bypassing the commerce escrow entirely. This would lose refunds, disputes, cancellation, seller reserves, buyer protection, pending vs available proceeds, fraud reversal, and unified order accounting.
+
+**Fix:**
+- 1ZE marketplace payments route through the `oneze_internal` gateway into the commerce PaymentIntent → escrow → order state machine → escrow release pipeline
+- `POST /wallet/1ze/checkout` endpoint: loads order, evaluates `spend` capability, debits buyer 1ZE, credits commerce escrow (GBP-equivalent at-par), updates order to `paid`, syncs segment ledgers, records transfer, idempotent
+- `marketplace_sale` added to `ALLOWED_1ZE_CONTEXTS` for the transfer endpoint
+- Seller receives GBP in `seller_payable` (existing system) — can withdraw via Stripe Connect or convert to 1ZE
+
+**Result:** 1ZE marketplace payments are STRONGER than direct P2P — they inherit the full order lifecycle protections.
+
+### P0 Fix #4 — Removal of legacy markup/PPP pricing controls + at-par invariant tests
+
+**Problem:** `calculateCountryPricing()` baked a 15-25% markup and 10-20% markdown plus a PPP (purchasing power parity) factor directly into the monetary principal. A user depositing $100 received only ~$80 of 1ZE value. This is token economics, not at-par e-money, and violates MiCA EMT at-par redemption requirements.
+
+**Fix:**
+- `calculateCountryPricing()` replaced with `calculateAtParPricing()`: `principalRate = 1` (at par), separate transparent `fxFeeBps`
+- `OnezePricingQuote` interface extended with 7 at-par fields (`principalRate`, `fxRate`, `platformFeeBps`, `principalAmount`, `feeAmount`, `totalCost`, `netRedemption`); old `buyPrice`/`sellPrice` kept as deprecated backward-compat aliases
+- `oneze_country_pricing_profiles` migration (`217_atpar_pricing_engine.sql`): removed markup/markdown/PPP controls, added `fx_fee_bps`, `load_fee_bps`, `withdraw_fee_bps` (CHECK 100-300)
+- `oneze_anchor_config` re-anchored to `('USD', 100)` — 100 1ZE = $1.00 USD
+- `onezeFxProviderBaseCurrency` default changed from `'INR'` to `'USD'`
+- Transparent platform spread: 200 bps load, 200 bps withdraw, 150 bps convert (bounded by `PLATFORM_FEE_MIN_BPS` 100 / `PLATFORM_FEE_MAX_BPS` 300)
+- At-par invariant tests added to verify 1 1ZE = $0.01 USD and that no markup/markdown/PPP is applied to the principal
+
+**Result:** User deposits $100 → receives 10,000 1ZE → that's exactly $100. FX fee is a disclosed separate line item, not a hidden spread baked into the rate. MiCA EMT Art. 49(6) compliant (fee is on FX conversion, not on token redemption).

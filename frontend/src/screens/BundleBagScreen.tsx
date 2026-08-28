@@ -155,12 +155,9 @@ export default function BundleBagScreen() {
         </View>
       ) : (
         <View style={styles.body}>
-          {/* Hero summary — bundle status */}
-          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {/* Hero summary — flat, no card */}
+          <View style={styles.heroWrap}>
             <View style={styles.heroRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="storefront" size={18} color={colors.textInverse} />
-              </View>
               <View style={styles.heroText}>
                 <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
                   {selectedItems.length} selected
@@ -250,25 +247,15 @@ export default function BundleBagScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    marginBottom: Space.sm,
+  heroWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm,
   },
   heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xl + 8,
-    height: Space.xl + 8,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   heroText: { flex: 1 },
   heroTitle: {

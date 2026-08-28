@@ -70,7 +70,6 @@ import {
   PLATFORM_CONVERT_FEE_BPS,
   PLATFORM_LOAD_FEE_BPS,
   PRICING_PARAMETER_BOUNDS,
-  findPricingArbitrageViolations,
   getCountryPricingProfile,
   listCountryPricingQuotes,
   pricingTablesAvailable as onezePricingTablesAvailable,
@@ -4373,8 +4372,8 @@ async function resolveOnezeFiatFxRate(
   void options;
   const quote = await resolveCountryPricingQuoteByCurrency(client, currency);
   return {
-    rate: quote.sellPrice,
-    source: `internal_pricing:${quote.countryCode}:sell`,
+    rate: quote.netRedemption,
+    source: `internal_pricing:${quote.countryCode}:withdraw`,
     observedAt: new Date().toISOString(),
   };
 }
@@ -6961,6 +6960,25 @@ async function createGatewayPaymentIntent(input: {
     moneyConversionVersion: providerMoney.trace.conversionVersion,
   };
 
+  // ── 1ZE internal gateway ───────────────────────────────────────────
+  // 1ZE marketplace payment is atomic — no external provider is needed.
+  // The create function only records the intent; the actual 1ZE wallet
+  // debit happens in settlePaymentIntent() when the intent is settled.
+  // This keeps 1ZE flowing through the SAME commerce escrow as card
+  // payments: buyer 1ZE → commerce escrow (GBP) → seller payable.
+  if (input.gatewayId === 'oneze_internal') {
+    const internalRef = `oneze_internal_${input.intentId}`;
+    return {
+      providerIntentRef: internalRef,
+      clientSecret: null,
+      initialStatus: 'requires_confirmation',
+      providerStatus: 'requires_confirmation',
+      nextActionUrl: null,
+      scaExpiresAt: null,
+      ...providerBoundary,
+    };
+  }
+
   if (input.gatewayId === 'stripe_americas' && config.stripeSecretKey) {
     const stripe = new Stripe(config.stripeSecretKey, {
       apiVersion: '2024-06-20',
@@ -7170,6 +7188,25 @@ async function createGatewayPaymentIntent(input: {
       providerStatus: String(payload.status ?? 'initiated'),
       nextActionUrl: checkoutUrl,
       scaExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      ...providerBoundary,
+    };
+  }
+
+  // ── 1ZE internal wallet gateway ────────────────────────────────────
+  // 1ZE is just another payment method at checkout, like Visa or PayPal.
+  // The intent is created as 'succeeded' because the 1ZE debit is atomic —
+  // no external processor round-trip is needed. The actual wallet debit
+  // and escrow credit happen in settlePaymentIntent(), flowing through the
+  // same commerce escrow, dispute resolution, and seller protection as
+  // card payments.
+  if (input.gatewayId === 'oneze_internal') {
+    return {
+      providerIntentRef: `oneze_${input.intentId}`,
+      clientSecret: null,
+      initialStatus: 'succeeded',
+      providerStatus: 'succeeded',
+      nextActionUrl: null,
+      scaExpiresAt: null,
       ...providerBoundary,
     };
   }
@@ -7813,6 +7850,76 @@ async function settlePaymentIntent(
             restrictions: spendCapability.restrictions,
           }
         );
+      }
+
+      // ── 1ZE internal gateway: debit buyer's 1ZE wallet ──────────────
+      // For oneze_internal commerce payments, the buyer pays with 1ZE
+      // from their wallet. The GBP total is converted to 1ZE units using
+      // the at-par pricing engine (GBP → USD → 1ZE, where 1 1ZE = $1).
+      // The debit happens here so the 1ZE flows through the SAME commerce
+      // escrow as card payments: buyer 1ZE → commerce escrow (GBP) →
+      // seller payable.
+      if (updatedIntent.gateway_id === 'oneze_internal') {
+        const onezeArchEnabled = await onezeArchitectureTablesAvailable(client);
+        if (!onezeArchEnabled) {
+          throw createApiError(
+            'PAYMENT_PROVIDER_UNAVAILABLE',
+            '1ZE wallet architecture is not available — cannot settle oneze_internal payment',
+            { gatewayId: updatedIntent.gateway_id, orderId: paidOrder.id }
+          );
+        }
+
+        const totalGbp = roundTo(Number(paidOrder.total_gbp), 2);
+        // At-par pricing: resolve GBP → USD FX rate (1 1ZE = $1 USD).
+        const gbpPricingQuote = await resolveCountryPricingQuoteByCurrency(client, 'GBP');
+        const gbpToUsdRate = gbpPricingQuote.fxRate;
+        if (!Number.isFinite(gbpToUsdRate) || gbpToUsdRate <= 0) {
+          throw createApiError(
+            'PAYMENT_PROVIDER_UNAVAILABLE',
+            'Unable to resolve GBP→USD FX rate for 1ZE debit',
+            { gatewayId: updatedIntent.gateway_id, orderId: paidOrder.id }
+          );
+        }
+
+        // GBP → USD (at par with 1ZE): 1ZE amount = GBP / fxRate
+        const izeAmount = Number((totalGbp / gbpToUsdRate).toFixed(6));
+        if (!Number.isFinite(izeAmount) || izeAmount <= 0) {
+          throw createApiError(
+            'IZE_AMOUNT_INVALID',
+            'Unable to derive a valid 1ZE debit amount from GBP total',
+            { gatewayId: updatedIntent.gateway_id, totalGbp, gbpToUsdRate }
+          );
+        }
+
+        const debitUnits = onezeAmountToUnits(izeAmount);
+        const buyerWallet = await ensureWallet(client, paidOrder.buyer_id, 'GBP');
+        const walletTxId = createRuntimeId('wtx');
+
+        // Debit the buyer's 1ZE wallet. applyWalletLedgerDelta throws
+        // WALLET_INSUFFICIENT_BALANCE if the balance is too low — this
+        // aborts the settlement transaction before any escrow entries
+        // or shipment provisioning occur.
+        await applyWalletLedgerDelta(client, {
+          walletId: buyerWallet.id,
+          txId: walletTxId,
+          asset: '1ZE',
+          amount: -debitUnits,
+          kind: 'PURCHASE',
+          refType: 'commerce_order',
+          refId: paidOrder.id,
+          anchorValueInInr: gbpPricingQuote.anchorValueInInr,
+          metadata: {
+            orderId: paidOrder.id,
+            intentId: updatedIntent.id,
+            gatewayId: updatedIntent.gateway_id,
+            totalGbp,
+            gbpToUsdRate,
+            izeAmount,
+            debitUnits,
+            pricingSource: 'fixed_par:GBP:1ZE',
+            conversionTrace: 'GBP→USD(at-par)→1ZE',
+          },
+        });
       }
 
       await client.query(
@@ -10606,7 +10713,6 @@ function applyAutoAdjustStep(
 
 function resolveAutoAdjustDirection(input: {
   metrics: OnezeRiskDashboardMetrics;
-  violationCount: number;
 }): { direction: OnezeAutoAdjustDirection | null; triggers: string[] } {
   const triggers: string[] = [];
   const highStress = input.metrics.liquidity.stressSignal >= config.onezeAutoAdjustHighStressThreshold;
@@ -10618,10 +10724,6 @@ function resolveAutoAdjustDirection(input: {
     redemptionRate === null
       ? input.metrics.redemption.burnedIze === 0
       : redemptionRate <= config.onezeAutoAdjustLowRedemptionRate;
-
-  if (input.violationCount > 0) {
-    triggers.push('arbitrage_violation');
-  }
 
   if (!input.metrics.reservePolicy.withinPolicy) {
     triggers.push('reserve_policy_violation');
@@ -10642,7 +10744,7 @@ function resolveAutoAdjustDirection(input: {
     };
   }
 
-  if (lowStress && lowRedemption && input.violationCount === 0) {
+  if (lowStress && lowRedemption) {
     return {
       direction: 'relax',
       triggers: ['liquidity_stress_low', 'redemption_rate_low'],
@@ -10667,19 +10769,15 @@ async function runOnezeAutomaticSpreadAdjustment(
   stepBps: number;
   matrixSizeBefore: number;
   matrixSizeAfter: number;
-  violationCountBefore: number;
-  violationCountAfter: number;
   adjustments: Array<{
     country: string;
     before: {
-      markupBps: number;
-      markdownBps: number;
-      crossBorderFeeBps: number;
+      loadFeeBps: number;
+      withdrawFeeBps: number;
     };
     after: {
-      markupBps: number;
-      markdownBps: number;
-      crossBorderFeeBps: number;
+      loadFeeBps: number;
+      withdrawFeeBps: number;
     };
   }>;
   evaluatedAt: string;
@@ -10694,8 +10792,6 @@ async function runOnezeAutomaticSpreadAdjustment(
       stepBps: clampNumber(toSafeInteger(config.onezeAutoAdjustStepBps), 1, 500),
       matrixSizeBefore: 0,
       matrixSizeAfter: 0,
-      violationCountBefore: 0,
-      violationCountAfter: 0,
       adjustments: [],
       evaluatedAt: new Date().toISOString(),
     };
@@ -10714,10 +10810,8 @@ async function runOnezeAutomaticSpreadAdjustment(
 
     const metrics = await collectOnezeRiskDashboardMetrics(client, safeLookbackHours);
     const quotesBefore = await listCountryPricingQuotes(client);
-    const violationsBefore = findPricingArbitrageViolations(quotesBefore);
     const decision = resolveAutoAdjustDirection({
       metrics,
-      violationCount: violationsBefore.length,
     });
 
     if (!decision.direction) {
@@ -10731,8 +10825,6 @@ async function runOnezeAutomaticSpreadAdjustment(
         stepBps,
         matrixSizeBefore: quotesBefore.length,
         matrixSizeAfter: quotesBefore.length,
-        violationCountBefore: violationsBefore.length,
-        violationCountAfter: violationsBefore.length,
         adjustments: [],
         evaluatedAt: metrics.evaluatedAt,
       };
@@ -10741,14 +10833,12 @@ async function runOnezeAutomaticSpreadAdjustment(
     const adjustments: Array<{
       country: string;
       before: {
-        markupBps: number;
-        markdownBps: number;
-        crossBorderFeeBps: number;
+        loadFeeBps: number;
+        withdrawFeeBps: number;
       };
       after: {
-        markupBps: number;
-        markdownBps: number;
-        crossBorderFeeBps: number;
+        loadFeeBps: number;
+        withdrawFeeBps: number;
       };
     }> = [];
 
@@ -10758,47 +10848,37 @@ async function runOnezeAutomaticSpreadAdjustment(
         continue;
       }
 
-      const nextMarkupBps = applyAutoAdjustStep(
-        profile.markupBps,
+      const nextLoadFeeBps = applyAutoAdjustStep(
+        profile.loadFeeBps,
         decision.direction,
         stepBps,
-        PRICING_PARAMETER_BOUNDS.markupBps
+        PRICING_PARAMETER_BOUNDS.platformFeeBps
       );
-      const nextMarkdownBps = applyAutoAdjustStep(
-        profile.markdownBps,
+      const nextWithdrawFeeBps = applyAutoAdjustStep(
+        profile.withdrawFeeBps,
         decision.direction,
         stepBps,
-        PRICING_PARAMETER_BOUNDS.markdownBps
-      );
-      const nextCrossBorderFeeBps = applyAutoAdjustStep(
-        profile.crossBorderFeeBps,
-        decision.direction,
-        stepBps,
-        PRICING_PARAMETER_BOUNDS.crossBorderFeeBps
+        PRICING_PARAMETER_BOUNDS.platformFeeBps
       );
 
       if (
-        nextMarkupBps === profile.markupBps
-        && nextMarkdownBps === profile.markdownBps
-        && nextCrossBorderFeeBps === profile.crossBorderFeeBps
+        nextLoadFeeBps === profile.loadFeeBps
+        && nextWithdrawFeeBps === profile.withdrawFeeBps
       ) {
         continue;
       }
 
       validatePricingProfileInput({
-        markupBps: nextMarkupBps,
-        markdownBps: nextMarkdownBps,
-        crossBorderFeeBps: nextCrossBorderFeeBps,
-        pppFactor: profile.pppFactor,
+        loadFeeBps: nextLoadFeeBps,
+        withdrawFeeBps: nextWithdrawFeeBps,
       });
 
       await upsertCountryPricingProfile(client, {
         countryCode: profile.countryCode,
         currency: profile.currency,
-        markupBps: nextMarkupBps,
-        markdownBps: nextMarkdownBps,
-        crossBorderFeeBps: nextCrossBorderFeeBps,
-        pppFactor: profile.pppFactor,
+        fxFeeBps: profile.fxFeeBps,
+        loadFeeBps: nextLoadFeeBps,
+        withdrawFeeBps: nextWithdrawFeeBps,
         withdrawalLockHours: profile.withdrawalLockHours,
         dailyRedeemLimitIze: profile.dailyRedeemLimitIze,
         weeklyRedeemLimitIze: profile.weeklyRedeemLimitIze,
@@ -10817,31 +10897,17 @@ async function runOnezeAutomaticSpreadAdjustment(
       adjustments.push({
         country: profile.countryCode,
         before: {
-          markupBps: profile.markupBps,
-          markdownBps: profile.markdownBps,
-          crossBorderFeeBps: profile.crossBorderFeeBps,
+          loadFeeBps: profile.loadFeeBps,
+          withdrawFeeBps: profile.withdrawFeeBps,
         },
         after: {
-          markupBps: nextMarkupBps,
-          markdownBps: nextMarkdownBps,
-          crossBorderFeeBps: nextCrossBorderFeeBps,
+          loadFeeBps: nextLoadFeeBps,
+          withdrawFeeBps: nextWithdrawFeeBps,
         },
       });
     }
 
     const quotesAfter = await listCountryPricingQuotes(client);
-    const violationsAfter = findPricingArbitrageViolations(quotesAfter);
-    if (violationsAfter.length > 0) {
-      throw createApiError(
-        'PRICING_ARBITRAGE_VIOLATION',
-        'Automatic spread adjustment introduces guaranteed arbitrage',
-        {
-          reason,
-          triggers: decision.triggers,
-          violations: violationsAfter.slice(0, 10),
-        }
-      );
-    }
 
     await client.query('COMMIT');
 
@@ -10854,8 +10920,6 @@ async function runOnezeAutomaticSpreadAdjustment(
       stepBps,
       matrixSizeBefore: quotesBefore.length,
       matrixSizeAfter: quotesAfter.length,
-      violationCountBefore: violationsBefore.length,
-      violationCountAfter: violationsAfter.length,
       adjustments,
       evaluatedAt: metrics.evaluatedAt,
     };
@@ -22033,16 +22097,18 @@ app.post('/chat/conversations/:conversationId/messages', {
   // suspicious content could trigger unwanted side-effects.
   if (!suppressRealtimeAndBots && conversation.type === 'group') {
     try {
-      await executeBotCommand(db, {
+      const { enqueueAgentRun } = await import('./botRuntime/index.js');
+      await enqueueAgentRun(db, {
         conversationId,
         conversationType: conversation.type,
         conversationTitle: conversation.title ?? null,
         actorUserId,
         actorUserName: null,
         messageText: bodyText,
+        triggerMessageId: result.rows[0].id ?? null,
       });
     } catch (err) {
-      request.log.error({ err, conversationId, actorUserId }, 'Bot runtime execution failed');
+      request.log.error({ err, conversationId, actorUserId }, 'Agent run enqueue failed');
     }
   }
 
@@ -23560,46 +23626,41 @@ app.get('/chat/conversations/:conversationId/bots', async (request) => {
   await ensureGroupConversationAccess(db, conversationId, actorUserId);
 
   const result = await db.query<{
-    id: string;
-    slug: string;
-    name: string;
-    description: string;
+    bot_id: string;
+    bot_name: string;
+    bot_slug: string;
+    bot_category: string;
+    bot_type: 'system' | 'custom';
     command_hint: string;
-    category: 'moderation' | 'commerce' | 'automation';
-    type: 'system' | 'custom';
-    status: string;
     runtime_mode: string;
-    is_draft: boolean;
-    permissions: unknown;
-    icon: string | null;
-    owner_id: string | null;
-    installed_at: string;
+    bot_status: string;
     install_status: string;
+    permissions_snapshot: unknown;
+    installed_by: string | null;
+    installed_at: string;
     agent_config: unknown;
   }>(
     `
       SELECT
-        b.id,
-        b.slug,
-        b.name,
-        b.description,
+        b.id AS bot_id,
+        b.name AS bot_name,
+        b.slug AS bot_slug,
+        b.category AS bot_category,
+        b.type AS bot_type,
         b.command_hint,
-        b.category,
-        b.type,
-        b.status,
         b.runtime_mode,
-        b.is_draft,
-        b.permissions,
-        b.icon,
-        b.owner_id,
-        cbi.installed_at::text,
+        b.status AS bot_status,
         cbi.status AS install_status,
+        cbi.permissions_snapshot,
+        cbi.installed_by,
+        cbi.installed_at,
         b.agent_config
       FROM chat_bot_installs cbi
-      INNER JOIN chat_bots b
-        ON b.id = cbi.bot_id
+      JOIN chat_bots b ON b.id = cbi.bot_id
       WHERE cbi.conversation_id = $1
         AND cbi.status = 'active'
+        AND b.is_active = TRUE
+        AND b.status != 'disabled'
       ORDER BY cbi.installed_at ASC
     `,
     [conversationId]
@@ -23609,23 +23670,21 @@ app.get('/chat/conversations/:conversationId/bots', async (request) => {
     ok: true,
     conversationId,
     items: result.rows.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      description: row.description,
+      botId: row.bot_id,
+      botName: row.bot_name,
+      botSlug: row.bot_slug,
+      botCategory: row.bot_category,
+      botType: row.bot_type,
       commandHint: row.command_hint,
-      category: row.category,
-      type: row.type,
-      status: row.status,
       runtimeMode: row.runtime_mode,
-      isDraft: row.is_draft,
-      permissions: row.permissions,
-      icon: row.icon,
-      ownerId: row.owner_id,
-      installedAt: row.installed_at,
+      status: row.bot_status,
       installStatus: row.install_status,
+      permissionsSnapshot: row.permissions_snapshot,
+      runtimeReady: row.runtime_mode !== 'ai' || isAgentRuntimeReady(),
+      runtimeReadinessReason: row.runtime_mode === 'ai' ? agentRuntimeReadinessReason() : null,
+      installedBy: row.installed_by,
+      installedAt: row.installed_at,
       agentConfig: row.runtime_mode === 'ai' ? publicAgentConfig(row.agent_config) : null,
-      ...botRuntimeReadiness(row.runtime_mode),
     })),
   };
 });
@@ -23638,7 +23697,7 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId, botId } = paramsSchema.parse(request.params);
-  await ensureGroupConversationAccess(db, conversationId, actorUserId);
+  await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
 
   const botResult = await db.query<{
     id: string;
@@ -23810,7 +23869,7 @@ app.delete('/chat/conversations/:conversationId/bots/:botId', async (request) =>
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId, botId } = paramsSchema.parse(request.params);
-  await ensureGroupConversationAccess(db, conversationId, actorUserId);
+  await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
 
   const botResult = await db.query<{ id: string; name: string }>(
     `
@@ -23915,6 +23974,131 @@ app.delete('/chat/conversations/:conversationId/bots/:botId', async (request) =>
     removed,
     botIds,
   };
+});
+
+// ── Agent runs: durable execution status ───────────────────────────
+
+app.get('/agent-runs', async (request) => {
+  if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const querySchema = z.object({
+    conversationId: z.string().min(2).max(120).optional(),
+    botId: z.string().min(2).max(120).optional(),
+    status: z.string().min(2).max(30).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  });
+  const params = querySchema.parse(request.query);
+
+  let query = `SELECT id, bot_id, conversation_id, actor_user_id, trigger_type, trigger_message_id, status, result_message_id, error_message, input_tokens, output_tokens, total_tokens, created_at, started_at, completed_at FROM agent_runs WHERE actor_user_id = $1`;
+  const values: unknown[] = [actorUserId];
+  let paramIdx = 2;
+
+  if (params.conversationId) {
+    query += ` AND conversation_id = $${paramIdx++}`;
+    values.push(params.conversationId);
+  }
+  if (params.botId) {
+    query += ` AND bot_id = $${paramIdx++}`;
+    values.push(params.botId);
+  }
+  if (params.status) {
+    query += ` AND status = $${paramIdx++}`;
+    values.push(params.status);
+  }
+  query += ` ORDER BY created_at DESC LIMIT $${paramIdx++}`;
+  values.push(params.limit);
+
+  const result = await db.query(query, values);
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      botId: row.bot_id,
+      conversationId: row.conversation_id,
+      actorUserId: row.actor_user_id,
+      triggerType: row.trigger_type,
+      triggerMessageId: row.trigger_message_id,
+      status: row.status,
+      resultMessageId: row.result_message_id,
+      errorMessage: row.error_message,
+      inputTokens: row.input_tokens,
+      outputTokens: row.output_tokens,
+      totalTokens: row.total_tokens,
+      createdAt: row.created_at,
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+    })),
+  };
+});
+
+app.get('/agent-runs/:runId', async (request) => {
+  if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  const paramsSchema = z.object({ runId: z.string().min(2).max(120) });
+  const { runId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    id: string; bot_id: string; conversation_id: string; actor_user_id: string;
+    agent_version_id: string | null; trigger_type: string; trigger_message_id: string | null;
+    status: string; result_message_id: string | null; result_text: string | null;
+    error_message: string | null; input_tokens: number; output_tokens: number;
+    total_tokens: number; metadata: unknown; created_at: string; started_at: string | null;
+    completed_at: string | null;
+  }>(`SELECT * FROM agent_runs WHERE id = $1 LIMIT 1`, [runId]);
+
+  if (!result.rowCount) throw createApiError('NOT_FOUND', 'Run not found', { runId });
+
+  const run = result.rows[0];
+  if (run.actor_user_id !== request.authUser.userId) {
+    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the run actor can view this run');
+  }
+
+  return {
+    ok: true,
+    run: {
+      id: run.id,
+      botId: run.bot_id,
+      conversationId: run.conversation_id,
+      actorUserId: run.actor_user_id,
+      agentVersionId: run.agent_version_id,
+      triggerType: run.trigger_type,
+      triggerMessageId: run.trigger_message_id,
+      status: run.status,
+      resultMessageId: run.result_message_id,
+      resultText: run.result_text,
+      errorMessage: run.error_message,
+      inputTokens: run.input_tokens,
+      outputTokens: run.output_tokens,
+      totalTokens: run.total_tokens,
+      metadata: run.metadata,
+      createdAt: run.created_at,
+      startedAt: run.started_at,
+      completedAt: run.completed_at,
+    },
+  };
+});
+
+app.post('/agent-runs/:runId/cancel', async (request) => {
+  if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  const paramsSchema = z.object({ runId: z.string().min(2).max(120) });
+  const { runId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{ actor_user_id: string; status: string }>(
+    `SELECT actor_user_id, status FROM agent_runs WHERE id = $1 LIMIT 1`, [runId]
+  );
+
+  if (!result.rowCount) throw createApiError('NOT_FOUND', 'Run not found', { runId });
+  if (result.rows[0].actor_user_id !== request.authUser.userId) {
+    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the run actor can cancel');
+  }
+
+  const status = result.rows[0].status;
+  if (status === 'succeeded' || status === 'failed' || status === 'cancelled' || status === 'timed_out') {
+    throw createApiError('AGENT_RUN_TERMINAL', 'Run has already reached a terminal state');
+  }
+
+  await db.query(`UPDATE agent_runs SET status = 'cancelled', completed_at = NOW() WHERE id = $1`, [runId]);
+
+  return { ok: true, runId, status: 'cancelled' };
 });
 
 // ── Bot command execution ──────────────────────────────────────────
@@ -24928,7 +25112,7 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
     let netFiatAmount: number;
     let platformFeeAmount = 0;
     let platformFeeRate = 0;
-    let effectiveRate = countryQuote.buyPrice;
+    let effectiveRate = countryQuote.principalAmount;
     let effectiveRateMode: 'buy' | 'sell' | 'cross_border_sell' | 'at_par_fx' = 'buy';
 
     if (direction === 'mint') {
@@ -24977,9 +25161,9 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
         rateSource: fiatCurrency === 'GBP'
           ? 'fixed_par:GBP:1ZE'
           : `internal_pricing:${countryQuote.countryCode}:${effectiveRateMode}`,
-        buyPrice: countryQuote.buyPrice,
-        sellPrice: countryQuote.sellPrice,
-        crossBorderPrice: countryQuote.crossBorderSellPrice,
+        principalAmount: countryQuote.principalAmount,
+        totalCost: countryQuote.totalCost,
+        netRedemption: countryQuote.netRedemption,
         money: moneyFromMinor(fiatCurrency, String(toFiatMinor(fiatAmount, fiatCurrency))),
         assetAmount: {
           asset: '1ZE',
@@ -25031,7 +25215,7 @@ app.get('/auctions/1ze-rates', async (request, reply) => {
 
     for (const quote of quotes) {
       rates[quote.currency] = {
-        rate: quote.sellPrice,
+        rate: quote.netRedemption,
         source: quote.source,
         updatedAt: quote.updatedAt,
         settlementSupported: true,
@@ -25106,10 +25290,6 @@ app.post('/update-pricing', async (request, reply) => {
   const bodySchema = z.object({
     country: z.string().min(2).max(3),
     currency: z.string().length(3),
-    markupBps: z.number().int(),
-    markdownBps: z.number().int(),
-    crossBorderFeeBps: z.number().int(),
-    pppFactor: z.number().positive(),
     fxFeeBps: z.number().int().min(0).max(10000).optional(),
     loadFeeBps: z.number().int().min(0).max(10000).optional(),
     withdrawFeeBps: z.number().int().min(0).max(10000).optional(),
@@ -25144,10 +25324,6 @@ app.post('/update-pricing', async (request, reply) => {
 
   try {
     validatePricingProfileInput({
-      markupBps: payload.markupBps,
-      markdownBps: payload.markdownBps,
-      crossBorderFeeBps: payload.crossBorderFeeBps,
-      pppFactor: payload.pppFactor,
       platformFeeBps: payload.fxFeeBps,
       loadFeeBps: payload.loadFeeBps,
       withdrawFeeBps: payload.withdrawFeeBps,
@@ -25167,10 +25343,6 @@ app.post('/update-pricing', async (request, reply) => {
     const profile = await upsertCountryPricingProfile(client, {
       countryCode: payload.country,
       currency: payload.currency,
-      markupBps: payload.markupBps,
-      markdownBps: payload.markdownBps,
-      crossBorderFeeBps: payload.crossBorderFeeBps,
-      pppFactor: payload.pppFactor,
       fxFeeBps: payload.fxFeeBps,
       loadFeeBps: payload.loadFeeBps,
       withdrawFeeBps: payload.withdrawFeeBps,
@@ -25186,12 +25358,6 @@ app.post('/update-pricing', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'Pricing update introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     const quote = quotes.find((entry) => entry.countryCode === profile.countryCode)
       ?? await resolveCountryPricingQuote(client, profile.countryCode);
@@ -25269,12 +25435,6 @@ app.post('/update-anchor', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'Anchor update introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     await client.query('COMMIT');
     return {
@@ -25351,12 +25511,6 @@ app.post('/admin/1ze/fx-rate', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'FX update introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     await client.query('COMMIT');
     return {
@@ -25394,9 +25548,9 @@ app.post('/admin/1ze/fx-rate', async (request, reply) => {
 app.post('/adjust-spread', async (request, reply) => {
   const bodySchema = z.object({
     country: z.string().min(2).max(3),
-    markupBps: z.number().int().optional(),
-    markdownBps: z.number().int().optional(),
-    crossBorderFeeBps: z.number().int().optional(),
+    fxFeeBps: z.number().int().min(0).max(10000).optional(),
+    loadFeeBps: z.number().int().min(0).max(10000).optional(),
+    withdrawFeeBps: z.number().int().min(0).max(10000).optional(),
     reason: z.string().max(240).optional(),
     metadata: z.record(z.unknown()).optional(),
   });
@@ -25423,14 +25577,14 @@ app.post('/adjust-spread', async (request, reply) => {
   const payload = bodySchema.parse(request.body ?? {});
 
   if (
-    payload.markupBps === undefined
-    && payload.markdownBps === undefined
-    && payload.crossBorderFeeBps === undefined
+    payload.fxFeeBps === undefined
+    && payload.loadFeeBps === undefined
+    && payload.withdrawFeeBps === undefined
   ) {
     reply.code(400);
     return {
       ok: false,
-      error: 'Provide at least one spread field to adjust',
+      error: 'Provide at least one fee field to adjust',
     };
   }
 
@@ -25448,16 +25602,15 @@ app.post('/adjust-spread', async (request, reply) => {
       };
     }
 
-    const nextMarkupBps = payload.markupBps ?? current.markupBps;
-    const nextMarkdownBps = payload.markdownBps ?? current.markdownBps;
-    const nextCrossBorderFeeBps = payload.crossBorderFeeBps ?? current.crossBorderFeeBps;
+    const nextFxFeeBps = payload.fxFeeBps ?? current.fxFeeBps;
+    const nextLoadFeeBps = payload.loadFeeBps ?? current.loadFeeBps;
+    const nextWithdrawFeeBps = payload.withdrawFeeBps ?? current.withdrawFeeBps;
 
     try {
       validatePricingProfileInput({
-        markupBps: nextMarkupBps,
-        markdownBps: nextMarkdownBps,
-        crossBorderFeeBps: nextCrossBorderFeeBps,
-        pppFactor: current.pppFactor,
+        platformFeeBps: nextFxFeeBps,
+        loadFeeBps: nextLoadFeeBps,
+        withdrawFeeBps: nextWithdrawFeeBps,
       });
     } catch (error) {
       throw createApiError('PRICING_PROFILE_INVALID', (error as Error).message);
@@ -25466,10 +25619,9 @@ app.post('/adjust-spread', async (request, reply) => {
     const profile = await upsertCountryPricingProfile(client, {
       countryCode: current.countryCode,
       currency: current.currency,
-      markupBps: nextMarkupBps,
-      markdownBps: nextMarkdownBps,
-      crossBorderFeeBps: nextCrossBorderFeeBps,
-      pppFactor: current.pppFactor,
+      fxFeeBps: nextFxFeeBps,
+      loadFeeBps: nextLoadFeeBps,
+      withdrawFeeBps: nextWithdrawFeeBps,
       withdrawalLockHours: current.withdrawalLockHours,
       dailyRedeemLimitIze: current.dailyRedeemLimitIze,
       weeklyRedeemLimitIze: current.weeklyRedeemLimitIze,
@@ -25482,12 +25634,6 @@ app.post('/adjust-spread', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'Spread adjustment introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     const quote = quotes.find((entry) => entry.countryCode === profile.countryCode)
       ?? await resolveCountryPricingQuote(client, profile.countryCode);
@@ -25543,13 +25689,10 @@ app.get('/admin/1ze/pricing-health', async (request, reply) => {
 
   try {
     const quotes = await listCountryPricingQuotes(db);
-    const violations = findPricingArbitrageViolations(quotes);
 
     return {
       ok: true,
       matrixSize: quotes.length,
-      violationCount: violations.length,
-      violations,
       quotes,
     };
   } catch (error) {
@@ -27365,14 +27508,17 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
 
   const payload = bodySchema.parse(request.body ?? {});
 
-  // 1ze Context Restrictions: Allow co-own trading, platform rewards, and marketplace sales
-  const ALLOWED_1ZE_CONTEXTS = ['marketplace_sale', 'coOwn_trade', 'platform_reward'] as const;
+  // 1ze Context Restrictions: P2P transfer is for co-own trading and platform
+  // rewards ONLY. Marketplace purchases must use the commerce checkout flow
+  // (PaymentIntent with gateway oneze_internal) so they go through escrow,
+  // refunds, disputes, cancellation, seller reserves, and buyer protection.
+  const ALLOWED_1ZE_CONTEXTS = ['coOwn_trade', 'platform_reward'] as const;
   if (!ALLOWED_1ZE_CONTEXTS.includes(payload.contextType as typeof ALLOWED_1ZE_CONTEXTS[number])) {
     reply.code(400);
     return {
       ok: false,
       error: 'IZE_TRANSFER_INVALID_CONTEXT',
-      message: '1ze can only be transferred for marketplace sales, co-own trading, or platform rewards.',
+      message: 'Marketplace purchases must use the commerce checkout flow (PaymentIntent with gateway oneze_internal), not P2P transfer. For co-own trading, use coOwn_trade context.',
       allowedContexts: ALLOWED_1ZE_CONTEXTS,
       providedContext: payload.contextType,
     };
@@ -27471,7 +27617,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
     const fxToGbp = await resolveInternalFxRate(client, fiatCurrency, 'GBP');
 
     const onezeAmountFromUnits = unitsToOnezeAmount(amountUnits);
-    const fiatAmount = Number((onezeAmountFromUnits * pricingQuote.buyPrice).toFixed(6));
+    const fiatAmount = Number((onezeAmountFromUnits * pricingQuote.principalAmount).toFixed(6));
     const amountGbp = Number((fiatAmount * fxToGbp.rate).toFixed(6));
     const eligibilityAmountGbp = roundTo(amountGbp, 2);
 
@@ -27533,7 +27679,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
           izeAmount: normalizedIzeAmount,
           fiatAmount,
           fiatCurrency,
-          ratePerGram: pricingQuote.buyPrice,
+          ratePerGram: pricingQuote.principalAmount,
         },
         assessment: amlAssessment,
       });
@@ -27555,7 +27701,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
       izeAmount: normalizedIzeAmount,
       fiatAmount,
       fiatCurrency,
-      ratePerGram: pricingQuote.buyPrice,
+      ratePerGram: pricingQuote.principalAmount,
       eligibilityCode: 'ALLOWED',
       amlRiskScore: amlAssessment.riskScore,
       amlRiskLevel: amlAssessment.riskLevel,
@@ -27665,7 +27811,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
         fiatAmount,
         fiatCurrency,
         amountGbp: eligibilityAmountGbp,
-        ratePerGram: pricingQuote.buyPrice,
+        ratePerGram: pricingQuote.principalAmount,
         rateSource: `internal_pricing:${pricingQuote.countryCode}:buy`,
         fxRateToGbp: fxToGbp.rate,
         fxSourceToGbp: fxToGbp.source,
@@ -28897,7 +29043,7 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
   const availableIze = Math.max(0, userIze - reservedForOrders);
   const settledCustomerClaim = userIze + redemptionInProgress;
   const serverTimestamp = new Date().toISOString();
-  const positionRate = fiatCurrency.toUpperCase() === 'GBP' ? 1 : pricingQuote.sellPrice;
+  const positionRate = fiatCurrency.toUpperCase() === 'GBP' ? 1 : pricingQuote.netRedemption;
 
   // ── WS4: Wallet safeguarding (backend-backed, no longer hardcoded) ──
   // Query the user's safeguarding profile. Default to safeguarded=false
@@ -46726,6 +46872,10 @@ const start = async () => {
         handleDsarExportJob: async ({ requestId, userId, reason }) => {
           await processDsarExport({ requestId, userId, reason });
         },
+        handleAgentRunJob: async ({ runId }) => {
+          const { processAgentRun } = await import('./botRuntime/index.js');
+          await processAgentRun(db, runId);
+        },
       });
     } else {
       app.log.info('[api] background workers disabled — running in separate container');
@@ -48672,6 +48822,15 @@ process.on('uncaughtException', (err) => {
     return;
   }
   logger.error({ err }, '[uncaughtException] Fatal');
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  if (reason instanceof Error && reason.message === 'Connection is closed.') {
+    logger.warn({ err: reason.message }, '[unhandledRejection] Redis connection closed (suppressed)');
+    return;
+  }
+  logger.error({ reason }, '[unhandledRejection] Fatal — unhandled promise rejection');
   process.exit(1);
 });
 

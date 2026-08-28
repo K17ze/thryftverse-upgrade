@@ -58,6 +58,9 @@ export default function SearchScreen() {
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [activeTab, setActiveTab] = useState<ExploreTab>('discover');
+
+
+
   // Tabs that have been visited at least once. A scene mounts the first
   // time its tab is activated and stays mounted (hidden) afterwards so
   // its scroll position is preserved across tab switches.

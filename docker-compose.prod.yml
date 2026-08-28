@@ -133,14 +133,15 @@ services:
       DB_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       DB_NAME: ${POSTGRES_DB:?POSTGRES_DB is required}
-      AUTH_TYPE: trust
+      AUTH_TYPE: plain
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 1000
       DEFAULT_POOL_SIZE: 25
       RESERVE_POOL_SIZE: 5
       MAX_DB_CONNECTIONS: 100
+      IGNORE_STARTUP_PARAMETERS: statement_timeout,extra_float_digits,search_path
     ports:
-      - "127.0.0.1:6432:6432"
+      - "127.0.0.1:6432:5432"
     <<: *default-security
     mem_limit: 256M
     logging: *default-logging
@@ -177,9 +178,11 @@ services:
       pgbouncer:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:6432/${POSTGRES_DB:?POSTGRES_DB is required}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      MIGRATE_DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       PGBOUNCER_ENABLED: "true"
-      PGBOUNCER_PORT: "6432"
+      PGBOUNCER_PORT: "5432"
+      NODE_ENV: production
       RUN_BACKGROUND_WORKERS: "false"
       RUN_API_SERVER: "true"
     <<: *default-security
@@ -212,11 +215,11 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:6432/${POSTGRES_DB:?POSTGRES_DB is required}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-20}
       PGBOUNCER_ENABLED: "true"
-      PGBOUNCER_PORT: "6432"
+      PGBOUNCER_PORT: "5432"
       RUN_BACKGROUND_WORKERS: "true"
       RUN_API_SERVER: "false"
       REDIS_URL: redis://redis:6379
@@ -267,8 +270,9 @@ services:
       ALERTING_WEBHOOK_URLS: ${ALERTING_WEBHOOK_URLS:?ALERTING_WEBHOOK_URLS is required}
     command: ["sh", "-c", "npm run worker:start"]
     healthcheck:
-      # Check if the node worker process is alive
-      test: ["CMD-SHELL", "pgrep -f 'workers/index' > /dev/null || exit 1"]
+      # Check if the node worker process is alive.
+      # node:20-alpine has no pgrep, but busybox ps is available.
+      test: ["CMD-SHELL", "ps | grep -q '[w]orkers/index' || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -377,14 +381,15 @@ volumes:
 
 # ── Network segmentation ──────────────────────────────────────────────
 # frontend  — public-facing network (Caddy only, bridges to backend)
-# backend   — internal network for application services (api, worker, key-service, ml-service, minio)
+# backend   — application network (api, worker, key-service, ml-service, minio)
+#             NOT internal:true — api/worker need outbound internet access
+#             for Stripe, OpenAI, Resend, Sentry, etc.
 # db        — internal network for data services (postgres, redis, pgbouncer, backup)
 networks:
   frontend:
     driver: bridge
   backend:
     driver: bridge
-    internal: true
   db:
     driver: bridge
     internal: true

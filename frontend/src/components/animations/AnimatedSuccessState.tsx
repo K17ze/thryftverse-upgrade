@@ -4,7 +4,7 @@ import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Type, Typography } from '../../theme/designTokens';
 import { LottieAnimation, type LottieAnimationSource } from './LottieAnimation';
 
 // ---------------------------------------------------------------------------
@@ -90,9 +90,9 @@ export function AnimatedSuccessState({
       ) : (
         <Reanimated.View
           entering={enter}
-          style={styles.iconRing}
+          style={styles.iconSlot}
         >
-          <Ionicons name="checkmark" size={48} color={colors.success} />
+          <Ionicons name="checkmark" size={32} color={colors.success} />
         </Reanimated.View>
       )}
 
@@ -122,7 +122,7 @@ type ThemeColors = ReturnType<typeof useAppTheme>['colors'];
 
 interface SuccessStateStyles {
   container: ViewStyle;
-  iconRing: ViewStyle;
+  iconSlot: ViewStyle;
   title: TextStyle;
   subtitle: TextStyle;
   animation: (size: number) => ViewStyle;
@@ -138,15 +138,8 @@ function createStyles(colors: ThemeColors): SuccessStateStyles {
       paddingVertical: Space.xxl + Space.sm,
       gap: Space.sm + 2,
     },
-    iconRing: {
-      width: 104,
-      height: 104,
-      borderRadius: Radius.full,
-      borderWidth: 2,
-      borderColor: colors.successBorder,
-      backgroundColor: colors.successSubtle,
+    iconSlot: {
       alignItems: 'center',
-      justifyContent: 'center',
       marginBottom: Space.md,
     },
     title: {

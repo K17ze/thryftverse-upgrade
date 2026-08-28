@@ -31,9 +31,7 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
 
   return (
     <View style={[styles.container, { backgroundColor: `${colors.danger}12`, borderColor: `${colors.danger}50` }, isMe && styles.containerMe]}>
-      <View style={styles.iconWrap}>
-        <Ionicons name="warning" size={16} color={colors.danger} />
-      </View>
+      <Ionicons name="warning" size={20} color={colors.danger} />
       <View style={styles.textCol}>
         <Text style={[styles.title, { color: colors.danger }]}>
           Keep payments on ThryftVerse
@@ -83,10 +81,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     alignSelf: 'flex-end',
     maxWidth: '85%',
-  },
-  iconWrap: {
-    paddingTop: 1,
-    flexShrink: 0,
   },
   textCol: {
     flex: 1,

@@ -89,3 +89,67 @@ export interface BotInstallInfo {
 
 /** Callback invoked for each text delta during streaming. */
 export type AgentStreamChunkHandler = (delta: string) => void;
+
+/**
+ * Canonical agent contract — the shared source-of-truth for agent definitions
+ * across frontend and backend. Both sides must use this shape.
+ *
+ * The legacy AgentConfig is retained for backward compatibility but new code
+ * should use CanonicalAgentContract.
+ */
+export interface CanonicalAgentContract {
+  // Identity
+  id: string;
+  name: string;
+  description: string;
+  category: AgentCategory;
+  commandHint: string;
+  icon: string | null;
+
+  // Behaviour
+  instructions: string;
+  triggerMode: AgentTriggerMode;
+  tone: AgentTone;
+  responseLength: AgentResponseLength;
+  reasoningEffort: AgentReasoningEffort;
+  starterPrompts: string[];
+
+  // Model
+  model: AgentModel;
+  historyLimit: number;
+  confidenceThreshold: number;
+
+  // Permissions (backend flat vocabulary: reply_in_chat, read_messages)
+  permissions: string[];
+
+  // Lifecycle
+  isDraft: boolean;
+  status: AgentStatus;
+  runtimeMode: AgentRuntimeMode;
+}
+
+export type AgentCategory = 'assistant' | 'styling' | 'commerce' | 'moderation' | 'safety' | 'automation';
+export type AgentStatus = 'available' | 'local-only' | 'backend-required' | 'disabled';
+export type AgentRuntimeMode = 'local' | 'config-only' | 'backend' | 'ai';
+
+/**
+ * Deployment state for a bot installed in a conversation.
+ * This is what the frontend reads to show real deployment state.
+ */
+export interface ConversationBotDeployment {
+  botId: string;
+  botName: string;
+  botSlug: string;
+  botCategory: string;
+  botType: 'system' | 'custom';
+  commandHint: string;
+  runtimeMode: string;
+  status: string;
+  installStatus: string;
+  permissionsSnapshot: string[];
+  runtimeReady: boolean;
+  runtimeReadinessReason: string | null;
+  installedBy: string | null;
+  installedAt: string;
+  agentConfig: AgentConfig | null;
+}

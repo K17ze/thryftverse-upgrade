@@ -79,9 +79,9 @@ export function AnimatedEmptyState({
       ) : (
         <Reanimated.View
           entering={enter}
-          style={styles.iconRing}
+          style={styles.iconSlot}
         >
-          <Ionicons name={fallbackIcon} size={38} color={colors.brand} />
+          <Ionicons name={fallbackIcon} size={24} color={colors.brand} />
         </Reanimated.View>
       )}
 
@@ -125,7 +125,7 @@ type ThemeColors = ReturnType<typeof useAppTheme>['colors'];
 
 interface EmptyStateStyles {
   container: ViewStyle;
-  iconRing: ViewStyle;
+  iconSlot: ViewStyle;
   title: TextStyle;
   subtitle: TextStyle;
   cta: ViewStyle;
@@ -143,15 +143,8 @@ function createStyles(colors: ThemeColors): EmptyStateStyles {
       paddingVertical: Space.xxl + Space.sm,
       gap: Space.sm + 2,
     },
-    iconRing: {
-      width: 96,
-      height: 96,
-      borderRadius: Radius.full,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceAlt,
+    iconSlot: {
       alignItems: 'center',
-      justifyContent: 'center',
       marginBottom: Space.md,
     },
     title: {

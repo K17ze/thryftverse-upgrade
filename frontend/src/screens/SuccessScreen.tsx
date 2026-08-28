@@ -128,9 +128,7 @@ export default function SuccessScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.centerContent}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={48} color={colors.background} />
-          </View>
+          <Ionicons name="checkmark" size={64} color={colors.success} style={styles.successIcon} />
 
           <View>
             <Text style={styles.title}>Payment Successful</Text>
@@ -212,9 +210,7 @@ export default function SuccessScreen() {
               accessibilityLabel="Open order support"
             >
               <View style={styles.supportIdentity}>
-                <View style={[styles.supportAvatarWrap, { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
-                </View>
+                <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
                 <Text style={styles.supportText}>Need help with this order?</Text>
                 <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
               </View>
@@ -259,13 +255,7 @@ function TimelineStep({
   return (
     <View style={timelineStyles.step}>
       <View style={timelineStyles.iconCol}>
-        <View style={[
-          timelineStyles.iconWrap,
-          isComplete && timelineStyles.iconWrapComplete,
-          isActive && timelineStyles.iconWrapActive,
-        ]}>
-          <Ionicons name={icon} size={14} color={isComplete || isActive ? colors.background : colors.textMuted} />
-        </View>
+        <Ionicons name={icon} size={18} color={color} style={timelineStyles.stepIcon} />
         {!isLast && <View style={[
           timelineStyles.connector,
           isComplete && timelineStyles.connectorComplete,
@@ -291,25 +281,13 @@ function createTimelineStyles(colors: ThemeColors) {
   iconCol: {
     alignItems: 'center',
   },
-  iconWrap: {
-    width: Space.lg + 4,
-    height: Space.lg + 4,
-    borderRadius: Radius.xl,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconWrapComplete: {
-    backgroundColor: colors.success,
-  },
-  iconWrapActive: {
-    backgroundColor: colors.brand,
+  stepIcon: {
+    marginBottom: Space.xs,
   },
   connector: {
     width: Stroke.standard,
     flex: 1,
     backgroundColor: colors.border,
-    marginTop: Space.xs,
     minHeight: Space.md + 4,
   },
   connectorComplete: {
@@ -338,11 +316,8 @@ function createStyles(colors: ThemeColors) {
   container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { flexGrow: 1, paddingHorizontal: Space.lg },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: Space.xl + Space.xl - 8, paddingBottom: 20 },
-  iconCircle: {
-    width: Space.xxl + Space.xxl + Space.xxl, height: Space.xxl + Space.xxl + Space.xxl, borderRadius: Radius.full,
-    backgroundColor: colors.success,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: Space.xl,
+  successIcon: {
+    marginBottom: Space.lg,
   },
 
   title: { fontSize: Type.priceHero.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
@@ -390,11 +365,6 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs + 2,
-  },
-  supportAvatarWrap: {
-    width: Space.lg + 4,
-    height: Space.lg + 4,
-    borderRadius: Radius.xl,
   },
   supportText: {
     flex: 1,

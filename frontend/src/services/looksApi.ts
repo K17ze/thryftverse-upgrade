@@ -12,6 +12,9 @@ export interface LookCreator {
   id: string;
   username: string | null;
   avatar: string | null;
+  /** Whether the creator has identity/trader verification evidence.
+   *  Backed by seller_trust_evidence (identity_checked / trader_verified). */
+  verified?: boolean;
 }
 
 export interface LookMediaEntry {

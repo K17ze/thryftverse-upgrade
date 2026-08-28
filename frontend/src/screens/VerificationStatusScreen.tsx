@@ -220,9 +220,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
         }
       >
         {/* ── Status hero ── */}
-        <View>
-          <StatusHero status={effectiveStatus} colors={colors} styles={styles} />
-        </View>
+        <StatusHero status={effectiveStatus} />
 
         {/* ── Status-specific content ── */}
         {effectiveStatus === 'unverified' && (
@@ -358,15 +356,11 @@ export default function VerificationStatusScreen({ navigation }: Props) {
 }
 
 // ── Status hero ──
-function StatusHero({
-  status,
-  colors,
-  styles,
-}: {
-  status: EffectiveStatus;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}) {
+// Flat, prominent status block — no card, no circle. The icon colour + bold
+// subtitle-size title carry the visual hierarchy (per AGENTS.md flat canvas).
+function StatusHero({ status }: { status: EffectiveStatus }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const config = STATUS_HERO_CONFIG[status];
   const accentColor =
     config.accent === 'success'
@@ -378,21 +372,22 @@ function StatusHero({
       : colors.brand;
 
   return (
-    <FlagshipFormSection variant="state" tone={config.accent} style={styles.section}>
-      <View style={styles.heroRow}>
-        <View style={[styles.heroIcon, { backgroundColor: `${accentColor}18` }]}>
-          <Ionicons name={config.icon} size={28} color={accentColor} />
-        </View>
-        <View style={styles.heroBody}>
-          <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-            {config.title}
-          </Text>
-          <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-            {config.subtitle}
-          </Text>
-        </View>
+    <View style={styles.statusHero}>
+      <Ionicons
+        name={config.icon}
+        size={32}
+        color={accentColor}
+        style={styles.statusHeroIcon}
+      />
+      <View style={styles.statusHeroBody}>
+        <Text style={[styles.statusHeroTitle, { color: colors.textPrimary }]}>
+          {config.title}
+        </Text>
+        <Text style={[styles.statusHeroSubtitle, { color: colors.textSecondary }]}>
+          {config.subtitle}
+        </Text>
       </View>
-    </FlagshipFormSection>
+    </View>
   );
 }
 
@@ -507,34 +502,30 @@ function createStyles(colors: ThemeColors) {
       paddingTop: Space.sm,
       paddingBottom: Space.xl,
     },
-    section: {
-      marginBottom: Space.md,
-    },
-    heroRow: {
+    statusHero: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.lg,
     },
-    heroIcon: {
-      width: Control.hit + Space.sm,
-      height: Control.hit + Space.sm,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
+    statusHeroIcon: {
+      marginBottom: 0,
     },
-    heroBody: {
+    statusHeroBody: {
       flex: 1,
     },
-    heroTitle: {
+    statusHeroTitle: {
       fontSize: Type.subtitle.size,
       fontFamily: Typography.family.bold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      marginBottom: Space.xs / 2,
+      marginBottom: 2,
     },
-    heroSubtitle: {
+    statusHeroSubtitle: {
       fontSize: Type.body.size,
       fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
+    },
+    section: {
+      marginBottom: Space.md,
     },
     panelContent: {
       gap: Space.sm,

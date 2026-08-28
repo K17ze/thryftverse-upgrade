@@ -1,9 +1,17 @@
 /**
- * AIAgentIntegrationScreen — Bring-your-own-key settings for AI providers.
+ * AIAgentIntegrationScreen — "Agent Studio" hub.
  *
- * Lets the user connect their own API keys for OpenAI, Anthropic Claude,
- * Google Gemini, and any OpenAI-compatible custom endpoint — similar to how
- * Codex / Claude Code let users supply their own AI credentials.
+ * The single surface for managing agents, server connections, and
+ * device-local discovery keys. Re-architected (Phase 7) as a cohesive
+ * information-architecture hub rather than a flat settings list.
+ *
+ * Information architecture (top → bottom):
+ *  1. Header — "Agent Studio"
+ *  2. Status overview — agents, connections, pending approvals (flat text)
+ *  3. Your agents — flat list of custom bots, tap to open detail
+ *  4. Server connections — verified server-side keys that power execution
+ *  5. Device-local keys — discovery-only keys, collapsed by default
+ *  6. Help footer — honest note on what agents can and cannot do
  *
  * Per AGENTS.md §11 (Truthful UI):
  *  - "Verify connection" performs a real provider round-trip (GET /models
@@ -15,16 +23,15 @@
  *
  * Design (per AGENTS.md §4):
  *  - Flat canvas, hairline separators, no card-on-card composition.
- *  - One dominant surface per section (the provider list).
- *  - Max two non-avatar radius sizes (Radius.md for inputs/badges, Radius.lg
- *    for the hero summary).
- *  - Clear visual hierarchy: provider name > connection status > key input.
+ *  - Status indicators as colored text, not decorative badges or pills.
+ *  - One icon family (Ionicons), consistent optical size.
+ *  - Section headers as small caps text, not large bold headers.
  *  - All colors via useAppTheme(), all geometry via design tokens.
  *
  * State coverage (per AGENTS.md §14):
- *  - Loading: while reading stored keys on mount.
- *  - Populated: provider list with connected / not-connected states.
- *  - Editing: inline key input with test / save / disconnect actions.
+ *  - Loading: skeleton for status overview + agent list while data loads.
+ *  - Populated: agent rows, connection rows, provider rows.
+ *  - Empty: explanatory empty states, not just "No data".
  *  - Error: invalid format badge with truthful message.
  */
 
@@ -66,6 +73,9 @@ import {
   pauseAllAgents,
   getActiveAgentSessionCount,
 } from '../services/chatAgentsApi';
+import { useStore } from '../store/useStore';
+import type { ProviderConnectionInfo } from '../services/botsApi';
+import { AgentIcon } from '../components/agents/AgentIcon';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIAgentIntegration'>;
 
@@ -101,6 +111,48 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     custom: emptyProviderState(),
   });
   const [activeAgentSessions, setActiveAgentSessions] = React.useState(0);
+
+  // Server-backed provider connections (Phase 3)
+  const providerConnections = useStore((s) => s.providerConnections);
+  const loadProviderConnections = useStore((s) => s.loadProviderConnections);
+  const createProviderConnection = useStore((s) => s.createProviderConnection);
+  const deleteProviderConnection = useStore((s) => s.deleteProviderConnection);
+  const reverifyProviderConnection = useStore((s) => s.reverifyProviderConnection);
+
+  // Agent Studio hub data (Phase 7)
+  const customBots = useStore((s) => s.customBots);
+  const loadBotsFromApi = useStore((s) => s.loadBotsFromApi);
+  const pendingApprovals = useStore((s) => s.pendingApprovals);
+  const loadPendingApprovals = useStore((s) => s.loadPendingApprovals);
+  const botVersions = useStore((s) => s.botVersions);
+  const loadBotVersions = useStore((s) => s.loadBotVersions);
+
+  const [agentsLoading, setAgentsLoading] = React.useState(true);
+  const [approvalsLoading, setApprovalsLoading] = React.useState(true);
+  const [showDeviceKeys, setShowDeviceKeys] = React.useState(false);
+
+  const [connectionsLoading, setConnectionsLoading] = React.useState(true);
+  const [showConnectForm, setShowConnectForm] = React.useState(false);
+  const [connectProvider, setConnectProvider] = React.useState<'openai' | 'anthropic' | 'gemini' | 'custom'>('openai');
+  const [connectKey, setConnectKey] = React.useState('');
+  const [connectLabel, setConnectLabel] = React.useState('');
+  const [connectBaseUrl, setConnectBaseUrl] = React.useState('');
+  const [creatingConnection, setCreatingConnection] = React.useState(false);
+  const [reverifyingId, setReverifyingId] = React.useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = React.useState<{ connection: ProviderConnectionInfo; affectedAgents: string[] } | null>(null);
+  const [removingId, setRemovingId] = React.useState<string | null>(null);
+  const [toast, setToast] = React.useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+
+  const showToast = React.useCallback((kind: 'success' | 'error', message: string) => {
+    setToast({ kind, message });
+  }, []);
+
+  // Auto-dismiss toast after a few seconds.
+  React.useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   // Load stored keys on mount, then discover models for connected providers.
   React.useEffect(() => {
@@ -152,7 +204,69 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Load server-backed provider connections on mount (Phase 3).
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      await loadProviderConnections();
+      if (mounted) setConnectionsLoading(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [loadProviderConnections]);
+
+  // Load custom bots and pending approvals for the status overview (Phase 7).
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        await Promise.all([
+          loadBotsFromApi(),
+          loadPendingApprovals(),
+        ]);
+      } catch {
+        // Non-fatal — status overview degrades gracefully.
+      } finally {
+        if (mounted) {
+          setAgentsLoading(false);
+          setApprovalsLoading(false);
+        }
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [loadBotsFromApi, loadPendingApprovals]);
+
+  // Load versions for each custom bot so we can show the last published version.
+  React.useEffect(() => {
+    if (agentsLoading) return;
+    for (const bot of customBots) {
+      if (!botVersions[bot.id]) {
+        loadBotVersions(bot.id);
+      }
+    }
+  }, [customBots, agentsLoading, botVersions, loadBotVersions]);
+
   const connectedCount = PROVIDER_ORDER.filter((p) => providers[p].stored).length;
+
+  // Status overview derived values (Phase 7).
+  const agentCount = customBots.length;
+  const healthyConnections = providerConnections.filter(
+    (c) => c.healthStatus === 'healthy'
+  ).length;
+  const totalConnections = providerConnections.length;
+  const pendingApprovalCount = pendingApprovals.filter(
+    (a) => a.status === 'pending'
+  ).length;
+  const statusLoading = loading || connectionsLoading || agentsLoading || approvalsLoading;
+
+  const getLastPublishedVersion = (botId: string): number | null => {
+    const versions = botVersions[botId];
+    if (!versions || versions.length === 0) return null;
+    return versions[0].versionNumber;
+  };
 
   const startEdit = (provider: AIProvider) => {
     haptic.light();
@@ -242,12 +356,113 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     haptic.selection();
   };
 
+  const openConnectForm = () => {
+    haptic.light();
+    setShowConnectForm(true);
+    setConnectProvider('openai');
+    setConnectKey('');
+    setConnectLabel('');
+    setConnectBaseUrl('');
+  };
+
+  const cancelConnectForm = () => {
+    haptic.light();
+    setShowConnectForm(false);
+    setConnectKey('');
+    setConnectLabel('');
+    setConnectBaseUrl('');
+  };
+
+  const handleCreateConnection = async () => {
+    if (connectKey.trim().length === 0) return;
+    haptic.light();
+    setCreatingConnection(true);
+    try {
+      await createProviderConnection({
+        provider: connectProvider,
+        apiKey: connectKey.trim(),
+        label: connectLabel.trim() || undefined,
+        baseUrl: connectBaseUrl.trim() || undefined,
+      });
+      if (connectProvider !== 'openai') {
+        // Should not happen — form gates non-openai providers.
+        return;
+      }
+      setShowConnectForm(false);
+      setConnectKey('');
+      setConnectLabel('');
+      setConnectBaseUrl('');
+      showToast('success', 'Connection verified and saved.');
+      haptic.selection();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not verify the key. Check the key and try again.';
+      showToast('error', message);
+      haptic.medium();
+    } finally {
+      setCreatingConnection(false);
+    }
+  };
+
+  const handleReverify = async (connectionId: string) => {
+    haptic.light();
+    setReverifyingId(connectionId);
+    try {
+      await reverifyProviderConnection(connectionId);
+      showToast('success', 'Connection re-verified.');
+      haptic.selection();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Re-verification failed.';
+      showToast('error', message);
+      haptic.medium();
+    } finally {
+      setReverifyingId(null);
+    }
+  };
+
+  const handleRequestRemove = async (connection: ProviderConnectionInfo) => {
+    haptic.light();
+    // Optimistically fetch affected agents via the delete call, but we want to
+    // confirm first. The backend returns affectedAgents on delete, so we
+    // perform a two-step: show a confirmation, then delete on confirm.
+    // Since we can't know affected agents without deleting, we show a generic
+    // confirmation and surface the affected agents count after deletion.
+    setConfirmRemove({ connection, affectedAgents: [] });
+  };
+
+  const handleConfirmRemove = async () => {
+    if (!confirmRemove) return;
+    const { connection } = confirmRemove;
+    haptic.medium();
+    setRemovingId(connection.id);
+    try {
+      const affectedAgents = await deleteProviderConnection(connection.id);
+      setConfirmRemove(null);
+      if (affectedAgents.length > 0) {
+        showToast('success', `Removed. ${affectedAgents.length} agent${affectedAgents.length === 1 ? '' : 's'} updated.`);
+      } else {
+        showToast('success', 'Connection removed.');
+      }
+      haptic.selection();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not remove connection.';
+      showToast('error', message);
+      haptic.medium();
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
+  const cancelConfirmRemove = () => {
+    haptic.light();
+    setConfirmRemove(null);
+  };
+
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Connections"
-          subtitle="Connect your own provider keys"
+          title="Agent Studio"
+          subtitle="Manage agents, connections, and keys"
           onBack={() => navigation.goBack()}
         />
       }
@@ -266,94 +481,534 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* ── Summary — connected count as typography, no card ── */}
-        <View style={styles.summaryWrap}>
-          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
-            {connectedCount > 0
-              ? `${connectedCount} of ${PROVIDER_ORDER.length} providers connected`
-              : 'No providers connected'}
-          </Text>
-          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
-            {connectedCount > 0
-              ? 'Your keys are stored on this device only'
-              : 'Connect an OpenAI, Anthropic, Gemini or custom endpoint'}
-          </Text>
-        </View>
-
-      {/* ── Agent management — flat rows, no card ── */}
-        <View style={styles.sectionLabelWrap}>
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>AGENT MANAGEMENT</Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [
-            styles.flatRow,
-            { opacity: pressed ? 0.6 : 1 },
-          ]}
-          onPress={handlePauseAllAgents}
-          disabled={activeAgentSessions === 0}
-          accessibilityRole="button"
-          accessibilityLabel={
-            activeAgentSessions === 0
-              ? 'Pause all agents — none running'
-              : `Pause all agents — ${activeAgentSessions} running`
-          }
-        >
-          <Ionicons
-            name="pause-circle-outline"
-            size={20}
-            color={activeAgentSessions > 0 ? colors.danger : colors.textMuted}
-          />
-          <View style={styles.flatRowText}>
-            <Text
-              style={[
-                styles.flatRowTitle,
-                { color: activeAgentSessions > 0 ? colors.textPrimary : colors.textMuted },
-              ]}
-            >
-              Pause all agents
-            </Text>
-            <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-              {activeAgentSessions > 0
-                ? `${activeAgentSessions} agent session${activeAgentSessions === 1 ? '' : 's'} running`
-                : 'No agent sessions running'}
-            </Text>
+      {/* ───────────────────────────────────────────────────────────────────
+          1. Status overview — flat text with colored numbers, no cards
+          Loading: skeleton lines; Populated: counts as typography
+      ──────────────────────────────────────────────────────────────────── */}
+      <View style={styles.summaryWrap}>
+        {statusLoading ? (
+          <View style={styles.statusSkeleton}>
+            <View style={[styles.skeletonLine, { width: '70%', backgroundColor: colors.surfaceAlt }]} />
+            <View style={[styles.skeletonLine, { width: '50%', marginTop: Space.xs, backgroundColor: colors.surfaceAlt }]} />
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </Pressable>
-        <View style={[styles.flatRowSeparator, { backgroundColor: colors.border }]} />
+        ) : (
+          <>
+            <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
+              <Text style={{ color: agentCount > 0 ? colors.textPrimary : colors.textMuted }}>
+                {agentCount}
+              </Text>
+              {' agent' + (agentCount === 1 ? '' : 's')}
+              {'  ·  '}
+              <Text style={{ color: totalConnections > 0 ? colors.success : colors.textMuted }}>
+                {healthyConnections}/{totalConnections}
+              </Text>
+              {' connections'}
+              {pendingApprovalCount > 0 ? (
+                <>
+                  {'  ·  '}
+                  <Text style={{ color: colors.warning }}>
+                    {pendingApprovalCount} pending approval{pendingApprovalCount === 1 ? '' : 's'}
+                  </Text>
+                </>
+              ) : null}
+            </Text>
+            <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
+              {agentCount === 0 && totalConnections === 0
+                ? 'Create an agent and connect a provider to get started'
+                : agentCount === 0
+                  ? 'Connect a provider, then create your first agent'
+                  : totalConnections === 0
+                    ? 'Connect a provider server-side to power agent execution'
+                    : 'Agents run on your connected server-side keys'}
+            </Text>
+            {pendingApprovalCount > 0 ? (
+              <Pressable
+                style={({ pressed }) => [styles.pendingAction, { opacity: pressed ? 0.6 : 1 }]}
+                onPress={() => navigation.navigate('AgentLedger')}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${pendingApprovalCount} pending approval${pendingApprovalCount === 1 ? '' : 's'}`}
+              >
+                <Text style={[styles.pendingActionText, { color: colors.warning }]}>
+                  View {pendingApprovalCount} pending approval{pendingApprovalCount === 1 ? '' : 's'} →
+                </Text>
+              </Pressable>
+            ) : null}
+          </>
+        )}
+      </View>
+
+      {/* ───────────────────────────────────────────────────────────────────
+          2. Your agents — flat list of custom bots
+      ──────────────────────────────────────────────────────────────────── */}
+      <View style={styles.sectionLabelWrap}>
+        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>YOUR AGENTS</Text>
+      </View>
+
+      {agentsLoading ? (
+        <View style={styles.agentListSkeleton}>
+          {[0, 1].map((i) => (
+            <View key={i} style={styles.skeletonRow}>
+              <View style={[styles.skeletonIcon, { backgroundColor: colors.surfaceAlt }]} />
+              <View style={styles.skeletonCopy}>
+                <View style={[styles.skeletonLine, { width: '45%', backgroundColor: colors.surfaceAlt }]} />
+                <View style={[styles.skeletonLine, { width: '65%', marginTop: Space.xs, backgroundColor: colors.surfaceAlt }]} />
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : customBots.length === 0 ? (
+        <View style={styles.emptyAgents}>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            No agents yet. Create one to give it a specialty, boundaries, and context.
+          </Text>
+        </View>
+      ) : (
+        <View>
+          {customBots.map((bot, index) => {
+            const isLast = index === customBots.length - 1;
+            const statusColor = bot.isDraft
+              ? colors.textMuted
+              : bot.isDisabled
+                ? colors.danger
+                : bot.runtimeReady === false
+                  ? colors.warning
+                  : colors.success;
+            const statusLabel = bot.isDraft
+              ? 'Draft'
+              : bot.isDisabled
+                ? 'Disabled'
+                : bot.runtimeReady === false
+                  ? 'Setup needed'
+                  : 'Published';
+            const runtimeLabel = bot.runtimeMode === 'ai' ? 'AI' : (bot.runtimeMode ?? 'AI');
+            const lastVersion = getLastPublishedVersion(bot.id);
+            return (
+              <React.Fragment key={bot.id}>
+                <Pressable
+                  style={({ pressed }) => [styles.flatRow, { opacity: pressed ? 0.6 : 1 }]}
+                  onPress={() => navigation.navigate('BotDetail', { botId: bot.id })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${bot.name}`}
+                >
+                  <AgentIcon category={bot.category} name={bot.name} size={20} color={colors.textPrimary} />
+                  <View style={styles.flatRowText}>
+                    <Text style={[styles.flatRowTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {bot.name}
+                    </Text>
+                    <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {runtimeLabel}
+                      {lastVersion !== null ? ` · v${lastVersion}` : ''}
+                    </Text>
+                  </View>
+                  <Text style={[styles.providerStatus, { color: statusColor }]} numberOfLines={1}>
+                    {statusLabel}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </Pressable>
+                {!isLast ? (
+                  <View style={[styles.flatRowSeparator, { backgroundColor: colors.border }]} />
+                ) : null}
+              </React.Fragment>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Create agent — flat text button */}
+      <Pressable
+        style={({ pressed }) => [styles.createAgentBtn, { opacity: pressed ? 0.6 : 1 }]}
+        onPress={() => {
+          haptic.light();
+          navigation.navigate('BotBuilder', {});
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Create agent"
+      >
+        <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
+        <Text style={[styles.createAgentText, { color: colors.brand }]}>Create agent</Text>
+      </Pressable>
+
+      {/* Agent management quick actions — flat rows */}
+      <Pressable
+        style={({ pressed }) => [styles.flatRow, { opacity: pressed ? 0.6 : 1 }]}
+        onPress={handlePauseAllAgents}
+        disabled={activeAgentSessions === 0}
+        accessibilityRole="button"
+        accessibilityLabel={
+          activeAgentSessions === 0
+            ? 'Pause all agents — none running'
+            : `Pause all agents — ${activeAgentSessions} running`
+        }
+      >
+        <Ionicons
+          name="pause-circle-outline"
+          size={20}
+          color={activeAgentSessions > 0 ? colors.danger : colors.textMuted}
+        />
+        <View style={styles.flatRowText}>
+          <Text
+            style={[
+              styles.flatRowTitle,
+              { color: activeAgentSessions > 0 ? colors.textPrimary : colors.textMuted },
+            ]}
+          >
+            Pause all agents
+          </Text>
+          <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            {activeAgentSessions > 0
+              ? `${activeAgentSessions} agent session${activeAgentSessions === 1 ? '' : 's'} running`
+              : 'No agent sessions running'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </Pressable>
+      <View style={[styles.flatRowSeparator, { backgroundColor: colors.border }]} />
+      <Pressable
+        style={({ pressed }) => [styles.flatRow, { opacity: pressed ? 0.6 : 1 }]}
+        onPress={() => navigation.navigate('AgentLedger')}
+        accessibilityRole="button"
+        accessibilityLabel="View agent activity ledger"
+      >
+        <Ionicons name="list-outline" size={20} color={colors.textPrimary} />
+        <View style={styles.flatRowText}>
+          <Text style={[styles.flatRowTitle, { color: colors.textPrimary }]}>
+            Agent activity
+          </Text>
+          <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            Local log of agent actions and approvals
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </Pressable>
+
+      {/* ───────────────────────────────────────────────────────────────────
+          3. Server connections — verified server-side keys (power execution)
+      ──────────────────────────────────────────────────────────────────── */}
+      <View style={styles.sectionLabelWrap}>
+        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SERVER CONNECTIONS</Text>
+      </View>
+      <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+        Keys verified and stored encrypted on the server. These power agent execution.
+      </Text>
+
+      {/* Connect server-side action row */}
+      {!showConnectForm ? (
         <Pressable
-          style={({ pressed }) => [
-            styles.flatRow,
-            { opacity: pressed ? 0.6 : 1 },
-          ]}
-          onPress={() => navigation.navigate('AgentLedger')}
+          style={({ pressed }) => [styles.flatRow, { opacity: pressed ? 0.6 : 1 }]}
+          onPress={openConnectForm}
           accessibilityRole="button"
-          accessibilityLabel="View agent activity ledger"
+          accessibilityLabel="Connect a provider server-side"
         >
-          <Ionicons name="list-outline" size={20} color={colors.textPrimary} />
+          <Ionicons name="server-outline" size={20} color={colors.brand} />
           <View style={styles.flatRowText}>
             <Text style={[styles.flatRowTitle, { color: colors.textPrimary }]}>
-              Agent activity
+              Connect server-side
             </Text>
-            <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-              Record of agent actions and approvals
+            <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={2}>
+              Keys are verified and stored encrypted on the server.
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </Pressable>
+      ) : null}
 
-      {/* ── Provider list ── */}
+      {/* Inline connect form */}
+      {showConnectForm ? (
+        <View style={styles.connectFormBody}>
+          {/* Provider selector — OpenAI only for now */}
+          <View style={styles.providerSelectorWrap}>
+            {(['openai', 'anthropic', 'gemini', 'custom'] as const).map((p) => {
+              const isAvailable = p === 'openai';
+              const isSelected = connectProvider === p && isAvailable;
+              const label = p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : p === 'gemini' ? 'Gemini' : 'Custom';
+              return (
+                <Pressable
+                  key={p}
+                  style={({ pressed }) => [
+                    styles.providerChip,
+                    {
+                      borderColor: isSelected ? colors.brand : colors.border,
+                      backgroundColor: isSelected ? colors.brandSubtle : colors.surface,
+                      opacity: isAvailable ? (pressed ? 0.7 : 1) : 0.5,
+                    },
+                  ]}
+                  onPress={() => isAvailable && (haptic.light(), setConnectProvider(p))}
+                  disabled={!isAvailable}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label}${isAvailable ? '' : ' — coming soon'}`}
+                >
+                  <Text
+                    style={[
+                      styles.providerChipText,
+                      { color: isSelected ? colors.brand : isAvailable ? colors.textPrimary : colors.textMuted },
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                  {!isAvailable ? (
+                    <Text style={[styles.providerChipSoon, { color: colors.textMuted }]}>Soon</Text>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={[styles.inputWrap, { borderColor: colors.border }]}>
+            <Ionicons name="key-outline" size={16} color={colors.textMuted} />
+            <TextInput
+              style={[styles.input, { color: colors.inputText }]}
+              placeholder="API key"
+              placeholderTextColor={colors.textMuted}
+              value={connectKey}
+              onChangeText={setConnectKey}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              accessibilityLabel="Server connection API key"
+            />
+          </View>
+
+          <View style={[styles.inputWrap, { borderColor: colors.border }]}>
+            <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+            <TextInput
+              style={[styles.input, { color: colors.inputText }]}
+              placeholder="Label (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={connectLabel}
+              onChangeText={setConnectLabel}
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Server connection label"
+            />
+          </View>
+
+          <View style={[styles.inputWrap, { borderColor: colors.border }]}>
+            <Ionicons name="link-outline" size={16} color={colors.textMuted} />
+            <TextInput
+              style={[styles.input, { color: colors.inputText }]}
+              placeholder="Base URL (optional, custom providers)"
+              placeholderTextColor={colors.textMuted}
+              value={connectBaseUrl}
+              onChangeText={setConnectBaseUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              accessibilityLabel="Server connection base URL"
+            />
+          </View>
+
+          <View style={styles.actionRow}>
+            <SecondaryButton
+              label="Cancel"
+              onPress={cancelConnectForm}
+              disabled={creatingConnection}
+              colors={colors}
+              styles={styles}
+            />
+            <PrimaryButton
+              label={creatingConnection ? 'Verifying…' : 'Verify & save'}
+              onPress={handleCreateConnection}
+              loading={creatingConnection}
+              disabled={creatingConnection || connectKey.trim().length === 0}
+              colors={colors}
+              styles={styles}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      {/* Server connection list — flat rows, hairline separators */}
+      {connectionsLoading ? (
+        <FlagshipState variant="loading" style={styles.loadingWrap} />
+      ) : providerConnections.length === 0 && !showConnectForm ? (
+        <View style={styles.emptyServerConnections}>
+          <Text style={[styles.connectHint, { color: colors.textMuted }]}>
+            No server connections yet. Connect a provider to power your agents.
+          </Text>
+        </View>
+      ) : (
+        <View>
+          {providerConnections.map((conn, index) => {
+            const isLast = index === providerConnections.length - 1;
+            const healthColor =
+              conn.healthStatus === 'healthy' ? colors.success
+                : conn.healthStatus === 'failed' || conn.healthStatus === 'revoked' || conn.healthStatus === 'expired' ? colors.danger
+                  : conn.healthStatus === 'degraded' ? colors.warning
+                    : colors.textMuted;
+            const healthLabel =
+              conn.healthStatus === 'healthy' ? 'Healthy'
+                : conn.healthStatus === 'failed' ? 'Failed'
+                  : conn.healthStatus === 'revoked' ? 'Revoked'
+                    : conn.healthStatus === 'expired' ? 'Expired'
+                      : conn.healthStatus === 'degraded' ? 'Degraded'
+                        : 'Unverified';
+            const providerLabel = conn.provider.charAt(0).toUpperCase() + conn.provider.slice(1);
+            const titleText = conn.label ? `${providerLabel} — ${conn.label}` : providerLabel;
+            const isReverifying = reverifyingId === conn.id;
+            const isRemoving = removingId === conn.id;
+            const verifiedText = conn.lastVerifiedAt
+              ? `Verified ${formatRelativeTime(conn.lastVerifiedAt)}`
+              : 'Not yet verified';
+
+            return (
+              <View
+                key={conn.id}
+                style={[
+                  styles.serverConnectionRow,
+                  !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+                ]}
+              >
+                <View style={styles.serverConnectionHeader}>
+                  <View style={styles.providerIdentity}>
+                    <Ionicons name="server-outline" size={20} color={colors.textPrimary} />
+                    <View style={styles.providerNameWrap}>
+                      <Text style={[styles.providerName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {titleText}
+                      </Text>
+                      <Text style={[styles.providerDesc, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {conn.maskedKey}
+                      </Text>
+                      <Text style={[styles.flatRowCaveat, { color: colors.textMuted }]} numberOfLines={1}>
+                        {verifiedText}
+                        {conn.lastError ? ` · ${conn.lastError}` : ''}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text
+                    style={[styles.providerStatus, { color: healthColor }]}
+                    numberOfLines={1}
+                  >
+                    {healthLabel}
+                  </Text>
+                </View>
+
+                {conn.discoveredModels && conn.discoveredModels.length > 0 ? (
+                  <Text style={[styles.modelsList, { color: colors.textSecondary }]} numberOfLines={2}>
+                    {conn.discoveredModels.length} model{conn.discoveredModels.length === 1 ? '' : 's'} · {conn.discoveredModels.slice(0, 6).map((m) => m.displayName).join(', ')}
+                    {conn.discoveredModels.length > 6 ? `, +${conn.discoveredModels.length - 6} more` : ''}
+                  </Text>
+                ) : null}
+
+                <View style={styles.actionRow}>
+                  <SecondaryButton
+                    label={isReverifying ? 'Verifying…' : 'Reverify'}
+                    onPress={() => handleReverify(conn.id)}
+                    disabled={isReverifying || isRemoving}
+                    colors={colors}
+                    styles={styles}
+                  />
+                  <SecondaryButton
+                    label={isRemoving ? 'Removing…' : 'Remove'}
+                    danger
+                    onPress={() => handleRequestRemove(conn)}
+                    disabled={isReverifying || isRemoving}
+                    colors={colors}
+                    styles={styles}
+                  />
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Remove confirmation */}
+      {confirmRemove ? (
+        <View style={[styles.confirmWrap, { backgroundColor: colors.dangerSubtle }]}>
+          <Text style={[styles.confirmTitle, { color: colors.textPrimary }]}>
+            Remove this connection?
+          </Text>
+          <Text style={[styles.confirmBody, { color: colors.textSecondary }]}>
+            Agents using this connection will no longer be able to run until you connect a replacement.
+          </Text>
+          <View style={styles.actionRow}>
+            <SecondaryButton
+              label="Cancel"
+              onPress={cancelConfirmRemove}
+              disabled={removingId !== null}
+              colors={colors}
+              styles={styles}
+            />
+            <PrimaryButton
+              label={removingId ? 'Removing…' : 'Remove'}
+              onPress={handleConfirmRemove}
+              loading={removingId !== null}
+              colors={colors}
+              styles={styles}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      {/* Toast */}
+      {toast ? (
+        <View
+          style={[
+            styles.toast,
+            {
+              backgroundColor: toast.kind === 'success' ? colors.successSubtle : colors.dangerSubtle,
+              borderColor: toast.kind === 'success' ? colors.successBorder : colors.dangerBorder,
+            },
+          ]}
+        >
+          <Ionicons
+            name={toast.kind === 'success' ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+            size={16}
+            color={toast.kind === 'success' ? colors.success : colors.danger}
+          />
+          <Text
+            style={[
+              styles.toastText,
+              { color: toast.kind === 'success' ? colors.success : colors.danger },
+            ]}
+            numberOfLines={3}
+          >
+            {toast.message}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* ───────────────────────────────────────────────────────────────────
+          4. Device-local keys — discovery only, collapsed by default
+      ──────────────────────────────────────────────────────────────────── */}
       {loading ? (
         <FlagshipState variant="loading" style={styles.loadingWrap} />
       ) : (
         <View>
-          <View style={styles.sectionLabelWrap}>
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PROVIDERS</Text>
-          </View>
+          <Pressable
+            style={({ pressed }) => [styles.collapseHeader, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={() => {
+              haptic.light();
+              setShowDeviceKeys((v) => !v);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={showDeviceKeys ? 'Hide device-local keys' : 'Show device-local keys'}
+          >
+            <View style={styles.collapseHeaderLeft}>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
+                DEVICE-LOCAL KEYS
+              </Text>
+              <Text style={[styles.deviceLocalNote, { color: colors.textMuted }]} numberOfLines={1}>
+                Discovery only — not used for execution
+              </Text>
+            </View>
+            <Ionicons
+              name={showDeviceKeys ? 'chevron-up-outline' : 'chevron-down-outline'}
+              size={18}
+              color={colors.textMuted}
+            />
+          </Pressable>
+
+          {showDeviceKeys ? (
+            <>
+              <Text style={[styles.deviceLocalNote, { color: colors.textMuted }]}>
+                Device-local keys are used for model discovery only. Server connections power agent execution.
+              </Text>
 
           {PROVIDER_ORDER.map((providerId, index) => {
             const config = PROVIDER_CONFIGS[providerId];
             const state = providers[providerId];
+            const isComingSoon = providerId !== 'openai';
             const status: ConnectionStatus = state.testResult?.status === 'invalid'
               ? 'invalid'
               : state.stored
@@ -367,6 +1022,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 style={[
                   styles.providerRow,
                   !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+                  isComingSoon && { opacity: 0.6 },
                 ]}
               >
                 {/* Provider header row */}
@@ -389,8 +1045,9 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                     style={[
                       styles.providerStatus,
                       {
-                        color:
-                          status === 'connected'
+                        color: isComingSoon
+                          ? colors.textMuted
+                          : status === 'connected'
                             ? colors.success
                             : status === 'invalid'
                               ? colors.danger
@@ -399,16 +1056,18 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                     ]}
                     numberOfLines={1}
                   >
-                    {status === 'connected'
-                      ? 'Connected'
-                      : status === 'invalid'
-                        ? 'Invalid'
-                        : 'Not connected'}
+                    {isComingSoon
+                      ? 'Coming soon'
+                      : status === 'connected'
+                        ? 'Connected'
+                        : status === 'invalid'
+                          ? 'Invalid'
+                          : 'Not connected'}
                   </Text>
                 </View>
 
                 {/* Connected state — masked key + actions */}
-                {state.stored && !state.editing ? (
+                {!isComingSoon && state.stored && !state.editing ? (
                   <View style={styles.connectedBody}>
                     <View style={[styles.keyDisplay, { backgroundColor: colors.surfaceAlt }]}>
                       <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
@@ -469,7 +1128,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 ) : null}
 
                 {/* Not connected state — prompt to connect */}
-                {!state.stored && !state.editing ? (
+                {!isComingSoon && !state.stored && !state.editing ? (
                   <View style={styles.connectCta}>
                     <Text style={[styles.connectHint, { color: colors.textMuted }]}>
                       No key saved. Connect to use {config.name} models.
@@ -484,7 +1143,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 ) : null}
 
                 {/* Editing state — key input + test / cancel */}
-                {state.editing ? (
+                {!isComingSoon && state.editing ? (
                   <View style={styles.editBody}>
                     {config.supportsBaseUrl ? (
                       <View style={[styles.inputWrap, { borderColor: colors.border }]}>
@@ -590,20 +1249,32 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                     </View>
                   </View>
                 ) : null}
+
+                {isComingSoon ? (
+                  <View style={styles.connectCta}>
+                    <Text style={[styles.connectHint, { color: colors.textMuted }]}>
+                      Coming soon — not yet available on this deployment.
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             );
           })}
+            </>
+          ) : null}
         </View>
       )}
 
-      {/* ── Security note (truthful) ── */}
+      {/* ───────────────────────────────────────────────────────────────────
+          5. Help footer — honest note on what agents can and cannot do
+      ──────────────────────────────────────────────────────────────────── */}
         <View style={styles.securityNote}>
           <View style={styles.securityHeader}>
-            <Ionicons name="shield-checkmark-outline" size={18} color={colors.textSecondary} />
-            <Text style={[styles.securityTitle, { color: colors.textPrimary }]}>How your keys are stored</Text>
+            <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} />
+            <Text style={[styles.securityTitle, { color: colors.textPrimary }]}>What agents can and cannot do</Text>
           </View>
           <Text style={[styles.securityBody, { color: colors.textSecondary }]}>
-            Your API keys are stored locally on this device only — they are never sent to ThryftVerse servers or shared with third parties. When hardware-backed secure storage (iOS Keychain / Android Keystore) is available, keys are stored encrypted at rest; otherwise they are held in process memory only for the current session and never written to plaintext app storage. Removing a key permanently deletes it from this device. When you test a key, a minimal live request (such as listing available models) is sent directly to the provider to confirm the key is authorised — the key is only saved after the provider confirms it, and the returned model list is cached so it stays current as the provider updates it.
+            Agents draft replies and summarise conversations using the provider keys you connect. They cannot access your wallet, make payments, or act outside the permissions you grant. Server-side keys are stored encrypted on the server; device-local keys never leave this device. Each agent action is logged in the activity ledger for transparency.
           </Text>
         </View>
     </FlagshipScreen>
@@ -662,12 +1333,14 @@ function SecondaryButton({
   label,
   onPress,
   danger,
+  disabled,
   colors,
   styles,
 }: {
   label: string;
   onPress: () => void;
   danger?: boolean;
+  disabled?: boolean;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
@@ -675,9 +1348,13 @@ function SecondaryButton({
     <Pressable
       style={({ pressed }) => [
         styles.secondaryBtn,
-        { borderColor: danger ? colors.danger : colors.border, opacity: pressed ? 0.7 : 1 },
+        {
+          borderColor: danger ? colors.danger : colors.border,
+          opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
+        },
       ]}
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={8}
@@ -707,6 +1384,22 @@ function emptyProviderState(): ProviderState {
     discoveredModels: null,
     discovering: false,
   };
+}
+
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return 'recently';
+  const diffMs = Date.now() - then;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
 }
 
 // ---------------------------------------------------------------------------
@@ -772,6 +1465,13 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       letterSpacing: Type.caption.letterSpacing,
       marginTop: Space.xs / 2,
+    },
+    flatRowCaveat: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.meta.letterSpacing,
+      marginTop: Space.xs / 2,
+      lineHeight: Type.caption.lineHeight,
     },
     flatRowSeparator: {
       height: StyleSheet.hairlineWidth,
@@ -978,6 +1678,174 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       lineHeight: Type.caption.lineHeight + 2,
       letterSpacing: Type.caption.letterSpacing,
+    },
+    // Server connections (Phase 3)
+    connectFormBody: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md,
+      gap: Space.sm,
+    },
+    providerSelectorWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Space.xs,
+    },
+    providerChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs / 2,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.standard,
+    },
+    providerChipText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      letterSpacing: Type.caption.letterSpacing,
+    },
+    providerChipSoon: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.meta.letterSpacing,
+    },
+    serverConnectionRow: {
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+      gap: Space.xs,
+    },
+    serverConnectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: Space.sm,
+    },
+    emptyServerConnections: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md,
+    },
+    deviceLocalNote: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.meta.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
+      paddingBottom: Space.sm,
+    },
+    confirmWrap: {
+      marginHorizontal: Space.md,
+      marginTop: Space.md,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md,
+      borderRadius: Radius.md,
+      gap: Space.xs,
+    },
+    confirmTitle: {
+      fontSize: Type.bodyStrong.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    confirmBody: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
+    },
+    toast: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.xs,
+      marginHorizontal: Space.md,
+      marginTop: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.standard,
+    },
+    toastText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
+    },
+    // Agent Studio hub (Phase 7)
+    statusSkeleton: {
+      gap: Space.xs,
+    },
+    skeletonLine: {
+      height: 14,
+      borderRadius: Radius.sm,
+    },
+    skeletonRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.sm + Space.xs,
+      paddingHorizontal: Space.md,
+    },
+    skeletonIcon: {
+      width: Space.lg + Space.xs,
+      height: Space.lg + Space.xs,
+      borderRadius: Radius.sm,
+    },
+    skeletonCopy: {
+      flex: 1,
+      gap: Space.xs,
+    },
+    agentListSkeleton: {
+      gap: 0,
+    },
+    emptyAgents: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md,
+    },
+    emptyText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight + 1,
+    },
+    createAgentBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + Space.xs,
+      minHeight: Control.hit,
+    },
+    createAgentText: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    pendingAction: {
+      marginTop: Space.xs,
+      paddingVertical: Space.xs,
+    },
+    pendingActionText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.caption.letterSpacing,
+    },
+    sectionHint: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.meta.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.sm,
+    },
+    collapseHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      gap: Space.sm,
+    },
+    collapseHeaderLeft: {
+      flex: 1,
+      gap: Space.xs / 2,
     },
   });
 }

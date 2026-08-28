@@ -304,3 +304,71 @@ export function buildInitialCapabilityGrants(
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Backend permission vocabulary mapping
+// ---------------------------------------------------------------------------
+//
+// The frontend capability taxonomy is a rich, namespaced vocabulary
+// (e.g. `chat.draft_reply`, `profile.read_public`) used by the builder
+// surface to present typed, risk-graded grants to the user. The backend,
+// however, only recognises a flat permission vocabulary. Today the backend
+// understands exactly two permission strings:
+//
+//   - `reply_in_chat`  — the agent may draft / send replies in a chat
+//   - `read_messages`  — the agent may read chat messages
+//
+// This mapping translates the namespaced frontend taxonomy down to the
+// backend's flat permission vocabulary when an agent definition is saved.
+// Capabilities with no backend equivalent map to null (not yet recognised
+// by the backend). The BotBuilderScreen uses these helpers to send the
+// correct permission strings to the `/bots` API instead of leaking the
+// namespaced taxonomy, which the backend would silently drop.
+
+/**
+ * Translate a single namespaced capability into the backend's flat
+ * permission vocabulary.
+ *
+ * Returns the backend permission string, or `null` when the capability has
+ * no backend equivalent (i.e. the backend does not yet enforce it).
+ */
+export function capabilityToBackendPermission(
+  cap: AgentCapability,
+): string | null {
+  switch (cap) {
+    case 'chat.draft_reply':
+    case 'chat.send':
+      // Drafting and sending are both forms of replying in a chat.
+      return 'reply_in_chat';
+    case 'chat.read_current':
+    case 'chat.read_selected_history':
+      // Both read capabilities collapse to the backend read permission.
+      return 'read_messages';
+    default:
+      // Not recognised by the backend permission vocabulary yet.
+      return null;
+  }
+}
+
+/**
+ * Convert the enabled capability grants of an agent definition into the
+ * deduplicated array of backend permission strings the backend enforces.
+ *
+ * Only enabled grants contribute, and only capabilities with a non-null
+ * backend mapping are included. The result is deduplicated so that, e.g.,
+ * an agent granted both `chat.draft_reply` and `chat.send` produces a
+ * single `reply_in_chat` entry.
+ */
+export function enabledCapabilitiesToBackendPermissions(
+  grants: CapabilityGrantConfig[],
+): string[] {
+  const permissions = new Set<string>();
+  for (const grant of grants) {
+    if (!grant.enabled) continue;
+    const permission = capabilityToBackendPermission(grant.capability);
+    if (permission) {
+      permissions.add(permission);
+    }
+  }
+  return Array.from(permissions);
+}

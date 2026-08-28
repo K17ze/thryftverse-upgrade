@@ -15,10 +15,11 @@ import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
-import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
 
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'About'>;
 
 // Number of taps on the version row required to toggle developer mode.
@@ -97,7 +98,7 @@ export default function AboutScreen({ navigation }: Props) {
         <View style={styles.heroCard}>
           <View style={styles.heroRow}>
             <View style={styles.brandIcon}>
-              <Ionicons name="shirt-outline" size={32} color={colors.brand} />
+              <Ionicons name="storefront-outline" size={32} color={colors.brand} />
             </View>
             <View style={styles.heroText}>
               <Text style={styles.brandName}>Thryftverse</Text>
@@ -116,113 +117,17 @@ export default function AboutScreen({ navigation }: Props) {
           </View>
         </View>
 
-        <View>
-          <Text style={styles.sectionLabel}>Legal</Text>
-          <View style={styles.rowGroup}>
-            <AnimatedPressable
-              onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
-              activeOpacity={0.75}
-              scaleValue={0.995}
-              hapticFeedback="light"
-            >
-              <View style={[styles.rowRoot, styles.rowBorder]}>
-                <View style={styles.rowIconWrap}>
-                  <Ionicons name="document-text-outline" size={22} color={colors.textPrimary} />
-                </View>
-                <View style={styles.rowTextWrap}>
-                  <Text style={styles.rowTitle}>Terms of Service</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </View>
-            </AnimatedPressable>
-            <AnimatedPressable
-              onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
-              activeOpacity={0.75}
-              scaleValue={0.995}
-              hapticFeedback="light"
-            >
-              <View style={[styles.rowRoot, styles.rowBorder]}>
-                <View style={styles.rowIconWrap}>
-                  <Ionicons name="lock-closed-outline" size={22} color={colors.textPrimary} />
-                </View>
-                <View style={styles.rowTextWrap}>
-                  <Text style={styles.rowTitle}>Privacy Policy</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </View>
-            </AnimatedPressable>
-            <AnimatedPressable
-              onPress={() => void handleOpenExternal('https://thryftverse.app/cookies')}
-              activeOpacity={0.75}
-              scaleValue={0.995}
-              hapticFeedback="light"
-            >
-              <View style={styles.rowRoot}>
-                <View style={styles.rowIconWrap}>
-                  <Ionicons name="cube-outline" size={22} color={colors.textPrimary} />
-                </View>
-                <View style={styles.rowTextWrap}>
-                  <Text style={styles.rowTitle}>Cookie Policy</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </View>
-            </AnimatedPressable>
-          </View>
-        </View>
+        <SettingsSection title="Legal">
+          <SettingsRow icon="document-text-outline" title="Terms of Service" onPress={() => void handleOpenExternal('https://thryftverse.app/terms')} />
+          <SettingsRow icon="lock-closed-outline" title="Privacy Policy" onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')} />
+          <SettingsRow icon="cube-outline" title="Cookie Policy" onPress={() => void handleOpenExternal('https://thryftverse.app/cookies')} isLast />
+        </SettingsSection>
 
-        <View>
-          <Text style={styles.sectionLabel}>Support</Text>
-          <View style={styles.rowGroup}>
-            <AnimatedPressable
-              onPress={() => navigation.navigate('HelpSupport')}
-              activeOpacity={0.75}
-              scaleValue={0.995}
-              hapticFeedback="light"
-            >
-              <View style={[styles.rowRoot, styles.rowBorder]}>
-                <View style={styles.rowIconWrap}>
-                  <Ionicons name="help-circle-outline" size={22} color={colors.textPrimary} />
-                </View>
-                <View style={styles.rowTextWrap}>
-                  <Text style={styles.rowTitle}>Help Centre</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </View>
-            </AnimatedPressable>
-            <AnimatedPressable
-              onPress={handleRateApp}
-              activeOpacity={0.75}
-              scaleValue={0.995}
-              hapticFeedback="light"
-            >
-              <View style={[styles.rowRoot, styles.rowBorder]}>
-                <View style={styles.rowIconWrap}>
-                  <Ionicons name="star-outline" size={22} color={colors.textPrimary} />
-                </View>
-                <View style={styles.rowTextWrap}>
-                  <Text style={styles.rowTitle}>Rate Thryftverse</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </View>
-            </AnimatedPressable>
-            <AnimatedPressable
-              onPress={() => void handleShareApp()}
-              activeOpacity={0.75}
-              scaleValue={0.995}
-              hapticFeedback="light"
-            >
-              <View style={styles.rowRoot}>
-                <View style={styles.rowIconWrap}>
-                  <Ionicons name="share-social-outline" size={22} color={colors.textPrimary} />
-                </View>
-                <View style={styles.rowTextWrap}>
-                  <Text style={styles.rowTitle}>Share with friends</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </View>
-            </AnimatedPressable>
-          </View>
-        </View>
+        <SettingsSection title="Support">
+          <SettingsRow icon="help-circle-outline" title="Help Centre" onPress={() => navigation.navigate('HelpSupport')} />
+          <SettingsRow icon="star-outline" title="Rate Thryftverse" onPress={handleRateApp} />
+          <SettingsRow icon="share-social-outline" title="Share with friends" onPress={() => void handleShareApp()} isLast />
+        </SettingsSection>
 
         <View style={{ height: Space.xl }} />
     </FlagshipScreen>
@@ -263,48 +168,6 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
     marginTop: Space.xs - 2,
-  },
-  sectionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    marginBottom: Space.smMd,
-    marginTop: Space.lg,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  rowGroup: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    marginBottom: Space.sm,
-  },
-  rowRoot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    minHeight: Control.hit + Space.sm + Space.xs,
-    gap: Space.smMd,
-  },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  rowIconWrap: {
-    width: Space.xl - Space.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowTextWrap: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  rowTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
   },
   });
 }

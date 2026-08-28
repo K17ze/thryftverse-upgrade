@@ -130,7 +130,7 @@ export function FlagshipState({
     >
       <Reanimated.View
         entering={enter}
-        style={styles.iconWrap}
+        style={styles.iconSlot}
       >
         <Ionicons
           name={effectiveIcon}
@@ -327,9 +327,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrap: {
+  iconSlot: {
     alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: Space.md,
   },
   title: {

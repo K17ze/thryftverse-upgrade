@@ -38,3 +38,55 @@ export interface ChatBot {
   runtimeReady?: boolean;
   runtimeReadinessReason?: string;
 }
+
+/**
+ * Canonical agent contract — shared source-of-truth with the backend.
+ * The backend's botRuntime/types.ts has the same shape.
+ */
+export type AgentCategory = 'assistant' | 'styling' | 'commerce' | 'moderation' | 'safety' | 'automation';
+export type AgentStatus = 'available' | 'local-only' | 'backend-required' | 'disabled';
+export type AgentRuntimeMode = 'local' | 'config-only' | 'backend' | 'ai';
+
+export interface CanonicalAgentContract {
+  id: string;
+  name: string;
+  description: string;
+  category: AgentCategory;
+  commandHint: string;
+  icon: string | null;
+  instructions: string;
+  triggerMode: 'mention' | 'command' | 'always';
+  tone: 'focused' | 'warm' | 'expert';
+  responseLength: 'concise' | 'balanced' | 'detailed';
+  reasoningEffort: 'low' | 'medium' | 'high';
+  starterPrompts: string[];
+  model: string;
+  historyLimit: number;
+  confidenceThreshold: number;
+  permissions: string[];
+  isDraft: boolean;
+  status: AgentStatus;
+  runtimeMode: AgentRuntimeMode;
+}
+
+/**
+ * Real deployment state for a bot installed in a conversation.
+ * Returned by GET /chat/conversations/:conversationId/bots
+ */
+export interface ConversationBotDeployment {
+  botId: string;
+  botName: string;
+  botSlug: string;
+  botCategory: string;
+  botType: 'system' | 'custom';
+  commandHint: string;
+  runtimeMode: string;
+  status: string;
+  installStatus: string;
+  permissionsSnapshot: string[];
+  runtimeReady: boolean;
+  runtimeReadinessReason: string | null;
+  installedBy: string | null;
+  installedAt: string;
+  agentConfig: ChatAgentConfig | null;
+}

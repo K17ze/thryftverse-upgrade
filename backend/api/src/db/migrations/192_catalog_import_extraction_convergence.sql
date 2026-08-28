@@ -255,27 +255,49 @@ COMMENT ON COLUMN catalog_import_extractions.legacy_marker IS
 -- ---------------------------------------------------------------------------
 -- Constraint hardening (per audit)
 -- ---------------------------------------------------------------------------
+-- Note: PostgreSQL does not support ADD CONSTRAINT IF NOT EXISTS, so we use
+-- DO blocks with exception handling for idempotency.
 
 -- A terminal run MUST have an outcome — NULL outcome with terminal state
 -- violates the documented invariant.
-ALTER TABLE catalog_import_extraction_runs
-  ADD CONSTRAINT IF NOT EXISTS terminal_requires_outcome
-  CHECK (job_state != 'terminal' OR outcome IS NOT NULL);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'terminal_requires_outcome') THEN
+    ALTER TABLE catalog_import_extraction_runs
+      ADD CONSTRAINT terminal_requires_outcome
+      CHECK (job_state != 'terminal' OR outcome IS NOT NULL);
+  END IF;
+END $$;
 
 -- A terminal run MUST have a completed_at timestamp.
-ALTER TABLE catalog_import_extraction_runs
-  ADD CONSTRAINT IF NOT EXISTS terminal_requires_completed_at
-  CHECK (job_state != 'terminal' OR completed_at IS NOT NULL);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'terminal_requires_completed_at') THEN
+    ALTER TABLE catalog_import_extraction_runs
+      ADD CONSTRAINT terminal_requires_completed_at
+      CHECK (job_state != 'terminal' OR completed_at IS NOT NULL);
+  END IF;
+END $$;
 
 -- Rejected decisions MUST NOT have a final_value (they don't mutate fields).
-ALTER TABLE catalog_import_field_decisions
-  ADD CONSTRAINT IF NOT EXISTS rejected_has_null_final_value
-  CHECK (decision != 'rejected' OR final_value_json IS NULL);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'rejected_has_null_final_value') THEN
+    ALTER TABLE catalog_import_field_decisions
+      ADD CONSTRAINT rejected_has_null_final_value
+      CHECK (decision != 'rejected' OR final_value_json IS NULL);
+  END IF;
+END $$;
 
 -- Accepted/edited decisions MUST have a final_value.
-ALTER TABLE catalog_import_field_decisions
-  ADD CONSTRAINT IF NOT EXISTS accepted_edited_has_final_value
-  CHECK (decision = 'rejected' OR final_value_json IS NOT NULL);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'accepted_edited_has_final_value') THEN
+    ALTER TABLE catalog_import_field_decisions
+      ADD CONSTRAINT accepted_edited_has_final_value
+      CHECK (decision = 'rejected' OR final_value_json IS NOT NULL);
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Additional indexes (per audit)

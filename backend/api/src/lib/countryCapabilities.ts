@@ -205,7 +205,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: true,
     paymentMethodTypes: ['card', 'bank_account', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['razorpay_in', 'stripe_americas'],
+      commerce: ['oneze_internal', 'razorpay_in', 'stripe_americas'],
       'co-own': ['razorpay_in', 'stripe_americas'],
       wallet_topup: ['razorpay_in', 'stripe_americas'],
       wallet_withdrawal: ['razorpay_in'],
@@ -253,7 +253,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: true,
     paymentMethodTypes: ['card', 'bank_account', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['stripe_americas'],
+      commerce: ['oneze_internal', 'stripe_americas'],
       'co-own': ['stripe_americas'],
       wallet_topup: ['stripe_americas'],
       wallet_withdrawal: ['stripe_americas'],
@@ -303,7 +303,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: true,
     paymentMethodTypes: ['card', 'bank_account', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['stripe_americas', 'mollie_eu'],
+      commerce: ['oneze_internal', 'stripe_americas', 'mollie_eu'],
       'co-own': ['stripe_americas', 'mollie_eu'],
       wallet_topup: ['stripe_americas', 'mollie_eu'],
       wallet_withdrawal: ['stripe_americas', 'mollie_eu'],
@@ -352,7 +352,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: true,
     paymentMethodTypes: ['card', 'bank_account', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['mollie_eu', 'stripe_americas'],
+      commerce: ['oneze_internal', 'mollie_eu', 'stripe_americas'],
       'co-own': ['mollie_eu', 'stripe_americas'],
       wallet_topup: ['mollie_eu', 'stripe_americas'],
       wallet_withdrawal: ['mollie_eu', 'stripe_americas'],
@@ -401,7 +401,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: true,
     paymentMethodTypes: ['card', 'bank_account', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['tap_gulf', 'stripe_americas'],
+      commerce: ['oneze_internal', 'tap_gulf', 'stripe_americas'],
       'co-own': ['tap_gulf', 'stripe_americas'],
       wallet_topup: ['tap_gulf', 'stripe_americas'],
       wallet_withdrawal: ['tap_gulf', 'stripe_americas'],
@@ -452,7 +452,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: false,
     paymentMethodTypes: ['card', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['stripe_americas'],
+      commerce: ['oneze_internal', 'stripe_americas'],
       'co-own': ['stripe_americas'],
       wallet_topup: ['stripe_americas'],
       wallet_withdrawal: ['stripe_americas'],
@@ -502,7 +502,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: false,
     paymentMethodTypes: ['card'],
     gatewaysByChannel: {
-      commerce: ['stripe_americas'],
+      commerce: ['oneze_internal', 'stripe_americas'],
       'co-own': ['stripe_americas'],
       wallet_topup: ['stripe_americas'],
       wallet_withdrawal: ['stripe_americas'],
@@ -641,6 +641,9 @@ export function isGatewayConfigured(gatewayId: string): boolean {
       // adapter is implemented. This prevents users from selecting a
       // gateway that cannot process payments.
       return false;
+    case 'oneze_internal':
+      // Internal gateway — no external API keys required. Always configured.
+      return true;
     case 'mock_fiat_gbp':
     case 'mock_tvusd':
       return !isProduction;

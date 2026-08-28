@@ -39,7 +39,6 @@ interface StateConfig {
   subtitle: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
   iconColor: string;
-  iconBg: string;
   stage?: OrderStepperStage;
   isFailure?: boolean;
   failureLabel?: string;
@@ -54,7 +53,6 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         subtitle: 'The seller has been notified.',
         icon: 'receipt-outline',
         iconColor: colors.brand,
-        iconBg: `${colors.brand}15`,
         stage: 'placed',
         nextStep: 'Awaiting payment confirmation',
       };
@@ -64,7 +62,6 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         subtitle: 'Your payment has been processed.',
         icon: 'checkmark-circle-outline',
         iconColor: colors.success,
-        iconBg: `${colors.success}15`,
         stage: 'paid',
         nextStep: 'Seller preparing for dispatch',
       };
@@ -74,7 +71,6 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         subtitle: 'The parcel has been dispatched.',
         icon: 'cube-outline',
         iconColor: colors.brand,
-        iconBg: `${colors.brand}15`,
         stage: 'shipped',
         nextStep: 'In carrier transit',
       };
@@ -84,7 +80,6 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         subtitle: 'Your parcel is on the way.',
         icon: 'car-outline',
         iconColor: colors.brand,
-        iconBg: `${colors.brand}15`,
         stage: 'in_transit',
         nextStep: 'Out for delivery',
       };
@@ -94,7 +89,6 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         subtitle: 'Delivery has been confirmed.',
         icon: 'checkmark-done-circle-outline',
         iconColor: colors.success,
-        iconBg: `${colors.success}15`,
         stage: 'delivered',
       };
     case 'order_cancelled':
@@ -103,7 +97,6 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         subtitle: 'This order has been cancelled.',
         icon: 'close-circle-outline',
         iconColor: colors.danger,
-        iconBg: `${colors.danger}15`,
         isFailure: true,
         failureLabel: 'Cancelled',
       };
@@ -113,7 +106,6 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         subtitle: 'Your payment has been refunded.',
         icon: 'cash-outline',
         iconColor: colors.danger,
-        iconBg: `${colors.danger}15`,
         isFailure: true,
         failureLabel: 'Refunded',
       };
@@ -158,9 +150,7 @@ export function CommerceStateCard({
     >
       {/* Header row */}
       <View style={styles.headerRow}>
-        <View style={[styles.headerIcon, { backgroundColor: config.iconBg }]}>
-          <Ionicons name={config.icon} size={16} color={config.iconColor} />
-        </View>
+        <Ionicons name={config.icon} size={20} color={config.iconColor} />
         <View style={styles.headerBody}>
           <Text style={styles.title} numberOfLines={1}>{config.title}</Text>
           <Text style={styles.subtitle} numberOfLines={1}>{config.subtitle}</Text>
@@ -246,14 +236,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-  },
-  headerIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
   headerBody: {
     flex: 1,

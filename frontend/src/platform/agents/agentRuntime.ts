@@ -1,11 +1,22 @@
 /**
- * Agent Runtime — the execution layer that sits between the chat agent
- * service and the actual tool execution. Every agent action that would
- * affect the user's account, data, or external state MUST go through
- * this runtime, which checks the Capability Broker before executing.
+ * Agent Runtime — a LOCAL PREVIEW / SIMULATION of the execution layer that
+ * sits between the chat agent service and tool execution in the on-device
+ * preview. This is NOT the production runtime.
  *
- * This is the ONLY path from agent → tool execution. The runtime:
- *  - Hydrates persisted grants from AsyncStorage on first use.
+ * IMPORTANT — this is a local preview/simulation only.
+ *
+ * The production runtime is the backend `botRuntime` module, which executes
+ * agent tool calls server-side under the backend's real authorization and
+ * audit boundaries. This local runtime exists solely so the in-app preview
+ * can demonstrate the approval-prompt flow and tool-execution shape without
+ * a round-trip to the backend. It must never be described or used as the
+ * "real" or "production" runtime.
+ *
+ * In the local preview, every agent action that would affect the user's
+ * account, data, or external state goes through this runtime, which checks
+ * the (UI-state only) Capability Broker before executing a registered
+ * local executor. The runtime:
+ *  - Hydrates persisted UI-state grants from AsyncStorage on first use.
  *  - Honours existing `always_allow` grants for non-Tier-D capabilities.
  *  - Auto-approves Tier A reads when the caller opts in
  *    (`autoApproveTierA`), so read-only agents don't prompt on every call.
@@ -82,8 +93,9 @@ export function clearAllPendingApprovals(): void {
 }
 
 /**
- * Execute a tool call through the capability broker.
- * This is the ONLY path from agent → tool execution.
+ * Execute a tool call through the capability broker in the local preview.
+ * This is the local preview path from agent → tool execution; the
+ * production path is the backend `botRuntime`.
  */
 export async function executeToolCall(
   request: ToolCallRequest,

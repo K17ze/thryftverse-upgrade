@@ -259,6 +259,7 @@ type LookRow = {
   updated_at: string;
   creator_username: string | null;
   creator_avatar: string | null;
+  creator_verified: boolean | null;
   source_look_id: string | null;
 };
 
@@ -267,7 +268,13 @@ const LOOK_SELECT_COLUMNS = `
   l.composition_document, l.status, l.visibility,
   l.created_at, l.updated_at, l.source_look_id,
   u.username AS creator_username,
-  u.avatar AS creator_avatar
+  u.avatar AS creator_avatar,
+  EXISTS (
+    SELECT 1 FROM seller_trust_evidence ste
+    WHERE ste.seller_id = l.creator_id
+      AND ste.code IN ('identity_checked', 'trader_verified')
+      AND (ste.expires_at IS NULL OR ste.expires_at > NOW())
+  ) AS creator_verified
 `;
 
 /**
@@ -414,6 +421,7 @@ async function enrichLooks(
       id: row.creator_id,
       username: row.creator_username,
       avatar: row.creator_avatar,
+      verified: Boolean(row.creator_verified),
     },
     title: row.title,
     caption: row.caption,

@@ -275,21 +275,14 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* Posture summary — flat, no gamification (per AGENTS.md §4) */}
-      <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.heroRow}>
-          <View style={[styles.heroIcon, { backgroundColor: enabledCount > 0 ? colors.brand : colors.surfaceAlt }]}>
-            <Ionicons name="notifications" size={20} color={enabledCount > 0 ? colors.textInverse : colors.textMuted} />
-          </View>
-          <View style={styles.heroText}>
-            <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-              {enabledCount === 0 ? 'All notifications off' : 'Push notifications on'}
-            </Text>
-            <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-              {enabledCount === 0 ? 'You won\'t receive any push alerts' : isDeviceRegistered ? 'This device is registered for delivery' : 'Register this device to receive alerts'}
-            </Text>
-          </View>
-        </View>
+      {/* Posture summary — flat canvas, no card chrome */}
+      <View style={styles.postureSummary}>
+        <Text style={[styles.postureTitle, { color: colors.textPrimary }]}>
+          {enabledCount === 0 ? 'All notifications off' : 'Push notifications on'}
+        </Text>
+        <Text style={[styles.postureSubtitle, { color: colors.textSecondary }]}>
+          {enabledCount === 0 ? 'You won\'t receive any push alerts' : isDeviceRegistered ? 'This device is registered for delivery' : 'Register this device to receive alerts'}
+        </Text>
       </View>
 
       {PUSH_NOTIFICATION_GROUPS.map((group) => {
@@ -450,31 +443,17 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
+    postureSummary: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.md,
+      paddingBottom: Space.sm,
     },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Control.chrome + Space.xs,
-      height: Control.chrome + Space.xs,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
+    postureTitle: {
       fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
-    heroSubtitle: {
+    postureSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       marginTop: Space.xs / 2,

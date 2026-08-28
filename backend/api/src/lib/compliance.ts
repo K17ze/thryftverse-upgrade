@@ -1104,6 +1104,19 @@ const CAPABILITIES_BLOCKED_ON_SANCTIONS_WATCH: ReadonlySet<WalletCapability> = n
 ]);
 
 /**
+ * Capabilities that demand a fully verified compliance state — clear
+ * sanctions screening, completed KYC, and a known AML risk tier.  Any
+ * unknown or pending compliance data must FAIL CLOSED (deny) for these.
+ */
+const SENSITIVE_CAPABILITIES: ReadonlySet<WalletCapability> = new Set([
+  'issue',
+  'redeem',
+  'settlement',
+  'p2p_send',
+  'p2p_receive',
+]);
+
+/**
  * Map a wallet capability to the compliance market used for jurisdiction
  * rule resolution.  This lets us reuse the existing jurisdiction_rules
  * table and `resolveJurisdictionRule` helper.
@@ -1222,14 +1235,20 @@ function hasActiveRestriction(profile: ComplianceProfile): boolean {
  * "Access denied."
  *
  * Checks performed (in order, first failure wins):
- *  1. Active restriction / ban (trading_enabled flag)
- *  2. Sanctions screening (blocked → hard block; watchlist → block for
- *     issuance/redemption/settlement)
- *  3. KYC verification status (verified required for issue/redeem/settlement;
- *     rejected/expired blocks all capabilities)
- *  4. AML risk tier (critical → block; high → block issuance/redemption)
- *  5. Jurisdiction policy (rule disabled or sanctions-clear required)
- *  6. Velocity limits (daily transaction count and notional caps)
+ *  1. Compliance profile exists (missing → block)
+ *  2. Active restriction / ban (trading_enabled flag)
+ *  3. Sanctions screening (blocked/unknown/pending → hard block;
+ *     watchlist → block for issuance/redemption/settlement)
+ *  4. KYC verification status (verified required for sensitive
+ *     capabilities; rejected/expired blocks all capabilities)
+ *  5. AML risk tier (unknown → block sensitive; critical → block;
+ *     high → block issuance/redemption)
+ *  6. Jurisdiction policy (missing → block sensitive; rule disabled
+ *     or sanctions-clear required)
+ *  7. Velocity limits (daily transaction count and notional caps)
+ *
+ * The gate FAILS CLOSED: when jurisdiction, sanctions, KYC, or AML
+ * data is missing or unknown, the capability is denied by default.
  *
  * The function uses indexed queries and short-circuits on the first
  * failure so it does not block the main flow unnecessarily.
@@ -1259,7 +1278,22 @@ export async function evaluateWalletCapability(
   });
 
   // 1. Compliance profile (KYC, sanctions, PEP, risk tier, trading flag)
-  const profile = await getOrCreateComplianceProfile(client, userId);
+  // FAIL CLOSED: if the profile cannot be loaded or is missing, deny.
+  let profile: ComplianceProfile | undefined;
+  try {
+    profile = await getOrCreateComplianceProfile(client, userId);
+  } catch {
+    return deny(
+      'WALLET_CAPABILITY_PROFILE_MISSING',
+      'Compliance profile is required. Please complete identity verification.'
+    );
+  }
+  if (!profile) {
+    return deny(
+      'WALLET_CAPABILITY_PROFILE_MISSING',
+      'Compliance profile is required. Please complete identity verification.'
+    );
+  }
   const countryCode = normalizeCountryCode(profile.countryCode);
   const market = capabilityToMarket(capability);
 
@@ -1279,6 +1313,19 @@ export async function evaluateWalletCapability(
     );
   }
 
+  // FAIL CLOSED: unknown or pending sanctions status = block.
+  // Sanctions screening must be completed before any wallet operation.
+  if (
+    !profile.sanctionsStatus ||
+    profile.sanctionsStatus === 'unknown' ||
+    (profile.sanctionsStatus as string) === 'pending'
+  ) {
+    return deny(
+      'WALLET_CAPABILITY_SANCTIONS_UNKNOWN',
+      'Sanctions screening must be completed before this operation. Please complete identity verification.'
+    );
+  }
+
   // Watchlist — block value-issuance / redemption / settlement
   if (
     profile.sanctionsStatus === 'watchlist'
@@ -1291,14 +1338,27 @@ export async function evaluateWalletCapability(
   }
 
   // 4. KYC verification
-  if (CAPABILITIES_REQUIRING_VERIFIED_KYC.has(capability)) {
-    if (profile.kycStatus !== 'verified') {
-      return deny(
-        'WALLET_CAPABILITY_KYC_REQUIRED',
-        'Complete identity verification to continue with this wallet operation.'
-      );
-    }
-  } else if (profile.kycStatus === 'rejected' || profile.kycStatus === 'expired') {
+  // FAIL CLOSED: sensitive capabilities require verified KYC.  Pending,
+  // not_started, rejected, and expired statuses all block.
+  if (
+    SENSITIVE_CAPABILITIES.has(capability) &&
+    (!profile.kycStatus ||
+      profile.kycStatus === 'pending' ||
+      profile.kycStatus === 'not_started' ||
+      profile.kycStatus === 'rejected' ||
+      profile.kycStatus === 'expired')
+  ) {
+    return deny(
+      'WALLET_CAPABILITY_KYC_REQUIRED',
+      'Complete identity verification to continue with this wallet operation.'
+    );
+  }
+
+  // Non-sensitive capabilities: block on rejected / expired only.
+  if (
+    !SENSITIVE_CAPABILITIES.has(capability) &&
+    (profile.kycStatus === 'rejected' || profile.kycStatus === 'expired')
+  ) {
     return deny(
       'WALLET_CAPABILITY_KYC_REQUIRED',
       'Your identity verification has expired or was rejected. Please re-verify your identity to continue.'
@@ -1307,6 +1367,18 @@ export async function evaluateWalletCapability(
 
   // 5. AML risk tier
   const restrictions: string[] = [];
+
+  // FAIL CLOSED: unknown AML risk tier = block sensitive capabilities.
+  if (
+    SENSITIVE_CAPABILITIES.has(capability) &&
+    (!profile.amlRiskTier || (profile.amlRiskTier as string) === 'unknown')
+  ) {
+    return deny(
+      'WALLET_CAPABILITY_AML_UNKNOWN',
+      'Risk assessment is pending. Please contact support if this persists.'
+    );
+  }
+
   if (profile.amlRiskTier === 'critical') {
     return deny(
       'WALLET_CAPABILITY_RESTRICTED',
@@ -1331,6 +1403,17 @@ export async function evaluateWalletCapability(
   // 6. Jurisdiction policy
   const rule = await resolveJurisdictionRule(client, market, countryCode);
 
+  // FAIL CLOSED: no jurisdiction policy = block for sensitive capabilities.
+  if (
+    !rule &&
+    (capability === 'issue' || capability === 'redeem' || capability === 'settlement')
+  ) {
+    return deny(
+      'WALLET_CAPABILITY_JURISDICTION_UNKNOWN',
+      'Your jurisdiction is not currently supported for this operation.'
+    );
+  }
+
   if (rule) {
     if (!rule.isEnabled) {
       return deny(
@@ -1343,7 +1426,6 @@ export async function evaluateWalletCapability(
     if (
       rule.requireSanctionsClear
       && profile.sanctionsStatus !== 'clear'
-      && profile.sanctionsStatus !== 'unknown'
     ) {
       return deny(
         'WALLET_CAPABILITY_SANCTIONS_BLOCK',

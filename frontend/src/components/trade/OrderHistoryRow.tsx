@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
@@ -122,15 +122,10 @@ export function OrderHistoryRow({
       accessibilityRole="button"
       accessibilityLabel={`${side} ${quantity} units of ${assetTitle}`}
     >
-      <View
-        style={[
-          styles.iconWrap,
-          { borderColor: resolveSideColor(side, colors) + '40', backgroundColor: resolveSideColor(side, colors) + '12' },
-        ]}
-      >
+      <View style={styles.iconWrap}>
         <Ionicons
           name={resolveSideIcon(side)}
-          size={16}
+          size={20}
           color={resolveSideColor(side, colors)}
         />
       </View>
@@ -220,13 +215,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
   iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Space.sm,
+    marginRight: Space.xs,
     marginTop: 2,
   },
   body: {

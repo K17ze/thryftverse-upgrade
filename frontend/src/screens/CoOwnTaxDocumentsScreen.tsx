@@ -21,13 +21,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
 import { fetchCoOwnTaxDocument, type CoOwnTaxDocument } from '../services/marketApi';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -134,19 +136,12 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
           />
         ) : (
           <>
-            {/* Hero — tax year with P&L as dominant number */}
-            <View style={styles.heroCard}>
-              <View style={styles.heroTop}>
-                <View style={[styles.heroIconWrap, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="document-text" size={22} color={colors.brand} />
-                </View>
-                <View style={styles.heroYearWrap}>
-                  <Text style={styles.heroYear}>Tax Year {doc.taxYear}</Text>
-                  <Text style={styles.heroPeriod}>
-                    {formatDate(doc.startDate)} – {formatDate(doc.endDate)}
-                  </Text>
-                </View>
-              </View>
+            {/* Hero — tax year with P&L as dominant number (flat, no card) */}
+            <View style={styles.heroWrap}>
+              <Text style={styles.heroYear}>Tax Year {doc.taxYear}</Text>
+              <Text style={styles.heroPeriod}>
+                {formatDate(doc.startDate)} – {formatDate(doc.endDate)}
+              </Text>
               {/* P&L as the dominant number */}
               <View style={styles.heroPnlWrap}>
                 <Text style={styles.heroPnlLabel}>Realized P&L</Text>
@@ -167,106 +162,87 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
             </View>
 
             {/* Summary breakdown */}
-            <View>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Summary</Text>
-              </View>
-              <View style={styles.summaryCard}>
-                <View style={styles.summaryRow}>
-                  <View style={styles.summaryIconWrap}>
-                    <Ionicons name="add-circle-outline" size={18} color={colors.textSecondary} />
-                  </View>
-                  <Text style={styles.summaryLabel}>Total purchases</Text>
-                  <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalPurchasesGbpMinor, currencySymbol)}</Text>
-                </View>
-                <View style={[styles.summaryRow, styles.summaryRowBorder, { borderBottomColor: colors.borderSubtle }]}>
-                  <View style={styles.summaryIconWrap}>
-                    <Ionicons name="remove-circle-outline" size={18} color={colors.textSecondary} />
-                  </View>
-                  <Text style={styles.summaryLabel}>Total sales</Text>
-                  <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalSalesGbpMinor, currencySymbol)}</Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <View style={styles.summaryIconWrap}>
-                    <Ionicons name="cash-outline" size={18} color={colors.textSecondary} />
-                  </View>
-                  <Text style={styles.summaryLabel}>Distributions</Text>
-                  <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalDistributionsGbpMinor, currencySymbol)}</Text>
-                </View>
-              </View>
-            </View>
+            <SettingsSection title="Summary">
+              <SettingsRow title="Total purchases" icon="add-circle-outline" isFirst>
+                <Text style={[styles.financialValue, { color: colors.textPrimary }]}>
+                  {formatGbp(doc.summary.totalPurchasesGbpMinor, currencySymbol)}
+                </Text>
+              </SettingsRow>
+              <SettingsRow title="Total sales" icon="remove-circle-outline">
+                <Text style={[styles.financialValue, { color: colors.textPrimary }]}>
+                  {formatGbp(doc.summary.totalSalesGbpMinor, currencySymbol)}
+                </Text>
+              </SettingsRow>
+              <SettingsRow title="Distributions" icon="cash-outline" isLast>
+                <Text style={[styles.financialValue, { color: colors.textPrimary }]}>
+                  {formatGbp(doc.summary.totalDistributionsGbpMinor, currencySymbol)}
+                </Text>
+              </SettingsRow>
+            </SettingsSection>
 
             {/* Purchases breakdown */}
             {doc.purchases.length > 0 && (
-              <View>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Purchases by asset</Text>
-                </View>
-                <View style={styles.breakdownCard}>
-                  {doc.purchases.map((p, i) => (
-                    <View key={p.assetId} style={[styles.breakdownRow, i < doc.purchases.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle }]}>
-                      <View style={styles.breakdownInfo}>
-                        <Text style={styles.breakdownAsset}>{p.assetId.slice(0, 16)}…</Text>
-                        <Text style={styles.breakdownMeta}>{p.units} units · {p.executionCount} trades</Text>
-                      </View>
-                      <Text style={styles.breakdownValue}>{formatGbp(p.totalGbpMinor, currencySymbol)}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
+              <SettingsSection title="Purchases by asset">
+                {doc.purchases.map((p, i) => (
+                  <SettingsRow
+                    key={p.assetId}
+                    title={p.assetId.slice(0, 16) + '…'}
+                    subtitle={`${p.units} units · ${p.executionCount} trades`}
+                    isFirst={i === 0}
+                    isLast={i === doc.purchases.length - 1}
+                  >
+                    <Text style={[styles.financialValue, { color: colors.textPrimary }]}>
+                      {formatGbp(p.totalGbpMinor, currencySymbol)}
+                    </Text>
+                  </SettingsRow>
+                ))}
+              </SettingsSection>
             )}
 
             {/* Sales breakdown */}
             {doc.sales.length > 0 && (
-              <View>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Sales by asset</Text>
-                </View>
-                <View style={styles.breakdownCard}>
-                  {doc.sales.map((s, i) => (
-                    <View key={s.assetId} style={[styles.breakdownRow, i < doc.sales.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle }]}>
-                      <View style={styles.breakdownInfo}>
-                        <Text style={styles.breakdownAsset}>{s.assetId.slice(0, 16)}…</Text>
-                        <Text style={styles.breakdownMeta}>{s.units} units · {s.executionCount} trades</Text>
-                      </View>
-                      <Text style={styles.breakdownValue}>{formatGbp(s.totalGbpMinor, currencySymbol)}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
+              <SettingsSection title="Sales by asset">
+                {doc.sales.map((s, i) => (
+                  <SettingsRow
+                    key={s.assetId}
+                    title={s.assetId.slice(0, 16) + '…'}
+                    subtitle={`${s.units} units · ${s.executionCount} trades`}
+                    isFirst={i === 0}
+                    isLast={i === doc.sales.length - 1}
+                  >
+                    <Text style={[styles.financialValue, { color: colors.textPrimary }]}>
+                      {formatGbp(s.totalGbpMinor, currencySymbol)}
+                    </Text>
+                  </SettingsRow>
+                ))}
+              </SettingsSection>
             )}
 
             {/* Distributions breakdown */}
             {doc.distributions.length > 0 && (
-              <View>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Distributions by asset</Text>
-                </View>
-                <View style={styles.breakdownCard}>
-                  {doc.distributions.map((d, i) => (
-                    <View key={d.assetId} style={[styles.breakdownRow, i < doc.distributions.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle }]}>
-                      <View style={styles.breakdownInfo}>
-                        <Text style={styles.breakdownAsset}>{d.assetId.slice(0, 16)}…</Text>
-                        <Text style={styles.breakdownMeta}>{d.count} payments</Text>
-                      </View>
-                      <Text style={styles.breakdownValue}>{formatGbp(d.totalGbpMinor, currencySymbol)}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
+              <SettingsSection title="Distributions by asset">
+                {doc.distributions.map((d, i) => (
+                  <SettingsRow
+                    key={d.assetId}
+                    title={d.assetId.slice(0, 16) + '…'}
+                    subtitle={`${d.count} payments`}
+                    isFirst={i === 0}
+                    isLast={i === doc.distributions.length - 1}
+                  >
+                    <Text style={[styles.financialValue, { color: colors.textPrimary }]}>
+                      {formatGbp(d.totalGbpMinor, currencySymbol)}
+                    </Text>
+                  </SettingsRow>
+                ))}
+              </SettingsSection>
             )}
 
-            {/* Disclaimer */}
-            <View style={styles.disclaimerCard}>
-              <View style={styles.disclaimerIconWrap}>
-                <Ionicons name="information-circle" size={18} color={colors.textSecondary} />
-              </View>
-              <View style={styles.disclaimerTextWrap}>
-                <Text style={styles.disclaimerTitle}>For information only</Text>
-                <Text style={styles.disclaimerText}>
-                  This statement does not constitute tax advice. Consult a qualified tax professional for guidance on your specific circumstances.
-                </Text>
-              </View>
+            {/* Disclaimer — flat, no card */}
+            <View style={styles.disclaimerWrap}>
+              <Text style={styles.disclaimerTitle}>For information only</Text>
+              <Text style={styles.disclaimerText}>
+                This statement does not constitute tax advice. Consult a qualified tax professional for guidance on your specific circumstances.
+              </Text>
             </View>
 
             <Text style={styles.generatedAt}>Generated {formatDate(doc.generatedAt)}</Text>
@@ -295,29 +271,11 @@ function createStyles(colors: ThemeColors) {
     loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
-    // Hero card — P&L dominant
-    heroCard: {
-      borderRadius: Radius.xl,
-      backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.lg,
+    // Hero — flat, no card. P&L dominant number.
+    heroWrap: {
       marginTop: Space.sm,
+      paddingHorizontal: Space.xs,
     },
-    heroTop: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIconWrap: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.lg,
-      backgroundColor: colors.surfaceAlt,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroYearWrap: { flex: 1 },
     heroYear: {
       fontSize: Type.subtitle.size,
       fontFamily: Typography.family.semibold,
@@ -365,123 +323,11 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: Type.caption.letterSpacing,
     },
 
-    // Section headers
-    sectionHeader: {
+    // Disclaimer — flat, no card
+    disclaimerWrap: {
       marginTop: Space.lg,
-      marginBottom: Space.sm,
       paddingHorizontal: Space.xs,
     },
-    sectionTitle: {
-      fontSize: Type.label.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
-      lineHeight: Type.label.lineHeight,
-      opacity: 0.7,
-    },
-
-    // Summary card
-    summaryCard: {
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.md,
-    },
-    summaryRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: Space.smMd,
-      gap: Space.sm,
-    },
-    summaryRowBorder: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    summaryIconWrap: {
-      width: Control.chromeCompact,
-      height: Control.chromeCompact,
-      borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    summaryLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      flex: 1,
-    },
-    summaryValue: {
-      fontSize: Type.priceList.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-      fontVariant: ['tabular-nums'],
-      letterSpacing: Type.priceList.letterSpacing,
-      lineHeight: Type.priceList.lineHeight,
-    },
-
-    // Breakdown cards
-    breakdownCard: {
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.md,
-    },
-    breakdownRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: Space.smMd,
-    },
-    breakdownInfo: { flex: 1 },
-    breakdownAsset: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
-    breakdownMeta: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs / 2,
-    },
-    breakdownValue: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      fontVariant: ['tabular-nums'],
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
-    },
-
-    // Disclaimer — elevated card
-    disclaimerCard: {
-      flexDirection: 'row',
-      gap: Space.md,
-      marginTop: Space.lg,
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.md,
-    },
-    disclaimerIconWrap: {
-      width: Control.chromeCompact,
-      height: Control.chromeCompact,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    disclaimerTextWrap: { flex: 1 },
     disclaimerTitle: {
       fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
@@ -505,6 +351,11 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.lineHeight,
       textAlign: 'center',
       marginTop: Space.md,
+    },
+    financialValue: {
+      fontSize: Type.bodyStrong.size,
+      fontFamily: Typography.family.semibold,
+      fontVariant: ['tabular-nums'],
     },
   });
 }

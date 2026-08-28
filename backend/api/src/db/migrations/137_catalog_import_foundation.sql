@@ -162,6 +162,8 @@ CREATE TABLE IF NOT EXISTS catalog_import_items (
   batch_id TEXT NOT NULL REFERENCES catalog_import_batches(id) ON DELETE CASCADE,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   external_item_id TEXT NOT NULL,
+  source TEXT NOT NULL
+    CHECK (source IN ('ebay', 'seller_package', 'depop', 'vinted')),
   source_url TEXT,
   -- Mirror of the source listing's lifecycle state (active / sold / ended).
   source_state TEXT,

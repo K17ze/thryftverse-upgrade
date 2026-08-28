@@ -525,7 +525,7 @@ export default function CreatorAnalyticsDashboardScreen() {
 
         {/* ── 4. SUPPRESSED DIMENSIONS — inline callout ─────────────── */}
         {currentSummary.suppressedDimensions.length > 0 && (
-          <View style={[styles.suppressedCallout, { backgroundColor: colors.surfaceAlt }]}>
+          <View style={styles.suppressedCallout}>
             <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
             <Text style={[styles.suppressedText, { color: colors.textMuted }]}>
               {currentSummary.suppressedDimensions.map(d => `${d.dimension}: ${d.reason}`).join(' · ')}
@@ -759,7 +759,7 @@ function ContentRankingRow({
             priority="normal"
           />
         ) : (
-          <View style={[styles.thumb, styles.thumbFallback, { backgroundColor: colors.surfaceAlt }]}>
+          <View style={[styles.thumb, styles.thumbFallback]}>
             <Ionicons
               name={item.contentType === 'look' ? 'shirt-outline' : 'image-outline'}
               size={18}
@@ -968,9 +968,10 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingHorizontal: Space.sm,
       paddingVertical: Space.sm,
-      borderRadius: Radius.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       marginTop: Space.xs,
     },
     suppressedText: {
