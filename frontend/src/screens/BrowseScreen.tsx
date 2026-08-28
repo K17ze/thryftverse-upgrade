@@ -700,7 +700,7 @@ export default function BrowseScreen() {
   const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView testID="browse-screen" style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Heavy Typography Header */}
@@ -1000,6 +1000,7 @@ export default function BrowseScreen() {
             gap={gridDensity === 'compact' ? Space.xs + 2 : 3}
             horizontalPadding={Space.md}
             testIDPrefix="golden-browse-product-card"
+            firstItemTestID="golden-browse-first-product"
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

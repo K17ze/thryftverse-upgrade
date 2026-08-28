@@ -628,7 +628,7 @@ export default function AssetDetailScreen() {
     : null;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View testID="asset-detail-screen" style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* ── Collapsed scrolling header ──

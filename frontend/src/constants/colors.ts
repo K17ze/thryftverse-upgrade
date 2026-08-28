@@ -1,7 +1,9 @@
-// CONSOLIDATED: Values mirror theme/ThemeContext.tsx exactly. Single source of truth is ThemeContext.
-// This file remains a standalone static export so non-component modules can access theme colors
-// without the React context hook. The 4 critical WCAG-compliant colors (textMuted, danger,
-// success, warning) and all semantic colors are kept identical to ThemeContext.
+// ThryftVerse color tokens — single source of truth for all color values.
+// ThemeContext.tsx imports DARK_COLORS/LIGHT_COLORS from this file and exposes
+// them via useAppTheme().colors for React components. Non-component modules
+// can import Colors directly from this file when hooks are unavailable.
+// All WCAG-compliant values (textMuted, danger, success, warning) and semantic
+// colors are defined here and consumed identically in both light and dark themes.
 
 import { Appearance } from 'react-native';
 
@@ -86,6 +88,9 @@ export const DARK_COLORS = {
   scrimTextPrimary: '#FFFFFF',
   scrimTextSecondary: 'rgba(255,255,255,0.88)',
   scrimTextTertiary: 'rgba(255,255,255,0.40)',
+  // Price deltas over media scrims — light enough to read on dark scrim in both themes
+  scrimDeltaPositive: '#158d41',
+  scrimDeltaNegative: '#a22e2e',
 
   // Structural / utility colors (mirrors ThemeContext)
   overlay: 'rgba(0,0,0,0.6)',
@@ -168,6 +173,9 @@ export const LIGHT_COLORS = {
   scrimTextPrimary: '#FFFFFF',
   scrimTextSecondary: 'rgba(255,255,255,0.88)',
   scrimTextTertiary: 'rgba(255,255,255,0.40)',
+  // Price deltas over media scrims — light enough to read on dark scrim in both themes
+  scrimDeltaPositive: '#3a9d5e',
+  scrimDeltaNegative: '#852a2a',
 
   // Structural / utility colors (mirrors ThemeContext)
   overlay: 'rgba(0,0,0,0.4)',

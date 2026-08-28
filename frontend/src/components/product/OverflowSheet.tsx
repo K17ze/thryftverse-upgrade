@@ -37,6 +37,7 @@ export function OverflowSheet({
       </View>
       <Pressable
         style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         onPress={() => {
           onDismiss();
           onShare();
@@ -49,6 +50,7 @@ export function OverflowSheet({
       </Pressable>
       <Pressable
         style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         onPress={() => {
           onDismiss();
           onToggleFav();
@@ -64,6 +66,7 @@ export function OverflowSheet({
       </Pressable>
       <Pressable
         style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         onPress={() => {
           onDismiss();
           onReport();

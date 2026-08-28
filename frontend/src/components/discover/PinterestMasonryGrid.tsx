@@ -24,7 +24,7 @@ import type {
 } from '../../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
 import { mapListingToDiscoverySummary } from '../../contracts/DiscoveryListingSummary';
-import { ProductDiscoveryTile } from '../ProductCardV2';
+import { ProductDiscoveryTile } from '../ProductCard';
 import { Space, Type, Typography, Radius } from '../../theme/designTokens';
 import { typographyV2Style } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -123,6 +123,9 @@ interface Props {
    * id instead of brittle coordinate taps (P0.6).
    */
   testIDPrefix?: string;
+  /** Explicit testID for the first card (index 0). When provided, overrides
+   *  the prefix-derived testID so Maestro flows can tapOn by an exact id. */
+  firstItemTestID?: string;
   /** Pull-to-refresh control — passed through to FlashList. */
   refreshControl?: React.ReactElement<any>;
   /**
@@ -186,6 +189,7 @@ export function PinterestMasonryGrid({
   gap = Space.sm,
   horizontalPadding = Space.md,
   testIDPrefix,
+  firstItemTestID,
   refreshControl,
   onScroll,
   scrollRef,
@@ -246,6 +250,7 @@ export function PinterestMasonryGrid({
           gap,
           colWidth,
           testIDPrefix,
+          firstItemTestID,
           onListingPress: handleUnitPress,
           onListingSaveToggle: onItemSaveToggle,
           isListingSaved: isItemSaved,
@@ -262,14 +267,14 @@ export function PinterestMasonryGrid({
             onPress={() => handleListingPress(item)}
             aspectRatio={resolveListingMediaAspectRatio(item)}
             downscaleWidth={colWidth}
-            testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
+            testID={index === 0 ? (firstItemTestID ?? (testIDPrefix ? `${testIDPrefix}-first` : undefined)) : undefined}
             isSaved={isItemSaved?.(item.id)}
             onSaveToggle={onItemSaveToggle ? () => onItemSaveToggle(mapListingToDiscoverySummary(item)) : undefined}
           />
         </View>
       );
     },
-    [gap, colWidth, testIDPrefix, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, isItemSaved, onLookPress, onPosterPress, onMoodboardPress],
+    [gap, colWidth, testIDPrefix, firstItemTestID, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, isItemSaved, onLookPress, onPosterPress, onMoodboardPress],
   );
 
   // overrideItemLayout — span is decided here from the unit's declared span
@@ -374,6 +379,7 @@ interface UnitRenderContext {
   gap: number;
   colWidth: number;
   testIDPrefix?: string;
+  firstItemTestID?: string;
   onListingPress: (listing: DiscoveryListingSummary) => void;
   onListingSaveToggle?: (listing: DiscoveryListingSummary) => void;
   isListingSaved?: (listingId: string) => boolean;
@@ -406,7 +412,7 @@ function renderUnit(
             // Hero (full-width) units request a wider derivative; single-
             // column units request the column width.
             downscaleWidth={isHero ? ctx.colWidth * ctx.numColumns + ctx.gap : ctx.colWidth}
-            testID={ctx.testIDPrefix && index === 0 ? `${ctx.testIDPrefix}-first` : undefined}
+            testID={index === 0 ? (ctx.firstItemTestID ?? (ctx.testIDPrefix ? `${ctx.testIDPrefix}-first` : undefined)) : undefined}
             isSaved={ctx.isListingSaved?.(u.listing.id)}
             onSaveToggle={ctx.onListingSaveToggle ? () => ctx.onListingSaveToggle!(u.listing) : undefined}
           />
@@ -477,16 +483,16 @@ function LookDiscoveryTile({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd }}>
-          <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
             {unit.title}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: Typography.family.regular, fontSize: Type.meta.size, lineHeight: Type.meta.lineHeight }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextSecondary, fontFamily: Typography.family.regular, fontSize: Type.meta.size, lineHeight: Type.meta.lineHeight }} numberOfLines={1}>
             @{creator}
           </Text>
         </View>
         {unit.itemIds.length > 0 ? (
           <View style={{ position: 'absolute', top: Space.sm, right: Space.sm }}>
-            <Ionicons name="pricetag" size={15} color="#FFFFFF" />
+            <Ionicons name="pricetag" size={15} color={colors.scrimTextPrimary} />
           </View>
         ) : null}
     </View>
@@ -536,9 +542,9 @@ function PosterDiscoveryTile({
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
-        <Ionicons name="play" size={16} color="#FFFFFF" style={{ position: 'absolute', top: Space.sm, right: Space.sm }} />
+        <Ionicons name="play" size={16} color={colors.scrimTextPrimary} style={{ position: 'absolute', top: Space.sm, right: Space.sm }} />
         <Text
-          style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd, color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, lineHeight: Type.captionElevated.lineHeight }}
+          style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd, color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, lineHeight: Type.captionElevated.lineHeight }}
           numberOfLines={1}
         >
           @{creator}
@@ -608,10 +614,10 @@ function MoodboardDiscoveryTile({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.md, right: Space.md, bottom: Space.smMd }}>
-          <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, lineHeight: Type.subtitle.lineHeight }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, lineHeight: Type.subtitle.lineHeight }} numberOfLines={1}>
             {unit.moodboard.title}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: Typography.family.regular, fontSize: Type.caption.size, lineHeight: Type.caption.lineHeight }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextSecondary, fontFamily: Typography.family.regular, fontSize: Type.caption.size, lineHeight: Type.caption.lineHeight }} numberOfLines={1}>
             {unit.moodboard.curator} · {unit.moodboard.items.length} pieces
           </Text>
         </View>

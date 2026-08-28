@@ -8,7 +8,6 @@ import {
   NotificationActionButton,
 } from './NotificationRowBase';
 import {
-  Space,
   Type,
   FontFamily,
 } from '../../theme/designTokens';
@@ -36,7 +35,6 @@ export interface SystemNotificationRowProps {
 interface SystemVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'warning' | 'danger' | 'brand';
-  accentSubtleKey: 'warningSubtle' | 'dangerSubtle' | 'brandSubtle';
   statusLabel: string;
   actionLabel?: string;
 }
@@ -44,11 +42,11 @@ interface SystemVisual {
 function resolveSystemVisual(eventType: NotificationEventV2['eventType']): SystemVisual {
   switch (eventType) {
     case 'resolution_opened':
-      return { icon: 'alert-circle-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', statusLabel: 'Dispute opened', actionLabel: 'Respond' };
+      return { icon: 'alert-circle-outline', accentKey: 'warning', statusLabel: 'Dispute opened', actionLabel: 'Respond' };
     case 'resolution_status_changed':
-      return { icon: 'document-text-outline', accentKey: 'brand', accentSubtleKey: 'brandSubtle', statusLabel: 'Status updated' };
+      return { icon: 'document-text-outline', accentKey: 'brand', statusLabel: 'Status updated' };
     default:
-      return { icon: 'information-circle-outline', accentKey: 'brand', accentSubtleKey: 'brandSubtle', statusLabel: 'System update' };
+      return { icon: 'information-circle-outline', accentKey: 'brand', statusLabel: 'System update' };
   }
 }
 
@@ -65,13 +63,16 @@ export function SystemNotificationRow({
 
   const visual = useMemo(() => resolveSystemVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
-  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
   const subject = event.objectRef?.label ?? readPayloadString(event.payload, 'ticketSubject') ?? event.title;
   const status = readPayloadString(event.payload, 'resolutionStatus') ?? readPayloadString(event.payload, 'status');
 
-  const description = status ? `${visual.statusLabel} · ${status}` : visual.statusLabel;
+  // The status is the actionable signal — it is the TITLE when no curated
+  // title exists. If the backend provides a specific title, use it; otherwise
+  // fall back to the status label. The subject is context → body.
+  const titleText = event.title || visual.statusLabel;
+  const bodyText = status ? `${subject} · ${status}` : subject;
 
   const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${visual.statusLabel}${subject ? `: ${subject}` : ''}. ${time}${visual.actionLabel ? `. Button: ${visual.actionLabel}` : ''}`;
 
@@ -79,9 +80,7 @@ export function SystemNotificationRow({
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
-      accentSubtle={accentSubtle}
-      colors={colors}
-      size={44}
+      size={24}
     />
   );
 
@@ -106,10 +105,10 @@ export function SystemNotificationRow({
       accessibilityLabel={accessibilityLabel}
     >
       <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
-        {subject || visual.statusLabel}
+        {titleText}
       </Text>
       <Text style={styles.body} numberOfLines={2}>
-        {description}
+        {bodyText}
       </Text>
     </NotificationRowBase>
   );
@@ -118,11 +117,11 @@ export function SystemNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyLarge.lineHeight,
-      paddingRight: Space.xxl + Space.sm,
+      lineHeight: Type.bodyStrong.lineHeight,
+      flexShrink: 1,
     },
     titleUnread: {
       color: colors.textPrimary,

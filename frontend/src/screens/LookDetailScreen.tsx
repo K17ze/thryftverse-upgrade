@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
+import { FlashList } from '@shopify/flash-list';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,15 +24,18 @@ import { useStore } from '../store/useStore';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Type, Space, Radius, Typography, Stroke, Control, LetterSpacing, AspectRatio } from '../theme/designTokens';
+import { Type, Space, Radius, Typography, Control, LetterSpacing, AspectRatio } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import type { SupportedCurrencyCode } from '../constants/currencies';
 import { EmptyState } from '../components/EmptyState';
 import { LookDetailSkeleton } from '../components/skeletons/LookDetailSkeleton';
 import { LookSocialActions } from '../components/look/LookSocialActions';
 import { LookCommentsSheet } from '../components/look/LookCommentsSheet';
+import { LookMasonryTile } from '../components/look/LookMasonryTile';
+import { LookHotspots, type HydratedLookTag } from '../components/look/LookHotspots';
+import { ExpandableCaption } from '../components/look/ExpandableCaption';
 import {
   fetchLookByIdFromApi,
   deleteLookOnApi,
@@ -40,14 +44,14 @@ import {
   type LookApiItem,
   type LookTagApiItem,
 } from '../services/looksApi';
-import { LookMasonryGrid } from '../components/look/LookMasonryGrid';
+import { resolveLookTemplate } from '../utils/lookTemplates';
+import { LookMediaCarousel, type LookMediaCarouselPage } from '../components/look/LookMediaCarousel';
 import {
   fetchPublicProfileAggregate,
   followUser,
   unfollowUser,
   type PublicProfileAggregate,
 } from '../services/profileApi';
-import { Video, ResizeMode } from '../components/compat/Video';
 import {
   openProductDetail,
   type ProductReference,
@@ -61,29 +65,6 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'LookDetail'>;
-
-/**
- * A look tag may carry hydrated product data when the backend includes it
- * (title, price, image, isSold, assetId, referenceKind). When hydrated data
- * is absent, the tag still renders with its label and taps resolve through the
- * canonical product resolver using whatever id is present. We never search the
- * global listing cache to resolve tags — that path is unreliable.
- */
-type HydratedLookTag = LookTagApiItem & {
-  title?: string;
-  price?: number;
-  image?: string;
-  images?: string[];
-  isSold?: boolean;
-  assetId?: string;
-  referenceKind?: ProductReferenceKind;
-};
-
-interface MediaPage {
-  id: string;
-  uri: string;
-  isVideo: boolean;
-}
 
 /** Resolve a hydrated tag into a canonical ProductReference, or null when no
  *  id is available to navigate on. */
@@ -102,8 +83,7 @@ export default function LookDetailScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
-  const reducedMotion = useReducedMotion();
-  const { formatFromFiat, currencyCode, currencySymbol } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -117,16 +97,11 @@ export default function LookDetailScreen() {
     kind: 'not-found' | 'connection';
     message: string;
   } | null>(null);
-  const [activeTagId, setActiveTagId] = useState<string | null>(null);
   const [commentsVisible, setCommentsVisible] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
   const [overflowVisible, setOverflowVisible] = useState(false);
   const [inspectTag, setInspectTag] = useState<HydratedLookTag | null>(null);
-  const [captionExpanded, setCaptionExpanded] = useState(false);
-  const [heroAspectRatio, setHeroAspectRatio] = useState<number>(AspectRatio.marketplace);
-  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
-  const [failedMediaIds, setFailedMediaIds] = useState<Set<string>>(() => new Set());
-  const [mediaRetryNonce, setMediaRetryNonce] = useState(0);
+  const [heroAspectRatio] = useState<number>(AspectRatio.marketplace);
 
   // Creator relationship — fetched so the Follow button reflects server truth.
   const [creatorProfile, setCreatorProfile] = useState<PublicProfileAggregate | null>(null);
@@ -143,6 +118,7 @@ export default function LookDetailScreen() {
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [relatedLoadingMore, setRelatedLoadingMore] = useState(false);
   const [relatedHasMore, setRelatedHasMore] = useState(true);
+  const [relatedError, setRelatedError] = useState(false);
 
   // Repost — lightweight re-publish with attribution to the original creator.
   const [repostBusy, setRepostBusy] = useState(false);
@@ -209,6 +185,7 @@ export default function LookDetailScreen() {
     setRelatedLooks([]);
     setRelatedCursor(null);
     setRelatedHasMore(true);
+    setRelatedError(false);
     fetchRelatedLooksFromApi(look.id, { limit: 24 })
       .then((res) => {
         if (cancelled) return;
@@ -217,7 +194,9 @@ export default function LookDetailScreen() {
         setRelatedHasMore(!!res.nextCursor);
       })
       .catch(() => {
-        // Non-fatal — grid is simply hidden.
+        if (cancelled) return;
+        setRelatedError(true);
+        setRelatedHasMore(false);
       })
       .finally(() => {
         if (!cancelled) setRelatedLoading(false);
@@ -228,34 +207,67 @@ export default function LookDetailScreen() {
     };
   }, [look]);
 
+  // Ref guard prevents race condition: FlashList can fire onEndReached
+  // multiple times before setRelatedLoadingMore(true) propagates through
+  // React's async state update, causing duplicate API calls and duplicate
+  // items. The ref check is synchronous.
+  const loadingMoreRef = useRef(false);
+
   // Infinite-scroll: load more related looks when the user nears the bottom.
   const loadMoreRelated = useCallback(async () => {
-    if (relatedLoadingMore || relatedLoading || !relatedHasMore || !relatedCursor) return;
+    if (loadingMoreRef.current || relatedLoading || !relatedHasMore || !relatedCursor || !look) return;
+    loadingMoreRef.current = true;
     setRelatedLoadingMore(true);
+    setRelatedError(false);
     try {
-      const res = await fetchRelatedLooksFromApi(look!.id, { cursor: relatedCursor, limit: 24 });
-      setRelatedLooks((prev) => [...prev, ...res.items]);
+      const res = await fetchRelatedLooksFromApi(look.id, { cursor: relatedCursor, limit: 24 });
+      // Dedup guard — prevents duplicate items if the race-condition ref
+      // guard ever fails or the backend cursor pagination has edge cases.
+      setRelatedLooks((prev) => {
+        const existingIds = new Set(prev.map(l => l.id));
+        const fresh = res.items.filter(l => !existingIds.has(l.id));
+        return fresh.length === res.items.length ? [...prev, ...res.items] : [...prev, ...fresh];
+      });
       setRelatedCursor(res.nextCursor ?? null);
       setRelatedHasMore(!!res.nextCursor);
     } catch {
-      // Non-fatal — stop pagination on error.
+      // Non-fatal — surface a retry affordance in the footer.
+      setRelatedError(true);
       setRelatedHasMore(false);
     } finally {
+      loadingMoreRef.current = false;
       setRelatedLoadingMore(false);
     }
-  }, [relatedLoadingMore, relatedLoading, relatedHasMore, relatedCursor, look]);
+  }, [relatedLoading, relatedHasMore, relatedCursor, look]);
 
-  // Detect when the user scrolls near the bottom to trigger pagination.
-  const handleScroll = useCallback(
-    (e: { nativeEvent: { contentOffset: { y: number }; layoutMeasurement: { height: number }; contentSize: { height: number } } }) => {
-      const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
-      const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-      if (distanceFromBottom < 600) {
-        loadMoreRelated();
-      }
-    },
-    [loadMoreRelated]
-  );
+  // Retry the initial related-looks fetch after an error.
+  const retryRelatedFetch = useCallback(() => {
+    if (!look) return;
+    setRelatedError(false);
+    setRelatedLoading(true);
+    setRelatedLooks([]);
+    setRelatedCursor(null);
+    setRelatedHasMore(true);
+    fetchRelatedLooksFromApi(look.id, { limit: 24 })
+      .then((res) => {
+        setRelatedLooks(res.items);
+        setRelatedCursor(res.nextCursor ?? null);
+        setRelatedHasMore(!!res.nextCursor);
+      })
+      .catch(() => {
+        setRelatedError(true);
+        setRelatedHasMore(false);
+      })
+      .finally(() => setRelatedLoading(false));
+  }, [look]);
+
+  // Retry pagination after a load-more error — preserves already-loaded items.
+  const retryLoadMore = useCallback(() => {
+    setRelatedError(false);
+    setRelatedHasMore(true);
+    loadingMoreRef.current = false;
+    loadMoreRelated();
+  }, [loadMoreRelated]);
 
   const handleShare = useCallback(async () => {
     haptic.light();
@@ -393,7 +405,6 @@ export default function LookDetailScreen() {
         show('This tag has no product attached', 'info');
         return;
       }
-      setActiveTagId(tag.id);
       setInspectTag(tag);
     },
     [haptic, look, show]
@@ -416,7 +427,15 @@ export default function LookDetailScreen() {
     navigation.navigate('UserProfile', { userId: look.creator.id });
   }, [look, navigation, haptic]);
 
-  // Stable callback for LookMasonryGrid's onPress (takes lookId string).
+  // Hoisted stable callbacks for LookSocialActions — avoids inline arrows
+  // that would break React.memo and cause unnecessary re-renders.
+  const handleCommentPress = useCallback(() => setCommentsVisible(true), []);
+  const handleSignInRequired = useCallback(() => {
+    show('Sign in to like, save, and comment', 'info');
+    navigation.navigate('Login');
+  }, [show, navigation]);
+
+  // Stable callback for explore tile onPress (takes lookId string).
   // Avoids inline arrow at the call site that would break React.memo on
   // LookMasonryTile (audit item-29 §5.4).
   const handleRelatedLookPress = useCallback(
@@ -427,12 +446,12 @@ export default function LookDetailScreen() {
     [navigation, haptic],
   );
 
-  // Build the media pager pages. The current data model exposes a single
-  // mediaUrl, but the pager is structured to accept multiple pages when the
-  // API grows — no fixed height is imposed by the screen.
-  const mediaPages: MediaPage[] = useMemo(() => {
+  // Build the media pager pages. The primary mediaUrl is slide 0;
+  // additional carousel slides from look.mediaUrls follow. When the API
+  // has no carousel slides, this degrades to a single-page carousel.
+  const mediaPages: LookMediaCarouselPage[] = useMemo(() => {
     if (!look) return [];
-    const isVideo =
+    const primaryIsVideo =
       look.mediaType === 'video' ||
       (() => {
         const url = look.mediaUrl.toLowerCase();
@@ -443,7 +462,19 @@ export default function LookDetailScreen() {
           url.includes('/video/')
         );
       })();
-    return [{ id: 'media-0', uri: look.mediaUrl, isVideo }];
+    const pages: LookMediaCarouselPage[] = [
+      { id: 'media-0', uri: look.mediaUrl, isVideo: primaryIsVideo },
+    ];
+    if (look.mediaUrls && look.mediaUrls.length > 0) {
+      look.mediaUrls.forEach((slide, i) => {
+        pages.push({
+          id: `media-${i + 1}`,
+          uri: slide.url,
+          isVideo: slide.mediaType === 'video',
+        });
+      });
+    }
+    return pages;
   }, [look]);
 
   const compositionDocument = useMemo<CreatorDocument | null>(() => {
@@ -462,12 +493,350 @@ export default function LookDetailScreen() {
   const tags: HydratedLookTag[] = (look?.tags ?? []) as HydratedLookTag[];
 
   const captionText = look?.caption || look?.title || '';
-  const captionIsLong = captionText.length > 140;
 
   const creatorDisplayName =
     creatorProfile?.user?.displayName || look?.creator.username || 'unknown';
   const creatorHandle = look?.creator.username ?? 'unknown';
   const followerCount = creatorProfile?.stats?.followerCount;
+
+  // ── FlashList callbacks for the single-scroll-surface architecture ────────
+  // The look detail (hero + info + social + actions) renders as
+  // ListHeaderComponent — full-width, above the masonry columns. The related
+  // looks render as virtualized masonry items with onEndReached pagination.
+  // This is the correct architecture for unlimited scrolling: one scroll
+  // surface, proper virtualization, no nested ScrollView + FlashList.
+
+  const renderDetailHeader = useMemo(() => {
+    if (!look) return null;
+    return (
+      <>
+        {/* Aspect-aware media carousel — height follows the media's real aspect
+            ratio (defaulting to 4:5 until the first frame loads). Uses the
+            flagship LookMediaCarousel with pinch/zoom/double-tap/preload/
+            progress dots/swipe hint — matching CommerceMediaStage quality. */}
+        <View style={[styles.heroWrap, { height: heroHeight }]}>
+          {compositionDocument ? (
+            <View
+              style={styles.heroPage}
+              accessibilityLabel={captionText || 'Authored Look composition'}
+            >
+              <CreatorCanvas
+                document={compositionDocument}
+                page={compositionDocument.pages[0]}
+                canvasWidth={SCREEN_W}
+                canvasHeight={heroHeight}
+                mode="view"
+              />
+            </View>
+          ) : (
+            <LookMediaCarousel
+              pages={mediaPages}
+              aspectRatio={resolvedHeroAspectRatio}
+              accessibilityLabel={`Look media, ${mediaPages.length} image${mediaPages.length === 1 ? '' : 's'}`}
+            />
+          )}
+
+          {/* Interactive product hotspots — tap opens the inspect sheet, never
+              navigates directly. Extracted to its own component with local
+              activeTagId state so hotspot taps don't re-render the entire
+              FlashList header (CreatorCanvas, LookSocialActions, etc). */}
+          <LookHotspots
+            tags={tags}
+            onTagTap={handleTagTap}
+            formatPrice={(price, code) => formatFromFiat(price, code as SupportedCurrencyCode)}
+            currencyCode={currencyCode}
+          />
+
+          <LinearGradient
+            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.42)']}
+            locations={[0, 0.4, 1]}
+            style={styles.heroGradient}
+          />
+        </View>
+
+        {/* Info — expandable caption, repost attribution, creator row with follow.
+            Lives below the media so it never covers the creator's composition.
+            No "Look" eyebrow — the media is the label. */}
+        <View style={styles.infoSection}>
+          {captionText ? (
+            <ExpandableCaption text={captionText} />
+          ) : null}
+
+          {/* Repost attribution — when this look is a repost, show a quiet
+              "Reposted from @creator" line with a link to the source creator.
+              No decorative chrome; the attribution is the signal. */}
+          {look.sourceLookId && look.sourceLook && (
+            <Pressable
+              style={styles.repostAttribution}
+              onPress={() => look.sourceLook && navigation.navigate('UserProfile', { userId: look.sourceLook.creatorId })}
+              accessibilityRole="link"
+              accessibilityLabel={`Reposted from @${look.sourceLook.creatorUsername ?? 'creator'}`}
+            >
+              <Ionicons name="repeat-outline" size={14} color={colors.textMuted} aria-hidden={true} />
+              <Text style={styles.repostAttributionText}>
+                Reposted from @{look.sourceLook.creatorUsername ?? 'creator'}
+              </Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            style={styles.creatorRow}
+            onPress={handleCreatorPress}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${creatorHandle}'s profile`}
+          >
+            <View style={styles.creatorAvatar}>
+              {look.creator.avatar ? (
+                <ExpoImage
+                  source={{ uri: look.creator.avatar }}
+                  style={styles.creatorAvatarImg}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  recyclingKey={look.creator.avatar}
+                />
+              ) : (
+                <Ionicons name="person-circle" size={28} color={colors.textMuted} aria-hidden={true} />
+              )}
+            </View>
+            <View style={styles.creatorInfo}>
+              <Text style={styles.creatorName}>@{creatorHandle}</Text>
+              <Text style={styles.creatorMeta}>
+                {look.tags.length} piece{look.tags.length === 1 ? '' : 's'} tagged
+                {typeof followerCount === 'number' ? ` · ${followerCount} followers` : ''}
+              </Text>
+            </View>
+            {!isOwner && (
+              <AnimatedPressable
+                style={[styles.followBtn, isFollowing && styles.followBtnActive]}
+                onPress={handleFollow}
+                activeOpacity={0.85}
+                disabled={followBusy}
+                accessibilityRole="button"
+                accessibilityLabel={isFollowing ? 'Unfollow creator' : 'Follow creator'}
+                accessibilityState={{ selected: isFollowing }}
+              >
+                {followBusy ? (
+                  <ActivityIndicator size="small" color={isFollowing ? colors.textPrimary : colors.textInverse} />
+                ) : (
+                  <Text style={[styles.followBtnText, isFollowing && styles.followBtnTextActive]}>
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </Text>
+                )}
+              </AnimatedPressable>
+            )}
+          </Pressable>
+        </View>
+
+        {/* Social Actions — like / comment / save / share engagement */}
+        <View style={styles.socialWrap}>
+          <LookSocialActions
+            lookId={look.id}
+            initialLikeCount={look.likeCount}
+            commentCount={commentCount}
+            initialSaveCount={look.saveCount}
+            initialLikedByViewer={look.likedByViewer}
+            initialSavedByViewer={look.savedByViewer}
+            isAuthenticated={!!currentUser?.id}
+            onCommentPress={handleCommentPress}
+            onSharePress={handleShare}
+            onSignInRequired={handleSignInRequired}
+          />
+        </View>
+
+        {/* Object actions — Repost + Remix + Report, semantically labelled.
+            Repost is the primary distributive action (preserves attribution);
+            Remix is the derivative action (opens creator studio); Report is
+            the safety action. Save and Share live in the social row above. */}
+        <View style={styles.actionRow}>
+          {!isOwner && (
+            <>
+              <AnimatedPressable
+                style={styles.actionBtn}
+                onPress={handleRepost}
+                activeOpacity={0.85}
+                disabled={repostBusy}
+                accessibilityRole="button"
+                accessibilityLabel="Repost this look"
+                accessibilityHint="Re-publishes this look to your profile with attribution to the original creator"
+              >
+                {repostBusy ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : (
+                  <>
+                    <Ionicons name="repeat-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
+                    <Text style={styles.actionBtnLabel}>Repost</Text>
+                  </>
+                )}
+              </AnimatedPressable>
+              <View style={styles.actionDivider} />
+            </>
+          )}
+          <AnimatedPressable
+            style={styles.actionBtn}
+            onPress={handleRemix}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Remix this look"
+            accessibilityHint="Opens the creator studio seeded from this look"
+          >
+            <Ionicons name="swap-horizontal-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
+            <Text style={styles.actionBtnLabel}>Remix</Text>
+          </AnimatedPressable>
+          <View style={styles.actionDivider} />
+          <AnimatedPressable
+            style={styles.actionBtn}
+            onPress={handleReport}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Report this look"
+            accessibilityHint="Reports the creator of this look"
+          >
+            <Ionicons name="flag-outline" size={20} color={colors.danger} aria-hidden={true} />
+            <Text style={[styles.actionBtnLabel, { color: colors.danger }]}>Report</Text>
+          </AnimatedPressable>
+        </View>
+
+        {/* Labeled soft seam — a deliberate mode-shift between the detail
+            (evaluate this one) and the explore grid (discover among many).
+            Research: a hard unbroken scroll erodes choice confidence on
+            commerce surfaces (CUHK 2026). A labeled seam is the cognitive
+            reset cue — "you are now entering browse mode." Editorial
+            microcopy reads as human curation; "Recommended for you" is
+            the AI tell. Hairline divider + generous whitespace, not a
+            heavy card or different background. Magazine section break,
+            not screen boundary. */}
+        <View style={styles.exploreSeam}>
+          <View style={styles.exploreSeamDivider} />
+          <Text style={styles.exploreSeamLabel}>More looks you might like</Text>
+        </View>
+      </>
+    );
+  }, [
+    look, heroHeight, compositionDocument, captionText, mediaPages, resolvedHeroAspectRatio,
+    tags, handleTagTap, formatFromFiat, currencyCode, colors,
+    handleCreatorPress, creatorHandle,
+    followerCount, isOwner, isFollowing, handleFollow, followBusy,
+    commentCount, currentUser?.id, handleShare, handleCommentPress, handleSignInRequired,
+    handleRepost, repostBusy, handleRemix, handleReport, styles,
+    // navigation is used for repost attribution link — must be in deps
+    navigation,
+  ]);
+
+  // Explore tile renderer — Instagram-style: media-only, no text overlays,
+  // media-type badges (video/carousel), template-driven aspect ratios for
+  // masonry rhythm. Tighter gutters (Space.xs = 4px) for discovery density.
+  const exploreGap = Space.xs;
+
+  const keyExtractor = useCallback((item: LookApiItem) => item.id, []);
+
+  const renderExploreTile = useCallback(
+    ({ item, index }: { item: LookApiItem; index: number }) => {
+      const template = resolveLookTemplate(item, index, 2);
+      return (
+        <View style={{ paddingHorizontal: exploreGap / 2, paddingBottom: exploreGap, width: '100%' }}>
+          <LookMasonryTile
+            look={item}
+            onPress={handleRelatedLookPress}
+            aspectRatio={template.aspect}
+            variant="explore"
+          />
+        </View>
+      );
+    },
+    [handleRelatedLookPress, exploreGap],
+  );
+
+  // Span control — all tiles are span-1 in the 3-column explore grid.
+  // Instagram's 3-column explore grid uses uniform single-column tiles;
+  // the visual rhythm comes from the varying aspect ratios (portrait 3:4,
+  // marketplace 4:5, square 1:1) in the HEIGHT_RHYTHM cycle, not from
+  // span-2 tiles. Span-2 tiles in a 3-column grid with
+  // optimizeItemArrangement={false} leave 1-column gaps (masonry holes).
+  // The 2-column LooksTab keeps span-2 editorial/cinematic tiles.
+  const overrideItemLayout = useCallback(
+    (layout: { span?: number }, item: LookApiItem, index: number) => {
+      const template = resolveLookTemplate(item, index, 1);
+      if (template.span > 1) {
+        layout.span = template.span;
+      }
+    },
+    [],
+  );
+
+  // Footer — full state machine: loading, error+retry, end state, spacer.
+  const renderFooter = useMemo(() => {
+    if (relatedLoading) {
+      return (
+        <View style={styles.exploreLoading}>
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        </View>
+      );
+    }
+    if (relatedLoadingMore) {
+      return (
+        <View style={styles.exploreLoading}>
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        </View>
+      );
+    }
+    // Pagination error — inline retry, preserves already-loaded items.
+    if (relatedError && relatedLooks.length > 0) {
+      return (
+        <Pressable
+          style={styles.exploreRetry}
+          onPress={retryLoadMore}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading more looks"
+        >
+          <Ionicons name="refresh-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
+          <Text style={styles.exploreRetryText}>Couldn't load more. Tap to retry.</Text>
+        </Pressable>
+      );
+    }
+    // End state — a stopping cue. Reintroducing stopping cues is a 2026 HCI
+    // and regulatory recommendation for infinite scroll surfaces. This is
+    // a positive brand moment, not a dead end.
+    if (!relatedHasMore && relatedLooks.length > 0) {
+      return (
+        <View style={styles.exploreEnd}>
+          <View style={styles.exploreEndDivider} />
+          <Text style={styles.exploreEndText}>You're all caught up</Text>
+          <Text style={styles.exploreEndSub}>Fresh looks drop daily — come back tomorrow</Text>
+        </View>
+      );
+    }
+    return <View style={{ height: Space.xl + Space.sm }} />;
+  }, [relatedLoading, relatedLoadingMore, relatedError, relatedHasMore, relatedLooks.length, retryLoadMore, styles, colors.textMuted, colors.textSecondary]);
+
+  // Empty state — shown when the first page returns zero items or the initial
+  // fetch failed. Distinguishes error (with retry) from truly empty.
+  const renderEmpty = useMemo(() => {
+    if (relatedLoading) return null; // footer handles loading
+    if (relatedError) {
+      return (
+        <View style={styles.exploreEmpty}>
+          <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} aria-hidden={true} />
+          <Text style={styles.exploreEmptyTitle}>Couldn't load more looks</Text>
+          <Text style={styles.exploreEmptySub}>Check your connection and try again.</Text>
+          <Pressable
+            style={styles.exploreEmptyRetry}
+            onPress={retryRelatedFetch}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading looks"
+          >
+            <Text style={styles.exploreEmptyRetryText}>Try again</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.exploreEmpty}>
+        <Ionicons name="sparkles-outline" size={32} color={colors.textMuted} aria-hidden={true} />
+        <Text style={styles.exploreEmptyTitle}>No more looks to explore</Text>
+        <Text style={styles.exploreEmptySub}>Fresh looks drop daily — check back soon.</Text>
+      </View>
+    );
+  }, [relatedLoading, relatedError, retryRelatedFetch, styles, colors.textMuted]);
 
   if (isLoading) {
     return (
@@ -553,410 +922,27 @@ export default function LookDetailScreen() {
         </View>
       </View>
 
-      <ScrollView
+      {/* Single FlashList scroll surface — the look detail content renders as
+          ListHeaderComponent (full-width, above the masonry columns) and the
+          related looks render as virtualized masonry items below. This is the
+          correct architecture for unlimited scrolling: one scroll surface,
+          proper virtualization, no nested ScrollView + FlashList. */}
+      <FlashList
+        data={relatedLooks}
+        masonry
+        numColumns={3}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        {/* Aspect-aware media pager — height follows the media's real aspect
-            ratio (defaulting to 4:5 until the first frame loads), not a fixed
-            value imposed by the screen. */}
-        <View style={[styles.heroWrap, { height: heroHeight }]}>
-          {compositionDocument ? (
-            <View
-              style={styles.heroPage}
-              accessibilityLabel={captionText || 'Authored Look composition'}
-            >
-              <CreatorCanvas
-                document={compositionDocument}
-                page={compositionDocument.pages[0]}
-                canvasWidth={SCREEN_W}
-                canvasHeight={heroHeight}
-                mode="view"
-              />
-            </View>
-          ) : (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(e) => {
-                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-                setActiveMediaIndex(idx);
-              }}
-              accessibilityLabel={`Look media, ${mediaPages.length} image${mediaPages.length === 1 ? '' : 's'}`}
-            >
-              {mediaPages.map((page, pageIndex) => (
-                <View
-                  key={page.id}
-                  style={styles.heroPage}
-                  accessibilityLabel={captionText || 'Look media'}
-                >
-                  {failedMediaIds.has(page.id) ? (
-                    <View style={styles.heroMediaError}>
-                      <Ionicons name="image-outline" size={28} color={colors.textMuted} aria-hidden={true} />
-                      <Text style={styles.heroMediaErrorText}>Media couldn't be loaded</Text>
-                      <Pressable
-                        style={({ pressed }) => [styles.heroMediaRetry, pressed && { opacity: 0.6 }]}
-                        onPress={() => {
-                          setFailedMediaIds((current) => {
-                            const next = new Set(current);
-                            next.delete(page.id);
-                            return next;
-                          });
-                          setMediaRetryNonce((value) => value + 1);
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Retry Look media"
-                      >
-                        <Text style={styles.heroMediaRetryText}>Try again</Text>
-                      </Pressable>
-                    </View>
-                  ) : page.isVideo ? (
-                    <Video
-                      source={{ uri: page.uri }}
-                      style={styles.heroImage}
-                      resizeMode={ResizeMode.COVER}
-                      shouldPlay={activeMediaIndex === pageIndex}
-                      isMuted
-                      isLooping
-                      useNativeControls
-                    />
-                  ) : (
-                    <ExpoImage
-                      source={{ uri: page.uri }}
-                      style={styles.heroImage}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                      recyclingKey={`${page.uri}-${mediaRetryNonce}`}
-                      transition={reducedMotion ? 0 : 240}
-                      onLoad={(e) => {
-                        const { width, height } = e.source;
-                        if (width && height && width > 0 && height > 0) {
-                          setHeroAspectRatio((prev) =>
-                            prev === AspectRatio.marketplace ? width / height : prev
-                          );
-                        }
-                      }}
-                      onError={() => {
-                        setFailedMediaIds((current) => new Set(current).add(page.id));
-                      }}
-                    />
-                  )}
-                </View>
-              ))}
-            </ScrollView>
-          )}
-
-          {/* Pager indicators — only when multiple pages exist */}
-          {!compositionDocument && mediaPages.length > 1 && (
-            <View style={styles.pagerDots} pointerEvents="none">
-              {mediaPages.map((page, i) => (
-                <View
-                  key={page.id}
-                  style={[styles.pagerDot, i === activeMediaIndex && styles.pagerDotActive]}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Interactive product hotspots — tap opens the inspect sheet, never
-              navigates directly. */}
-          {tags.map((tag) => {
-            const isActive = activeTagId === tag.id;
-            const tagImage = tag.image ?? tag.images?.[0];
-            const tagTitle = tag.title ?? tag.label;
-            return (
-              <Pressable
-                key={tag.id}
-                style={[styles.hotspotWrap, { left: `${tag.x * 100}%`, top: `${tag.y * 100}%` }]}
-                onPress={() => handleTagTap(tag)}
-                hitSlop={20}
-                accessibilityRole="button"
-                accessibilityLabel={`Tagged item: ${tagTitle || 'product'}`}
-                accessibilityHint="Opens a product preview before viewing details"
-              >
-                <View style={styles.hotspotHalo} />
-                <View style={[styles.hotspotDot, isActive && styles.hotspotDotActive]} />
-                {isActive && tagImage && tagTitle && (
-                  <View style={styles.tagTooltip}>
-                    <ExpoImage
-                      source={{ uri: tagImage }}
-                      style={styles.tagTooltipImg}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                      recyclingKey={tagImage}
-                    />
-                    <View style={styles.tagTooltipText}>
-                      <Text style={styles.tagTooltipTitle} numberOfLines={1}>{tagTitle}</Text>
-                      {tag.isSold ? (
-                        <Text style={styles.tagTooltipSold}>Sold</Text>
-                      ) : typeof tag.price === 'number' ? (
-                        <Text style={styles.tagTooltipPrice}>{formatFromFiat(tag.price, currencyCode)}</Text>
-                      ) : null}
-                    </View>
-                    <Ionicons name="chevron-forward" size={14} color={colors.scrimTextSecondary} aria-hidden={true} />
-                  </View>
-                )}
-              </Pressable>
-            );
-          })}
-
-          <LinearGradient
-            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.42)']}
-            locations={[0, 0.4, 1]}
-            style={styles.heroGradient}
-          />
-        </View>
-
-        {/* Info — expandable caption, repost attribution, creator row with follow.
-            Lives below the media so it never covers the creator's composition.
-            No "Look" eyebrow — the media is the label. */}
-        <View style={styles.infoSection}>
-          {captionText ? (
-            <Pressable
-              onPress={() => {
-                if (captionIsLong) {
-                  haptic.light();
-                  setCaptionExpanded((v) => !v);
-                }
-              }}
-              disabled={!captionIsLong}
-              accessibilityRole={captionIsLong ? 'button' : undefined}
-              accessibilityLabel={captionExpanded ? 'Collapse caption' : 'Expand caption'}
-            >
-              <Text
-                style={styles.caption}
-                numberOfLines={captionExpanded || !captionIsLong ? undefined : 3}
-              >
-                {captionText}
-              </Text>
-              {captionIsLong && (
-                <Text style={styles.captionToggle}>
-                  {captionExpanded ? 'Less' : 'More'}
-                </Text>
-              )}
-            </Pressable>
-          ) : null}
-
-          {/* Repost attribution — when this look is a repost, show a quiet
-              "Reposted from @creator" line with a link to the source creator.
-              No decorative chrome; the attribution is the signal. */}
-          {look.sourceLookId && look.sourceLook && (
-            <Pressable
-              style={styles.repostAttribution}
-              onPress={() => look.sourceLook && navigation.navigate('UserProfile', { userId: look.sourceLook.creatorId })}
-              accessibilityRole="link"
-              accessibilityLabel={`Reposted from @${look.sourceLook.creatorUsername ?? 'creator'}`}
-            >
-              <Ionicons name="repeat-outline" size={14} color={colors.textMuted} aria-hidden={true} />
-              <Text style={styles.repostAttributionText}>
-                Reposted from @{look.sourceLook.creatorUsername ?? 'creator'}
-              </Text>
-            </Pressable>
-          )}
-
-          <Pressable
-            style={styles.creatorRow}
-            onPress={handleCreatorPress}
-            accessibilityRole="button"
-            accessibilityLabel={`View ${creatorHandle}'s profile`}
-          >
-            <View style={styles.creatorAvatar}>
-              {look.creator.avatar ? (
-                <ExpoImage
-                  source={{ uri: look.creator.avatar }}
-                  style={styles.creatorAvatarImg}
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
-                  recyclingKey={look.creator.avatar}
-                />
-              ) : (
-                <Ionicons name="person-circle" size={28} color={colors.textMuted} aria-hidden={true} />
-              )}
-            </View>
-            <View style={styles.creatorInfo}>
-              <Text style={styles.creatorName}>@{creatorHandle}</Text>
-              <Text style={styles.creatorMeta}>
-                {look.tags.length} piece{look.tags.length === 1 ? '' : 's'} tagged
-                {typeof followerCount === 'number' ? ` · ${followerCount} followers` : ''}
-              </Text>
-            </View>
-            {!isOwner && (
-              <AnimatedPressable
-                style={[styles.followBtn, isFollowing && styles.followBtnActive]}
-                onPress={handleFollow}
-                activeOpacity={0.85}
-                disabled={followBusy}
-                accessibilityRole="button"
-                accessibilityLabel={isFollowing ? 'Unfollow creator' : 'Follow creator'}
-                accessibilityState={{ selected: isFollowing }}
-              >
-                {followBusy ? (
-                  <ActivityIndicator size="small" color={isFollowing ? colors.textPrimary : colors.textInverse} />
-                ) : (
-                  <Text style={[styles.followBtnText, isFollowing && styles.followBtnTextActive]}>
-                    {isFollowing ? 'Following' : 'Follow'}
-                  </Text>
-                )}
-              </AnimatedPressable>
-            )}
-          </Pressable>
-        </View>
-
-        {/* Social Actions — like / comment / save / share engagement */}
-        <View style={styles.socialWrap}>
-          <LookSocialActions
-            lookId={look.id}
-            initialLikeCount={look.likeCount}
-            commentCount={commentCount}
-            initialSaveCount={look.saveCount}
-            initialLikedByViewer={look.likedByViewer}
-            initialSavedByViewer={look.savedByViewer}
-            isAuthenticated={!!currentUser?.id}
-            onCommentPress={() => setCommentsVisible(true)}
-            onSharePress={handleShare}
-            onSignInRequired={() => {
-              show('Sign in to like, save, and comment', 'info');
-              navigation.navigate('Login');
-            }}
-          />
-        </View>
-
-        {/* Object actions — Repost + Remix + Report, semantically labelled.
-            Repost is the primary distributive action (preserves attribution);
-            Remix is the derivative action (opens creator studio); Report is
-            the safety action. Save and Share live in the social row above. */}
-        <View style={styles.actionRow}>
-          {!isOwner && (
-            <>
-              <AnimatedPressable
-                style={styles.actionBtn}
-                onPress={handleRepost}
-                activeOpacity={0.85}
-                disabled={repostBusy}
-                accessibilityRole="button"
-                accessibilityLabel="Repost this look"
-                accessibilityHint="Re-publishes this look to your profile with attribution to the original creator"
-              >
-                {repostBusy ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                ) : (
-                  <>
-                    <Ionicons name="repeat-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
-                    <Text style={styles.actionBtnLabel}>Repost</Text>
-                  </>
-                )}
-              </AnimatedPressable>
-              <View style={styles.actionDivider} />
-            </>
-          )}
-          <AnimatedPressable
-            style={styles.actionBtn}
-            onPress={handleRemix}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Remix this look"
-            accessibilityHint="Opens the creator studio seeded from this look"
-          >
-            <Ionicons name="swap-horizontal-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
-            <Text style={styles.actionBtnLabel}>Remix</Text>
-          </AnimatedPressable>
-          <View style={styles.actionDivider} />
-          <AnimatedPressable
-            style={styles.actionBtn}
-            onPress={handleReport}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Report this look"
-            accessibilityHint="Reports the creator of this look"
-          >
-            <Ionicons name="flag-outline" size={20} color={colors.danger} aria-hidden={true} />
-            <Text style={[styles.actionBtnLabel, { color: colors.danger }]}>Report</Text>
-          </AnimatedPressable>
-        </View>
-
-        {/* Tagged Products Rail — shop-the-look. Uses hydrated tag data when
-            the backend provides it; otherwise shows the tag label and still
-            resolves taps through the canonical product resolver. */}
-        {tags.length > 0 && (
-          <View style={styles.traySection}>
-            <View style={styles.trayHeader}>
-              <Text style={styles.trayTitle}>Shop the look</Text>
-              <Text style={styles.trayCount}>{tags.length} piece{tags.length === 1 ? '' : 's'}</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trayScroll}>
-              {tags.map((tag) => {
-                const tagImage = tag.image ?? tag.images?.[0];
-                const tagTitle = tag.title ?? tag.label ?? 'Untitled';
-                const ref = tagToReference(tag, look.id);
-                return (
-                  <AnimatedPressable
-                    key={tag.id}
-                    style={styles.trayCard}
-                    onPress={() => handleTagTap(tag)}
-                    activeOpacity={0.9}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${tagTitle}${typeof tag.price === 'number' ? `, ${currencySymbol}${tag.price}` : ''}`}
-                    accessibilityHint="Opens a product preview before viewing details"
-                  >
-                    <View style={styles.trayImgWrap}>
-                      {tagImage ? (
-                        <ExpoImage
-                          source={{ uri: tagImage }}
-                          style={styles.trayImg}
-                          contentFit="cover"
-                          cachePolicy="memory-disk"
-                          recyclingKey={tagImage}
-                        />
-                      ) : (
-                        <View style={styles.trayImgEmpty}>
-                          <Ionicons name="pricetag-outline" size={20} color={colors.textMuted} aria-hidden={true} />
-                        </View>
-                      )}
-                      {tag.isSold && <View style={styles.traySoldScrim} />}
-                    </View>
-                    <Text style={styles.trayCardTitle} numberOfLines={1}>{tagTitle}</Text>
-                    {tag.isSold ? (
-                      <Text style={styles.trayCardSold}>Sold</Text>
-                    ) : typeof tag.price === 'number' ? (
-                      <Text style={styles.trayCardPrice}>{formatFromFiat(tag.price, currencyCode)}</Text>
-                    ) : ref ? (
-                      <Text style={styles.trayCardCta}>View</Text>
-                    ) : null}
-                  </AnimatedPressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* More to explore — Pinterest-style 2-column masonry grid of related
-            looks. Replaces the former two horizontal rails with a single dense
-            grid that flows directly from the detail. Server-ranked by tag
-            overlap with cursor pagination for infinite scroll. The grid emerges
-            from the detail with a quiet section header — no hard divider. */}
-        {(relatedLooks.length > 0 || relatedLoading) && (
-          <View style={styles.masonrySection}>
-            <Text style={styles.masonryHeader}>More to explore</Text>
-            {relatedLoading ? (
-              <View style={styles.masonryLoading}>
-                <ActivityIndicator size="small" color={colors.textMuted} />
-              </View>
-            ) : (
-              <LookMasonryGrid
-                looks={relatedLooks}
-                onPress={handleRelatedLookPress}
-                isLoadingMore={relatedLoadingMore}
-                testIDPrefix="look-related"
-              />
-            )}
-          </View>
-        )}
-
-        <View style={{ height: Space.xl + Space.sm }} />
-      </ScrollView>
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={renderDetailHeader}
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={renderEmpty}
+        renderItem={renderExploreTile}
+        overrideItemLayout={overrideItemLayout}
+        onEndReached={loadMoreRelated}
+        onEndReachedThreshold={0.5}
+        optimizeItemArrangement={false}
+      />
 
       {/* Comments Sheet */}
       <LookCommentsSheet
@@ -1011,7 +997,7 @@ export default function LookDetailScreen() {
                           <Ionicons name="pricetag-outline" size={28} color={colors.textMuted} aria-hidden={true} />
                         </View>
                       )}
-                      {inspectTag.isSold && <View style={styles.traySoldScrim} />}
+                      {inspectTag.isSold && <View style={styles.inspectSoldScrim} />}
                     </View>
                     <View style={styles.inspectInfo}>
                       <Text style={styles.inspectTitle} numberOfLines={2}>{tagTitle}</Text>
@@ -1134,31 +1120,6 @@ function createStyles(colors: ThemeColors) {
       overflow: 'hidden',
     },
     heroPage: { width: SCREEN_W, height: '100%' },
-    heroImage: { width: '100%', height: '100%' },
-    heroMediaError: {
-      width: '100%',
-      height: '100%',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.sm,
-      backgroundColor: colors.surfaceAlt,
-    },
-    heroMediaErrorText: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
-    heroMediaRetry: {
-      minHeight: 48,
-      paddingHorizontal: Space.lg,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    heroMediaRetryText: {
-      color: colors.textPrimary,
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
     heroGradient: {
       position: 'absolute',
       bottom: 0,
@@ -1166,74 +1127,6 @@ function createStyles(colors: ThemeColors) {
       right: 0,
       height: Space.xxl * 3 + Space.xl + Space.xs,
     },
-    pagerDots: {
-      position: 'absolute',
-      top: Space.sm,
-      left: 0,
-      right: 0,
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: Space.xs,
-      zIndex: 4,
-    },
-    pagerDot: {
-      width: Space.sm,
-      height: Space.xxs,
-      borderRadius: Space.xxs,
-      backgroundColor: colors.scrimTextTertiary,
-    },
-    pagerDotActive: {
-      backgroundColor: colors.scrimTextPrimary,
-      width: Space.sm + Space.xs,
-    },
-
-    // ── Hotspots ──
-    hotspotWrap: {
-      position: 'absolute',
-      width: Control.hit,
-      height: Control.hit,
-      marginLeft: -(Space.lg - 2),
-      marginTop: -(Space.lg - 2),
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 3,
-    },
-    hotspotHalo: {
-      position: 'absolute',
-      width: Space.xl - Space.xs,
-      height: Space.xl - Space.xs,
-      borderRadius: Radius.xl,
-      backgroundColor: colors.overlay,
-    },
-    hotspotDot: {
-      width: Space.sm + Space.xs,
-      height: Space.sm + Space.xs,
-      borderRadius: Radius.md,
-      backgroundColor: colors.scrimTextPrimary,
-      borderWidth: Stroke.emphasis,
-      borderColor: colors.overlay,
-    },
-    hotspotDotActive: {
-      backgroundColor: colors.brand,
-      borderColor: colors.scrimTextPrimary,
-    },
-    tagTooltip: {
-      position: 'absolute',
-      top: Space.lg + 4,
-      left: -Space.xxl - Space.xxl - Space.xl - 8,
-      width: Space.xxl * 8 + Space.xl + 4,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      backgroundColor: colors.overlay,
-      borderRadius: Radius.lg,
-      padding: Space.sm,
-    },
-    tagTooltipImg: { width: Space.xl + 4, height: Space.xl + 4, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt },
-    tagTooltipText: { flex: 1, gap: Space.xxs },
-    tagTooltipTitle: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: colors.scrimTextPrimary },
-    tagTooltipPrice: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.medium, color: colors.scrimTextSecondary },
-    tagTooltipSold: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.semibold, color: colors.danger },
 
     // ── Info section ──
     infoSection: {
@@ -1251,27 +1144,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
-    },
-    eyebrow: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textMuted,
-      letterSpacing: LetterSpacing.caps,
-      textTransform: 'uppercase',
-      marginBottom: -(Space.xs - 2),
-    },
-    caption: {
-      fontSize: Type.title.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-      letterSpacing: Type.title.letterSpacing,
-      lineHeight: Type.title.size + 6,
-    },
-    captionToggle: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-      marginTop: Space.xs,
     },
     creatorRow: {
       flexDirection: 'row',
@@ -1345,94 +1217,100 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
 
-    // ── Tagged products rail ──
-    traySection: {
-      marginTop: Space.xl,
-      paddingHorizontal: Space.md,
-    },
-    trayHeader: {
-      flexDirection: 'row',
-      alignItems: 'baseline',
-      justifyContent: 'space-between',
-      marginBottom: Space.sm,
-    },
-    trayTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    trayCount: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
-    trayScroll: {
-      gap: Space.sm,
-      paddingRight: Space.md,
-    },
-    trayCard: {
-      width: Space.xxl * 7 + 12,
-      gap: Space.xs + 2,
-    },
-    trayImgWrap: {
-      width: Space.xxl * 7 + 12,
-      height: Space.xxl * 9 + 8,
-      borderRadius: Radius.lg,
-      overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-      position: 'relative',
-    },
-    trayImg: { width: '100%', height: '100%' },
-    trayImgEmpty: {
-      width: '100%',
-      height: '100%',
+    // ── Explore grid loading footer ──
+    exploreLoading: {
+      paddingVertical: Space.xl,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surfaceAlt,
     },
-    traySoldScrim: {
-      ...StyleSheet.absoluteFill,
-      backgroundColor: colors.scrimTextTertiary,
+
+    // ── Labeled soft seam (detail → explore transition) ──
+    // A magazine section break: hairline divider + editorial label.
+    // Not a heavy card, not a different background — just a deliberate
+    // mode-shift cue. Reads as human curation, not algorithmic bleed.
+    exploreSeam: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.xl,
+      paddingBottom: Space.sm,
+      gap: Space.sm,
     },
-    trayCardTitle: {
-      fontSize: Type.caption.size,
+    exploreSeamDivider: {
+      height: 1,
+      backgroundColor: colors.borderSubtle,
+    },
+    exploreSeamLabel: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textSecondary,
+      letterSpacing: LetterSpacing.caps,
+      textTransform: 'uppercase',
+    },
+
+    // ── Explore empty state ──
+    exploreEmpty: {
+      paddingVertical: Space.xxl,
+      paddingHorizontal: Space.lg,
+      alignItems: 'center',
+      gap: Space.sm,
+    },
+    exploreEmptyTitle: {
+      fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
-      marginTop: Space.xs / 2,
     },
-    trayCardPrice: {
+    exploreEmptySub: {
       fontSize: Type.meta.size,
-      fontFamily: Typography.family.bold,
-      color: colors.brand,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+      textAlign: 'center',
     },
-    trayCardSold: {
+    exploreEmptyRetry: {
+      marginTop: Space.xs,
+      paddingHorizontal: Space.lg,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+    },
+    exploreEmptyRetryText: {
       fontSize: Type.meta.size,
-      fontFamily: Typography.family.bold,
-      color: colors.danger,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
     },
-    trayCardCta: {
+
+    // ── Explore footer: retry + end state ──
+    exploreRetry: {
+      paddingVertical: Space.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.xs,
+    },
+    exploreRetryText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
+    },
+    exploreEnd: {
+      paddingVertical: Space.xl,
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    exploreEndDivider: {
+      width: 40,
+      height: 2,
+      backgroundColor: colors.borderSubtle,
+      borderRadius: 1,
+      marginBottom: Space.xs,
+    },
+    exploreEndText: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
     },
-
-    // ── More to explore masonry ──
-    masonrySection: {
-      marginTop: Space.xl,
-    },
-    masonryHeader: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-      paddingHorizontal: Space.md,
-      marginBottom: Space.md,
-    },
-    masonryLoading: {
-      paddingVertical: Space.xl,
-      alignItems: 'center',
-      justifyContent: 'center',
+    exploreEndSub: {
+      fontSize: Type.meta.size - 1,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
     },
 
     // ── Inspect sheet ──
@@ -1476,6 +1354,10 @@ function createStyles(colors: ThemeColors) {
       height: '100%',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    inspectSoldScrim: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: colors.scrimTextTertiary,
     },
     inspectInfo: { flex: 1, justifyContent: 'center', gap: Space.xs },
     inspectTitle: {

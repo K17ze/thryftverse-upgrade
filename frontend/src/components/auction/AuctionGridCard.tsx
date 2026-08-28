@@ -35,7 +35,7 @@ interface Props {
   testID?: string;
 }
 
-export function AuctionGridCard({
+function AuctionGridCardBase({
   title,
   imageUrl,
   brand,
@@ -114,6 +114,10 @@ export function AuctionGridCard({
     </AnimatedPressable>
   );
 }
+
+const AuctionGridCard = React.memo(AuctionGridCardBase);
+AuctionGridCard.displayName = 'AuctionGridCard';
+export { AuctionGridCard };
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {

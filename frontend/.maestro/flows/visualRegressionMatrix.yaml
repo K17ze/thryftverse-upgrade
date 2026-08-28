@@ -6,24 +6,43 @@ tags:
   - matrix
 ---
 # Visual regression matrix — captures golden routes across theme + font
-# scale variants.
+# scale variants, then asserts each against a committed baseline.
 #
 # This flow is parameterised by env vars:
-#   THEME      — "light" | "dark" (used in screenshot names)
-#   FONT_SCALE — "100" | "130" | "200" (used in screenshot names)
+#   APP_ID       — bundle/package id
+#   PLATFORM     — "ios" | "android" (used in screenshot names)
+#   DEVICE       — device slug e.g. "iphone15pro", "iphonese", "pixel8", "pixel5"
+#   THEME        — "light" | "dark" (used in screenshot names)
+#   FONT_SCALE   — "100" | "130" | "200" (used in screenshot names)
+#   THRESHOLD    — thresholdPercentage for assertScreenshot (default 98)
+#   VISUAL_MODE  — "capture" | "assert" (default: capture)
+#                    capture: takeScreenshot only (baseline seeding)
+#                    assert:  takeScreenshot + assertScreenshot (regression check)
 #
 # Device-level theme and font-scale changes are handled externally by
-# scripts/capture-baselines.sh, which sets the device configuration via
-# xcrun simctl (iOS) or adb (Android) before each invocation of this
-# flow. Maestro flows are declarative YAML and cannot run shell commands
-# to change device settings directly.
+# scripts/capture-baselines.sh or the CI workflow, which set the device
+# configuration via xcrun simctl (iOS) or adb (Android) before each
+# invocation of this flow. Maestro flows are declarative YAML and cannot
+# run shell commands to change device settings directly.
+#
+# Screenshot naming convention:
+#   {platform}-{device}-{theme}-{scale}-{route}.png
+#   e.g. ios-iphone15pro-light-100-home.png
 #
 # Usage (see scripts/capture-baselines.sh for the full matrix loop):
 #   maestro test .maestro/flows/visualRegressionMatrix.yaml \
 #     --env APP_ID=$APP_ID \
+#     --env PLATFORM=ios \
+#     --env DEVICE=iphone15pro \
 #     --env THEME=light \
 #     --env FONT_SCALE=100 \
-#     --output .maestro/screenshots/light-100
+#     --env VISUAL_MODE=capture \
+#     --test-output-dir=.maestro/screenshots/ios-iphone15pro-light-100
+
+env:
+  THRESHOLD: "98"
+  VISUAL_MODE: "capture"
+  PREFIX: "${PLATFORM}-${DEVICE}-${THEME}-${FONT_SCALE}"
 
 - launchApp:
     clearState: false
@@ -32,14 +51,24 @@ tags:
 
 - extendedWaitUntil:
     visible:
-      id: "home-brand-title"
+      id: "home-feed-container"
       optional: true
     timeout: 20000
 
 - waitForAnimationToEnd:
     timeout: 5000
 
-- takeScreenshot: golden-home-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-home
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-home.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "home-feed-container"
 
 - tapOn:
     label: "Search listings"
@@ -48,7 +77,17 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-search-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-search
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-search.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "search-screen"
 
 - clearText
 
@@ -61,10 +100,20 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-browse-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-browse
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-browse.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "browse-screen"
 
 - tapOn:
-    point: "50%, 40%"
+    id: "golden-browse-first-product"
     optional: true
 
 - extendedWaitUntil:
@@ -76,7 +125,17 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-pdp-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-pdp
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-pdp.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "item-detail-screen"
 
 - back
 
@@ -87,7 +146,17 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-sell-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-sell
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-sell.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "sell-screen"
 
 - back
 
@@ -104,7 +173,17 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-profile-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-profile
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-profile.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "profile-screen"
 
 - tapOn:
     text: "Settings"
@@ -113,7 +192,17 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-settings-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-settings
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-settings.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "settings-screen"
 
 - back
 
@@ -130,16 +219,36 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-inbox-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-inbox
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-inbox.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "inbox-screen"
 
 - tapOn:
-    point: "50%, 30%"
+    id: "golden-inbox-first-conversation"
     optional: true
 
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-chat-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-chat
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-chat.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "chat-screen"
 
 - back
 
@@ -150,16 +259,36 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-auction-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-auction
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-auction.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "auction-screen"
 
 - tapOn:
-    point: "50%, 50%"
+    id: "golden-auction-first-card"
     optional: true
 
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-auction-detail-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-auction-detail
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-auction-detail.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "auction-detail-screen"
 
 - back
 
@@ -170,16 +299,36 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-coown-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-coown
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-coown.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "coown-screen"
 
 - tapOn:
-    point: "50%, 40%"
+    id: "golden-coown-first-asset"
     optional: true
 
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-coown-detail-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-coown-detail
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-coown-detail.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "asset-detail-screen"
 
 - back
 
@@ -197,7 +346,17 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-seller-hub-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-seller-hub
+
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: ${MAESTRO_LOGS_DIRECTORY}/${PREFIX}-seller-hub.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "seller-hub-screen"
 
 - back
 
@@ -214,4 +373,4 @@ tags:
 - waitForAnimationToEnd:
     timeout: 3000
 
-- takeScreenshot: golden-poster-${THEME}-${FONT_SCALE}
+- takeScreenshot: ${PREFIX}-poster

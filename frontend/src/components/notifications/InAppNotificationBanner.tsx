@@ -5,6 +5,7 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  cancelAnimation,
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
@@ -93,6 +94,17 @@ export function InAppNotificationBanner({
   const progress = useSharedValue(0);
 
   const isSticky = notification.duration <= 0;
+
+  // Cancel all in-flight animations on unmount. Without this, Reanimated
+  // can try to update props on an unmounted banner view, causing
+  // RetryableMountingLayerException on Android Fabric.
+  React.useEffect(() => {
+    return () => {
+      cancelAnimation(translateY);
+      cancelAnimation(opacity);
+      cancelAnimation(progress);
+    };
+  }, [translateY, opacity, progress]);
 
   const handleDismiss = React.useCallback(() => {
     if (reducedMotion) {

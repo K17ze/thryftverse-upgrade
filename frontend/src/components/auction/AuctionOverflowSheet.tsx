@@ -49,6 +49,7 @@ export function AuctionOverflowSheet({
       </View>
       <Pressable
         style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         onPress={() => {
           onDismiss();
           onToggleWatch();
@@ -68,6 +69,7 @@ export function AuctionOverflowSheet({
       </Pressable>
       <Pressable
         style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         onPress={() => {
           onDismiss();
           onShare();
@@ -80,6 +82,7 @@ export function AuctionOverflowSheet({
       </Pressable>
       <Pressable
         style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         onPress={() => {
           onDismiss();
           onOpenCollectionPicker();
@@ -99,6 +102,7 @@ export function AuctionOverflowSheet({
       </Pressable>
       <Pressable
         style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         onPress={() => {
           onDismiss();
           onToggleLike();

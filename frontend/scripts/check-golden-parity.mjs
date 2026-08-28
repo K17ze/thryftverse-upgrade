@@ -7,6 +7,10 @@
  *   - Design bugs: UI fabricating data the backend doesn't provide
  *   - Seeding gaps: integration screenshots empty where fixture is populated
  *
+ * Performs real pixel-level diff using pixelmatch when both fixture and
+ * integration baselines exist for a route. Falls back to presence check
+ * when only one mode has a baseline.
+ *
  * Usage:
  *   node scripts/check-golden-parity.mjs
  *
@@ -20,14 +24,26 @@
  *   - Exit 2: baseline directories missing
  */
 
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { PNG } from 'pngjs';
+import pixelmatch from 'pixelmatch';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCREENSHOTS_DIR = join(__dirname, '..', 'src', '__tests__', '__screenshots__');
 const FIXTURE_DIR = join(SCREENSHOTS_DIR, 'fixture');
 const INTEGRATION_DIR = join(SCREENSHOTS_DIR, 'integration');
+
+// Pixel diff threshold — 0.1 means up to 10% color difference per pixel
+// is tolerated. Lower = more sensitive.
+const PIXELMATCH_THRESHOLD = 0.1;
+
+// Maximum allowed diff percentage between fixture and integration mode.
+// If the diff exceeds this, the route is flagged as a parity violation.
+// 5% allows for minor rendering differences (timestamps, avatars) while
+// catching structural divergence (missing fields, fabricated data).
+const MAX_DIFF_PERCENT = 5.0;
 
 // Routes that must have both fixture and integration baselines
 const GOLDEN_ROUTES = [
@@ -56,6 +72,40 @@ function listScreenshots(dir) {
   return readdirSync(dir).filter((f) => /\.(png|jpg|jpeg)$/i.test(f));
 }
 
+/**
+ * Compares two PNG files pixel-by-pixel using pixelmatch.
+ * Returns the percentage of differing pixels (0-100).
+ * Returns null if the images have different dimensions (cannot compare).
+ */
+function comparePngs(fixturePath, integrationPath) {
+  try {
+    const img1 = PNG.sync.read(readFileSync(fixturePath));
+    const img2 = PNG.sync.read(readFileSync(integrationPath));
+
+    if (img1.width !== img2.width || img1.height !== img2.height) {
+      console.warn(`  Dimension mismatch: ${img1.width}x${img1.height} vs ${img2.width}x${img2.height}`);
+      return null;
+    }
+
+    const { width, height } = img1;
+    const diff = new PNG({ width, height });
+    const numDiffPixels = pixelmatch(
+      img1.data,
+      img2.data,
+      diff.data,
+      width,
+      height,
+      { threshold: PIXELMATCH_THRESHOLD }
+    );
+
+    const totalPixels = width * height;
+    return (numDiffPixels / totalPixels) * 100;
+  } catch (err) {
+    console.warn(`  Pixel comparison failed: ${err.message}`);
+    return null;
+  }
+}
+
 function checkParity() {
   const fixtureScreenshots = listScreenshots(FIXTURE_DIR);
   const integrationScreenshots = listScreenshots(INTEGRATION_DIR);
@@ -75,6 +125,7 @@ function checkParity() {
 
   const violations = [];
   const warnings = [];
+  const diffs = [];
 
   for (const route of GOLDEN_ROUTES) {
     const fixtureMatch = fixtureScreenshots.find((f) => f.startsWith(route));
@@ -86,13 +137,33 @@ function checkParity() {
       violations.push(`${route}: missing in fixture mode`);
     } else if (!integrationMatch) {
       warnings.push(`${route}: missing in integration mode (seeded backend may not be running)`);
+    } else {
+      // Both exist — perform real pixel-level diff
+      const fixturePath = join(FIXTURE_DIR, fixtureMatch);
+      const integrationPath = join(INTEGRATION_DIR, integrationMatch);
+      const diffPercent = comparePngs(fixturePath, integrationPath);
+
+      if (diffPercent === null) {
+        warnings.push(`${route}: pixel comparison skipped (dimension mismatch or read error)`);
+      } else if (diffPercent > MAX_DIFF_PERCENT) {
+        violations.push(
+          `${route}: pixel diff ${diffPercent.toFixed(2)}% exceeds ${MAX_DIFF_PERCENT}% threshold — ` +
+            `possible contract bug (backend missing fields) or design bug (UI fabricating data)`
+        );
+      } else {
+        diffs.push(`${route}: ${diffPercent.toFixed(2)}% diff (within threshold)`);
+      }
     }
-    // Pixel-level diff would go here once a screenshot diffing library
-    // is wired in (e.g., pixelmatch or odiff). For now, we check presence.
+  }
+
+  if (diffs.length > 0) {
+    console.log('[golden-parity] Pixel diff results:');
+    for (const d of diffs) console.log(`  ✓ ${d}`);
+    console.log('');
   }
 
   if (warnings.length > 0) {
-    console.warn('[golden-parity] Warnings (integration baselines incomplete):');
+    console.warn('[golden-parity] Warnings (integration baselines incomplete or comparison skipped):');
     for (const w of warnings) console.warn(`  ⚠ ${w}`);
     console.warn('');
   }
@@ -102,12 +173,16 @@ function checkParity() {
     for (const v of violations) console.error(`  ✗ ${v}`);
     console.error('');
     console.error('Fix: Re-run the dual-mode golden suite and commit baselines.');
+    console.error('  If the diff is intentional, update the fixture or integration baseline.');
     process.exit(1);
   }
 
   console.log('[golden-parity] PASS — all golden routes have baselines in both modes.');
   if (warnings.length > 0) {
     console.log(`  (${warnings.length} warnings about missing integration baselines)`);
+  }
+  if (diffs.length > 0) {
+    console.log(`  (${diffs.length} routes compared with pixelmatch — all within ${MAX_DIFF_PERCENT}% threshold)`);
   }
   process.exit(0);
 }

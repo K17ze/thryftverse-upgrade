@@ -1,5 +1,5 @@
 /**
- * ProductCard V2 — stable, image-first marketplace card.
+ * ProductCard — stable, image-first marketplace card.
  * Geometry is reserved before media loads to prevent masonry reflow.
  */
 
@@ -35,7 +35,7 @@ function isUsableUri(uri: unknown): uri is string {
   return typeof uri === 'string' && uri.trim().length > 0;
 }
 
-interface ProductCardV2Props {
+interface ProductCardProps {
   item: Listing;
   onPress: () => void;
   index?: number;
@@ -62,7 +62,7 @@ interface ProductCardV2Props {
   testID?: string;
 }
 
-function ProductCardV2Base({
+function ProductCardBase({
   item,
   onPress,
   index = 0,
@@ -77,7 +77,7 @@ function ProductCardV2Base({
   // (SearchScreen, PinterestMasonryGrid) keep type-checking, but the
   // chat action is intentionally not rendered on the card — messaging
   // belongs on the product detail page, not the discovery surface.
-}: ProductCardV2Props) {
+}: ProductCardProps) {
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
   const isSaved = useStore((state) => state.isSavedProduct(item.id));
@@ -361,7 +361,7 @@ function ProductCardV2Base({
   );
 }
 
-export const ProductCardV2 = React.memo(ProductCardV2Base);
+export const ProductCard = React.memo(ProductCardBase);
 
 // ============================================================================
 // STYLES
@@ -750,7 +750,7 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
   },
   // Fixed white ink — the badge always sits on the dark `overlay` scrim or
   // the saturated `success` green, so a theme text token (black in dark
-  // mode) would render invisible. Mirrors the ProductCardV2 convention.
+  // mode) would render invisible. Mirrors the ProductCard convention.
   conditionText: {
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
@@ -805,4 +805,4 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
   },
 });
 
-export default ProductCardV2;
+export default ProductCard;

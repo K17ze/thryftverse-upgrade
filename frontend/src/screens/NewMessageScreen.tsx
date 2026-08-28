@@ -12,6 +12,7 @@ import { createDmConversationOnApi, joinGroupByInviteOnApi } from '../services/c
 import { parseApiError } from '../lib/apiClient';
 import { getAvailableAgents, deployAgent, type ChatAgent } from '../services/chatAgentsApi';
 import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, TypeStyles, Typography, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -630,7 +631,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 const joinStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Space.lg,

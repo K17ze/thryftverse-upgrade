@@ -471,12 +471,12 @@ export default function CreatorAnalyticsDashboardScreen() {
                   {viewsDelta ? (
                     <View style={[
                       styles.heroDelta,
-                      { backgroundColor: viewsUp ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.25)' },
+                      { backgroundColor: viewsUp ? colors.scrimDeltaPositive : colors.scrimDeltaNegative },
                     ]}>
                       <Ionicons
                         name={viewsUp ? 'arrow-up' : 'arrow-down'}
                         size={11}
-                        color="#fff"
+                        color={colors.scrimTextPrimary}
                       />
                       <Text style={styles.heroDeltaText}>
                         {viewsDelta}
@@ -621,6 +621,8 @@ export default function CreatorAnalyticsDashboardScreen() {
                   styles.contentRowPress,
                   pressed && { opacity: 0.6 },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${item.title}`}
               >
                 <ContentRankingRow
                   item={item}
@@ -925,7 +927,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: FontFamily.medium,
       letterSpacing: Type.caption.letterSpacing,
-      color: 'rgba(255,255,255,0.8)',
+      color: colors.scrimTextSecondary,
     },
     heroRow: {
       flexDirection: 'row',
@@ -939,7 +941,7 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.priceHero.lineHeight,
       letterSpacing: Type.priceHero.letterSpacing,
       fontFamily: FontFamily.bold,
-      color: '#fff',
+      color: colors.scrimTextPrimary,
     },
     heroDelta: {
       flexDirection: 'row',
@@ -953,7 +955,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: FontFamily.semibold,
       letterSpacing: 0.2,
-      color: '#fff',
+      color: colors.scrimTextPrimary,
     },
     // ── Comparison context ──
     comparisonContext: {
@@ -1028,7 +1030,7 @@ function createStyles(colors: ThemeColors) {
     payoutButtonText: {
       fontSize: Type.body.size,
       fontFamily: FontFamily.semibold,
-      color: '#fff',
+      color: colors.textInverse,
     },
     earningsEntries: {
       marginTop: Space.lg,

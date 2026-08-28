@@ -5,7 +5,7 @@
  * re-scanning items they have already saved. The information hierarchy
  * differs from discovery: media dominates, price is a compact overlay,
  * and chrome recedes. This is a purpose-built tile (AGENTS.md §7) — the
- * shared ProductCardV2 carries full discovery metadata that would be
+ * shared ProductCard carries full discovery metadata that would be
  * cramped at 3-column width.
  *
  * Preserves all functionality of the previous MasonryGrid usage:

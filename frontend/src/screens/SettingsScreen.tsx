@@ -429,7 +429,7 @@ export default function SettingsScreen({ navigation }: Props) {
   // that filters settings in-place. No separate overlay screen needed.
 
   return (
-    <View style={{ flex: 1 }}>
+    <View testID="settings-screen" style={{ flex: 1 }}>
     <FlagshipScreen
       header={
         <FlagshipHeader

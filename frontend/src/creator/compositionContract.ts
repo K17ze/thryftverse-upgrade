@@ -6,7 +6,7 @@ import {
   hasFullBleedMedia,
   isDefaultBackground,
 } from './composition';
-import type { LookCreateBody, LookCreateTag } from '../services/looksApi';
+import type { LookCreateBody, LookCreateTag, LookMediaEntry } from '../services/looksApi';
 import type { PosterStoryCreateBody, PosterStickerType } from '../services/postersApi';
 import type { CreatorStoryCreateFrame } from './publishTypes';
 
@@ -207,6 +207,22 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
     return currentArea > largestArea ? current : largest;
   });
 
+  // Additional media layers become carousel slides in mediaUrls. The
+  // primary media layer is excluded; remaining media layers are mapped in
+  // their original layer order.
+  const mediaUrls: LookMediaEntry[] = mediaLayers
+    .filter((l) => l.id !== mediaLayer.id)
+    .map((l) => ({
+      url: l.type === 'media' ? l.payload.mediaUri : '',
+      mediaType: l.type === 'media' && l.payload.mediaType === 'video' ? 'video' : 'image',
+      ...(l.type === 'media' && l.payload.mediaFinalizationId
+        ? { mediaFinalizationId: l.payload.mediaFinalizationId }
+        : {}),
+      ...(l.type === 'media' && l.payload.mediaAssetId
+        ? { mediaAssetId: l.payload.mediaAssetId }
+        : {}),
+    }));
+
   const tags: LookCreateTag[] = page.layers
     .filter((l) => l.type === 'product')
     .map((l) => ({
@@ -249,6 +265,7 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
       mediaType: mediaLayer.type === 'media' && mediaLayer.payload.mediaType === 'video'
         ? 'video'
         : 'image',
+      ...(mediaUrls.length > 0 ? { mediaUrls } : {}),
       visibility: doc.metadata.visibility === 'closeFriends'
         ? 'followers'
         : doc.metadata.visibility,

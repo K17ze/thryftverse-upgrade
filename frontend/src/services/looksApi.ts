@@ -14,6 +14,13 @@ export interface LookCreator {
   avatar: string | null;
 }
 
+export interface LookMediaEntry {
+  url: string;
+  mediaType: 'image' | 'video';
+  mediaFinalizationId?: string;
+  mediaAssetId?: string;
+}
+
 export interface LookApiItem {
   id: string;
   creatorId: string;
@@ -23,6 +30,9 @@ export interface LookApiItem {
   mediaUrl: string;
   /** Media type — defaults to 'image' when absent for backward compatibility */
   mediaType?: 'image' | 'video';
+  /** Additional carousel slides beyond the primary mediaUrl. Empty array when
+   *  the look has only one media item. Position 0 is the primary mediaUrl. */
+  mediaUrls?: LookMediaEntry[];
   visibility: 'public' | 'followers' | 'private';
   status: 'draft' | 'published' | 'archived';
   createdAt: string;
@@ -75,6 +85,10 @@ export interface LookCreateBody {
   /** Authoritative media lifecycle row returned by upload finalization. */
   mediaAssetId?: string;
   mediaType?: 'image' | 'video';
+  /** Carousel slides beyond the primary mediaUrl. Max 9 additional slides
+   *  (10 total including primary). Each entry with a mediaFinalizationId
+   *  will be verified by the backend. */
+  mediaUrls?: LookMediaEntry[];
   visibility?: 'public' | 'followers' | 'private';
   tags?: LookCreateTag[];
   status?: 'draft' | 'published' | 'archived';

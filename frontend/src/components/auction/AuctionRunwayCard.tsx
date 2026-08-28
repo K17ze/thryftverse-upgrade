@@ -39,7 +39,7 @@ interface Props {
   onPersonalAction?: () => void;
 }
 
-export function AuctionRunwayCard({
+function AuctionRunwayCardBase({
   title,
   imageUrl,
   brand,
@@ -219,6 +219,10 @@ export function AuctionRunwayCard({
     </AnimatedPressable>
   );
 }
+
+const AuctionRunwayCard = React.memo(AuctionRunwayCardBase);
+AuctionRunwayCard.displayName = 'AuctionRunwayCard';
+export { AuctionRunwayCard };
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {

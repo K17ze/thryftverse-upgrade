@@ -1,0 +1,150 @@
+import React, { useState, useCallback, memo } from 'react';
+import { View, Pressable, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Image as ExpoImage } from 'expo-image';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import type { LookTagApiItem } from '../../services/looksApi';
+import type { ProductReferenceKind } from '../../platform/product/openProductDetail';
+
+/** A look tag with optional hydrated product fields (title, price, image, etc). */
+export type HydratedLookTag = LookTagApiItem & {
+  title?: string;
+  price?: number;
+  image?: string;
+  images?: string[];
+  isSold?: boolean;
+  assetId?: string;
+  referenceKind?: ProductReferenceKind;
+};
+
+export interface LookHotspotsProps {
+  tags: HydratedLookTag[];
+  onTagTap: (tag: HydratedLookTag) => void;
+  /** Price formatter — receives the fiat amount and currency code. */
+  formatPrice?: (price: number, currencyCode?: string) => string;
+  currencyCode: string;
+}
+
+/**
+ * Interactive product hotspots overlaid on the look media.
+ * Has its own activeTagId state so tapping a hotspot doesn't
+ * re-render the parent FlashList header (CreatorCanvas, LookSocialActions).
+ */
+function LookHotspotsImpl({
+  tags,
+  onTagTap,
+  formatPrice,
+  currencyCode,
+}: LookHotspotsProps) {
+  const { colors } = useAppTheme();
+  const styles = useHotspotStyles(colors);
+  const [activeTagId, setActiveTagId] = useState<string | null>(null);
+
+  const handlePress = useCallback(
+    (tag: HydratedLookTag) => {
+      setActiveTagId(tag.id);
+      onTagTap(tag);
+    },
+    [onTagTap],
+  );
+
+  if (tags.length === 0) return null;
+
+  return (
+    <>
+      {tags.map((tag) => {
+        const isActive = activeTagId === tag.id;
+        const tagImage = tag.image ?? tag.images?.[0];
+        const tagTitle = tag.title ?? tag.label;
+        return (
+          <Pressable
+            key={tag.id}
+            style={[styles.hotspotWrap, { left: `${tag.x * 100}%`, top: `${tag.y * 100}%` }]}
+            onPress={() => handlePress(tag)}
+            hitSlop={20}
+            accessibilityRole="button"
+            accessibilityLabel={`Tagged item: ${tagTitle || 'product'}`}
+            accessibilityHint="Opens a product preview before viewing details"
+          >
+            <View style={styles.hotspotHalo} />
+            <View style={[styles.hotspotDot, isActive && styles.hotspotDotActive]} />
+            {isActive && tagImage && tagTitle && (
+              <View style={styles.tagTooltip}>
+                <ExpoImage
+                  source={{ uri: tagImage }}
+                  style={styles.tagTooltipImg}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  recyclingKey={tagImage}
+                />
+                <View style={styles.tagTooltipText}>
+                  <Text style={styles.tagTooltipTitle} numberOfLines={1}>{tagTitle}</Text>
+                  {tag.isSold ? (
+                    <Text style={styles.tagTooltipSold}>Sold</Text>
+                  ) : typeof tag.price === 'number' && formatPrice ? (
+                    <Text style={styles.tagTooltipPrice}>{formatPrice(tag.price, currencyCode)}</Text>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={colors.scrimTextSecondary} aria-hidden={true} />
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
+    </>
+  );
+}
+
+export const LookHotspots = memo(LookHotspotsImpl);
+
+const useHotspotStyles = (colors: ThemeColors) => {
+  return StyleSheet.create({
+    hotspotWrap: {
+      position: 'absolute',
+      width: Control.hit,
+      height: Control.hit,
+      marginLeft: -(Space.lg - 2),
+      marginTop: -(Space.lg - 2),
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 3,
+    },
+    hotspotHalo: {
+      position: 'absolute',
+      width: Space.xl - Space.xs,
+      height: Space.xl - Space.xs,
+      borderRadius: Radius.xl,
+      backgroundColor: colors.overlay,
+    },
+    hotspotDot: {
+      width: Space.sm + Space.xs,
+      height: Space.sm + Space.xs,
+      borderRadius: Radius.md,
+      backgroundColor: colors.scrimTextPrimary,
+      borderWidth: Stroke.emphasis,
+      borderColor: colors.overlay,
+    },
+    hotspotDotActive: {
+      backgroundColor: colors.brand,
+      borderColor: colors.scrimTextPrimary,
+    },
+    tagTooltip: {
+      position: 'absolute',
+      top: Space.lg + 4,
+      left: -Space.xxl - Space.xxl - Space.xl - 8,
+      width: Space.xxl * 8 + Space.xl + 4,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      backgroundColor: colors.overlay,
+      borderRadius: Radius.lg,
+      padding: Space.sm,
+    },
+    tagTooltipImg: { width: Space.xl + 4, height: Space.xl + 4, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt },
+    tagTooltipText: { flex: 1, gap: Space.xxs },
+    tagTooltipTitle: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: colors.scrimTextPrimary },
+    tagTooltipPrice: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.medium, color: colors.scrimTextSecondary },
+    tagTooltipSold: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.semibold, color: colors.danger },
+  });
+};

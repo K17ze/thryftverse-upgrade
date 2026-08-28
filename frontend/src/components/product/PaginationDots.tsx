@@ -8,6 +8,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Space, FontFamily, LetterSpacing } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Image pagination dots.
@@ -23,12 +24,21 @@ function PaginationDot({
   index,
   activeIndex,
   color,
+  reducedMotion,
 }: {
   index: number;
   activeIndex: SharedValue<number>;
   color: string;
+  reducedMotion: boolean;
 }) {
   const style = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      const isActive = Math.round(activeIndex.value) === index;
+      return {
+        width: isActive ? DOT_ACTIVE : DOT_INACTIVE,
+        opacity: isActive ? 1 : 0.35,
+      };
+    }
     const width = interpolate(
       activeIndex.value,
       [index - 0.5, index, index + 0.5],
@@ -63,6 +73,7 @@ export function PaginationDots({
   counterText?: string;
   color: string;
 }) {
+  const reducedMotion = useReducedMotion();
   return (
     <View style={paginationStyles.wrap}>
       <View style={paginationStyles.dotRow}>
@@ -72,6 +83,7 @@ export function PaginationDots({
             index={i}
             activeIndex={activeIndex}
             color={color}
+            reducedMotion={reducedMotion}
           />
         ))}
       </View>

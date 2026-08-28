@@ -45,6 +45,7 @@ function TagInputWithSuggestions({
     ({ item }) => (
       <Pressable
         style={({ pressed }) => [styles.tagSuggestionRow, pressed && { opacity: 0.6 }]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         onPress={() => onSuggestionPick(item)}
         accessibilityRole="button"
         accessibilityLabel={`Add tag ${item.query}`}

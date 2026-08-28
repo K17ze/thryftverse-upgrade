@@ -1,7 +1,7 @@
 /**
  * ListingPreviewCard — live preview of how a listing appears in the feed.
  *
- * Mirrors the ProductCardV2 styling patterns (image-first, portrait 3:4 ratio,
+ * Mirrors the ProductCard styling patterns (image-first, portrait 3:4 ratio,
  * condition badge, price hero, seller row) so the seller sees exactly what a
  * buyer will see. This closes the "blind publish" gap flagged in 2026 research:
  * sellers who preview their listing are 40% more confident at publish time.
@@ -9,7 +9,7 @@
  * Design (AGENTS.md §4):
  *   - Portrait 3:4 media (Poshmark 2026 standard) as the visual anchor.
  *   - One radius family (Radius.lg for media, Radius.md for badges).
- *   - Condition badge + price hero follow ProductCardV2 hierarchy.
+ *   - Condition badge + price hero follow ProductCard hierarchy.
  *   - "This is how buyers will see your listing" label sets honest context.
  *
  * TRUTHFUL UI (AGENTS.md §11):
@@ -90,7 +90,7 @@ export function ListingPreviewCard({
         </Text>
       </View>
 
-      {/* Preview card — mirrors ProductCardV2 composition */}
+      {/* Preview card — mirrors ProductCard composition */}
       <View style={styles.card}>
         {/* Media — portrait 3:4 */}
         <View style={styles.imageWrap}>
@@ -107,7 +107,7 @@ export function ListingPreviewCard({
             />
           )}
 
-          {/* Condition badge — same priority as ProductCardV2 */}
+          {/* Condition badge — same priority as ProductCard */}
           {condition ? (
             <View style={styles.conditionBadge}>
               <Text style={styles.conditionText}>{condition}</Text>

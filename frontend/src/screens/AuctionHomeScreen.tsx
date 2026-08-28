@@ -1227,7 +1227,7 @@ export default function AuctionHomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View testID="auction-screen" style={styles.container}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
       <AuctionMarketHeader
         title="Auctions"

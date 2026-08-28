@@ -52,7 +52,7 @@ import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModa
 import { ShareSheet } from '../components/ShareSheet';
 import { BottomSheet } from '../components/BottomSheet';
 import { HorizontalRail } from '../components/HorizontalRail';
-import { ProductCardV2 } from '../components/ProductCardV2';
+import { ProductCard } from '../components/ProductCard';
 import type { Listing as CatalogListing } from '../domain';
 
 import {
@@ -795,6 +795,7 @@ export default function ItemDetailScreen() {
   return (
     <GestureDetector gesture={dismissPan}>
     <Reanimated.View
+      testID="item-detail-screen"
       entering={reducedMotion ? FadeIn.duration(0) : FadeIn.duration(Motion.transitions.mediaLoad.duration)}
       style={[styles.container, { backgroundColor: colors.background }, dismissContainerStyle]}
     >
@@ -1320,7 +1321,7 @@ export default function ItemDetailScreen() {
             Horizontal browse rail of other live listings from the same
             seller. Contextual to the seller section — closes it with a
             bottom hairline. Only rendered when there are at least 2 real
-            items. Uses ProductCardV2 inside HorizontalRail so cards match
+            items. Uses ProductCard inside HorizontalRail so cards match
             discovery surfaces. Distinct from the Bundle upsell discovery
             module in the tail (which incentivises multi-item purchase). */}
         {seller && moreFromSellerRailItems.length >= 2 ? (
@@ -1334,7 +1335,7 @@ export default function ItemDetailScreen() {
             >
               {moreFromSellerRailItems.map((railItem) => (
                 <View key={railItem.id} style={styles.railCardWrap}>
-                  <ProductCardV2
+                  <ProductCard
                     item={railItem as unknown as CatalogListing}
                     onPress={() => handlePressRecommendation(railItem, 'more_from_seller')}
                     showSaveButton={false}

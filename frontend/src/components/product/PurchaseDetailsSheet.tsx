@@ -64,6 +64,7 @@ export function PurchaseDetailsSheet({
         <Pressable
           onPress={onDismiss}
           style={styles.sheetCloseTarget}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityLabel="Close costs, delivery and protection"
           accessibilityRole="button"
         >

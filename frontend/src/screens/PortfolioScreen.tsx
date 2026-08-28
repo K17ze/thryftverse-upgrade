@@ -402,6 +402,7 @@ export default function PortfolioScreen() {
 
   return (
     <FlagshipScreen
+      testID="portfolio-screen"
       header={
         <FlagshipHeader
           title="Portfolio"

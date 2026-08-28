@@ -43,7 +43,7 @@ describe("neutral flagship production detail pass", () => {
   });
 
   it("keeps product cards legible, truthful and accessible", () => {
-    const card = readSource("components/ProductCardV2.tsx");
+    const card = readSource("components/ProductCard.tsx");
     const heart = readSource("components/AnimatedHeart.tsx");
     // Sustainability chip must never appear when sold or when a price drop
     // is shown. The consolidated badge cascade enforces this through priority

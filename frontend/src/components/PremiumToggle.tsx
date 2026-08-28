@@ -1,34 +1,37 @@
 import React from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { StyleSheet, Pressable } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withTiming,
+  withSpring,
   interpolateColor,
 } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useMotionConfig } from '../hooks/useMotionConfig';
 
 import { Radius } from '../theme/designTokens';
 interface PremiumToggleProps {
   value: boolean;
   onValueChange: (v: boolean) => void;
   disabled?: boolean;
+  /** Accessibility label — should include the setting name and current state. */
+  accessibilityLabel?: string;
 }
 
 const ReanimatedPressable = Reanimated.createAnimatedComponent(Pressable);
 
-export function PremiumToggle({ value, onValueChange, disabled = false }: PremiumToggleProps) {
+export function PremiumToggle({ value, onValueChange, disabled = false, accessibilityLabel }: PremiumToggleProps) {
   const haptic = useHaptic();
   const { colors } = useAppTheme();
-  const reducedMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const progress = useSharedValue(value ? 1 : 0);
+  const scale = useSharedValue(1);
 
   React.useEffect(() => {
-    progress.value = withTiming(value ? 1 : 0, { duration: reducedMotion ? 0 : 180 });
-  }, [value, reducedMotion]);
+    progress.value = withSpring(value ? 1 : 0, spring.tap);
+  }, [value, progress, spring]);
 
   const trackStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
@@ -36,10 +39,11 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
       [0, 1],
       [colors.surfaceAlt, `${colors.brand}40`]
     ),
+    transform: [{ scale: scale.value }],
   }));
 
   const knobStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: progress.value * 20 }],
+    transform: [{ translateX: progress.value * 22 }],
     backgroundColor: interpolateColor(
       progress.value,
       [0, 1],
@@ -56,10 +60,18 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
   return (
     <ReanimatedPressable
       onPress={handlePress}
-      style={[styles.track, trackStyle]}
+      disabled={disabled}
+      style={[styles.track, trackStyle, disabled && { opacity: 0.5 }]}
       accessibilityRole="switch"
       accessibilityState={{ checked: value, disabled }}
-      accessibilityLabel={value ? 'On' : 'Off'}
+      accessibilityLabel={accessibilityLabel ?? (value ? 'On' : 'Off')}
+      accessibilityHint="Double tap to toggle"
+      onPressIn={() => {
+        if (!disabled) scale.value = withSpring(0.97, spring.press);
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, spring.press);
+      }}
     >
       <Reanimated.View style={[styles.knob, knobStyle]} />
     </ReanimatedPressable>

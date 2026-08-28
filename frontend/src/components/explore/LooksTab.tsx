@@ -24,6 +24,10 @@ import { EmptyState } from '../EmptyState';
 import { PremiumSkeletonTile } from '../discover/PremiumSkeletonTile';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { isVideoUri } from '../../utils/media';
+import {
+  resolveLookTemplate,
+  type LookTemplate,
+} from '../../utils/lookTemplates';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -39,68 +43,9 @@ const FEED_TABS: { key: FeedMode; label: string; sort: string }[] = [
   { key: 'following', label: 'Following', sort: 'following' },
 ];
 
-// ── Template set ─────────────────────────────────────────────────────────────
-// A deterministic template set drives the mixed-tile Explore canvas with
-// TRUE masonry rhythm — varying heights so the two columns stagger naturally
-// like Pinterest/Instagram Explore, not a uniform grid.
-//
-//   1×1 standard        — default image look (span 1, 4:5)
-//   1×1 portrait        — tall portrait look (span 1, 3:4)
-//   1×1 square          — compact square look (span 1, 1:1)
-//   2×1 cinematic        — video or multi-layer collage (span 2, 16:9)
-//   2×2 editorial anchor — rare, every 8th item (span 2, 4:5)
-//
-// The height variation between standard/portrait/square is what creates the
-// masonry staggering. Assignment is deterministic from index — no randomness.
-const EDITORIAL_ANCHOR_INTERVAL = 8;
-
-// Deterministic height rhythm: a 7-step cycle that creates organic masonry
-// staggering without visible pattern repetition. Prime-length cycles avoid
-// the "every 4th item looks the same" tell. The mix of portrait/square/
-// marketplace/landscape creates true Pinterest-style column stagger.
-const HEIGHT_RHYTHM: number[] = [
-  AspectRatio.portrait,    // 3:4 — tall
-  AspectRatio.square,      // 1:1 — compact
-  AspectRatio.marketplace, // 4:5 — standard
-  AspectRatio.portrait,    // 3:4 — tall
-  AspectRatio.landscape,   // 4:3 — wide-ish (still span 1)
-  AspectRatio.square,      // 1:1 — compact
-  AspectRatio.marketplace, // 4:5 — standard
-];
-
-interface LookTemplate {
-  /** Column span (1 or 2). Consumed by overrideItemLayout. */
-  span: 1 | 2;
-  /** Media aspect ratio (width / height) applied to the tile image. */
-  aspect: number;
-  /** Semantic template id — drives overlay cues. */
-  kind: 'standard' | 'portrait' | 'square' | 'cinematic' | 'editorial';
-}
-
-function resolveLookTemplate(look: LookApiItem, index: number): LookTemplate {
-  // 2×2 editorial anchor — rare, at a controlled interval.
-  if (index > 0 && index % EDITORIAL_ANCHOR_INTERVAL === 0) {
-    return { span: 2, aspect: AspectRatio.marketplace, kind: 'editorial' };
-  }
-
-  // 2×1 cinematic — video or multi-layer collage looks get a wide feature.
-  const isVideo = look.mediaType === 'video' || isVideoUri(look.mediaUrl);
-  const isMultiLayer = look.compositionDocument != null;
-  if (isVideo || isMultiLayer) {
-    return { span: 2, aspect: AspectRatio.wide, kind: 'cinematic' };
-  }
-
-  // 1×1 tiles with deterministic height variation for true masonry rhythm.
-  // The cycle creates visual stagger between columns without randomness.
-  const aspect = HEIGHT_RHYTHM[index % HEIGHT_RHYTHM.length];
-  if (aspect === AspectRatio.portrait) {
-    return { span: 1, aspect, kind: 'portrait' };
-  }
-  if (aspect === AspectRatio.square) {
-    return { span: 1, aspect, kind: 'square' };
-  }
-  return { span: 1, aspect, kind: 'standard' };
-}
+// Template set and resolveLookTemplate are now shared from
+// ../../utils/lookTemplates — see that file for the height rhythm
+// and editorial/cinematic anchor logic.
 
 // ── LookTile ─────────────────────────────────────────────────────────────────
 // Lightweight inline tile for the Explore canvas. Overlay density is kept low:
@@ -321,96 +266,11 @@ export default function LooksTab() {
     [feedMode, handleFeedModeChange, styles],
   );
 
-  // ── Loading / error / empty states (preserved) ────────────────────────────
-  if (isLoading) {
-    // Masonry skeleton matching the final layout — two columns of
-    // surfaceAlt blocks with varying heights that mirror the template
-    // set's aspect ratios (AGENTS.md §14: skeletons should resemble the
-    // final layout; no generic centred spinner).
-    const colWidth = (windowWidth - Space.md * 2 - Space.sm) / 2;
-    const skeletonHeights = [
-      Math.round(colWidth / AspectRatio.marketplace),
-      Math.round(colWidth / AspectRatio.wide),
-      Math.round(colWidth / AspectRatio.marketplace),
-      Math.round(colWidth / AspectRatio.marketplace),
-    ];
-    const leftCol = [skeletonHeights[0], skeletonHeights[2]];
-    const rightCol = [skeletonHeights[1], skeletonHeights[3]];
-
-    return (
-      <View style={styles.scrollContent}>
-        {FeedTabs}
-        <View style={styles.masonrySkeletonGrid}>
-          <View style={styles.masonrySkeletonCol}>
-            {leftCol.map((h, i) => (
-              <PremiumSkeletonTile
-                key={`l-${i}`}
-                width={colWidth}
-                height={h}
-                borderRadius={Radius.lg}
-                style={styles.masonrySkeletonTile}
-              />
-            ))}
-          </View>
-          <View style={styles.masonrySkeletonCol}>
-            {rightCol.map((h, i) => (
-              <PremiumSkeletonTile
-                key={`r-${i}`}
-                width={colWidth}
-                height={h}
-                borderRadius={Radius.lg}
-                style={styles.masonrySkeletonTile}
-              />
-            ))}
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  if (loadError && looks.length === 0) {
-    return (
-      <View style={styles.errorWrap}>
-        <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
-        <Text style={styles.errorTitle}>Looks could not be loaded</Text>
-        <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
-        <AnimatedPressable
-          style={styles.retryBtn}
-          onPress={() => {
-            setIsLoading(true);
-            void loadLooks(false, feedMode);
-          }}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading looks"
-        >
-          <Text style={styles.retryBtnText}>Retry</Text>
-        </AnimatedPressable>
-      </View>
-    );
-  }
-
-  if (looks.length === 0 && !loadError) {
-    return (
-      <View style={styles.scrollContent}>
-        {FeedTabs}
-        <EmptyState
-          icon="camera-outline"
-          title="No looks yet"
-          subtitle="Create a look, tag real products, and share your style with the community."
-          ctaLabel="Create a Look"
-          onCtaPress={handleCreateLook}
-          graphic={
-            <View style={{ alignItems: 'center', marginBottom: Space.md }}>
-              <Ionicons name="images-outline" size={48} color={colors.brand} />
-            </View>
-          }
-        />
-      </View>
-    );
-  }
-
-  // ── FlashList v2 masonry canvas ───────────────────────────────────────────
+  // ── FlashList v2 masonry hooks ────────────────────────────────────────────
+  // These hooks MUST be called before any early returns. React requires hooks
+  // to be called in the same order on every render. If we return early (e.g.
+  // during loading) and skip these hooks, React throws "Rendered more hooks
+  // than during the previous render" when the loading state clears.
   const keyExtractor = useCallback(
     (item: LookApiItem) => `look-${item.id}`,
     [],
@@ -506,6 +366,95 @@ export default function LooksTab() {
       ) : null,
     [isLoadingMore, cursor, looks.length, windowWidth, styles],
   );
+
+  // ── Loading / error / empty states (preserved) ────────────────────────────
+  if (isLoading) {
+    // Masonry skeleton matching the final layout — two columns of
+    // surfaceAlt blocks with varying heights that mirror the template
+    // set's aspect ratios (AGENTS.md §14: skeletons should resemble the
+    // final layout; no generic centred spinner).
+    const colWidth = (windowWidth - Space.md * 2 - Space.sm) / 2;
+    const skeletonHeights = [
+      Math.round(colWidth / AspectRatio.marketplace),
+      Math.round(colWidth / AspectRatio.wide),
+      Math.round(colWidth / AspectRatio.marketplace),
+      Math.round(colWidth / AspectRatio.marketplace),
+    ];
+    const leftCol = [skeletonHeights[0], skeletonHeights[2]];
+    const rightCol = [skeletonHeights[1], skeletonHeights[3]];
+
+    return (
+      <View style={styles.scrollContent}>
+        {FeedTabs}
+        <View style={styles.masonrySkeletonGrid}>
+          <View style={styles.masonrySkeletonCol}>
+            {leftCol.map((h, i) => (
+              <PremiumSkeletonTile
+                key={`l-${i}`}
+                width={colWidth}
+                height={h}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            ))}
+          </View>
+          <View style={styles.masonrySkeletonCol}>
+            {rightCol.map((h, i) => (
+              <PremiumSkeletonTile
+                key={`r-${i}`}
+                width={colWidth}
+                height={h}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            ))}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (loadError && looks.length === 0) {
+    return (
+      <View style={styles.errorWrap}>
+        <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
+        <Text style={styles.errorTitle}>Looks could not be loaded</Text>
+        <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
+        <AnimatedPressable
+          style={styles.retryBtn}
+          onPress={() => {
+            setIsLoading(true);
+            void loadLooks(false, feedMode);
+          }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading looks"
+        >
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </AnimatedPressable>
+      </View>
+    );
+  }
+
+  if (looks.length === 0 && !loadError) {
+    return (
+      <View style={styles.scrollContent}>
+        {FeedTabs}
+        <EmptyState
+          icon="camera-outline"
+          title="No looks yet"
+          subtitle="Create a look, tag real products, and share your style with the community."
+          ctaLabel="Create a Look"
+          onCtaPress={handleCreateLook}
+          graphic={
+            <View style={{ alignItems: 'center', marginBottom: Space.md }}>
+              <Ionicons name="images-outline" size={48} color={colors.brand} />
+            </View>
+          }
+        />
+      </View>
+    );
+  }
 
   // Only wire onEndReached when there is a cursor to consume — avoids
   // no-op fetches at the end of a finite feed.

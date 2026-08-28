@@ -157,7 +157,7 @@ export function SmartSellCard({
             false: colors.surfaceAlt,
             true: colors.brand,
           }}
-          thumbColor="#fff"
+          thumbColor={colors.scrimTextPrimary}
           accessibilityLabel="Toggle Smart Sell"
           accessibilityHint="Enable or disable auto-negotiation"
         />
@@ -304,6 +304,8 @@ function SmartSellSheet({
           },
         ]}
         onPress={(e) => e.stopPropagation()}
+        accessibilityRole="button"
+        accessibilityLabel="Smart Sell settings panel"
       >
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
@@ -478,7 +480,7 @@ function SmartSellSheet({
                   false: colors.surfaceAlt,
                   true: colors.brand,
                 }}
-                thumbColor="#fff"
+                thumbColor={colors.scrimTextPrimary}
                 accessibilityLabel="Toggle auto-decline"
                 accessibilityHint="Enable or disable auto-decline of low offers"
               />
@@ -874,7 +876,7 @@ function createSheetStyles(colors: ThemeColors) {
     doneBtnText: {
       fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
-      color: '#fff',
+      color: colors.scrimTextPrimary,
     },
   });
 }

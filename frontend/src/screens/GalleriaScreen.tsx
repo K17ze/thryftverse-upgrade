@@ -727,7 +727,7 @@ export default function GalleriaScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="coown-screen" style={styles.container}>
       <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* Offline banner */}

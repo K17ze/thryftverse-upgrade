@@ -1490,6 +1490,18 @@ const ProductPicker = React.memo(function ProductPicker({ onClose, onAddLayer }:
     }
   }, [activeTab, doSearch, query]);
 
+  const renderProductItem = useCallback<ListRenderItem<ListingSearchResult>>(({ item }) => (
+    <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+      <View style={styles.resultThumb}>
+        {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />}
+      </View>
+      <View style={styles.resultInfo}>
+        <Text style={styles.resultName} numberOfLines={1}>{item.title}</Text>
+        <Text style={styles.resultPrice}>{currencySymbol}{item.priceGbp.toFixed(0)}</Text>
+      </View>
+    </Pressable>
+  ), [handleSelect, styles, colors, currencySymbol]);
+
   const tabs: Array<{ key: ProductSourceTab; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
     { key: 'search', label: 'Search', icon: 'search-outline' },
     { key: 'closet', label: 'My Closet', icon: 'shirt-outline' },
@@ -1556,17 +1568,7 @@ const ProductPicker = React.memo(function ProductPicker({ onClose, onAddLayer }:
         <FlashList
           data={activeResults}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <View style={styles.resultThumb}>
-                {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />}
-              </View>
-              <View style={styles.resultInfo}>
-                <Text style={styles.resultName} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.resultPrice}>{currencySymbol}{item.priceGbp.toFixed(0)}</Text>
-              </View>
-            </Pressable>
-          )}
+          renderItem={renderProductItem}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
           drawDistance={250}
@@ -1661,6 +1663,18 @@ const MentionPicker = React.memo(function MentionPicker({ onClose, onAddLayer }:
     onClose();
   }, [onAddLayer, onClose]);
 
+  const renderMentionItem = useCallback<ListRenderItem<UserSearchResult>>(({ item }) => (
+    <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+      <View style={styles.resultAvatar}>
+        {item.avatar ? <Image source={{ uri: item.avatar }} style={styles.resultThumbImg} /> : <Text style={styles.resultAvatarText}>{item.username[0]?.toUpperCase()}</Text>}
+      </View>
+      <View style={styles.resultInfo}>
+        <Text style={styles.resultName}>@{item.username}</Text>
+        {item.displayName && <Text style={styles.resultSubtext}>{item.displayName}</Text>}
+      </View>
+    </Pressable>
+  ), [handleSelect, styles]);
+
   return (
     <PickerShell title="Add Mention" onClose={onClose} compact>
       <View style={styles.searchRow}>
@@ -1689,17 +1703,7 @@ const MentionPicker = React.memo(function MentionPicker({ onClose, onAddLayer }:
         <FlashList
           data={results}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <View style={styles.resultAvatar}>
-                {item.avatar ? <Image source={{ uri: item.avatar }} style={styles.resultThumbImg} /> : <Text style={styles.resultAvatarText}>{item.username[0]?.toUpperCase()}</Text>}
-              </View>
-              <View style={styles.resultInfo}>
-                <Text style={styles.resultName}>@{item.username}</Text>
-                {item.displayName && <Text style={styles.resultSubtext}>{item.displayName}</Text>}
-              </View>
-            </Pressable>
-          )}
+          renderItem={renderMentionItem}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
           drawDistance={250}
@@ -1772,6 +1776,15 @@ const LookPicker = React.memo(function LookPicker({ onClose, onAddLayer }: { onC
     onClose();
   }, [onAddLayer, onClose]);
 
+  const renderLookItem = useCallback<ListRenderItem<{ id: string; caption: string; mediaUrl: string; creatorId: string }>>(({ item }) => (
+    <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+      <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} /></View>
+      <View style={styles.resultInfo}>
+        <Text style={styles.resultName} numberOfLines={2}>{item.caption}</Text>
+      </View>
+    </Pressable>
+  ), [handleSelect, styles, colors]);
+
   return (
     <PickerShell title="Add Look" onClose={onClose} compact>
       <View style={styles.searchRow}>
@@ -1800,14 +1813,7 @@ const LookPicker = React.memo(function LookPicker({ onClose, onAddLayer }: { onC
         <FlashList
           data={filtered}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} /></View>
-              <View style={styles.resultInfo}>
-                <Text style={styles.resultName} numberOfLines={2}>{item.caption}</Text>
-              </View>
-            </Pressable>
-          )}
+          renderItem={renderLookItem}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
           drawDistance={250}
@@ -2660,6 +2666,22 @@ const GifPicker = React.memo(function GifPicker({ onClose, onAddLayer }: { onClo
     onClose();
   }, [onAddLayer, onClose, haptic]);
 
+  const renderGifItem = useCallback<ListRenderItem<GifResult>>(({ item }) => (
+    <Pressable
+      onPress={() => handleSelect(item)}
+      style={styles.gifCell}
+      accessibilityLabel={`Select GIF ${item.altText}`}
+      accessibilityRole="button"
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <Image
+        source={{ uri: item.stillUrl || item.gifUrl }}
+        style={styles.gifThumb}
+        contentFit="cover"
+      />
+    </Pressable>
+  ), [handleSelect, styles]);
+
   return (
     <PickerShell title="GIF" onClose={onClose} compact>
       {/* Category chips — premium style matching sticker tray */}
@@ -2714,21 +2736,7 @@ const GifPicker = React.memo(function GifPicker({ onClose, onAddLayer }: { onClo
           data={results}
           keyExtractor={(item) => item.id}
           numColumns={2}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => handleSelect(item)}
-              style={styles.gifCell}
-              accessibilityLabel={`Select GIF ${item.altText}`}
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Image
-                source={{ uri: item.stillUrl || item.gifUrl }}
-                style={styles.gifThumb}
-                contentFit="cover"
-              />
-            </Pressable>
-          )}
+          renderItem={renderGifItem}
           style={styles.gifList}
           keyboardShouldPersistTaps="handled"
           drawDistance={250}
@@ -2833,6 +2841,26 @@ const MusicPicker = React.memo(function MusicPicker({ onClose, onAddLayer }: { o
     onClose();
   }, [onAddLayer, onClose, haptic]);
 
+  const renderMusicItem = useCallback<ListRenderItem<MusicTrack>>(({ item }) => (
+    <Pressable
+      onPress={() => handleSelect(item)}
+      onPressIn={() => setPreviewTrack(item)}
+      style={({ pressed }) => [styles.musicRow, pressed && { opacity: 0.6 }]}
+      accessibilityLabel={`Select ${item.trackName} by ${item.artistName}`}
+      accessibilityRole="button"
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} contentFit="cover" />
+      <View style={styles.musicInfo}>
+        <Text style={styles.musicTrackName} numberOfLines={1}>{item.trackName}</Text>
+        <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
+      </View>
+      <View style={styles.musicAddBtn}>
+        <Ionicons name="checkmark" size={IconGrammar.standard} color={colors.textInverse} aria-hidden={true} />
+      </View>
+    </Pressable>
+  ), [handleSelect, setPreviewTrack, styles, colors]);
+
   return (
     <PickerShell title="Music" onClose={onClose}>
       {/* Live sticker preview — shows how the music sticker will look on canvas */}
@@ -2892,25 +2920,7 @@ const MusicPicker = React.memo(function MusicPicker({ onClose, onAddLayer }: { o
         <FlashList
           data={results}
           keyExtractor={(item) => item.trackId}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => handleSelect(item)}
-              onPressIn={() => setPreviewTrack(item)}
-              style={({ pressed }) => [styles.musicRow, pressed && { opacity: 0.6 }]}
-              accessibilityLabel={`Select ${item.trackName} by ${item.artistName}`}
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} contentFit="cover" />
-              <View style={styles.musicInfo}>
-                <Text style={styles.musicTrackName} numberOfLines={1}>{item.trackName}</Text>
-                <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
-              </View>
-              <View style={styles.musicAddBtn}>
-                <Ionicons name="checkmark" size={IconGrammar.standard} color={colors.textInverse} aria-hidden={true} />
-              </View>
-            </Pressable>
-          )}
+          renderItem={renderMusicItem}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
           drawDistance={250}

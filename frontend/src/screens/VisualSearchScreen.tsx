@@ -500,11 +500,11 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           >
             <Text style={[styles.categoryPillText, !selectedCategory && styles.categoryPillTextActive]}>All</Text>
           </AnimatedPressable>
-          {availableCategories.map(({ category, count }) => {
+          {availableCategories.map(({ category, count }, idx) => {
             const active = selectedCategory === category;
             return (
               <AnimatedPressable
-                key={category}
+                key={`vscat-${idx}-${category}`}
                 style={[styles.categoryPill, active && styles.categoryPillActive]}
                 onPress={() => { haptic.selection(); setSelectedCategory(active ? null : category); }}
                 activeOpacity={0.85}

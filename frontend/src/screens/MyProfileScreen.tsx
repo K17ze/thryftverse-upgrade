@@ -573,7 +573,7 @@ export default function MyProfileScreen() {
   const showHero = allOwnedListings.length >= 3;
 
   return (
-    <View style={[styles.container, t.container]}>
+    <View testID="profile-screen" style={[styles.container, t.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <OfflineBanner />

@@ -40,7 +40,6 @@ export interface AuctionNotificationRowProps {
 interface AuctionVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'danger' | 'success' | 'warning';
-  accentSubtleKey: 'dangerSubtle' | 'successSubtle' | 'warningSubtle';
   urgencyLabel: string;
   actionLabel: string;
 }
@@ -48,13 +47,13 @@ interface AuctionVisual {
 function resolveAuctionVisual(eventType: NotificationEventV2['eventType']): AuctionVisual {
   switch (eventType) {
     case 'auction_outbid':
-      return { icon: 'trending-up-outline', accentKey: 'danger', accentSubtleKey: 'dangerSubtle', urgencyLabel: 'Outbid', actionLabel: 'Bid again' };
+      return { icon: 'trending-up-outline', accentKey: 'danger', urgencyLabel: 'Outbid', actionLabel: 'Bid again' };
     case 'auction_won':
-      return { icon: 'trophy-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', urgencyLabel: 'Auction won', actionLabel: 'Complete purchase' };
+      return { icon: 'trophy-outline', accentKey: 'success', urgencyLabel: 'Auction won', actionLabel: 'Complete purchase' };
     case 'auction_ending_soon':
-      return { icon: 'time-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', urgencyLabel: 'Ending soon', actionLabel: 'Place bid' };
+      return { icon: 'time-outline', accentKey: 'warning', urgencyLabel: 'Ending soon', actionLabel: 'Place bid' };
     default:
-      return { icon: 'flag-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', urgencyLabel: 'Auction update', actionLabel: 'View auction' };
+      return { icon: 'flag-outline', accentKey: 'warning', urgencyLabel: 'Auction update', actionLabel: 'View auction' };
   }
 }
 
@@ -72,7 +71,6 @@ export function AuctionNotificationRow({
 
   const visual = useMemo(() => resolveAuctionVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
-  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
   const objectLabel = event.objectRef?.label ?? 'this auction';
@@ -83,23 +81,24 @@ export function AuctionNotificationRow({
   const minimumNextBid = readPayloadNumber(event.payload, 'minimumNextBidGbp') ?? readPayloadNumber(event.payload, 'minimumNextBid');
   const currency = readPayloadString(event.payload, 'currency') ?? currencySymbol;
 
-  const bidText = currentBid != null
-    ? `Current bid ${currency}${currentBid.toFixed(2)}`
+  const bidAmount = currentBid != null
+    ? `${currency}${currentBid.toFixed(2)}`
     : minimumNextBid != null
-      ? `Next bid ${currency}${minimumNextBid.toFixed(2)}`
+      ? `${currency}${minimumNextBid.toFixed(2)}`
       : null;
+  const bidPrefix = currentBid != null ? 'Current bid' : minimumNextBid != null ? 'Next bid' : null;
 
-  const description = bidText ? `${visual.urgencyLabel} · ${objectLabel} · ${bidText}` : `${visual.urgencyLabel} · ${objectLabel}`;
+  // The description carries the urgency + object label only; the bid amount
+  // is rendered as a dedicated tabular-figures element (the visual anchor).
+  const description = `${visual.urgencyLabel} · ${objectLabel}`;
 
-  const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${visual.urgencyLabel} on ${objectLabel}${bidText ? `. ${bidText}` : ''}. ${time}. Button: ${visual.actionLabel}`;
+  const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${visual.urgencyLabel} on ${objectLabel}${bidAmount ? `. ${bidPrefix} ${bidAmount}` : ''}. ${time}. Button: ${visual.actionLabel}`;
 
   const leading = (
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
-      accentSubtle={accentSubtle}
-      colors={colors}
-      size={44}
+      size={24}
     />
   );
 
@@ -129,6 +128,11 @@ export function AuctionNotificationRow({
       <Text style={styles.body} numberOfLines={2}>
         {description}
       </Text>
+      {bidAmount ? (
+        <Text style={styles.bidAmount} numberOfLines={1}>
+          {bidPrefix} {bidAmount}
+        </Text>
+      ) : null}
     </NotificationRowBase>
   );
 }
@@ -136,11 +140,11 @@ export function AuctionNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyLarge.lineHeight,
-      paddingRight: Space.xxl + Space.sm,
+      lineHeight: Type.bodyStrong.lineHeight,
+      flexShrink: 1,
     },
     titleUnread: {
       color: colors.textPrimary,
@@ -151,6 +155,14 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
       lineHeight: Type.body.lineHeight,
+    },
+    bidAmount: {
+      fontSize: Type.body.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+      lineHeight: Type.body.lineHeight,
+      fontVariant: ['tabular-nums'],
+      marginTop: Space.xs / 2,
     },
   });
 }

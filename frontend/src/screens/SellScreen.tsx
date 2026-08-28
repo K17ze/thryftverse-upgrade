@@ -70,7 +70,6 @@ import { useListingPublishPipeline } from '../hooks/sell/useListingPublishPipeli
 import { useSellDraftPersistence } from '../hooks/sell/useSellDraftPersistence';
 import { useTagAutocomplete } from '../hooks/sell/useTagAutocomplete';
 import AuctionFieldsSection from '../components/sell/AuctionFieldsSection';
-import PhotoGuideCollapse from '../components/sell/PhotoGuideCollapse';
 import SellerTipsBanner from '../components/sell/SellerTipsBanner';
 import ShippingPickerSheet from '../components/sell/ShippingPickerSheet';
 import TagInputWithSuggestions from '../components/sell/TagInputWithSuggestions';
@@ -645,7 +644,7 @@ export default function SellScreen() {
   }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, navigation]);
 
   return (
-    <SafeAreaView ref={a11yRef} style={[styles.root, themed.root]} edges={['top']}>
+    <SafeAreaView ref={a11yRef} testID="sell-screen" style={[styles.root, themed.root]} edges={['top']}>
         {/* -- 1. COMPACT NAVIGATION HEADER -- */}
         <View style={[styles.navHeader, themed.navHeader, { paddingTop: 0 }]}>
           <Pressable
@@ -694,7 +693,109 @@ export default function SellScreen() {
             </View>
           )}
 
-          {/* -- 1b. QUICK ACTIONS ROW -- */}
+          {/* -- 2. LISTING MEDIA (dominant first-viewport object) -- */}
+          {/* The media empty state is the primary action — it leads the
+              first viewport. Utility rows (quick actions, import, tips)
+              follow below so the media area dominates, not a stack of
+              secondary affordances. */}
+          {mediaDraftItems.length === 0 ? (
+            <EmptyState
+              icon="camera-outline"
+              title={t('listing.create.addPhotosTitle')}
+              subtitle={t('listing.create.addPhotosSubtitle')}
+              ctaLabel={t('listing.create.uploadFromLibrary')}
+              onCtaPress={handlePickFromLibrary}
+              secondaryCtaLabel={t('listing.create.takePhoto')}
+              onSecondaryCtaPress={handlePickFromCamera}
+            />
+          ) : (
+            <ListingMediaStudio
+              items={mediaDraftItems}
+              queueItems={queueState.items}
+              maxCount={10}
+              errorText={errors.photos}
+              onPickFromLibrary={handlePickFromLibrary}
+              onPickFromCamera={handlePickFromCamera}
+              onReorder={handleReorderIds}
+              onRemoveItem={removeItem}
+              onRetryItem={handleRetryItem}
+              onSetCover={handleSetCover}
+            />
+          )}
+
+          {/* -- 2a. CONTEXTUAL PHOTO ASSISTANT (consolidated) -- */}
+          {/* One system, not three. Shows only the most relevant guidance
+              for the current media state: an expandable tips affordance
+              before any photos, a count nudge + contextual prompts once
+              photos exist. No redundant labels or stacked hint rows. */}
+          {(() => {
+            const count = mediaDraftItems.length;
+            const prompts = buildContextualPhotoPrompts(brand, condition, count, category);
+            const needsMore = count > 0 && count < 3;
+
+            if (count === 0) {
+              // EmptyState dominates; tips remain accessible via a single
+              // subtle expandable affordance — no stacked hint rows.
+              return (
+                <Pressable
+                  style={({ pressed }) => [styles.photoAssistantToggle, pressed && { opacity: 0.6 }]}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPress={() => setPhotoGuideCollapsed((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
+                  accessibilityHint="Tips for taking great listing photos"
+                >
+                  <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
+                  <Text style={[styles.photoAssistantToggleText, { color: colors.textSecondary }]}>
+                    {t('listing.create.photoTips')}
+                  </Text>
+                  <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color={colors.textMuted} aria-hidden={true} />
+                </Pressable>
+              );
+            }
+
+            if (prompts.length === 0 && !needsMore) return null;
+
+            return (
+              <View style={styles.contextualPrompts}>
+                {needsMore && (
+                  <View style={styles.contextualPromptRow}>
+                    <Ionicons name="camera-outline" size={16} color={colors.brand} aria-hidden={true} />
+                    <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
+                      {t('listing.create.addMorePhotos', { count: 3 - count, plural: 3 - count > 1 ? 's' : '' })}
+                    </Text>
+                  </View>
+                )}
+                {prompts.map((prompt, i) => (
+                  <View key={i} style={styles.contextualPromptRow}>
+                    <Ionicons name={prompt.icon as React.ComponentProps<typeof Ionicons>['name']} size={16} color={colors.brand} aria-hidden={true} />
+                    <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
+                      {prompt.text}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })()}
+
+          {/* Photo tips detail — expandable, only before the first photo */}
+          {mediaDraftItems.length === 0 && !photoGuideCollapsed && (
+            <View style={styles.photoAssistantTips}>
+              <View style={styles.contextualPromptRow}>
+                <Ionicons name="sunny-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipLighting')}</Text>
+              </View>
+              <View style={styles.contextualPromptRow}>
+                <Ionicons name="cube-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipAngles')}</Text>
+              </View>
+              <View style={styles.contextualPromptRow}>
+                <Ionicons name="leaf-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipBackground')}</Text>
+              </View>
+            </View>
+          )}
+          {/* -- 2b. QUICK ACTIONS ROW -- */}
           {/* Per research: quick actions for related seller tasks.
               Transparent 44pt targets with 20-24pt glyphs (AGENTS.md §4).
               Only shows when the form is empty (no draft content) to avoid
@@ -734,7 +835,7 @@ export default function SellScreen() {
             </View>
           )}
 
-          {/* -- 1c. IMPORT A SHOP -- secondary action below the primary
+          {/* -- 2c. IMPORT A SHOP -- secondary action below the primary
               listing flow. A single flat row (not a card) with a hairline
               separator above. Restrained — does not compete with the
               primary camera/listing action (blueprint §5.1). -- */}
@@ -763,86 +864,13 @@ export default function SellScreen() {
             </AnimatedPressable>
           )}
 
-          {/* -- 1d. NEW SELLER TIPS -- */}
+          {/* -- 2d. NEW SELLER TIPS -- */}
           {/* Per research: new seller tips/guidance if first-time seller.
               Dismissible, only shows when isNewSeller and not dismissed.
               Flat inline — no card chrome (§4 surface budget). */}
           {isNewSeller && !sellerTipsDismissed && !hasDraftContent && (
             <SellerTipsBanner onDismiss={() => setSellerTipsDismissed(true)} />
           )}
-          {/* -- 2. LARGE LISTING MEDIA STUDIO -- */}
-          {mediaDraftItems.length === 0 ? (
-            <EmptyState
-              icon="camera-outline"
-              title={t('listing.create.addPhotosTitle')}
-              subtitle={t('listing.create.addPhotosSubtitle')}
-              ctaLabel={t('listing.create.uploadFromLibrary')}
-              onCtaPress={handlePickFromLibrary}
-              secondaryCtaLabel={t('listing.create.takePhoto')}
-              onSecondaryCtaPress={handlePickFromCamera}
-            />
-          ) : (
-            <ListingMediaStudio
-              items={mediaDraftItems}
-              queueItems={queueState.items}
-              maxCount={10}
-              errorText={errors.photos}
-              onPickFromLibrary={handlePickFromLibrary}
-              onPickFromCamera={handlePickFromCamera}
-              onReorder={handleReorderIds}
-              onRemoveItem={removeItem}
-              onRetryItem={handleRetryItem}
-              onSetCover={handleSetCover}
-            />
-          )}
-
-          {/* -- 2a. CONTEXTUAL PHOTO COUNT HINT -- */}
-          {/* Not a quality score — a specific, actionable check next to the
-              media it relates to. Resolves when the user adds enough photos. */}
-          {mediaDraftItems.length < 3 && (
-            <View style={styles.contextualHintRow}>
-              <Ionicons name="camera-outline" size={16} color={colors.brand} aria-hidden={true} />
-              <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
-                {mediaDraftItems.length === 0
-                  ? t('listing.create.addAtLeastOnePhoto')
-                  : t('listing.create.addMorePhotos', { count: 3 - mediaDraftItems.length, plural: 3 - mediaDraftItems.length > 1 ? 's' : '' })}
-              </Text>
-            </View>
-          )}
-
-          {/* -- 2a. PHOTO UPLOAD GUIDANCE (contextual, collapsible) -- */}
-          <PhotoGuideCollapse
-            collapsed={photoGuideCollapsed}
-            onToggle={() => setPhotoGuideCollapsed((v) => !v)}
-          />
-
-          {/* -- 2a-2. CONTEXTUAL AUTHENTICITY PROMPTS -- */}
-          {/* Per audit 04 P1: "Contextual authenticity prompts by category/value."
-              Per audit 04 media authenticity: prompts appear contextually based on
-              the current listing state, not as a permanent instructional card.
-              - After first image: "Add the back"
-              - After category known: "Show the size label"
-              - For luxury brands: "Add serial / stitching / receipt evidence"
-              - If condition has flaws: "Add a close-up of the flaw"
-              Only shows when relevant and dismissible. */}
-          {(() => {
-            const visible = buildContextualPhotoPrompts(brand, condition, mediaDraftItems.length, category);
-
-            if (visible.length === 0) return null;
-
-            return (
-              <View style={styles.contextualPrompts}>
-                {visible.map((prompt, i) => (
-                  <View key={i} style={styles.contextualPromptRow}>
-                    <Ionicons name={prompt.icon as React.ComponentProps<typeof Ionicons>['name']} size={16} color={colors.brand} aria-hidden={true} />
-                    <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
-                      {prompt.text}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            );
-          })()}
 
           {/* -- 2c. TITLE FIELD (first identity field, in first viewport) -- */}
           {/* Per spec: first viewport shows close, Sell title, media studio,
@@ -1900,6 +1928,37 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+
+  /* -- contextual photo assistant (consolidated) -- */
+  /* One system replacing the former contextualHintRow, PhotoGuideCollapse,
+     and contextualPrompts. Flat inline — no card chrome (§4 surface budget). */
+  photoAssistantToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    minHeight: Control.hit,
+  },
+  photoAssistantToggleText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  photoAssistantTips: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+    gap: Space.xs,
+  },
+  photoAssistantTip: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
 

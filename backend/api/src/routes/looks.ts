@@ -26,6 +26,14 @@ const createLookBodySchema = z.object({
   mediaFinalizationId: z.string().min(2).max(160).optional(),
   mediaAssetId: z.string().min(2).max(160).optional(),
   mediaType: z.enum(['image', 'video']).default('image'),
+  mediaUrls: z.array(
+    z.object({
+      url: z.string().url(),
+      mediaType: z.enum(['image', 'video']).default('image'),
+      mediaFinalizationId: z.string().optional(),
+      mediaAssetId: z.string().optional(),
+    })
+  ).max(10).optional(),
   compositionDocument: z.unknown().optional(),
   visibility: z.enum(['public', 'followers', 'private']).default('public'),
   tags: z.array(
@@ -55,6 +63,14 @@ const patchLookBodySchema = z.object({
   mediaFinalizationId: z.string().min(2).max(160).optional(),
   mediaAssetId: z.string().min(2).max(160).optional(),
   mediaType: z.enum(['image', 'video']).optional(),
+  mediaUrls: z.array(
+    z.object({
+      url: z.string().url(),
+      mediaType: z.enum(['image', 'video']).default('image'),
+      mediaFinalizationId: z.string().optional(),
+      mediaAssetId: z.string().optional(),
+    })
+  ).max(10).optional(),
   compositionDocument: z.unknown().nullable().optional(),
   visibility: z.enum(['public', 'followers', 'private']).optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
@@ -341,6 +357,27 @@ async function enrichLooks(
     viewerSavesSet = new Set(viewerSavesResult.rows.map((r) => r.look_id));
   }
 
+  // Batch-fetch carousel media (additional slides beyond the primary media_url).
+  const carouselMediaResult = lookIds.length
+    ? await db.query<{
+        look_id: string;
+        media_url: string;
+        media_type: 'image' | 'video';
+      }>(
+        `SELECT look_id, media_url, media_type
+         FROM look_media
+         WHERE look_id = ANY($1)
+         ORDER BY look_id, position ASC`,
+        [lookIds]
+      )
+    : { rows: [] };
+  const carouselMediaByLook = new Map<string, Array<{ url: string; mediaType: 'image' | 'video' }>>();
+  for (const m of carouselMediaResult.rows) {
+    const arr = carouselMediaByLook.get(m.look_id) ?? [];
+    arr.push({ url: m.media_url, mediaType: m.media_type });
+    carouselMediaByLook.set(m.look_id, arr);
+  }
+
   // Batch-fetch source look creator info for repost attribution.
   const sourceLookIds = lookRows
     .map((r) => r.source_look_id)
@@ -382,6 +419,7 @@ async function enrichLooks(
     caption: row.caption,
     mediaUrl: row.media_url,
     mediaType: row.media_type,
+    mediaUrls: carouselMediaByLook.get(row.id) ?? [],
     compositionDocument: row.composition_document,
     visibility: row.visibility,
     status: row.status,
@@ -579,6 +617,69 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
         lookId: payload.id,
         media: mediaVerification.media,
       });
+
+      // Insert carousel slides (positions 1..N; position 0 is the primary media_url).
+      if (payload.mediaUrls && payload.mediaUrls.length) {
+        const totalSlides = 1 + payload.mediaUrls.length;
+        if (totalSlides > 10) {
+          await client.query('ROLLBACK');
+          reply.code(422);
+          return {
+            ok: false,
+            error: 'A look may have at most 10 media slides (1 primary + 9 carousel)',
+            code: 'TOO_MANY_MEDIA_SLIDES',
+          };
+        }
+
+        for (let i = 0; i < payload.mediaUrls.length; i++) {
+          const slide = payload.mediaUrls[i];
+          const position = i + 1;
+          let resolvedUrl = slide.url;
+          let mediaAssetId = slide.mediaAssetId ?? null;
+
+          if (slide.mediaFinalizationId) {
+            const slideVerification = await verifyLookMedia(client, {
+              actorUserId,
+              lookId: payload.id,
+              mediaUrl: slide.url,
+              mediaType: slide.mediaType,
+              mediaFinalizationId: slide.mediaFinalizationId,
+              mediaAssetId: slide.mediaAssetId,
+            });
+            if (!slideVerification.ok) {
+              await client.query('ROLLBACK');
+              reply.code(slideVerification.status);
+              return {
+                ok: false,
+                error: slideVerification.error,
+                code: slideVerification.code,
+                ...(slideVerification.mediaStatus
+                  ? { mediaStatus: slideVerification.mediaStatus }
+                  : {}),
+              };
+            }
+            resolvedUrl = slideVerification.media.resolvedUrl;
+            mediaAssetId = slideVerification.media.mediaAssetId;
+          }
+
+          await client.query(
+            `INSERT INTO look_media (
+               id, look_id, media_url, media_type, position,
+               media_finalization_id, media_asset_id
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              `lmedia_${crypto.randomUUID()}`,
+              payload.id,
+              resolvedUrl,
+              slide.mediaType,
+              position,
+              slide.mediaFinalizationId ?? null,
+              mediaAssetId,
+            ]
+          );
+        }
+      }
 
       await client.query('COMMIT');
     } catch (error) {
@@ -805,6 +906,71 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       if (verifiedMedia) {
         await bindLookMedia(client, { actorUserId, lookId, media: verifiedMedia });
       }
+
+      // Replace carousel slides when provided. Existing rows are deleted and
+      // re-inserted so the position sequence stays contiguous. Only entries
+      // carrying a mediaFinalizationId are verified (others are treated as
+      // already-published URLs, e.g. copied during a repost).
+      if (payload.mediaUrls !== undefined) {
+        const totalSlides = 1 + payload.mediaUrls.length;
+        if (totalSlides > 10) {
+          await client.query('ROLLBACK');
+          return reply.code(422).send({
+            error: 'A look may have at most 10 media slides (1 primary + 9 carousel)',
+            code: 'TOO_MANY_MEDIA_SLIDES',
+          });
+        }
+
+        await client.query('DELETE FROM look_media WHERE look_id = $1', [lookId]);
+
+        for (let i = 0; i < payload.mediaUrls.length; i++) {
+          const slide = payload.mediaUrls[i];
+          const position = i + 1;
+          let resolvedUrl = slide.url;
+          let mediaAssetId = slide.mediaAssetId ?? null;
+
+          if (slide.mediaFinalizationId) {
+            const slideVerification = await verifyLookMedia(client, {
+              actorUserId,
+              lookId,
+              mediaUrl: slide.url,
+              mediaType: slide.mediaType,
+              mediaFinalizationId: slide.mediaFinalizationId,
+              mediaAssetId: slide.mediaAssetId,
+            });
+            if (!slideVerification.ok) {
+              await client.query('ROLLBACK');
+              return reply.code(slideVerification.status).send({
+                error: slideVerification.error,
+                code: slideVerification.code,
+                ...(slideVerification.mediaStatus
+                  ? { mediaStatus: slideVerification.mediaStatus }
+                  : {}),
+              });
+            }
+            resolvedUrl = slideVerification.media.resolvedUrl;
+            mediaAssetId = slideVerification.media.mediaAssetId;
+          }
+
+          await client.query(
+            `INSERT INTO look_media (
+               id, look_id, media_url, media_type, position,
+               media_finalization_id, media_asset_id
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              `lmedia_${crypto.randomUUID()}`,
+              lookId,
+              resolvedUrl,
+              slide.mediaType,
+              position,
+              slide.mediaFinalizationId ?? null,
+              mediaAssetId,
+            ]
+          );
+        }
+      }
+
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');

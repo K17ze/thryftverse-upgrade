@@ -358,6 +358,7 @@ export default function SellerFulfilmentScreen() {
               }}
               accessibilityRole="button"
               accessibilityLabel={`Select ${carrier}`}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={[
                 styles.carrierOptionText,
@@ -503,6 +504,7 @@ export default function SellerFulfilmentScreen() {
 
               <Pressable
                 style={styles.findLocationLink}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 onPress={handleFindDropOff}
                 accessibilityRole="link"
                 accessibilityLabel="Find a drop-off location"

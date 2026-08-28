@@ -25,7 +25,7 @@ interface Props {
   cardWidth?: number;
 }
 
-export function AuctionSupportingTile({
+function AuctionSupportingTileBase({
   title,
   imageUrl,
   brand,
@@ -79,6 +79,10 @@ export function AuctionSupportingTile({
     </AnimatedPressable>
   );
 }
+
+const AuctionSupportingTile = React.memo(AuctionSupportingTileBase);
+AuctionSupportingTile.displayName = 'AuctionSupportingTile';
+export { AuctionSupportingTile };
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {

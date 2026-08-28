@@ -95,9 +95,11 @@ export default function AppNavigator() {
     return () => { mounted = false; };
   }, [storeOnboardingComplete]);
 
-  if (!ageCheckChecked || !onboardingChecked) {
-    return null;
-  }
+  // Hooks must be called unconditionally — before any early return — to
+  // satisfy the Rules of Hooks. All hooks below are called on every render
+  // regardless of whether the age/onboarding checks have completed.
+  const navigationContainerRef = React.useContext(NavigationContainerRefContext);
+  const restoredRef = React.useRef(false);
 
   // First-launch users see the age gate, then onboarding, before auth.
   // Returning users go straight to the auth/main entry point.
@@ -113,10 +115,8 @@ export default function AppNavigator() {
           : 'MainTabs'
         : 'AuthLanding';
 
-  const navigationContainerRef = React.useContext(NavigationContainerRefContext);
-  const restoredRef = React.useRef(false);
-
   React.useEffect(() => {
+    if (!ageCheckChecked || !onboardingChecked) return;
     if (!navigationContainerRef) return;
 
     const restore = () => {
@@ -149,7 +149,7 @@ export default function AppNavigator() {
       readyUnsub?.();
       stateUnsub?.();
     };
-  }, [navigationContainerRef, initialRoute]);
+  }, [navigationContainerRef, initialRoute, ageCheckChecked, onboardingChecked]);
 
   React.useEffect(() => {
     if (!isAuthenticated) {
@@ -184,6 +184,10 @@ export default function AppNavigator() {
       readyUnsub?.();
     };
   }, [navigationContainerRef]);
+
+  if (!ageCheckChecked || !onboardingChecked) {
+    return null;
+  }
 
   return (
     <View style={{ flex: 1 }}>

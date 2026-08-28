@@ -1,6 +1,6 @@
 import React from 'react';
 import { AccessibilityRole, ActivityIndicator, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
-import { Type, Typography, Radius, Space } from '../../theme/designTokens';
+import { Type, Typography, Radius, Space, Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -157,7 +157,7 @@ export function AppButton({
               </View>
             ) : null}
             <View style={[styles.textCol, resolvedAlign === 'center' && styles.textColCentered]}>
-              <Text style={[styles.title, { color: tokens.titleColor }, titleStyle]}>{title}</Text>
+              <Text maxFontSizeMultiplier={1.4} style={[styles.title, { color: tokens.titleColor }, titleStyle]}>{title}</Text>
               {subtitle ? (
                 <Text style={[styles.subtitle, { color: tokens.subtitleColor }, subtitleStyle]}>{subtitle}</Text>
               ) : null}
@@ -176,7 +176,7 @@ export function AppButton({
 
 const styles = StyleSheet.create({
   base: {
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     overflow: 'hidden',
     justifyContent: 'center',
     minWidth: 0,

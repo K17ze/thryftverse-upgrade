@@ -40,31 +40,29 @@ export interface CommerceNotificationRowProps {
 interface CommerceVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'success' | 'warning' | 'danger' | 'brand' | 'commerceTrust';
-  /** Matching subtle tint token key for the status icon background. */
-  accentSubtleKey: 'successSubtle' | 'warningSubtle' | 'dangerSubtle' | 'brandSubtle' | 'commerceTrustSubtle';
   statusLabel: string;
 }
 
 function resolveCommerceVisual(eventType: NotificationEventV2['eventType']): CommerceVisual {
   switch (eventType) {
     case 'order_created':
-      return { icon: 'bag-outline', accentKey: 'brand', accentSubtleKey: 'brandSubtle', statusLabel: 'New order' };
+      return { icon: 'bag-outline', accentKey: 'brand', statusLabel: 'New order' };
     case 'order_paid':
-      return { icon: 'card-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', statusLabel: 'Paid' };
+      return { icon: 'card-outline', accentKey: 'success', statusLabel: 'Paid' };
     case 'order_dispatched':
-      return { icon: 'cube-outline', accentKey: 'commerceTrust', accentSubtleKey: 'commerceTrustSubtle', statusLabel: 'Dispatched' };
+      return { icon: 'cube-outline', accentKey: 'commerceTrust', statusLabel: 'Dispatched' };
     case 'order_in_transit':
-      return { icon: 'airplane-outline', accentKey: 'commerceTrust', accentSubtleKey: 'commerceTrustSubtle', statusLabel: 'In transit' };
+      return { icon: 'airplane-outline', accentKey: 'commerceTrust', statusLabel: 'In transit' };
     case 'order_out_for_delivery':
-      return { icon: 'bicycle-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', statusLabel: 'Out for delivery' };
+      return { icon: 'bicycle-outline', accentKey: 'warning', statusLabel: 'Out for delivery' };
     case 'order_delivered':
-      return { icon: 'checkmark-circle-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', statusLabel: 'Delivered' };
+      return { icon: 'checkmark-circle-outline', accentKey: 'success', statusLabel: 'Delivered' };
     case 'order_cancelled':
-      return { icon: 'close-circle-outline', accentKey: 'danger', accentSubtleKey: 'dangerSubtle', statusLabel: 'Cancelled' };
+      return { icon: 'close-circle-outline', accentKey: 'danger', statusLabel: 'Cancelled' };
     case 'order_refunded':
-      return { icon: 'cash-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', statusLabel: 'Refunded' };
+      return { icon: 'cash-outline', accentKey: 'warning', statusLabel: 'Refunded' };
     default:
-      return { icon: 'bag-outline', accentKey: 'brand', accentSubtleKey: 'brandSubtle', statusLabel: 'Order update' };
+      return { icon: 'bag-outline', accentKey: 'brand', statusLabel: 'Order update' };
   }
 }
 
@@ -99,7 +97,9 @@ function resolveLifecycleStep(eventType: NotificationEventV2['eventType']): Life
   }
 }
 
-/** Compact 4-segment progress strip. Completed segments fill; the active one uses the accent. */
+/** Compact 4-segment progress strip. Completed segments are filled dots;
+ *  incomplete segments are hollow dots; the active segment shows the accent
+ *  colour plus its label. Only the current step is labelled, reducing height. */
 function OrderLifecycleStrip({
   currentStep,
   accentColor,
@@ -126,16 +126,14 @@ function OrderLifecycleStrip({
                 isActive && { backgroundColor: accentColor },
               ]}
             />
-            <Text
-              style={[
-                styles.label,
-                (isComplete || isActive) && styles.labelActive,
-                isActive && { color: accentColor, fontFamily: FontFamily.semibold },
-              ]}
-              numberOfLines={1}
-            >
-              {LIFECYCLE_LABELS[step]}
-            </Text>
+            {isActive ? (
+              <Text
+                style={[styles.label, { color: accentColor, fontFamily: FontFamily.semibold }]}
+                numberOfLines={1}
+              >
+                {LIFECYCLE_LABELS[step]}
+              </Text>
+            ) : null}
           </View>
         );
       })}
@@ -155,7 +153,6 @@ export function CommerceNotificationRow({
 
   const visual = useMemo(() => resolveCommerceVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
-  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
   const objectLabel = event.objectRef?.label ?? 'your order';
@@ -171,9 +168,7 @@ export function CommerceNotificationRow({
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
-      accentSubtle={accentSubtle}
-      colors={colors}
-      size={44}
+      size={24}
     />
   );
 
@@ -217,11 +212,11 @@ export function CommerceNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyLarge.lineHeight,
-      paddingRight: Space.xxl + Space.sm,
+      lineHeight: Type.bodyStrong.lineHeight,
+      flexShrink: 1,
     },
     titleUnread: {
       color: colors.textPrimary,
@@ -249,7 +244,7 @@ function createStripStyles(colors: ThemeColors) {
       gap: Space.xs / 2,
     },
     bar: {
-      height: 3,
+      height: 2,
       borderRadius: Radius.full,
       backgroundColor: colors.border,
     },
@@ -257,13 +252,11 @@ function createStripStyles(colors: ThemeColors) {
       backgroundColor: colors.textMuted,
     },
     label: {
-      fontSize: Type.meta.size - 1,
+      fontSize: Type.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       letterSpacing: 0.1,
-    },
-    labelActive: {
-      color: colors.textSecondary,
+      marginTop: Space.xs / 2,
     },
   });
 }

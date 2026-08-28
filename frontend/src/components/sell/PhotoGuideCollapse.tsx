@@ -23,6 +23,7 @@ function PhotoGuideCollapse({ collapsed, onToggle }: PhotoGuideCollapseProps) {
     <>
       <Pressable
         style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.6 }]}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         onPress={onToggle}
         accessibilityRole="button"
         accessibilityLabel={collapsed ? 'Expand photo tips' : 'Collapse photo tips'}

@@ -569,6 +569,7 @@ export default function AuctionDetailScreen() {
   return (
     <Reanimated.View
       ref={a11yRef}
+      testID="auction-detail-screen"
       entering={reducedMotion ? FadeIn.duration(0) : FadeIn.duration(Motion.transitions.mediaLoad.duration)}
       style={[styles.container, { backgroundColor: colors.background }]}
     >

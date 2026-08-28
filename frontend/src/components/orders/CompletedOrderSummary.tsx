@@ -41,6 +41,7 @@ export function CompletedOrderSummary({
       <Pressable
         style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
         onPress={() => { haptics.tap(); onViewReceipt(); }}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         accessibilityRole="button"
         accessibilityLabel={t('orderDetail.completed.viewReceiptA11y')}
       >
@@ -53,6 +54,7 @@ export function CompletedOrderSummary({
         <Pressable
           style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
           onPress={() => { haptics.tap(); onLeaveReview(); }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
           accessibilityLabel={t('orderDetail.completed.leaveReviewA11y')}
         >
@@ -65,6 +67,7 @@ export function CompletedOrderSummary({
       <Pressable
         style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
         onPress={() => { haptics.tap(); onBuyAgain(); }}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         accessibilityRole="button"
         accessibilityLabel={t('orderDetail.completed.buyAgainA11y')}
       >
@@ -76,6 +79,7 @@ export function CompletedOrderSummary({
       <Pressable
         style={({ pressed }) => [styles.completedActionRow, pressed && styles.completedActionPressed]}
         onPress={() => { haptics.tap(); onViewSupportHistory(); }}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         accessibilityRole="button"
         accessibilityLabel={t('orderDetail.completed.supportHistoryA11y')}
       >

@@ -585,7 +585,7 @@ export default function InboxScreen() {
     handleArchive,
   ]);
   return (
-    <SafeAreaView edges={['top']} style={[styles.screenRoot, t.screenRoot]}>
+    <SafeAreaView testID="inbox-screen" edges={['top']} style={[styles.screenRoot, t.screenRoot]}>
       <View style={styles.compactHeader}>
         <Text style={[styles.headerTitle, t.headerTitle]}>Inbox</Text>
         <View style={styles.headerActions}>

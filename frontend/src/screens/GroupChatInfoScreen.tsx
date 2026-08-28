@@ -608,7 +608,7 @@ function MediaTab({
               />
               {isVideo && (
                 <View style={styles.mediaVideoBadge}>
-                  <Ionicons name="play" size={14} color="#FFFFFF" />
+                  <Ionicons name="play" size={14} color={colors.scrimTextPrimary} />
                 </View>
               )}
             </AnimatedPressable>
@@ -831,7 +831,7 @@ function createStyles(colors: ThemeColors) {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1011,7 +1011,7 @@ function createStyles(colors: ThemeColors) {
     width: 22,
     height: 22,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -100,7 +100,6 @@ jobs:
     name: Visual release gates
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -246,6 +245,9 @@ jobs:
         run: |
           export PATH="$HOME/.maestro/bin:$PATH"
           maestro test frontend/.maestro/flows/
+        # Maestro E2E on Android emulator is flaky in CI — visual regression
+        # is enforced by the separate screenshots.yml workflow with reg-suit.
+        # This step provides E2E signal without blocking PRs on emulator flakiness.
         continue-on-error: true
 
   sbom-generation:

@@ -32,6 +32,7 @@ import { fetchPublicMoodboards, type Moodboard } from '../../services/moodboardA
 import type { RootStackParamList } from '../../navigation/types';
 import { useVisuallyComplete } from '../../performance/visuallyComplete';
 import { useA11yAudit } from '../../hooks/useA11yAudit';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const DISCOVER_NUM_COLUMNS = 2;
 type DiscoverNavigation = NativeStackNavigationProp<RootStackParamList>;
@@ -73,7 +74,7 @@ function DiscoverCategoryBar({ activeCategory, onSelect }: DiscoverCategoryBarPr
   const { categories } = useTaxonomy();
   const styles = useMemo(() => createCategoryBarStyles(colors), [colors]);
   const discoverCategories = useMemo(
-    () => ['All', ...categories.map((c) => c.name)],
+    () => ['All', ...categories.filter((c) => c.parentId === null).map((c) => c.name)],
     [categories],
   );
 
@@ -86,11 +87,11 @@ function DiscoverCategoryBar({ activeCategory, onSelect }: DiscoverCategoryBarPr
         accessibilityRole="tablist"
         accessibilityLabel="Discovery categories"
       >
-        {discoverCategories.map((category) => {
+        {discoverCategories.map((category, idx) => {
           const isActive = category === activeCategory;
           return (
             <Pressable
-              key={category}
+              key={`cat-${idx}-${category}`}
               style={[styles.pill, isActive && styles.pillActive]}
               onPress={() => onSelect(category)}
               accessibilityRole="tab"
@@ -195,7 +196,9 @@ export function DiscoverScene({
   const { colors } = useAppTheme();
   const { isOffline } = useConnectivity();
   const navigation = useNavigation<DiscoverNavigation>();
+  const reducedMotion = useReducedMotion();
   const scrollY = useSharedValue(0);
+  const staticScrollY = useSharedValue(0);
   const scrollRef = useRef<any>(null);
   const a11yRef = useRef<any>(null);
   useA11yAudit(a11yRef, 'DiscoverScene');
@@ -455,7 +458,7 @@ export function DiscoverScene({
   // the shared scrollY driven by the animated scroll handler above.
   return (
     <View ref={a11yRef} style={styles.container}>
-      <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
+      <RefreshIndicator scrollY={reducedMotion ? staticScrollY : scrollY} isRefreshing={refreshing} topInset={20} />
       <PinterestMasonryGrid
         items={units}
         onItemPress={onPressItem}

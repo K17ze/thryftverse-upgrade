@@ -225,6 +225,7 @@ export default function SellerHubScreen() {
 
   return (
     <FlagshipScreen
+      testID="seller-hub-screen"
       header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />}
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}

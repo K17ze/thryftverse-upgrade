@@ -1398,7 +1398,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   );
 
   return (
-    <SafeAreaView ref={a11yRef} edges={["bottom"]} style={styles.screenRoot}>
+    <SafeAreaView ref={a11yRef} testID="chat-screen" edges={["bottom"]} style={styles.screenRoot}>
       <View style={styles.screenRoot}>
         <ChatTopBar
           title={topBarTitle}

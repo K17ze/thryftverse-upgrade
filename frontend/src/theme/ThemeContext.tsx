@@ -77,6 +77,10 @@ export interface ThemeColors {
   scrimTextSecondary: string;
   /** Tertiary text/decor over media scrims — low-opacity white for inactive dots. */
   scrimTextTertiary: string;
+  /** Positive price delta over media scrims — light green visible on dark scrim in both themes. */
+  scrimDeltaPositive: string;
+  /** Negative price delta over media scrims — light red visible on dark scrim in both themes. */
+  scrimDeltaNegative: string;
   overlay: string;
   input: string;
   inputText: string;

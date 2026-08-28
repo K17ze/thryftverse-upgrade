@@ -1,5 +1,6 @@
 import type { CreatorDocument, CreatorLayer, CreatorPage } from './composition';
 import { POSTER_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_BACKGROUND, POSTER_DEFAULT_BACKGROUND } from './composition';
+import type { LookMediaEntry } from '../services/looksApi';
 
 // ── Look viewer adapter ────────────────────────────────────────────
 
@@ -9,6 +10,8 @@ export interface LookViewData {
   caption: string;
   mediaUrl: string;
   mediaType?: 'image' | 'video';
+  /** Additional carousel slides beyond the primary mediaUrl. */
+  mediaUrls?: LookMediaEntry[];
   visibility?: 'public' | 'followers' | 'private';
   tags: Array<{
     id: string;
@@ -42,6 +45,34 @@ export function lookToDocument(look: LookViewData): CreatorDocument {
       opacity: 1,
     },
   });
+
+  // Carousel slides — each additional media entry becomes its own media
+  // layer in the composition document. The viewer renders these as
+  // separate carousel slides beyond the primary.
+  if (look.mediaUrls && look.mediaUrls.length > 0) {
+    look.mediaUrls.forEach((slide, i) => {
+      layers.push({
+        id: `media_carousel_${i}`,
+        type: 'media',
+        x: 0.5,
+        y: 0.5,
+        width: 1,
+        height: 1,
+        scale: 1,
+        rotation: 0,
+        zIndex: i + 1,
+        locked: true,
+        hidden: false,
+        opacity: 1,
+        payload: {
+          mediaUri: slide.url,
+          mediaType: slide.mediaType ?? 'image',
+          contentFit: 'cover',
+          opacity: 1,
+        },
+      });
+    });
+  }
 
   for (const tag of look.tags) {
     layers.push({

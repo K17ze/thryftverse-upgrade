@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Type, Control, FontFamily, FontSize } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { PremiumToggle } from './PremiumToggle';
+import { PremiumToggle } from '../PremiumToggle';
 
 export interface SettingsRowProps {
   title: string;

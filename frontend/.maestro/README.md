@@ -4,9 +4,11 @@ This directory contains [Maestro](https://maestro.mobile.dev) E2E flow files
 for the ThryftVerse React Native app. Maestro is the modern, YAML-driven E2E
 framework for React Native / iOS / Android.
 
-> **Status:** Scaffolding. These flows define the critical user journeys that
-> must pass before a production release. They are the E2E layer of the testing
-> pyramid described in `docs/TESTING_GUIDE.md`.
+> **Status:** Active. These flows define the critical user journeys that
+> must pass before a production release. The visual-regression programme
+> uses Maestro `assertScreenshot` for in-flow visual regression, reg-suit
+> for PR diff gating, and pixelmatch for fixture/integration parity
+> checking. See `regconfig.json` and `scripts/capture-baselines.sh`.
 
 ---
 
@@ -135,15 +137,36 @@ maestro test --device "iPhone 15" .maestro/app-launch.yml
 maestro test --device "Pixel_7_API_33" .maestro/app-launch.yml
 ```
 
-### Screenshots
+### Screenshots and visual regression
 
-Every flow captures screenshots via `takeScreenshot`. They are written to the
-current directory (or `--output` folder) and can be used as the baseline for
-the visual-regression plan in `src/__tests__/visualRegressionPlan.test.ts`.
+Every golden-route flow captures screenshots via `takeScreenshot` and asserts
+them against committed baselines via `assertScreenshot` with `cropOn` (to
+isolate stable regions) and `thresholdPercentage: 98` (2% pixel tolerance).
+
+The visual-regression programme is powered by:
+- **reg-suit** — compares `actual/` vs `expected/` screenshots, generates HTML
+  diff reports, and posts PR comments via `reg-notify-github-plugin`.
+- **reg-publish-github-plugin** — stores baselines on GitHub Releases (no
+  external cloud account needed).
+- **pixelmatch** — pixel-level diff for fixture/integration parity checking
+  (`npm run visual:parity`).
 
 ```bash
-maestro test .maestro/ --output .maestro/screenshots
+# Capture baselines across theme + font-scale matrix
+npm run visual:capture
+
+# Compare actual vs expected (runs reg-suit)
+npm run visual:diff
+
+# Approve new baselines (promotes actual to expected)
+npm run visual:approve
+
+# Check fixture vs integration parity (pixelmatch diff)
+npm run visual:parity
 ```
+
+Baselines live in `src/__tests__/__screenshots__/expected/` and are addressed
+by commit hash via `reg-keygen-git-hash-plugin`.
 
 ---
 
@@ -227,7 +250,11 @@ jobs:
 3. Use `clearState: true` for first-run journeys, `false` for post-auth ones.
 4. Add a `takeScreenshot` step at every meaningful checkpoint — these double
    as visual-regression baselines.
-5. Prefer `tapOn: label:` (accessibility labels) over `tapOn: text:` so the
-   flow survives copy changes.
-6. Add the flow to the inventory table above and to `test:e2e:smoke` if it is
+5. Add an `assertScreenshot` step after each `takeScreenshot` on golden routes
+   to enforce visual regression in-flow. Use `cropOn: id:` to isolate stable
+   regions and `thresholdPercentage: 98` (or 99 for pixel-sensitive surfaces).
+6. Prefer `tapOn: label:` (accessibility labels) or `tapOn: id:` (testID
+   selectors) over `tapOn: text:`. **Never use `tapOn: point:`** (coordinate
+   taps) — they break silently when layout changes.
+7. Add the flow to the inventory table above and to `test:e2e:smoke` if it is
    a critical journey.

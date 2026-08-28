@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface AppSelectRowProps {
@@ -106,7 +106,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     backgroundColor: colors.surfaceAlt,
     paddingHorizontal: Space.md,
     minHeight: 52,

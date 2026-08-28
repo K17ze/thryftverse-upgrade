@@ -46,6 +46,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 
 import { useAppTheme } from '../theme/ThemeContext';
+import { Colors } from '../constants/colors';
 import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -1516,7 +1517,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#22c55e',
+    backgroundColor: Colors.success,
   },
   backButtonPlaceholder: {
     width: Control.hit,
@@ -1770,7 +1771,7 @@ function useStyles() {
           width: 8,
           height: 8,
           borderRadius: 4,
-          backgroundColor: '#22c55e',
+          backgroundColor: colors.success,
         },
         pickerSkeletonRail: {
           flexDirection: 'row',

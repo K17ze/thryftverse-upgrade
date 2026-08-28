@@ -8,10 +8,10 @@ import {
   NotificationThumbnail,
 } from './NotificationRowBase';
 import {
-  Space,
   Radius,
   Type,
   FontFamily,
+  Stroke,
 } from '../../theme/designTokens';
 import type { NotificationEventV2 } from '../../services/notificationsApi';
 
@@ -127,21 +127,22 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     avatar: {
-      width: 44,
-      height: 44,
+      width: 40,
+      height: 40,
       borderRadius: Radius.full,
     },
     avatarFallback: {
-      backgroundColor: colors.surfaceAlt,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
     },
     title: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyLarge.lineHeight,
-      paddingRight: Space.xxl + Space.sm,
+      lineHeight: Type.bodyStrong.lineHeight,
+      flexShrink: 1,
     },
     titleUnread: {
       color: colors.textPrimary,

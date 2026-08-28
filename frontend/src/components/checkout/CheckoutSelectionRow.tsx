@@ -25,7 +25,7 @@ interface Props {
   testID?: string;
 }
 
-export function CheckoutSelectionRow({
+function CheckoutSelectionRowBase({
   label,
   title,
   subtitle,
@@ -99,6 +99,10 @@ export function CheckoutSelectionRow({
     </View>
   );
 }
+
+const CheckoutSelectionRow = React.memo(CheckoutSelectionRowBase);
+CheckoutSelectionRow.displayName = 'CheckoutSelectionRow';
+export { CheckoutSelectionRow };
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrapper: {

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { Listing } from '../../domain';
-import { ProductCardV2 } from '../ProductCardV2';
+import { ProductCard } from '../ProductCard';
 import { ProductAnalytics } from '../../platform/product';
 
 export interface DiscoveryGridProps {
@@ -58,7 +58,7 @@ export function DiscoveryGrid({
   const renderItem = useCallback(
     ({ item, index }: { item: Listing; index: number }) => (
       <View style={styles.gridItem}>
-        <ProductCardV2
+        <ProductCard
           item={item}
           onPress={() => handlePress(item, index)}
           showSaveButton

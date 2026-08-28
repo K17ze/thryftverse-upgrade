@@ -20,7 +20,7 @@ interface Props {
   onPressMessage?: () => void;
 }
 
-export function CheckoutItemSummary({
+function CheckoutItemSummaryBase({
   title,
   imageUrl,
   seller,
@@ -70,6 +70,10 @@ export function CheckoutItemSummary({
     </View>
   );
 }
+
+const CheckoutItemSummary = React.memo(CheckoutItemSummaryBase);
+CheckoutItemSummary.displayName = 'CheckoutItemSummary';
+export { CheckoutItemSummary };
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {

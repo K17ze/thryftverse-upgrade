@@ -422,6 +422,20 @@ export default function NotificationsScreen() {
   const [overflowVisible, setOverflowVisible] = React.useState(false);
   const swipeableRefs = React.useRef<Record<string, Swipeable | null>>({});
 
+  // Clean up stale Swipeable refs on unmount. When FlashList recycles items,
+  // the Swipeable component's ref callback fires with null, but the ref map
+  // can retain stale entries. Clearing on unmount prevents gesture handler
+  // leaks that contribute to the RetryableMountingLayerException crash.
+  React.useEffect(() => {
+    return () => {
+      // Close any open swipe actions before the screen unmounts.
+      for (const id of Object.keys(swipeableRefs.current)) {
+        swipeableRefs.current[id]?.close();
+      }
+      swipeableRefs.current = {};
+    };
+  }, []);
+
   const quietActive = isQuietHoursActive(quietHours);
   const unreadCount = React.useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
   const reducedMotion = useReducedMotion();
@@ -998,7 +1012,7 @@ export default function NotificationsScreen() {
             <View style={styles.notificationSkeletonList} accessibilityLabel="Loading notifications">
               {[0, 1, 2, 3, 4].map((index) => (
                 <View key={index} style={styles.notificationSkeletonRow}>
-                  <SkeletonLoader width={52} height={52} borderRadius={Radius.md} />
+                  <SkeletonLoader width={40} height={40} borderRadius={Radius.md} />
                   <View style={styles.notificationSkeletonCopy}>
                     <SkeletonLoader width={index % 2 === 0 ? '58%' : '44%'} height={13} borderRadius={Radius.sm} />
                     <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
@@ -1030,8 +1044,7 @@ export default function NotificationsScreen() {
               density="compact"
               graphic={
                 <View style={styles.caughtUpGraphic}>
-                  <View style={styles.caughtUpRing} />
-                  <Ionicons name="checkmark" size={30} color={colors.brand} style={styles.caughtUpCheck} />
+                  <Ionicons name="checkmark-circle" size={40} color={colors.brand} />
                 </View>
               }
               title="You're all caught up"
@@ -1048,7 +1061,7 @@ export default function NotificationsScreen() {
             <View accessibilityLabel="Loading more notifications">
               {[0, 1].map((index) => (
                 <View key={index} style={styles.notificationSkeletonRow}>
-                  <SkeletonLoader width={52} height={52} borderRadius={Radius.md} />
+                  <SkeletonLoader width={40} height={40} borderRadius={Radius.md} />
                   <View style={styles.notificationSkeletonCopy}>
                     <SkeletonLoader width={index % 2 === 0 ? '58%' : '44%'} height={13} borderRadius={Radius.sm} />
                     <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
@@ -1077,7 +1090,7 @@ export default function NotificationsScreen() {
                 key={filter.key}
                 style={[
                   styles.overflowRow,
-                  isActive && { backgroundColor: `${colors.brand}0A` },
+                  isActive && { backgroundColor: colors.brandSubtle },
                 ]}
                 onPress={() => {
                   haptics.tap();
@@ -1152,9 +1165,12 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'transparent',
   },
+  // Active filter tab uses a solid brand fill, not brandSubtle (a 6% grey
+  // wash). A solid fill creates a clear visual anchor at the top of the
+  // screen and makes the selected state unmistakable at thumbnail scale.
   filterTabActive: {
-    backgroundColor: colors.surfaceAlt,
-    borderColor: colors.border,
+    backgroundColor: colors.brand,
+    borderColor: 'transparent',
   },
   filterTabText: {
     fontSize: Type.caption.size,
@@ -1164,7 +1180,7 @@ function createStyles(colors: ThemeColors) {
   },
   filterTabTextActive: {
     fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
+    color: colors.textInverse,
   },
   filterTabCount: {
     fontSize: Type.meta.size - 1,
@@ -1173,7 +1189,8 @@ function createStyles(colors: ThemeColors) {
     fontVariant: ['tabular-nums'],
   },
   filterTabCountActive: {
-    color: colors.brand,
+    color: colors.textInverse,
+    opacity: 0.7,
   },
 
   swipeActionContainer: {
@@ -1186,9 +1203,9 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     width: Space.xxl + Space.xl,
     borderRadius: Radius.xxl,
-    backgroundColor: `${colors.success}20`,
+    backgroundColor: colors.successSubtle,
     borderWidth: Stroke.standard,
-    borderColor: `${colors.success}40`,
+    borderColor: colors.successBorder,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
@@ -1211,7 +1228,12 @@ function createStyles(colors: ThemeColors) {
     color: colors.danger,
   },
 
-  listContent: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xxl + Space.xxl + Space.lg },
+  // No horizontal padding on the list content — each row already has its
+  // own paddingHorizontal: Space.md in NotificationRowBase. Adding list-level
+  // padding double-indents the rows, creating a wide flat margin of
+  // background colour that reads as "grey slop". Rows extend edge-to-edge
+  // with their internal padding providing the inset.
+  listContent: { paddingHorizontal: 0, paddingTop: Space.xs, paddingBottom: Space.xxl + Space.xxl + Space.lg },
 
   summaryBannerRow: {
     flexDirection: 'row',
@@ -1227,12 +1249,6 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 1,
     minHeight: Control.chromeCompact,
   },
-  unreadSummaryDot: {
-    width: Space.xs + 2,
-    height: Space.xs + 2,
-    borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-  },
   unreadSummaryText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
@@ -1242,12 +1258,6 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 1,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   quietHoursText: {
     fontSize: Type.caption.size,
@@ -1259,7 +1269,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
-    marginTop: Space.md + 4,
+    marginTop: Space.sm + 4,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
     paddingHorizontal: Space.sm,
@@ -1267,9 +1277,6 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.sm,
   },
   sectionHeaderRowAttention: {
-    backgroundColor: colors.dangerSubtle,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 2,
     marginLeft: 0,
   },
   sectionAttentionLeading: {
@@ -1289,12 +1296,10 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
-    textTransform: 'uppercase',
   },
   sectionTitleAttention: {
     color: colors.danger,
     fontSize: Type.caption.size,
-    textTransform: 'none',
     fontFamily: Typography.family.bold,
   },
   sectionCountBadge: {
@@ -1322,33 +1327,17 @@ function createStyles(colors: ThemeColors) {
     color: colors.textInverse,
   },
 
-  // Crafted "all caught up" graphic — a ring with a checkmark, authored
-  // rather than a generic outline icon in a grey circle.
   caughtUpGraphic: {
-    width: 64,
-    height: 64,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.sm,
-  },
-  caughtUpRing: {
-    position: 'absolute',
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-    opacity: 0.5,
-  },
-  caughtUpCheck: {
-    marginTop: 2,
   },
 
   notificationSkeletonList: {
     paddingTop: Space.sm,
   },
   notificationSkeletonRow: {
-    minHeight: Space.xxl + Space.xl + Space.xs,
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,

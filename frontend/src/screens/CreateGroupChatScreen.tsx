@@ -667,13 +667,21 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             {recentUsers.length > 0 && (
               <View style={styles.sectionBlock}>
                 <Text style={styles.sectionHeaderText}>Recent</Text>
-                {recentUsers.map((user) => renderMemberRow({ item: user }))}
+                {recentUsers.map((user) => (
+                  <React.Fragment key={user.id}>
+                    {renderMemberRow({ item: user })}
+                  </React.Fragment>
+                ))}
               </View>
             )}
             {suggestedUsers.length > 0 && (
               <View style={styles.sectionBlock}>
                 <Text style={styles.sectionHeaderText}>Suggested</Text>
-                {suggestedUsers.map((user) => renderMemberRow({ item: user }))}
+                {suggestedUsers.map((user) => (
+                  <React.Fragment key={user.id}>
+                    {renderMemberRow({ item: user })}
+                  </React.Fragment>
+                ))}
               </View>
             )}
           </ScrollView>
@@ -968,7 +976,7 @@ function createStyles(colors: ThemeColors) {
   coverUploadingOverlay: {
     position: 'absolute',
     inset: 0,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },

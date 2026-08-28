@@ -10,6 +10,7 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -84,6 +85,19 @@ export function AnimatedPressable({
   const { spring, duration, isEnabled } = useMotionConfig();
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
+
+  // Cancel any in-flight animations on unmount. Without this, Reanimated's
+  // worklet thread can try to synchronously update UI props on a view that
+  // has already been unmounted (e.g. a FlashList item recycled away during
+  // scroll). This causes RetryableMountingLayerException on Android Fabric.
+  // Cancelling the animations stops the worklet from queuing prop updates
+  // for a dead view tag.
+  React.useEffect(() => {
+    return () => {
+      cancelAnimation(scale);
+      cancelAnimation(opacity);
+    };
+  }, [scale, opacity]);
 
   const triggerHapticFeedback = React.useCallback(() => {
     if (autoHaptic && scaleValue < 1) {

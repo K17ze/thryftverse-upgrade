@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { haptics } from '../utils/haptics';
 import { AnimatedPressable } from './AnimatedPressable';
-import { PremiumToggle } from './settings/PremiumToggle';
+import { PremiumToggle } from './PremiumToggle';
 
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 export type SettingsCellVariant = 'default' | 'value' | 'toggle' | 'button' | 'destructive' | 'custom';

@@ -657,7 +657,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'rgba(0,0,0,0.55)',
+      backgroundColor: colors.overlay,
     },
     coverActions: {
       flexDirection: 'row',

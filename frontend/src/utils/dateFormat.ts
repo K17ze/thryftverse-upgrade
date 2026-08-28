@@ -12,12 +12,41 @@
 const DEFAULT_LOCALE = 'en-GB';
 
 // Cache RelativeTimeFormat instances per locale — construction is expensive.
-const rtfCache = new Map<string, Intl.RelativeTimeFormat>();
+// On Hermes (React Native's JS engine), Intl.RelativeTimeFormat may not
+// exist. We guard for that and fall back to a manual formatter.
+type RtfLike = { format(value: number, unit: string): string };
+const rtfCache = new Map<string, RtfLike>();
 
-function getRelativeTimeFormatter(locale: string): Intl.RelativeTimeFormat {
+const FALLBACK_RTF: RtfLike = {
+  format(value: number, unit: string): string {
+    const abs = Math.abs(value);
+    const isPast = value < 0;
+    switch (unit) {
+      case 'second':
+        return 'just now';
+      case 'minute':
+        return isPast ? `${abs}m ago` : `in ${abs}m`;
+      case 'hour':
+        return isPast ? `${abs}h ago` : `in ${abs}h`;
+      case 'day':
+        if (value === 0) return 'today';
+        if (value === -1) return 'yesterday';
+        return isPast ? `${abs}d ago` : `in ${abs}d`;
+      default:
+        return isPast ? `${abs} ${unit} ago` : `in ${abs} ${unit}`;
+    }
+  },
+};
+
+function getRelativeTimeFormatter(locale: string): RtfLike {
   const cached = rtfCache.get(locale);
   if (cached) return cached;
-  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  let formatter: RtfLike;
+  if (typeof Intl !== 'undefined' && typeof Intl.RelativeTimeFormat !== 'undefined') {
+    formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  } else {
+    formatter = FALLBACK_RTF;
+  }
   rtfCache.set(locale, formatter);
   return formatter;
 }

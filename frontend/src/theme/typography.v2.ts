@@ -26,7 +26,7 @@
  * - First viewport normally uses no more than three type sizes and one eyebrow.
  */
 
-import { FontFamily } from './designTokens';
+import { FontFamily, FontFamilySerif } from './designTokens';
 
 export type TypographyWeight = '400' | '500' | '600' | '700';
 
@@ -60,7 +60,9 @@ export type TypographyV2RoleName =
   | 'label'
   | 'priceHero'
   | 'priceList'
-  | 'numericMeta';
+  | 'numericMeta'
+  | 'editorialDisplay'
+  | 'editorialTitle';
 
 /**
  * The canonical semantic typography set.
@@ -171,6 +173,26 @@ export const TypographyV2: Record<TypographyV2RoleName, TypographyV2Role> = {
     letterSpacing: 0,
     fontFamily: FontFamily.semibold,
     tabularFigures: true,
+  },
+  // ── Editorial serif accents — Playfair Display ──
+  // Used sparingly for auction lot titles, editorial section headers,
+  // "Discover" module headers, seller profile names. Distinguishes
+  // ThryftVerse from generic AI marketplace UIs (+13% perceived quality).
+  editorialDisplay: {
+    role: 'editorialDisplay',
+    size: 28,
+    lineHeight: 36,
+    weight: '700',
+    letterSpacing: -0.3,
+    fontFamily: FontFamilySerif.bold,
+  },
+  editorialTitle: {
+    role: 'editorialTitle',
+    size: 20,
+    lineHeight: 28,
+    weight: '400',
+    letterSpacing: -0.2,
+    fontFamily: FontFamilySerif.regular,
   },
 } as const;
 

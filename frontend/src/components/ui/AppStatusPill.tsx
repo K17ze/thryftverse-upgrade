@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Space, Type } from '../../theme/designTokens';
+import { Typography, Radius, Space, Type, Stroke } from '../../theme/designTokens';
 
 /**
  * Unified status pill taxonomy. The former `PremiumStatusPill` is now
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     alignSelf: 'flex-start',
   },
   blockSizeSm: {

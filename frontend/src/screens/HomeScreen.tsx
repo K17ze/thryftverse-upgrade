@@ -25,7 +25,6 @@ import Reanimated, {
 import { Video, ResizeMode } from '../components/compat/Video';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
@@ -241,7 +240,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<HomeDiscoveryItemVM | null>(null);
   const [newListingIds, setNewListingIds] = React.useState<Set<string>>(() => new Set());
-  const [feedMode, setFeedMode] = React.useState<'foryou' | 'following' | 'non_profiled'>('foryou');
+  const [feedMode, setFeedMode] = React.useState<'foryou' | 'following'>('foryou');
 
   // Viewability-driven video autoplay: only the most-visible feed tile plays
   // its video. Settlement delay (350ms) avoids spinning up players during fast
@@ -553,19 +552,6 @@ export default function HomeScreen() {
     return i === FEATURED_RHYTHM[pos % FEATURED_RHYTHM.length] - 1;
   }, []);
 
-  const exploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
-    return listings.map((listing, index) =>
-      toHomeDiscoveryItemVM(listing, {
-        isSaved: wishlist.includes(listing.id),
-        currency: currencyCode,
-        followedSellerIds: followedSellerIdsSet,
-      }),
-    ).map((vm, index) => ({
-      ...vm,
-      featured: computeFeatured(index),
-    }));
-  }, [listings, wishlist, followedSellerIdsSet, computeFeatured]);
-
   // Following feed: transform following listings into discovery VMs
   const followingExploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
     return followingFeed.listings.map((listing) =>
@@ -597,13 +583,13 @@ export default function HomeScreen() {
   // For You mode uses personalised recommendations. When the feed is empty
   // or errored, we do NOT silently substitute general listings. The empty/
   // error state renders an honest message and the user can pull to refresh
-  // or browse all. The non_profiled mode uses general listings (DSA Art 38).
+  // or browse all via the Explore tab.
   const effectiveForYouData = forYouFeed.listings.length > 0 ? forYouExploreData : [];
   const forYouIsEmpty = feedMode === 'foryou' && !forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
   const forYouHasError = feedMode === 'foryou' && forYouFeed.error !== null && forYouFeed.listings.length === 0;
   const forYouIsDegraded = feedMode === 'foryou' && forYouFeed.serveMode === 'degraded_baseline' && forYouFeed.listings.length > 0;
 
-  const activeFeedData = feedMode === 'following' ? followingExploreData : feedMode === 'non_profiled' ? exploreData : effectiveForYouData;
+  const activeFeedData = feedMode === 'following' ? followingExploreData : effectiveForYouData;
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
   const showForYouLoading = feedMode === 'foryou' && forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
@@ -718,12 +704,7 @@ export default function HomeScreen() {
               accessibilityHint="Opens poster story viewer"
             >
               {isUnwatched ? (
-                <LinearGradient
-                  colors={[colors.brand, colors.discovery]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.posterTileGradientRing}
-                >
+                <View style={styles.posterTileRing}>
                   <View style={styles.posterTileInner}>
                     <PosterStoryArtwork story={story} />
                     <View style={styles.posterShade} />
@@ -751,7 +732,7 @@ export default function HomeScreen() {
                       </View>
                     )}
                   </View>
-                </LinearGradient>
+                </View>
               ) : (
                 <View style={[styles.posterTile, styles.posterTileSeen]}>
                   <PosterStoryArtwork story={story} />
@@ -1022,7 +1003,7 @@ export default function HomeScreen() {
         </View>
       </Reanimated.View>
 
-      <Reanimated.View style={[styles.feedShell, feedOpacityStyle]}>
+      <Reanimated.View testID="home-feed-container" style={[styles.feedShell, feedOpacityStyle]}>
       <AnimatedFlashList
         ref={scrollRef}
         data={feedGridData}
@@ -1055,9 +1036,9 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <View>
             <View style={styles.feedTabBar} accessibilityRole="tablist">
-              {(['foryou', 'following', 'non_profiled'] as const).map((option) => {
+              {(['foryou', 'following'] as const).map((option) => {
                 const isSelected = feedMode === option;
-                const label = option === 'foryou' ? 'For you' : option === 'following' ? 'Following' : 'General';
+                const label = option === 'foryou' ? 'For you' : 'Following';
                 return (
                   <AnimatedPressable
                     key={option}
@@ -1071,9 +1052,7 @@ export default function HomeScreen() {
                     accessibilityRole="tab"
                     accessibilityLabel={option === 'foryou'
                       ? 'For you feed'
-                      : option === 'following'
-                        ? `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`
-                        : 'General feed, not based on profiling'}
+                      : `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`}
                     accessibilityState={{ selected: isSelected }}
                   >
                     <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
@@ -1128,7 +1107,7 @@ export default function HomeScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: Space.xs }}>
                 <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
                 <Text style={{ flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary }} maxFontSizeMultiplier={1.5}>
-                  Showing general listings — personalised feed is temporarily unavailable.
+                  Showing baseline listings — personalised feed is temporarily unavailable.
                 </Text>
               </View>
             ) : null}
@@ -1546,16 +1525,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
   },
-  // Gradient ring for unwatched stories — Instagram-style gradient border
-  // using brand + discovery accent colors. 2pt padding creates the ring
-  // thickness (Stroke.emphasis = 2, reserved for focus/selection per
-  // AGENTS.md §4 stroke grammar). The inner tile clips artwork to the
-  // sheetDialog radius while the outer gradient uses sheetDialog + 2.
-  posterTileGradientRing: {
+  // Solid brand-color ring for unwatched stories — replaces the former
+  // decorative gradient ring. Per AGENTS.md §4: "decorative chrome over
+  // composition" is an AI tell. A solid 2pt brand border communicates
+  // "new/unwatched" without gradient decoration. Stroke.emphasis (2pt)
+  // is reserved for focus/selection per stroke grammar.
+  posterTileRing: {
     width: POSTER_CARD_WIDTH,
     height: POSTER_CARD_HEIGHT,
     borderRadius: RadiusRoleValue.sheetDialog + Stroke.emphasis,
-    padding: Stroke.emphasis,
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.brand,
   },
   posterTileInner: {
     flex: 1,

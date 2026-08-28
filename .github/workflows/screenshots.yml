@@ -4,13 +4,12 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - "frontend/**"
-      - ".github/workflows/screenshots.yml"
-      - "frontend/.maestro/**"
   push:
     tags:
       - "v*"
+  schedule:
+    # Nightly at 03:00 UTC — catches drift from dependencies, OTA updates, OS changes
+    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       platform:
@@ -24,15 +23,37 @@ on:
           - both
 
 permissions:
-  contents: read
+  contents: write
+  packages: write
+  pull-requests: write
+  statuses: write
 
 concurrency:
   group: screenshots-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect UI changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      ui: ${{ steps.filter.outputs.ui }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ui:
+              - 'frontend/**'
+              - '.github/workflows/screenshots.yml'
+              - 'frontend/.maestro/**'
+
   pre-flight-gates:
     name: Pre-flight quality gates
+    needs: changes
+    if: needs.changes.outputs.ui == 'true' || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -51,11 +72,14 @@ jobs:
       - name: Design token lint
         run: npm run lint:design-tokens
         working-directory: frontend
+      - name: Visual release gates lint
+        run: npm run check:visual-gates
+        working-directory: frontend
 
   screenshots-ios:
     name: iOS screenshots — ${{ matrix.device }} (${{ matrix.width }})
-    needs: pre-flight-gates
-    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'ios' || inputs.platform == 'both'
+    needs: [changes, pre-flight-gates]
+    if: (needs.changes.outputs.ui == 'true' || github.event_name != 'pull_request') && (github.event_name != 'workflow_dispatch' || inputs.platform == 'ios' || inputs.platform == 'both')
     runs-on: macos-14
     timeout-minutes: 60
     strategy:
@@ -64,13 +88,16 @@ jobs:
         include:
           - device: "iPhone 15 Pro"
             sim_type: "iPhone 15 Pro"
+            device_slug: "iphone15pro"
             width: regular
           - device: "iPhone SE (3rd generation)"
             sim_type: "iPhone SE (3rd generation)"
+            device_slug: "iphonese"
             width: compact
     env:
       APP_ID: com.thryftverse.app
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_MOCK_MODE: fixture-design
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -100,7 +127,7 @@ jobs:
         run: |
           eas build \
             --platform ios \
-            --profile development-simulator \
+            --profile screenshots \
             --message "screenshots:${GITHUB_SHA}" \
             --wait \
             --json > eas-build-ios.json
@@ -130,6 +157,22 @@ jobs:
           xcrun simctl boot "$SIM_ID"
           sleep 15
 
+      - name: Configure deterministic simulator state
+        run: |
+          # Fixed status bar — 9:41, full wifi, full cellular, charged battery
+          xcrun simctl status_bar "$SIM_ID" override \
+            --time "9:41" \
+            --dataNetwork wifi \
+            --wifiMode active \
+            --wifiBars 3 \
+            --cellularMode active \
+            --cellularBars 4 \
+            --batteryState charged \
+            --batteryLevel 100
+
+          # Reduce motion — eliminates animation non-determinism
+          xcrun simctl ui "$SIM_ID" reduce_motion yes
+
       - name: Install app on simulator
         run: |
           xcrun simctl install "$SIM_ID" frontend/build/*.app
@@ -154,15 +197,18 @@ jobs:
 
             maestro test .maestro/flows/visualRegressionMatrix.yaml \
               --env APP_ID=$APP_ID \
+              --env PLATFORM=ios \
+              --env DEVICE=${{ matrix.device_slug }} \
               --env THEME="$theme" \
               --env FONT_SCALE="$font_scale" \
+              --env VISUAL_MODE=capture \
               --test-output-dir=".maestro/screenshots/${label}"
           }
 
-          capture_variant light 100 light-100
-          capture_variant dark  100 dark-100
-          capture_variant light 130 light-130
-          capture_variant light 200 light-200
+          capture_variant light 100 ios-${{ matrix.device_slug }}-light-100
+          capture_variant dark  100 ios-${{ matrix.device_slug }}-dark-100
+          capture_variant light 130 ios-${{ matrix.device_slug }}-light-130
+          capture_variant light 200 ios-${{ matrix.device_slug }}-light-200
 
           ACTUAL_SCREENSHOTS=$(find .maestro/screenshots -type f -name '*.png' | wc -l | tr -d ' ')
           echo "Captured $ACTUAL_SCREENSHOTS screenshots"
@@ -175,17 +221,19 @@ jobs:
           cp -r .maestro/screenshots/*.png src/__tests__/__screenshots__/actual/ 2>/dev/null || true
           if [ -d src/__tests__/__screenshots__/expected ] && \
              [ "$(find src/__tests__/__screenshots__/expected -name '*.png' | wc -l)" -gt 0 ]; then
-            npx reg-suit compare
+            npx reg-suit run
           else
             echo "No expected baselines found — skipping reg-suit compare."
             echo "Run 'npm run visual:capture && npm run visual:approve' to seed baselines."
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-ios-${{ matrix.device }}-${{ github.sha }}
+          name: screenshots-ios-${{ matrix.device_slug }}-${{ github.sha }}
           path: |
             frontend/.maestro/screenshots/**
             frontend/src/__tests__/__screenshots__/diff/**
@@ -202,8 +250,8 @@ jobs:
 
   screenshots-android:
     name: Android screenshots — ${{ matrix.device }} (${{ matrix.width }})
-    needs: pre-flight-gates
-    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'android' || inputs.platform == 'both'
+    needs: [changes, pre-flight-gates]
+    if: (needs.changes.outputs.ui == 'true' || github.event_name != 'pull_request') && (github.event_name != 'workflow_dispatch' || inputs.platform == 'android' || inputs.platform == 'both')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -212,13 +260,16 @@ jobs:
         include:
           - device: "Pixel 8"
             profile: "pixel_8"
+            device_slug: "pixel8"
             width: regular
           - device: "Pixel 5"
             profile: "pixel_5"
+            device_slug: "pixel5"
             width: compact
     env:
       APP_ID: com.thryftverse.app
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_MOCK_MODE: fixture-design
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -254,7 +305,7 @@ jobs:
         run: |
           eas build \
             --platform android \
-            --profile development \
+            --profile screenshots \
             --message "screenshots:${GITHUB_SHA}" \
             --wait \
             --json > eas-build-android.json
@@ -286,6 +337,12 @@ jobs:
             adb install -r frontend/app.apk
             cd frontend && mkdir -p .maestro/screenshots
 
+            # Deterministic emulator state — reduce motion eliminates
+            # animation non-determinism in screenshots
+            adb shell settings put secure reduce_motion 1
+            adb shell settings put secure window_animation_scale 0.0
+            adb shell settings put secure transition_animation_scale 0.0
+
             capture_variant() {
               local theme="$1"
               local font_scale="$2"
@@ -301,15 +358,18 @@ jobs:
 
               maestro test .maestro/flows/visualRegressionMatrix.yaml \
                 --env APP_ID=$APP_ID \
+                --env PLATFORM=android \
+                --env DEVICE=${{ matrix.device_slug }} \
                 --env THEME="$theme" \
                 --env FONT_SCALE="$(echo "$font_scale" | tr '.' '')" \
+                --env VISUAL_MODE=capture \
                 --test-output-dir=".maestro/screenshots/${label}"
             }
 
-            capture_variant light 1.0 light-100
-            capture_variant dark  1.0 dark-100
-            capture_variant light 1.3 light-130
-            capture_variant light 2.0 light-200
+            capture_variant light 1.0 android-${{ matrix.device_slug }}-light-100
+            capture_variant dark  1.0 android-${{ matrix.device_slug }}-dark-100
+            capture_variant light 1.3 android-${{ matrix.device_slug }}-light-130
+            capture_variant light 2.0 android-${{ matrix.device_slug }}-light-200
 
             ACTUAL_SCREENSHOTS=$(find .maestro/screenshots -type f -name '*.png' | wc -l | tr -d ' ')
             echo "Captured $ACTUAL_SCREENSHOTS screenshots"
@@ -322,17 +382,19 @@ jobs:
           cp -r .maestro/screenshots/*.png src/__tests__/__screenshots__/actual/ 2>/dev/null || true
           if [ -d src/__tests__/__screenshots__/expected ] && \
              [ "$(find src/__tests__/__screenshots__/expected -name '*.png' | wc -l)" -gt 0 ]; then
-            npx reg-suit compare
+            npx reg-suit run
           else
             echo "No expected baselines found — skipping reg-suit compare."
             echo "Run 'npm run visual:capture && npm run visual:approve' to seed baselines."
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-android-${{ matrix.device }}-${{ github.sha }}
+          name: screenshots-android-${{ matrix.device_slug }}-${{ github.sha }}
           path: |
             frontend/.maestro/screenshots/**
             frontend/src/__tests__/__screenshots__/diff/**

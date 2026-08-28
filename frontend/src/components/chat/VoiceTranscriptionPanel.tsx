@@ -199,7 +199,7 @@ export function VoiceTranscriptionPanel({
           <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
           <Text style={styles.mutedText}>Transcription not available for this audio format</Text>
         </View>
-        <Pressable onPress={handleCollapse} hitSlop={8} accessibilityLabel="Close transcript">
+        <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
           <Ionicons name="close" size={16} color={colors.textMuted} />
         </Pressable>
       </View>
@@ -213,7 +213,7 @@ export function VoiceTranscriptionPanel({
           <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
           <Text style={styles.errorText} numberOfLines={2}>{error ?? 'Transcription failed'}</Text>
         </View>
-        <Pressable onPress={handleCollapse} hitSlop={8} accessibilityLabel="Close transcript">
+        <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
           <Ionicons name="close" size={16} color={colors.textMuted} />
         </Pressable>
       </View>
@@ -231,7 +231,7 @@ export function VoiceTranscriptionPanel({
           <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityRole="button" accessibilityLabel="Retry transcription">
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
-          <Pressable onPress={handleCollapse} hitSlop={8} accessibilityLabel="Close transcript">
+          <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
             <Ionicons name="close" size={16} color={colors.textMuted} />
           </Pressable>
         </View>
@@ -248,7 +248,7 @@ export function VoiceTranscriptionPanel({
             {state === 'requesting' ? 'Requesting transcript…' : 'Transcribing audio…'}
           </Text>
         </View>
-        <Pressable onPress={handleCollapse} hitSlop={8} accessibilityLabel="Close transcript">
+        <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
           <Ionicons name="close" size={16} color={colors.textMuted} />
         </Pressable>
       </View>
@@ -290,7 +290,7 @@ export function VoiceTranscriptionPanel({
             color={userRating === 'bad' ? colors.danger : colors.textMuted}
           />
         </Pressable>
-        <Pressable onPress={handleCollapse} hitSlop={8} accessibilityLabel="Close transcript">
+        <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
           <Ionicons name="close" size={16} color={colors.textMuted} />
         </Pressable>
       </View>
