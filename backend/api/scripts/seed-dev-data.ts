@@ -931,9 +931,9 @@ async function seed() {
     // ── Wallets for all users ───────────────────────────────────────────────
     for (const u of USERS) {
       await client.query(
-        `INSERT INTO wallets (id, user_id, oneze_balance_mg, fiat_balance_minor, fiat_currency)
+        `INSERT INTO wallets (id, user_id, oneze_balance_units, fiat_balance_minor, fiat_currency)
          VALUES ($1, $2, 5000000, 10000, 'GBP')
-         ON CONFLICT (user_id) DO UPDATE SET oneze_balance_mg = 5000000`,
+         ON CONFLICT (user_id) DO UPDATE SET oneze_balance_units = 5000000`,
         [`wallet_${u.id}`, u.id]
       );
     }

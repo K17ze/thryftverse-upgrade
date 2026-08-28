@@ -74,7 +74,7 @@ export default function AuctionHomeScreen() {
   const navigation = useNavigation<NavT>();
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { currencyCode, currencySymbol, displayMode, goldRates } = useFormattedPrice();
+  const { currencyCode, currencySymbol, displayMode, fxRates } = useFormattedPrice();
   const { width } = useWindowDimensions();
   const { isOffline } = useConnectivity();
 
@@ -224,14 +224,14 @@ export default function AuctionHomeScreen() {
   // In fiat-only display mode, izeText holds the local value and localText is null,
   // preserving the user's display preference.
   const formatValueLockup = useCallback((amountGbp: number): { izeText: string; localText: string | null } => {
-    const izeAmount = toIze(amountGbp, 'GBP', goldRates);
+    const izeAmount = toIze(amountGbp, 'GBP', fxRates);
     const izeText = formatIzeAmount(izeAmount, 2);
-    const fiatValue = izeAmount * (goldRates?.[currencyCode] ?? 1);
+    const fiatValue = izeAmount * (fxRates?.[currencyCode] ?? 1);
     const fiatText = formatFiatAmount(fiatValue, currencyCode, 2);
     if (displayMode === 'ize') return { izeText, localText: null };
     if (displayMode === 'fiat') return { izeText: fiatText, localText: null };
     return { izeText, localText: fiatText };
-  }, [goldRates, currencyCode, displayMode]);
+  }, [fxRates, currencyCode, displayMode]);
 
   // ── Renderers for search/filter ──
   const renderSearchItem = useCallback(({ item }: { item: AuctionHomeItem }) => {

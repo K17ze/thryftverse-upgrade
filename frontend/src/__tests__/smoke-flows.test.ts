@@ -12,7 +12,7 @@ const SAMPLE_ASSET: CoOwnAsset = {
   availableUnits: 20,
   unitPriceGBP: 2,
   unitPriceStable: 2.56,
-  settlementMode: 'HYBRID',
+  settlementMode: 'ONEZE',
   issuerJurisdiction: 'GB',
   marketMovePct24h: 0,
   holders: 0,

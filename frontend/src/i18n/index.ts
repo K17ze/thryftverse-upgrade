@@ -1012,7 +1012,7 @@ export const EN_TRANSLATIONS = {
   'commerce.wallet.a11y.viewSafeguardingEvidence': 'View safeguarding evidence',
   'commerce.wallet.a11y.viewSafeguardingTerms': 'View safeguarding terms',
   'commerce.wallet.a11y.opensExternalBrowser': 'Opens in external browser',
-  'commerce.wallet.1zeDisclosure': "1ZE is the platform's settlement unit for Co-Own, maintained at a £1.00 reference par before disclosed fees.",
+  'commerce.wallet.1zeDisclosure': "1ZE is the platform's settlement unit. 1 1ZE = $1.00 USD at par. A transparent 2% fee applies on load and withdraw — shown as a separate line item, never hidden in the rate.",
   'commerce.wallet.depositPending': '{amount} 1ZE deposit pending',
   'commerce.wallet.proceedsUnsettled': '{amount} 1ZE proceeds unsettled',
   'withdraw.status.pending': 'Pending',

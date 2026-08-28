@@ -21,7 +21,7 @@ import {
 } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
 import { createStableId } from '../../utils/createStableId';
-import { toIze, formatAuctionIze, type GoldRates } from '../../utils/currency';
+import { toIze, formatAuctionIze, type FxRates } from '../../utils/currency';
 import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
@@ -42,7 +42,7 @@ interface BuyNowSheetProps {
   onDismiss: () => void;
   auction: BuyNowSheetAuctionContext;
   currencyCode: SupportedCurrencyCode;
-  goldRates: Partial<GoldRates>;
+  fxRates: Partial<FxRates>;
   formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: any) => string;
   onSubmitBuyNow: (gbpAmount: number, idempotencyKey: string) => Promise<BuyNowResult>;
   onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
@@ -55,7 +55,7 @@ export function BuyNowSheet({
   onDismiss,
   auction,
   currencyCode,
-  goldRates,
+  fxRates,
   formatFromFiat,
   onSubmitBuyNow,
   onRefreshDetail,
@@ -198,7 +198,7 @@ export function BuyNowSheet({
         parsed.isNetworkError,
         parsed.structuredDetails,
         currencyCode,
-        goldRates,
+        fxRates,
       );
       setError(txError);
 

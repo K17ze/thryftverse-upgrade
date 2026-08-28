@@ -42,7 +42,7 @@ interface ClaimedSchedule {
  * Returns the number of rows processed.
  */
 export async function sweepScheduledPublications(
-  reason: 'interval' | 'manual' = 'interval',
+  reason: 'scheduled' | 'manual' = 'scheduled',
 ): Promise<number> {
   const client = await db.connect();
   let processed = 0;

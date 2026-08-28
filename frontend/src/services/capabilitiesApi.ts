@@ -16,7 +16,8 @@ export type CapabilityPaymentGatewayId =
   | 'flutterwave_africa'
   | 'tap_gulf'
   | 'wise_global'
-  | 'mock_fiat_gbp';
+  | 'mock_fiat_gbp'
+  | 'oneze_internal';
 
 export type CapabilityPaymentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal';
 export type CapabilityPaymentMethodType = 'card' | 'bank_account' | 'wallet' | 'apple_pay' | 'google_pay';

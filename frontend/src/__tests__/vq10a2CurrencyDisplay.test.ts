@@ -4,13 +4,13 @@ import {
   toFiat,
   formatIzeAmount,
   formatPrice,
-  DEFAULT_GOLD_RATES,
+  DEFAULT_FX_RATES,
   type CurrencyDisplayMode,
 } from '../utils/currency';
 import { CURRENCIES } from '../constants/currencies';
 
 describe('VQ-10A2: Currency quote conversion and 1ZE display hierarchy', () => {
-  const rates = DEFAULT_GOLD_RATES;
+  const rates = DEFAULT_FX_RATES;
 
   describe('toIze / toFiat round-trip', () => {
     it('converts GBP to 1ZE and back without significant loss', () => {
@@ -55,7 +55,7 @@ describe('VQ-10A2: Currency quote conversion and 1ZE display hierarchy', () => {
         izeAmount,
         displayMode: 'ize' as CurrencyDisplayMode,
         currencyCode: 'GBP',
-        goldRates: rates,
+        fxRates: rates,
       });
       expect(result).toContain('1ze');
       expect(result).not.toContain('£');
@@ -66,7 +66,7 @@ describe('VQ-10A2: Currency quote conversion and 1ZE display hierarchy', () => {
         izeAmount,
         displayMode: 'fiat' as CurrencyDisplayMode,
         currencyCode: 'GBP',
-        goldRates: rates,
+        fxRates: rates,
       });
       expect(result).toContain('£');
       expect(result).not.toContain('1ze');
@@ -77,7 +77,7 @@ describe('VQ-10A2: Currency quote conversion and 1ZE display hierarchy', () => {
         izeAmount,
         displayMode: 'both' as CurrencyDisplayMode,
         currencyCode: 'GBP',
-        goldRates: rates,
+        fxRates: rates,
       });
       expect(result).toContain('1ze');
       expect(result).toContain('£');
@@ -88,18 +88,18 @@ describe('VQ-10A2: Currency quote conversion and 1ZE display hierarchy', () => {
         izeAmount,
         displayMode: 'fiat' as CurrencyDisplayMode,
         currencyCode: 'USD',
-        goldRates: rates,
+        fxRates: rates,
       });
       expect(usdResult).toContain('$');
     });
   });
 
-  describe('DEFAULT_GOLD_RATES covers all supported currencies', () => {
+  describe('DEFAULT_FX_RATES covers all supported currencies', () => {
     const supportedCodes = Object.keys(CURRENCIES) as Array<keyof typeof CURRENCIES>;
     for (const code of supportedCodes) {
       it(`has a rate for ${code}`, () => {
-        expect(DEFAULT_GOLD_RATES[code]).toBeDefined();
-        expect(DEFAULT_GOLD_RATES[code]).toBeGreaterThan(0);
+        expect(DEFAULT_FX_RATES[code]).toBeDefined();
+        expect(DEFAULT_FX_RATES[code]).toBeGreaterThan(0);
       });
     }
   });

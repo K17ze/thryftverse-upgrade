@@ -123,11 +123,11 @@ test('precision, unsupported currencies, overflow, zero, and negatives fail clos
   );
 });
 
-test('1ZE uses integer mg base units with a fixed three-decimal scale', () => {
+test('1ZE uses integer minor units with a fixed three-decimal scale', () => {
   assert.deepEqual(assetAmountFromOneze('12.345'), {
     asset: '1ZE',
     baseUnitAmount: '12345',
-    baseUnit: 'mg',
+    baseUnit: 'units',
     scale: 3,
   });
   assert.throws(() => assetAmountFromOneze('1.0001'), MoneyValidationError);

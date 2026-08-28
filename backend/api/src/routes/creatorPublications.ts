@@ -1503,7 +1503,7 @@ export const registerCreatorPublicationRoutes = ({
   app.delete('/creator/documents/:documentId/presence', async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
-    const socketId = z.string().min(2).max(120).optional().parse(request.query.socketId);
+    const socketId = z.string().min(2).max(120).optional().parse((request.query as Record<string, unknown>).socketId);
 
     if (socketId) {
       await db.query(

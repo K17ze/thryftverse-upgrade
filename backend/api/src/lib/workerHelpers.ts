@@ -59,11 +59,11 @@ export function parseRunDateOrToday(runDate?: string): string {
 
 // ─── 1ze amount / fiat helpers ─────────────────────────────────────────────
 
-export const ONEZE_MG_PER_IZE = 1_000;
+export const ONEZE_UNITS_PER_IZE = 1_000;
 export const DEFAULT_WALLET_FIAT_CURRENCY = 'INR';
 
-export function mgToOnezeAmount(amountMg: number): number {
-  return Number((amountMg / ONEZE_MG_PER_IZE).toFixed(6));
+export function unitsToOnezeAmount(amountUnits: number): number {
+  return Number((amountUnits / ONEZE_UNITS_PER_IZE).toFixed(6));
 }
 
 export function getFiatMinorDigits(currency: string): number {
@@ -329,7 +329,9 @@ export type LedgerAccountCode =
   | 'ize_pending_redemption'
   | 'ize_outstanding'
   | 'ize_fiat_received'
-  | 'reserve_hold';
+  | 'reserve_hold'
+  | 'provider_cash_clearing'
+  | 'revenue_fx';
 
 // ─── Table-availability probes ─────────────────────────────────────────────
 
@@ -401,7 +403,7 @@ export interface MintOperationRow {
   fiat_currency: string;
   net_fiat_amount_minor: number | string;
   platform_fee_minor: number | string;
-  ize_amount_mg: number | string;
+  ize_amount_units: number | string;
   rate_per_gram: number | string;
   rate_source: string;
   rate_locked_at: string;
@@ -430,7 +432,7 @@ export const MINT_OPERATION_TERMINAL_STATES = new Set<string>([
 export interface WalletRow {
   id: string;
   user_id: string;
-  oneze_balance_mg: number | string;
+  oneze_balance_units: number | string;
   fiat_balance_minor: number | string;
   fiat_currency: string;
   version: number | string;
@@ -440,8 +442,8 @@ export interface WalletRow {
 
 export interface WalletSegmentRow {
   wallet_id: string;
-  purchased_balance_mg: number | string;
-  earned_balance_mg: number | string;
+  purchased_balance_units: number | string;
+  earned_balance_units: number | string;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -451,7 +453,7 @@ export interface WithdrawalRow {
   id: string;
   user_id: string;
   burn_tx_id: string | null;
-  amount_mg: number | string;
+  amount_units: number | string;
   target_currency: string;
   gross_minor: number | string;
   spread_minor: number | string;

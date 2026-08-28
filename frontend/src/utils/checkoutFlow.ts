@@ -121,6 +121,7 @@ export function buildOrderSignature(params: {
   platformCharge: number;
   postageFee: number;
   walletDebit?: number;
+  paymentGatewayId?: string;
 }): string {
   return [
     params.buyerId,
@@ -131,5 +132,6 @@ export function buildOrderSignature(params: {
     params.platformCharge.toFixed(2),
     params.postageFee.toFixed(2),
     params.walletDebit?.toFixed(2) ?? 'none',
+    params.paymentGatewayId ?? 'none',
   ].join('|');
 }

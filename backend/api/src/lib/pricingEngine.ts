@@ -19,6 +19,13 @@ type Queryable = {
   ) => Promise<{ rows: T[]; rowCount: number | null }>;
 };
 
+const PLATFORM_FEE_MIN_BPS = 100;
+const PLATFORM_FEE_MAX_BPS = 300;
+
+export const PLATFORM_LOAD_FEE_BPS = 200;
+export const PLATFORM_WITHDRAW_FEE_BPS = 200;
+export const PLATFORM_CONVERT_FEE_BPS = 150;
+
 const MARKUP_MIN_BPS = 1500;
 const MARKUP_MAX_BPS = 2500;
 const MARKDOWN_MIN_BPS = 1000;
@@ -29,6 +36,10 @@ const PPP_MIN = 0.7;
 const PPP_MAX = 1.0;
 
 export const PRICING_PARAMETER_BOUNDS = {
+  platformFeeBps: {
+    min: PLATFORM_FEE_MIN_BPS,
+    max: PLATFORM_FEE_MAX_BPS,
+  },
   markupBps: {
     min: MARKUP_MIN_BPS,
     max: MARKUP_MAX_BPS,
@@ -87,6 +98,9 @@ export interface OnezeCountryPricingProfile {
   markdownBps: number;
   crossBorderFeeBps: number;
   pppFactor: number;
+  fxFeeBps: number;
+  loadFeeBps: number;
+  withdrawFeeBps: number;
   withdrawalLockHours: number;
   dailyRedeemLimitIze: number;
   weeklyRedeemLimitIze: number;
@@ -101,7 +115,9 @@ export interface OnezePricingQuote {
   anchorCurrency: string;
   anchorValueInInr: number;
   fxRateInrToLocal: number;
+  /** @deprecated Use totalCost (at-par load cost). */
   buyPrice: number;
+  /** @deprecated Use netRedemption (at-par withdraw proceeds). */
   sellPrice: number;
   crossBorderSellPrice: number;
   buyPriceInAnchor: number;
@@ -113,6 +129,15 @@ export interface OnezePricingQuote {
   pppFactor: number;
   source: string;
   updatedAt: string;
+  principalRate: number;
+  fxRate: number;
+  platformFeeBps: number;
+  loadFeeBps: number;
+  withdrawFeeBps: number;
+  principalAmount: number;
+  feeAmount: number;
+  totalCost: number;
+  netRedemption: number;
 }
 
 export interface PricingArbitrageViolation {
@@ -153,11 +178,40 @@ export function calculateCountryPricing(input: {
   };
 }
 
+export function calculateAtParPricing(input: {
+  anchorValue: number;
+  fxRate: number;
+  feeBps: number;
+  direction?: 'load' | 'withdraw';
+  loadFeeBps?: number;
+  withdrawFeeBps?: number;
+}) {
+  const effectiveFeeBps =
+    input.direction === 'load' && input.loadFeeBps != null
+      ? input.loadFeeBps
+      : input.direction === 'withdraw' && input.withdrawFeeBps != null
+        ? input.withdrawFeeBps
+        : input.feeBps;
+  const principalAmount = roundTo(input.anchorValue * input.fxRate);
+  const feeAmount = roundTo(principalAmount * (effectiveFeeBps / 10_000));
+  return {
+    principalAmount,
+    feeAmount,
+    totalCost: roundTo(principalAmount + feeAmount),
+    netRedemption: roundTo(principalAmount - feeAmount),
+    rate: input.fxRate,
+    feeBps: effectiveFeeBps,
+  };
+}
+
 export function validatePricingProfileInput(input: {
   markupBps: number;
   markdownBps: number;
   crossBorderFeeBps: number;
   pppFactor: number;
+  platformFeeBps?: number;
+  loadFeeBps?: number;
+  withdrawFeeBps?: number;
 }): void {
   if (input.markupBps < MARKUP_MIN_BPS || input.markupBps > MARKUP_MAX_BPS) {
     throw new Error(`markupBps must be between ${MARKUP_MIN_BPS} and ${MARKUP_MAX_BPS}`);
@@ -178,6 +232,21 @@ export function validatePricingProfileInput(input: {
 
   if (input.pppFactor < PPP_MIN || input.pppFactor > PPP_MAX) {
     throw new Error(`pppFactor must be between ${PPP_MIN} and ${PPP_MAX}`);
+  }
+
+  const platformFeeBps = input.platformFeeBps ?? PLATFORM_LOAD_FEE_BPS;
+  if (platformFeeBps < PLATFORM_FEE_MIN_BPS || platformFeeBps > PLATFORM_FEE_MAX_BPS) {
+    throw new Error(`platformFeeBps must be between ${PLATFORM_FEE_MIN_BPS} and ${PLATFORM_FEE_MAX_BPS}`);
+  }
+
+  const loadFeeBps = input.loadFeeBps ?? PLATFORM_LOAD_FEE_BPS;
+  if (loadFeeBps < PLATFORM_FEE_MIN_BPS || loadFeeBps > PLATFORM_FEE_MAX_BPS) {
+    throw new Error(`loadFeeBps must be between ${PLATFORM_FEE_MIN_BPS} and ${PLATFORM_FEE_MAX_BPS}`);
+  }
+
+  const withdrawFeeBps = input.withdrawFeeBps ?? PLATFORM_WITHDRAW_FEE_BPS;
+  if (withdrawFeeBps < PLATFORM_FEE_MIN_BPS || withdrawFeeBps > PLATFORM_FEE_MAX_BPS) {
+    throw new Error(`withdrawFeeBps must be between ${PLATFORM_FEE_MIN_BPS} and ${PLATFORM_FEE_MAX_BPS}`);
   }
 }
 
@@ -259,6 +328,7 @@ export async function getOnezeAnchorConfig(client: Queryable): Promise<OnezeAnch
 export async function setOnezeAnchorConfig(
   client: Queryable,
   input: {
+    anchorCurrency?: string;
     anchorValue: number;
     notes?: string;
     metadata?: Record<string, unknown>;
@@ -267,6 +337,8 @@ export async function setOnezeAnchorConfig(
   if (!Number.isFinite(input.anchorValue) || input.anchorValue <= 0) {
     throw new Error('anchorValue must be a positive number');
   }
+
+  const anchorCurrency = toCurrencyCode(input.anchorCurrency ?? 'USD');
 
   await client.query(
     `
@@ -278,17 +350,17 @@ export async function setOnezeAnchorConfig(
         metadata,
         updated_at
       )
-      VALUES (1, 'INR', $1, $2, $3::jsonb, NOW())
+      VALUES (1, $1, $2, $3, $4::jsonb, NOW())
       ON CONFLICT (id)
       DO UPDATE
         SET
-          anchor_currency = 'INR',
+          anchor_currency = EXCLUDED.anchor_currency,
           anchor_value = EXCLUDED.anchor_value,
           notes = EXCLUDED.notes,
           metadata = oneze_anchor_config.metadata || EXCLUDED.metadata,
           updated_at = NOW()
     `,
-    [input.anchorValue, input.notes ?? null, JSON.stringify(input.metadata ?? {})]
+    [anchorCurrency, input.anchorValue, input.notes ?? null, JSON.stringify(input.metadata ?? {})]
   );
 
   return getOnezeAnchorConfig(client);
@@ -301,6 +373,9 @@ async function mapCountryProfileRow(row: {
   markdown_bps: number;
   cross_border_fee_bps: number;
   ppp_factor: string | number;
+  fx_fee_bps: number;
+  load_fee_bps: number;
+  withdraw_fee_bps: number;
   withdrawal_lock_hours: number;
   daily_redeem_limit_ize: string | number;
   weekly_redeem_limit_ize: string | number;
@@ -315,6 +390,9 @@ async function mapCountryProfileRow(row: {
     markdownBps: row.markdown_bps,
     crossBorderFeeBps: row.cross_border_fee_bps,
     pppFactor: parseNumeric(row.ppp_factor),
+    fxFeeBps: row.fx_fee_bps,
+    loadFeeBps: row.load_fee_bps,
+    withdrawFeeBps: row.withdraw_fee_bps,
     withdrawalLockHours: row.withdrawal_lock_hours,
     dailyRedeemLimitIze: parseNumeric(row.daily_redeem_limit_ize),
     weeklyRedeemLimitIze: parseNumeric(row.weekly_redeem_limit_ize),
@@ -337,6 +415,9 @@ export async function getCountryPricingProfile(
     markdown_bps: number;
     cross_border_fee_bps: number;
     ppp_factor: string | number;
+    fx_fee_bps: number;
+    load_fee_bps: number;
+    withdraw_fee_bps: number;
     withdrawal_lock_hours: number;
     daily_redeem_limit_ize: string | number;
     weekly_redeem_limit_ize: string | number;
@@ -352,6 +433,9 @@ export async function getCountryPricingProfile(
         markdown_bps,
         cross_border_fee_bps,
         ppp_factor::text,
+        fx_fee_bps,
+        load_fee_bps,
+        withdraw_fee_bps,
         withdrawal_lock_hours,
         daily_redeem_limit_ize::text,
         weekly_redeem_limit_ize::text,
@@ -386,6 +470,9 @@ export async function getCountryPricingProfileByCurrency(
     markdown_bps: number;
     cross_border_fee_bps: number;
     ppp_factor: string | number;
+    fx_fee_bps: number;
+    load_fee_bps: number;
+    withdraw_fee_bps: number;
     withdrawal_lock_hours: number;
     daily_redeem_limit_ize: string | number;
     weekly_redeem_limit_ize: string | number;
@@ -401,6 +488,9 @@ export async function getCountryPricingProfileByCurrency(
         markdown_bps,
         cross_border_fee_bps,
         ppp_factor::text,
+        fx_fee_bps,
+        load_fee_bps,
+        withdraw_fee_bps,
         withdrawal_lock_hours,
         daily_redeem_limit_ize::text,
         weekly_redeem_limit_ize::text,
@@ -433,6 +523,9 @@ export async function upsertCountryPricingProfile(
     markdownBps: number;
     crossBorderFeeBps: number;
     pppFactor: number;
+    fxFeeBps?: number;
+    loadFeeBps?: number;
+    withdrawFeeBps?: number;
     withdrawalLockHours?: number;
     dailyRedeemLimitIze?: number;
     weeklyRedeemLimitIze?: number;
@@ -444,6 +537,9 @@ export async function upsertCountryPricingProfile(
 
   const normalizedCountry = toCountryCode(input.countryCode);
   const normalizedCurrency = toCurrencyCode(input.currency);
+  const fxFeeBps = input.fxFeeBps ?? PLATFORM_LOAD_FEE_BPS;
+  const loadFeeBps = input.loadFeeBps ?? PLATFORM_LOAD_FEE_BPS;
+  const withdrawFeeBps = input.withdrawFeeBps ?? PLATFORM_WITHDRAW_FEE_BPS;
 
   await client.query(
     `
@@ -454,6 +550,9 @@ export async function upsertCountryPricingProfile(
         markdown_bps,
         cross_border_fee_bps,
         ppp_factor,
+        fx_fee_bps,
+        load_fee_bps,
+        withdraw_fee_bps,
         withdrawal_lock_hours,
         daily_redeem_limit_ize,
         weekly_redeem_limit_ize,
@@ -461,7 +560,7 @@ export async function upsertCountryPricingProfile(
         metadata,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, NOW())
       ON CONFLICT (country_code)
       DO UPDATE
         SET
@@ -470,6 +569,9 @@ export async function upsertCountryPricingProfile(
           markdown_bps = EXCLUDED.markdown_bps,
           cross_border_fee_bps = EXCLUDED.cross_border_fee_bps,
           ppp_factor = EXCLUDED.ppp_factor,
+          fx_fee_bps = EXCLUDED.fx_fee_bps,
+          load_fee_bps = EXCLUDED.load_fee_bps,
+          withdraw_fee_bps = EXCLUDED.withdraw_fee_bps,
           withdrawal_lock_hours = EXCLUDED.withdrawal_lock_hours,
           daily_redeem_limit_ize = EXCLUDED.daily_redeem_limit_ize,
           weekly_redeem_limit_ize = EXCLUDED.weekly_redeem_limit_ize,
@@ -484,6 +586,9 @@ export async function upsertCountryPricingProfile(
       input.markdownBps,
       input.crossBorderFeeBps,
       input.pppFactor,
+      fxFeeBps,
+      loadFeeBps,
+      withdrawFeeBps,
       input.withdrawalLockHours ?? 168,
       input.dailyRedeemLimitIze ?? 500,
       input.weeklyRedeemLimitIze ?? 2000,
@@ -624,14 +729,24 @@ export async function resolveCountryPricingQuote(
   }
 
   const fx = await resolveInternalFxRate(client, anchor.anchorCurrency, profile.currency);
-  const calculation = calculateCountryPricing({
+  const loadAtPar = calculateAtParPricing({
     anchorValue: anchor.anchorValue,
     fxRate: fx.rate,
-    markupBps: profile.markupBps,
-    markdownBps: profile.markdownBps,
-    crossBorderFeeBps: profile.crossBorderFeeBps,
-    pppFactor: profile.pppFactor,
+    feeBps: profile.fxFeeBps,
+    direction: 'load',
+    loadFeeBps: profile.loadFeeBps,
   });
+  const withdrawAtPar = calculateAtParPricing({
+    anchorValue: anchor.anchorValue,
+    fxRate: fx.rate,
+    feeBps: profile.fxFeeBps,
+    direction: 'withdraw',
+    withdrawFeeBps: profile.withdrawFeeBps,
+  });
+
+  const buyPriceInAnchor = roundTo(loadAtPar.totalCost / fx.rate);
+  const sellPriceInAnchor = roundTo(withdrawAtPar.netRedemption / fx.rate);
+  const crossBorderSellPriceInAnchor = sellPriceInAnchor;
 
   return {
     countryCode: profile.countryCode,
@@ -639,18 +754,27 @@ export async function resolveCountryPricingQuote(
     anchorCurrency: anchor.anchorCurrency,
     anchorValueInInr: anchor.anchorValue,
     fxRateInrToLocal: fx.rate,
-    buyPrice: calculation.buyPrice,
-    sellPrice: calculation.sellPrice,
-    crossBorderSellPrice: calculation.crossBorderSellPrice,
-    buyPriceInAnchor: calculation.buyPriceInAnchor,
-    sellPriceInAnchor: calculation.sellPriceInAnchor,
-    crossBorderSellPriceInAnchor: calculation.crossBorderSellPriceInAnchor,
+    buyPrice: loadAtPar.totalCost,
+    sellPrice: withdrawAtPar.netRedemption,
+    crossBorderSellPrice: withdrawAtPar.netRedemption,
+    buyPriceInAnchor,
+    sellPriceInAnchor,
+    crossBorderSellPriceInAnchor,
     markupBps: profile.markupBps,
     markdownBps: profile.markdownBps,
     crossBorderFeeBps: profile.crossBorderFeeBps,
     pppFactor: profile.pppFactor,
     source: `internal_pricing:${profile.countryCode}`,
     updatedAt: profile.updatedAt,
+    principalRate: 1,
+    fxRate: fx.rate,
+    platformFeeBps: profile.fxFeeBps,
+    loadFeeBps: profile.loadFeeBps,
+    withdrawFeeBps: profile.withdrawFeeBps,
+    principalAmount: loadAtPar.principalAmount,
+    feeAmount: loadAtPar.feeAmount,
+    totalCost: loadAtPar.totalCost,
+    netRedemption: withdrawAtPar.netRedemption,
   };
 }
 
@@ -675,6 +799,9 @@ export async function listCountryPricingQuotes(client: Queryable): Promise<Oneze
     markdown_bps: number;
     cross_border_fee_bps: number;
     ppp_factor: string | number;
+    fx_fee_bps: number;
+    load_fee_bps: number;
+    withdraw_fee_bps: number;
     withdrawal_lock_hours: number;
     daily_redeem_limit_ize: string | number;
     weekly_redeem_limit_ize: string | number;
@@ -690,6 +817,9 @@ export async function listCountryPricingQuotes(client: Queryable): Promise<Oneze
         markdown_bps,
         cross_border_fee_bps,
         ppp_factor::text,
+        fx_fee_bps,
+        load_fee_bps,
+        withdraw_fee_bps,
         withdrawal_lock_hours,
         daily_redeem_limit_ize::text,
         weekly_redeem_limit_ize::text,
@@ -711,14 +841,24 @@ export async function listCountryPricingQuotes(client: Queryable): Promise<Oneze
   const quotes: OnezePricingQuote[] = [];
   for (const profile of profiles) {
     const fx = await resolveInternalFxRate(client, anchor.anchorCurrency, profile.currency);
-    const calculation = calculateCountryPricing({
+    const loadAtPar = calculateAtParPricing({
       anchorValue: anchor.anchorValue,
       fxRate: fx.rate,
-      markupBps: profile.markupBps,
-      markdownBps: profile.markdownBps,
-      crossBorderFeeBps: profile.crossBorderFeeBps,
-      pppFactor: profile.pppFactor,
+      feeBps: profile.fxFeeBps,
+      direction: 'load',
+      loadFeeBps: profile.loadFeeBps,
     });
+    const withdrawAtPar = calculateAtParPricing({
+      anchorValue: anchor.anchorValue,
+      fxRate: fx.rate,
+      feeBps: profile.fxFeeBps,
+      direction: 'withdraw',
+      withdrawFeeBps: profile.withdrawFeeBps,
+    });
+
+    const buyPriceInAnchor = roundTo(loadAtPar.totalCost / fx.rate);
+    const sellPriceInAnchor = roundTo(withdrawAtPar.netRedemption / fx.rate);
+    const crossBorderSellPriceInAnchor = sellPriceInAnchor;
 
     quotes.push({
       countryCode: profile.countryCode,
@@ -726,18 +866,27 @@ export async function listCountryPricingQuotes(client: Queryable): Promise<Oneze
       anchorCurrency: anchor.anchorCurrency,
       anchorValueInInr: anchor.anchorValue,
       fxRateInrToLocal: fx.rate,
-      buyPrice: calculation.buyPrice,
-      sellPrice: calculation.sellPrice,
-      crossBorderSellPrice: calculation.crossBorderSellPrice,
-      buyPriceInAnchor: calculation.buyPriceInAnchor,
-      sellPriceInAnchor: calculation.sellPriceInAnchor,
-      crossBorderSellPriceInAnchor: calculation.crossBorderSellPriceInAnchor,
+      buyPrice: loadAtPar.totalCost,
+      sellPrice: withdrawAtPar.netRedemption,
+      crossBorderSellPrice: withdrawAtPar.netRedemption,
+      buyPriceInAnchor,
+      sellPriceInAnchor,
+      crossBorderSellPriceInAnchor,
       markupBps: profile.markupBps,
       markdownBps: profile.markdownBps,
       crossBorderFeeBps: profile.crossBorderFeeBps,
       pppFactor: profile.pppFactor,
       source: `internal_pricing:${profile.countryCode}`,
       updatedAt: profile.updatedAt,
+      principalRate: 1,
+      fxRate: fx.rate,
+      platformFeeBps: profile.fxFeeBps,
+      loadFeeBps: profile.loadFeeBps,
+      withdrawFeeBps: profile.withdrawFeeBps,
+      principalAmount: loadAtPar.principalAmount,
+      feeAmount: loadAtPar.feeAmount,
+      totalCost: loadAtPar.totalCost,
+      netRedemption: withdrawAtPar.netRedemption,
     });
   }
 

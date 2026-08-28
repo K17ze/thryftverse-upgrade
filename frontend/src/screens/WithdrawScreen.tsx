@@ -137,7 +137,7 @@ export default function WithdrawScreen() {
   const [withdrawals, setWithdrawals] = useState<PayoutRequestPayload[]>([]);
   const [withdrawalsLoadState, setWithdrawalsLoadState] = useState<WithdrawalsLoadState>('idle');
   const { currencySymbol, formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates, rateUpdatedAt } = useCurrencyContext();
+  const { currencyCode, fxRates, rateUpdatedAt } = useCurrencyContext();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
@@ -150,9 +150,9 @@ export default function WithdrawScreen() {
   const biometricGate = useBiometricGate();
 
   useEffect(() => {
-    const displayAmount = getDefaultWithdrawDisplayAmount(availableBalance, currencyCode, goldRates);
+    const displayAmount = getDefaultWithdrawDisplayAmount(availableBalance, currencyCode, fxRates);
     setAmount(displayAmount.toFixed(2));
-  }, [availableBalance, currencyCode, goldRates]);
+  }, [availableBalance, currencyCode, fxRates]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -282,7 +282,7 @@ export default function WithdrawScreen() {
   }, [currentUser?.id, loadWithdrawals]);
 
   const numericAmountDisplay = Number(amount) || 0;
-  const numericAmount = Number(convertDisplayToGbpAmount(numericAmountDisplay, currencyCode, goldRates).toFixed(2));
+  const numericAmount = Number(convertDisplayToGbpAmount(numericAmountDisplay, currencyCode, fxRates).toFixed(2));
   const exceedsBalance = numericAmount > availableBalance;
   const canWithdraw =
     numericAmount > 0
@@ -556,7 +556,7 @@ export default function WithdrawScreen() {
 
       const nextBalance = Number(Math.max(0, availableBalance - amountGbp).toFixed(2));
       setAvailableBalance(nextBalance);
-      setAmount(getDefaultWithdrawDisplayAmount(nextBalance, currencyCode, goldRates).toFixed(2));
+      setAmount(getDefaultWithdrawDisplayAmount(nextBalance, currencyCode, fxRates).toFixed(2));
 
       setSuccessData({
         reference: payoutResponse.payoutRequest.providerPayoutRef ?? payoutResponse.payoutRequest.id,

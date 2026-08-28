@@ -53,7 +53,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const { itemId, price, title } = route.params;
   const { colors } = useAppTheme();
   const { currencySymbol, formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, fxRates } = useCurrencyContext();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
@@ -93,16 +93,16 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   React.useEffect(() => {
     // For counter-offers, default to halfway between previous offer and asking price
     const basePrice = isCounterOffer && previousOffer ? (previousOffer + price) / 2 : price;
-    const defaultOffer = convertGbpToDisplayAmount(basePrice, currencyCode, goldRates);
+    const defaultOffer = convertGbpToDisplayAmount(basePrice, currencyCode, fxRates);
     setOfferPrice((Number.isFinite(defaultOffer) ? defaultOffer : basePrice).toFixed(2));
-  }, [currencyCode, goldRates, price, isCounterOffer, previousOffer]);
+  }, [currencyCode, fxRates, price, isCounterOffer, previousOffer]);
 
   const numericOffer = parseFloat(offerPrice) || 0;
   const {
     offerGbp: numericOfferGbp,
     platformChargeGbp,
     totalGbp: total,
-  } = calculateOfferSummaryFromDisplay(numericOffer, currencyCode, goldRates);
+  } = calculateOfferSummaryFromDisplay(numericOffer, currencyCode, fxRates);
 
   // Discount percentage relative to listing price — key trust signal
   // shown dynamically as the buyer adjusts their offer. Depop/Vinted/
@@ -263,7 +263,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const quickOfferPercentages = [0.8, 0.9, 0.95];
   const applyQuickOffer = (percentage: number) => {
     const gbpAmount = price * percentage;
-    const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, goldRates);
+    const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, fxRates);
     setOfferPrice((Number.isFinite(displayAmount) ? displayAmount : gbpAmount).toFixed(2));
     if (errorMsg) setErrorMsg('');
     haptics.tap();
@@ -392,7 +392,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           <View style={styles.quickOfferRow}>
             {quickOfferPercentages.map((pct) => {
               const gbpAmount = price * pct;
-              const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, goldRates);
+              const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, fxRates);
               const label = Number.isFinite(displayAmount)
                 ? `${Math.round(pct * 100)}%`
                 : `${Math.round(pct * 100)}%`;

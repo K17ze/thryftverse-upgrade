@@ -28,9 +28,14 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 
 import { parseApiError } from '../lib/apiClient';
-import { getIzePosition, convertIzeToFiat } from '../services/walletApi';
-import { convertGbpToDisplayAmount, sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
-import { formatIzeAmount } from '../utils/currency';
+import {
+  getIzePosition,
+  convertIzeToFiat,
+  getConvertQuote,
+  type ConvertQuotePayload,
+} from '../services/walletApi';
+import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
+import { formatIzeAmount, izeToUsd, formatUsd } from '../utils/currency';
 import { CURRENCIES } from '../constants/currencies';
 import { COPY } from '../constants/copy';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
@@ -48,15 +53,17 @@ import {
 } from '../theme/designTokens';
 import { t } from '../i18n';
 
-// ── Platform fee rate for 1ZE → fiat conversion (2%) ──
-const CONVERT_FEE_RATE = 0.02;
-
 type ConvertStep = 'amount' | 'review' | 'authenticating' | 'executing' | 'receipt' | 'error';
 
 interface ConversionResult {
   izeAmount: number;
   fiatAmount: number;
   fiatCurrency: string;
+  feeAmount: number;
+  feeBps: number;
+  principalAmount: number;
+  netRedemption: number;
+  rateUsed: number;
   timestamp: string;
 }
 
@@ -70,13 +77,13 @@ export default function WalletConvertScreen() {
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
-  const { currencyCode, goldRates, rateUpdatedAt, refreshRates } = useCurrencyContext();
+  const { currencyCode, rateUpdatedAt, refreshRates } = useCurrencyContext();
   const { formatFromFiat } = useFormattedPrice();
   const biometricGate = useBiometricGate();
 
   const currencySymbol = CURRENCIES[currencyCode].symbol;
 
-  // ── State ──
+  // -- State --
   const [step, setStep] = useState<ConvertStep>('amount');
   const [amount, setAmount] = useState('');
   const [availableIze, setAvailableIze] = useState(0);
@@ -85,7 +92,16 @@ export default function WalletConvertScreen() {
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // ── Balance hydration (available 1ZE) ──
+  // -- Fee quote from backend (transparent, not hardcoded) --
+  // The full principal/fee/net breakdown comes from the backend preview
+  // quote. The client never assumes a fee rate -- it discloses what the
+  // backend returns (MiCA EMT transparent-fee requirement).
+  const [quote, setQuote] = useState<ConvertQuotePayload | null>(null);
+  const [isFetchingQuote, setIsFetchingQuote] = useState(false);
+  const [quoteError, setQuoteError] = useState(false);
+  const [quoteNonce, setQuoteNonce] = useState(0);
+
+  // -- Balance hydration (available 1ZE) --
   useEffect(() => {
     let isCancelled = false;
 
@@ -118,16 +134,16 @@ export default function WalletConvertScreen() {
     };
   }, [currentUser?.id, currencyCode]);
 
-  // ── Derived conversion values ──
+  // -- Derived conversion values (at-par model) --
+  // All financial truth comes from the backend quote: principalAmount,
+  // feeAmount, feeBps, netFiatAmount and rateUsed. The client only
+  // displays these -- it never computes a fee locally.
   const izeValue = Number(amount || '0');
-  const grossFiat = convertGbpToDisplayAmount(izeValue, currencyCode, goldRates);
-  const platformFee = grossFiat * CONVERT_FEE_RATE;
-  const netFiat = Math.max(0, grossFiat - platformFee);
-  const feeRateLabel = `${Math.round(CONVERT_FEE_RATE * 100)}%`;
+  const usdEquivalent = izeToUsd(izeValue);
   const exceedsBalance = izeValue > availableIze;
   const isWalletOperational = !isOffline;
 
-  // ── Rate timestamp (when the rate was captured) ──
+  // -- Rate timestamp (when the rate was captured) --
   const rateTimestampLabel = React.useMemo(() => {
     if (!rateUpdatedAt) return null;
     const date = new Date(rateUpdatedAt);
@@ -140,7 +156,7 @@ export default function WalletConvertScreen() {
     });
   }, [rateUpdatedAt]);
 
-  // ── Rate expiry: rates are valid for 30 minutes from the timestamp ──
+  // -- Rate expiry: rates are valid for 30 minutes from the timestamp --
   const RATE_VALIDITY_MINUTES = 30;
   const [rateExpiryMs, setRateExpiryMs] = useState<number | null>(null);
 
@@ -174,14 +190,61 @@ export default function WalletConvertScreen() {
 
   const isRateExpired = remainingMs <= 0 && rateExpiryMs !== null;
 
+  // -- Fetch fee quote from backend (debounced) --
+  // The fee is transparent -- fetched from the backend, never hardcoded.
+  // We call the same convert endpoint with a preview flag so the breakdown
+  // matches exactly what execution will return.
+  useEffect(() => {
+    if (izeValue <= 0 || exceedsBalance || !currentUser?.id) {
+      setQuote(null);
+      setQuoteError(false);
+      return;
+    }
+    let isCancelled = false;
+    const debounce = setTimeout(async () => {
+      setIsFetchingQuote(true);
+      setQuoteError(false);
+      try {
+        const response = await getConvertQuote({
+          userId: currentUser.id,
+          izeAmount: izeValue,
+          fiatCurrency: currencyCode,
+        });
+        if (!isCancelled) {
+          setQuote(response.conversion);
+        }
+      } catch {
+        if (!isCancelled) {
+          setQuote(null);
+          setQuoteError(true);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsFetchingQuote(false);
+        }
+      }
+    }, 400);
+    return () => {
+      isCancelled = true;
+      clearTimeout(debounce);
+    };
+  }, [izeValue, currencyCode, exceedsBalance, currentUser?.id, quoteNonce]);
+
+  const handleRetryQuote = () => {
+    setQuoteNonce((n) => n + 1);
+  };
+
   const canReview =
     Number.isFinite(izeValue) &&
     izeValue > 0 &&
     !exceedsBalance &&
     !isExecuting &&
-    isWalletOperational;
+    isWalletOperational &&
+    quote !== null &&
+    !isFetchingQuote &&
+    !quoteError;
 
-  // ── Step transitions ──
+  // -- Step transitions --
   const handleReview = () => {
     if (!canReview) {
       return;
@@ -229,10 +292,16 @@ export default function WalletConvertScreen() {
     setStep('executing');
     setIsExecuting(true);
     try {
+      const idempotencyKey =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `convert_${currentUser.id}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
       const response = await convertIzeToFiat({
         userId: currentUser.id,
         izeAmount: izeValue,
         fiatCurrency: currencyCode,
+        idempotencyKey,
       });
 
       const conversion = response.conversion;
@@ -241,8 +310,13 @@ export default function WalletConvertScreen() {
 
       setResult({
         izeAmount: conversion.izeAmount,
-        fiatAmount: conversion.fiatAmount,
+        fiatAmount: conversion.netFiatAmount,
         fiatCurrency: conversion.fiatCurrency,
+        feeAmount: conversion.feeAmount,
+        feeBps: conversion.feeBps,
+        principalAmount: conversion.principalAmount,
+        netRedemption: conversion.netFiatAmount,
+        rateUsed: conversion.rateUsed,
         timestamp: new Date().toISOString(),
       });
 
@@ -299,7 +373,7 @@ export default function WalletConvertScreen() {
     }
   };
 
-  // ── Step indicator ──
+  // -- Step indicator --
   const stepLabels = ['Amount', 'Review', 'Auth', 'Done'];
   const activeStepIndex =
     step === 'amount'
@@ -412,7 +486,7 @@ export default function WalletConvertScreen() {
     </View>
   );
 
-  // ── Loading skeleton ──
+  // -- Loading skeleton --
   if (isHydratingBalance) {
     return (
       <FlagshipScreen
@@ -450,7 +524,7 @@ export default function WalletConvertScreen() {
     );
   }
 
-  // ── Footer actions per step ──
+  // -- Footer actions per step --
   const renderFooter = () => {
     if (step === 'amount') {
       return (
@@ -545,12 +619,12 @@ export default function WalletConvertScreen() {
         showsVerticalScrollIndicator={false}
         scrollEnabled={step === 'amount'}
       >
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* STEP 1: AMOUNT                                                    */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {step === 'amount' && (
           <>
-            {/* Hero summary — available 1ZE balance */}
+            {/* Hero summary -- available 1ZE balance */}
             <View>
               <View
                 style={[
@@ -564,10 +638,10 @@ export default function WalletConvertScreen() {
                   </View>
                   <View style={styles.heroText}>
                     <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                      {formatIzeAmount(availableIze)}
+                      {formatIzeAmount(availableIze, 2)}
                     </Text>
                     <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                      Available 1ZE to convert
+                      Available 1ZE · {formatUsd(izeToUsd(availableIze))} at par
                     </Text>
                   </View>
                 </View>
@@ -596,7 +670,7 @@ export default function WalletConvertScreen() {
                 />
               </View>
               <Text style={styles.availableText}>
-                Available: {formatIzeAmount(availableIze)}
+                Available: {formatIzeAmount(availableIze, 2)} · {formatUsd(izeToUsd(availableIze))}
               </Text>
               {exceedsBalance ? (
                 <Text style={styles.balanceError}>
@@ -605,7 +679,7 @@ export default function WalletConvertScreen() {
               ) : null}
             </View>
 
-            {/* Live calculation summary */}
+            {/* Live calculation summary -- transparent at-par breakdown */}
             {izeValue > 0 && !exceedsBalance && (
               <View>
                 <View
@@ -614,19 +688,51 @@ export default function WalletConvertScreen() {
                     { backgroundColor: colors.surface, borderColor: colors.border },
                   ]}
                 >
-                  {renderSummaryRow(
-                    `Gross ${currencyCode}`,
-                    formatFromFiat(grossFiat, currencyCode, { displayMode: 'fiat' })
-                  )}
-                  {renderSummaryRow(
-                    `Platform fee (${feeRateLabel})`,
-                    formatFromFiat(platformFee, currencyCode, { displayMode: 'fiat' })
-                  )}
-                  {renderSummaryRow(
-                    'Net fiat credited',
-                    formatFromFiat(netFiat, currencyCode, { displayMode: 'fiat' }),
-                    { total: true }
-                  )}
+                  {isFetchingQuote ? (
+                    <View style={styles.quoteLoadingRow}>
+                      <ActivityIndicator size="small" color={colors.textMuted} />
+                      <Text style={[styles.quoteStatusText, { color: colors.textMuted }]}>
+                        Fetching live quote…
+                      </Text>
+                    </View>
+                  ) : quoteError ? (
+                    <View style={styles.quoteErrorRow}>
+                      <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
+                      <Text style={[styles.quoteStatusText, { color: colors.danger }]}>
+                        Couldn't fetch quote.
+                      </Text>
+                      <Pressable
+                        hitSlop={8}
+                        onPress={handleRetryQuote}
+                        accessibilityRole="button"
+                        accessibilityLabel="Retry quote fetch"
+                      >
+                        <Text style={[styles.quoteStatusText, { color: colors.brand }]}>
+                          Retry
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : quote ? (
+                    <>
+                      {renderSummaryRow(
+                        'You convert',
+                        `${formatIzeAmount(izeValue, 2)} · ${formatUsd(usdEquivalent)}`
+                      )}
+                      {renderSummaryRow(
+                        'Principal',
+                        formatFromFiat(quote.principalAmount, currencyCode, { displayMode: 'fiat' })
+                      )}
+                      {renderSummaryRow(
+                        `Platform fee (${quote.feeBps} bps)`,
+                        `-${formatFromFiat(quote.feeAmount, currencyCode, { displayMode: 'fiat' })}`
+                      )}
+                      {renderSummaryRow(
+                        'You receive',
+                        formatFromFiat(quote.netFiatAmount, currencyCode, { displayMode: 'fiat' }),
+                        { total: true }
+                      )}
+                    </>
+                  ) : null}
                 </View>
                 {rateTimestampLabel ? (
                   <View style={styles.rateTimestampRow}>
@@ -656,10 +762,10 @@ export default function WalletConvertScreen() {
           </>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* STEP 2: REVIEW                                                    */}
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {step === 'review' && (
+        {/* ================================================================ */}
+        {step === 'review' && quote && (
           <View>
             <View
               style={[
@@ -674,24 +780,24 @@ export default function WalletConvertScreen() {
                 </Text>
               </View>
 
-              {renderSummaryRow('Converting', formatIzeAmount(izeValue), { emphasis: true })}
+              {renderSummaryRow('You convert', `${formatIzeAmount(izeValue, 2)} · ${formatUsd(usdEquivalent)}`, { emphasis: true })}
               {renderSummaryRow(
-                `To ${currencyCode}`,
-                formatFromFiat(grossFiat, currencyCode, { displayMode: 'fiat' })
+                'Principal',
+                formatFromFiat(quote.principalAmount, currencyCode, { displayMode: 'fiat' })
               )}
               {renderSummaryRow(
-                `Platform fee (${feeRateLabel})`,
-                formatFromFiat(platformFee, currencyCode, { displayMode: 'fiat' })
+                `Platform fee (${quote.feeBps} bps)`,
+                `-${formatFromFiat(quote.feeAmount, currencyCode, { displayMode: 'fiat' })}`
               )}
               {renderSummaryRow(
-                'Net credit',
-                formatFromFiat(netFiat, currencyCode, { displayMode: 'fiat' }),
+                'You receive',
+                formatFromFiat(quote.netFiatAmount, currencyCode, { displayMode: 'fiat' }),
                 { total: true }
               )}
 
               <Text style={[styles.reviewHint, { color: colors.textMuted }]}>
-                The net amount will be credited to your {currencyCode} wallet balance. 1ZE is
-                burned at the prevailing reference rate at settlement time.
+                1ZE is burned at par (100 1ZE = $1.00 USD) and converted to {currencyCode} at the
+                prevailing rate. The fee is a transparent line item — you see exactly what you pay.
               </Text>
               {rateTimestampLabel ? (
                 <View style={styles.rateTimestampRow}>
@@ -720,9 +826,9 @@ export default function WalletConvertScreen() {
           </View>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* STEP 3: AUTHENTICATING                                            */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {step === 'authenticating' && (
           <View
             style={styles.centeredStep}
@@ -769,9 +875,9 @@ export default function WalletConvertScreen() {
           </View>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* STEP 4: EXECUTING                                                 */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {step === 'executing' && (
           <View
             style={styles.centeredStep}
@@ -793,9 +899,9 @@ export default function WalletConvertScreen() {
           </View>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* STEP 5: RECEIPT                                                   */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {step === 'receipt' && result && (
           <View>
             <View style={styles.receiptWrap}>
@@ -806,8 +912,8 @@ export default function WalletConvertScreen() {
                 Conversion complete
               </Text>
               <Text style={[styles.receiptSubtitle, { color: colors.textSecondary }]}>
-                Converted {formatIzeAmount(result.izeAmount)} to{' '}
-                {formatFromFiat(result.fiatAmount, result.fiatCurrency as any, {
+                Converted {formatIzeAmount(result.izeAmount, 2)} to{' '}
+                {formatFromFiat(result.netRedemption, result.fiatCurrency as any, {
                   displayMode: 'fiat',
                 })}
               </Text>
@@ -818,10 +924,22 @@ export default function WalletConvertScreen() {
                   { backgroundColor: colors.surface, borderColor: colors.border },
                 ]}
               >
-                {renderSummaryRow('Converted', formatIzeAmount(result.izeAmount))}
+                {renderSummaryRow('Converted', `${formatIzeAmount(result.izeAmount, 2)} · ${formatUsd(izeToUsd(result.izeAmount))}`)}
                 {renderSummaryRow(
-                  'Credited',
-                  formatFromFiat(result.fiatAmount, result.fiatCurrency as any, {
+                  'Principal',
+                  formatFromFiat(result.principalAmount, result.fiatCurrency as any, {
+                    displayMode: 'fiat',
+                  })
+                )}
+                {renderSummaryRow(
+                  `Platform fee (${result.feeBps} bps)`,
+                  `-${formatFromFiat(result.feeAmount, result.fiatCurrency as any, {
+                    displayMode: 'fiat',
+                  })}`
+                )}
+                {renderSummaryRow(
+                  'You received',
+                  formatFromFiat(result.netRedemption, result.fiatCurrency as any, {
                     displayMode: 'fiat',
                   })
                 )}
@@ -842,9 +960,9 @@ export default function WalletConvertScreen() {
           </View>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* ERROR STATE                                                       */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {step === 'error' && (
           <View
             style={styles.centeredStep}
@@ -886,7 +1004,7 @@ export default function WalletConvertScreen() {
   );
 }
 
-// ── Styles ──
+// -- Styles --
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -932,7 +1050,7 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.lineHeight,
     },
 
-    // ── Step indicator ──
+    // -- Step indicator --
     stepIndicatorRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -976,7 +1094,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md + Space.xs,
     },
 
-    // ── Hero card (flat canvas + hairline — no shadow) ──
+    // -- Hero card (flat canvas + hairline -- no shadow) --
     heroCard: {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
@@ -1008,7 +1126,7 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs / 2,
     },
 
-    // ── Amount input ──
+    // -- Amount input --
     amountWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1051,12 +1169,30 @@ function createStyles(colors: ThemeColors) {
       color: colors.danger,
     },
 
-    // ── Calculation / summary card ──
+    // -- Calculation / summary card --
     calcCard: {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       padding: Space.md,
       marginTop: Space.sm,
+    },
+    quoteLoadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs,
+    },
+    quoteErrorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs,
+    },
+    quoteStatusText: {
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      fontFamily: Typography.family.medium,
+      letterSpacing: Type.caption.letterSpacing,
     },
     reviewCard: {
       borderRadius: Radius.lg,
@@ -1102,7 +1238,7 @@ function createStyles(colors: ThemeColors) {
       fontVariant: ['tabular-nums'],
     },
 
-    // ── Summary rows ──
+    // -- Summary rows --
     summaryRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -1123,7 +1259,7 @@ function createStyles(colors: ThemeColors) {
       fontVariant: ['tabular-nums'],
     },
 
-    // ── Centered step (auth / executing / error) ──
+    // -- Centered step (auth / executing / error) --
     centeredStep: {
       flex: 1,
       alignItems: 'center',
@@ -1166,7 +1302,7 @@ function createStyles(colors: ThemeColors) {
       width: '100%',
     },
 
-    // ── Receipt ──
+    // -- Receipt --
     receiptWrap: {
       alignItems: 'center',
       paddingTop: Space.xl,
@@ -1213,7 +1349,7 @@ function createStyles(colors: ThemeColors) {
       padding: Space.md,
     },
 
-    // ── Footer ──
+    // -- Footer --
     footer: {
       paddingVertical: Space.md + 4,
       paddingHorizontal: Space.md + Space.xs,

@@ -86,7 +86,7 @@ test(
       );
       await client.query(
         `
-        INSERT INTO wallets (id, user_id, oneze_balance_mg, fiat_balance_minor, fiat_currency)
+        INSERT INTO wallets (id, user_id, oneze_balance_units, fiat_balance_minor, fiat_currency)
         VALUES ($1, $2, 2500, 8400, 'GBP')
       `,
         [walletId, buyerId],

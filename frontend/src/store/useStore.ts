@@ -462,7 +462,7 @@ interface StoreState {
   coOwnRuntime: Record<string, CoOwnRuntimeState>;
   coOwnCompliance: CoOwnComplianceProfile;
   updateCoOwnCompliance: (updates: Partial<CoOwnComplianceProfile>) => void;
-  checkCoOwnEligibility: (settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE') => CoOwnEligibilityResult;
+  checkCoOwnEligibility: (settlementMode?: 'ONEZE') => CoOwnEligibilityResult;
   buyCoOwnUnits: (asset: CoOwnAsset, buyerId: string, units: number) => TradeActionResult;
   sellCoOwnUnits: (asset: CoOwnAsset, sellerId: string, units: number) => TradeActionResult;
   marketLedger: MarketLedgerEntry[];

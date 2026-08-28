@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   calculateCountryPricing,
+  calculateAtParPricing,
   findPricingArbitrageViolations,
   type OnezePricingQuote,
 } from '../lib/pricingEngine.js';
@@ -25,6 +26,12 @@ function buildQuote(input: {
     pppFactor: input.pppFactor,
   });
 
+  const atPar = calculateAtParPricing({
+    anchorValue: input.anchorValueInInr,
+    fxRate: input.fxRateInrToLocal,
+    feeBps: 200,
+  });
+
   return {
     countryCode: input.countryCode,
     currency: input.currency,
@@ -43,6 +50,15 @@ function buildQuote(input: {
     pppFactor: input.pppFactor,
     source: 'simulation',
     updatedAt: new Date().toISOString(),
+    principalRate: 1,
+    fxRate: input.fxRateInrToLocal,
+    platformFeeBps: 200,
+    loadFeeBps: 200,
+    withdrawFeeBps: 200,
+    principalAmount: atPar.principalAmount,
+    feeAmount: atPar.feeAmount,
+    totalCost: atPar.totalCost,
+    netRedemption: atPar.netRedemption,
   };
 }
 

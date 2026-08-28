@@ -101,7 +101,7 @@ export function MakeOfferSheet({
 }: MakeOfferSheetProps) {
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, fxRates } = useCurrencyContext();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
@@ -122,7 +122,7 @@ export function MakeOfferSheet({
     idempotencyKeyRef.current = null;
     // Default to 80% of asking — inside the sweet spot.
     const defaultGbp = askingPriceGbp * 0.8;
-    const display = convertGbpToDisplayAmount(defaultGbp, currencyCode, goldRates);
+    const display = convertGbpToDisplayAmount(defaultGbp, currencyCode, fxRates);
     setOfferDisplay((Number.isFinite(display) ? display : defaultGbp).toFixed(2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, listing?.id]);
@@ -154,7 +154,7 @@ export function MakeOfferSheet({
   const { offerGbp: numericOfferGbp } = calculateOfferSummaryFromDisplay(
     numericOfferDisplay,
     currencyCode,
-    goldRates,
+    fxRates,
   );
 
   // Discount percentage relative to asking price.
@@ -168,9 +168,9 @@ export function MakeOfferSheet({
   // Normalised slider position (0–1) within [min, max].
   const minDisplay = 1; // $1 floor
   const maxDisplay = useMemo(() => {
-    const gbp = convertGbpToDisplayAmount(askingPriceGbp, currencyCode, goldRates);
+    const gbp = convertGbpToDisplayAmount(askingPriceGbp, currencyCode, fxRates);
     return Number.isFinite(gbp) && gbp > 0 ? gbp : askingPriceGbp;
-  }, [askingPriceGbp, currencyCode, goldRates]);
+  }, [askingPriceGbp, currencyCode, fxRates]);
 
   const sliderFraction = useMemo(() => {
     if (maxDisplay <= minDisplay) return 0;
@@ -219,12 +219,12 @@ export function MakeOfferSheet({
   const applyQuickPercentage = useCallback(
     (percentage: number) => {
       const gbp = askingPriceGbp * percentage;
-      const display = convertGbpToDisplayAmount(gbp, currencyCode, goldRates);
+      const display = convertGbpToDisplayAmount(gbp, currencyCode, fxRates);
       setOfferDisplay((Number.isFinite(display) ? display : gbp).toFixed(2));
       if (errorMsg) setErrorMsg('');
       haptics.tap();
     },
-    [askingPriceGbp, currencyCode, goldRates, errorMsg],
+    [askingPriceGbp, currencyCode, fxRates, errorMsg],
   );
 
   const handleOfferTextChange = useCallback(

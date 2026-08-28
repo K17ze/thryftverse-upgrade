@@ -69,8 +69,8 @@ type AdminRouteDependencies = {
     redemption: unknown;
     crossBorder: unknown;
     liquidity: {
-      pendingWithdrawalMg: unknown;
-      operationalLiquidityMg: unknown;
+      pendingWithdrawalUnits: unknown;
+      operationalLiquidityUnits: unknown;
       stressIndex: unknown;
       stressLevel: unknown;
     };
@@ -305,8 +305,8 @@ export const registerAdminRoutes = ({
           redemption: metrics.redemption,
           crossBorder: metrics.crossBorder,
           liquidity: {
-            pendingWithdrawalMg: metrics.liquidity.pendingWithdrawalMg,
-            operationalLiquidityMg: metrics.liquidity.operationalLiquidityMg,
+            pendingWithdrawalUnits: metrics.liquidity.pendingWithdrawalUnits,
+            operationalLiquidityUnits: metrics.liquidity.operationalLiquidityUnits,
             stressIndex: metrics.liquidity.stressIndex,
             stressLevel: metrics.liquidity.stressLevel,
           },

@@ -1,0 +1,16 @@
+1ZE at-par USD anchor architecture upgrade
+
+- Re-anchor to 1 1ZE = $1.00 USD (was 100 1ZE = $1.00)
+- At-par pricing engine with direction-aware load/withdraw fees
+- Unified redemption state machine (QUOTED -> RESERVED -> PAID_OUT)
+- evaluateWalletCapability compliance gates on all wallet endpoints
+- 1ZE marketplace checkout + marketplace_sale transfer context
+- Co-Own settlement restricted to ONEZE-only (removed GBP/TVUSD/HYBRID)
+- Dynamic merchant country via STRIPE_MERCHANT_COUNTRY_CODE env var
+- Frontend wallet UX with backend-authoritative fee breakdown
+- Migrations 217-220: at-par pricing, ONEZE-only settlement, USD FX seed
+- Deleted dead wallet.ts (4645 lines, never wired into index.ts)
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

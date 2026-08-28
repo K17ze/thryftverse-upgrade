@@ -267,7 +267,7 @@ These are non-secret configuration values with sensible defaults. Overriding is 
 | `ONEZE_RESERVE_POLICY_ENABLED` | `false` |
 | `ONEZE_RESERVE_RATIO_MIN` | `0.3` |
 | `ONEZE_RESERVE_RATIO_MAX` | `0.6` |
-| `ONEZE_OPERATIONAL_RESERVE_MG` | `0` |
+| `ONEZE_OPERATIONAL_RESERVE_UNITS` | `0` |
 | `EXPO_PUSH_API_URL` | `https://exp.host/--/api/v2/push/send` |
 | `PUSH_DEFAULT_CHANNEL` | `default` |
 | `SENTRY_DSN` | none |
@@ -292,8 +292,8 @@ These are non-secret configuration values with sensible defaults. Overriding is 
 | `ONEZE_MINT_QUOTE_TTL_SECONDS` | `60` |
 | `ONEZE_MINT_PAYMENT_GRACE_SECONDS` | `300` |
 | `ONEZE_WITHDRAWAL_QUOTE_TTL_SECONDS` | `60` |
-| `ONEZE_WITHDRAWAL_INSTANT_LIMIT_MG` | `20000` |
-| `ONEZE_TRAVEL_RULE_THRESHOLD_MG` | `11000` |
+| `ONEZE_WITHDRAWAL_INSTANT_LIMIT_UNITS` | `20000` |
+| `ONEZE_TRAVEL_RULE_THRESHOLD_UNITS` | `11000` |
 | `ONEZE_DAILY_ATTESTATION_INTERVAL_MS` | `86400000` |
 
 ### 3.7 Legacy Aliases

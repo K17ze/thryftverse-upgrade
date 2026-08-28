@@ -23,7 +23,7 @@ import { toIze, formatIzeAmount } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
 import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
-import type { GoldRates } from '../../utils/currency';
+import type { FxRates } from '../../utils/currency';
 import type { AuctionDetailResponse } from '../../services/marketApi';
 import type { AuctionEffectiveState } from '../../hooks/useServerClock';
 import {
@@ -59,7 +59,7 @@ interface BidSheetProps {
   onDismiss: () => void;
   auction: BidSheetAuctionContext;
   currencyCode: SupportedCurrencyCode;
-  goldRates: Partial<GoldRates>;
+  fxRates: Partial<FxRates>;
   formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: any) => string;
   onSubmitBid: (gbpAmount: number, idempotencyKey: string, maxBidGbp?: number) => Promise<void>;
   onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
@@ -74,7 +74,7 @@ export function BidSheet({
   onDismiss,
   auction,
   currencyCode,
-  goldRates,
+  fxRates,
   formatFromFiat,
   onSubmitBid,
   onRefreshDetail,
@@ -156,7 +156,7 @@ export function BidSheet({
       // Use pre-filled amount from notification if provided, otherwise calculate suggested bid
       const suggested = initialBidAmount
         ? initialBidAmount.toFixed(2)
-        : getSuggestedBid(auction.minimumNextBidGbp, currencyCode, goldRates);
+        : getSuggestedBid(auction.minimumNextBidGbp, currencyCode, fxRates);
       setBidInput(suggested);
       setStage('entry');
       setError(null);
@@ -169,7 +169,7 @@ export function BidSheet({
       setMaxBidGbp(null);
       idempotencyKeyRef.current = null;
     }
-  }, [visible, auction.minimumNextBidGbp, currencyCode, goldRates, initialBidAmount]);
+  }, [visible, auction.minimumNextBidGbp, currencyCode, fxRates, initialBidAmount]);
 
   // Lifecycle guard — close sheet if auction transitions to terminal
   React.useEffect(() => {
@@ -202,7 +202,7 @@ export function BidSheet({
   };
 
   const handleQuickIncrement = (pct: number) => {
-    setBidInput(applyQuickIncrement(bidInput, pct, currentMinimum, currencyCode, goldRates));
+    setBidInput(applyQuickIncrement(bidInput, pct, currentMinimum, currencyCode, fxRates));
     setError(null);
   };
 
@@ -226,7 +226,7 @@ export function BidSheet({
         },
       };
     }
-    const maxGbp = convertDisplayToGbpAmount(raw, currencyCode, goldRates);
+    const maxGbp = convertDisplayToGbpAmount(raw, currencyCode, fxRates);
     if (!Number.isFinite(maxGbp) || maxGbp <= 0) {
       return {
         gbp: null,
@@ -286,7 +286,7 @@ export function BidSheet({
         return;
       }
 
-      const result = validateBidEntry(bidInput, currencyCode, goldRates, {
+      const result = validateBidEntry(bidInput, currencyCode, fxRates, {
         minimumNextBidGbp: snapshot.minimumNextBidGbp,
         isSeller: auction.isSeller,
         effectiveState: snapshot.effectiveState,
@@ -342,7 +342,7 @@ export function BidSheet({
       }
 
       // Re-validate after refresh using the returned snapshot values
-      const result = validateBidEntry(bidInput, currencyCode, goldRates, {
+      const result = validateBidEntry(bidInput, currencyCode, fxRates, {
         minimumNextBidGbp: snapshot.minimumNextBidGbp,
         isSeller: auction.isSeller,
         effectiveState: snapshot.effectiveState,
@@ -401,7 +401,7 @@ export function BidSheet({
         parsed.isNetworkError,
         parsed.structuredDetails,
         currencyCode,
-        goldRates,
+        fxRates,
       );
       setError(txError);
 
@@ -567,7 +567,7 @@ export function BidSheet({
 
             {/* 1ZE equivalent — platform value */}
             <Text style={styles.amountIzeEquivalent}>
-              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 2)}
+              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, fxRates), 2)}
             </Text>
 
             {/* Quick adjustments */}
@@ -623,7 +623,7 @@ export function BidSheet({
                   />
                 </View>
                 <Text style={styles.amountIzeEquivalent}>
-                  {formatIzeAmount(toIze(Number(maxBidInput) || 0, currencyCode, goldRates), 2)}
+                  {formatIzeAmount(toIze(Number(maxBidInput) || 0, currencyCode, fxRates), 2)}
                 </Text>
               </>
             )}
@@ -688,7 +688,7 @@ export function BidSheet({
                 {currencyCode} {bidInput}
               </Text>
               <Text style={styles.reviewAmountIze}>
-                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0, 2)}
+                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', fxRates) : 0, 2)}
               </Text>
               {isNonGbp && gbpEquivalentText && (
                 <Text style={styles.reviewGbpEquivalent}>{gbpEquivalentText}</Text>

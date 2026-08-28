@@ -37,8 +37,9 @@ import { useToast } from '../../context/ToastContext';
 import { useConnectivity } from '../../hooks/useConnectivity';
 import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';
-import { formatIzeAmount } from '../../utils/currency';
-import { convertDisplayToGbpAmount } from '../../utils/currencyAuthoringFlows';
+import { formatIzeAmount, usdToIze } from '../../utils/currency';
+import { SupportedCurrencyCode } from '../../constants/currencies';
+import { convertDisplayToUsdAmount } from '../../utils/currencyAuthoringFlows';
 import { parseApiError } from '../../lib/apiClient';
 import {
   createIzeMintQuote,
@@ -49,12 +50,28 @@ import {
   configureStripeMobile,
   getStripeReturnUrl,
 } from '../../platform/payments/stripeMobile';
-import {
-  CO_OWN_LOAD_FEE_RATE as LOAD_IZE_FEE_RATE,
-} from '../../utils/tradeFlow';
 
-/** Funding source — human goal, not internal "Load" vs "Buy" terminology. */
+/**
+ * Funding source — human goal, not internal "Load" vs "Buy" terminology.
+ */
 type FundingSource = 'card' | 'fiatBalance';
+
+/**
+ * The backend quote response shape returned by `createIzeMintQuote`. We hold
+ * a fetched quote in state so the review step can display the authoritative
+ * fee breakdown (feeAmount / feeBps / totalCost) instead of a client-side
+ * estimate. The quote also carries the Stripe PaymentIntent, which we reuse
+ * on confirm so we never mint a duplicate intent.
+ */
+type IzeMintQuoteResponse = Awaited<ReturnType<typeof createIzeMintQuote>>;
+
+/**
+ * Estimated load fee used only while a backend quote is in flight (or when the
+ * card path is unavailable). The backend quote is the source of truth; this is
+ * a clearly-labelled estimate so the user is never shown a fabricated exact fee.
+ */
+const LOAD_FEE_BPS_ESTIMATE = 200;
+const LOAD_FEE_RATE_ESTIMATE = LOAD_FEE_BPS_ESTIMATE / 10_000;
 
 interface AddMoneySheetProps {
   visible: boolean;
@@ -78,7 +95,7 @@ export function AddMoneySheet({
   userId,
 }: AddMoneySheetProps) {
   const { colors } = useAppTheme();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, fxRates } = useCurrencyContext();
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
@@ -87,8 +104,20 @@ export function AddMoneySheet({
   const [amountInput, setAmountInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [receipt, setReceipt] = useState<{ title: string; subtitle: string } | null>(null);
+  /**
+   * Backend quote fetched as a live preview for the card path. Held in state so
+   * the review step can render the authoritative fee breakdown, and reused on
+   * confirm to avoid minting a second PaymentIntent. `null` while loading or
+   * when the current amount/source is not eligible for a card quote.
+   */
+  const [cardQuote, setCardQuote] = useState<{
+    response: IzeMintQuoteResponse;
+    idempotencyKey: string;
+    fingerprint: string;
+    expiresAtMs: number;
+  } | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
   const amountRef = useRef<TextInput>(null);
-  const topupIdempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   // Reset internal state whenever the sheet is reopened.
   React.useEffect(() => {
@@ -97,16 +126,107 @@ export function AddMoneySheet({
       setAmountInput('');
       setReceipt(null);
       setIsProcessing(false);
+      setCardQuote(null);
+      setQuoteLoading(false);
     }
   }, [visible]);
 
   const fiatValue = Number(amountInput || '0');
-  const grossIze = convertDisplayToGbpAmount(fiatValue, currencyCode, goldRates);
-  const feeIze = grossIze * LOAD_IZE_FEE_RATE;
-  const netIze = Math.max(0, grossIze - feeIze);
-  const feeRateLabel = `${Math.round(LOAD_IZE_FEE_RATE * 100)}%`;
+  // ── At-par model: 1 1ZE = $1.00 USD ──
+  // The user enters an amount in their display currency. We convert to GBP
+  // (the settlement currency the backend quotes), then issue 1ZE at par. The
+  // fee is a transparent additive line item — the user pays principal + fee
+  // and receives principal in 1ZE.
+  //
+  // For the card path the authoritative breakdown comes from the backend
+  // quote (cardQuote). The values below are a clearly-labelled estimate used
+  // only while the quote is in flight or unavailable.
+  const principalUsd = convertDisplayToUsdAmount(fiatValue, currencyCode, fxRates);
+  const estimatedFeeUsd = principalUsd * LOAD_FEE_RATE_ESTIMATE;
+  const estimatedTotalUsd = principalUsd + estimatedFeeUsd;
+  const estimatedIzeReceived = usdToIze(principalUsd);
+  const estimateFeeRateLabel = `${LOAD_FEE_BPS_ESTIMATE} bps`;
 
-  const izeFromFiatBalance = convertDisplayToGbpAmount(fiatValue, currencyCode, goldRates);
+  // Backend quote breakdown for the card review (source of truth when present).
+  const cardOp = cardQuote?.response.operation;
+  const cardPrincipal = cardOp?.principalAmount ?? cardOp?.fiatAmount ?? principalUsd;
+  const cardFee = cardOp?.feeAmount ?? cardOp?.platformFeeAmount ?? estimatedFeeUsd;
+  const cardFeeBps = cardOp?.feeBps;
+  const cardTotal = cardOp?.totalCost ?? (cardOp ? (cardPrincipal + cardFee) : estimatedTotalUsd);
+  const cardIzeReceived = cardOp?.izeAmount ?? estimatedIzeReceived;
+  const cardFeeLabel = cardFeeBps
+    ? `Platform fee (${cardFeeBps} bps)`
+    : `Platform fee (~${estimateFeeRateLabel})`;
+  const cardQuoteCurrency: SupportedCurrencyCode = (cardOp?.fiatCurrency as SupportedCurrencyCode) ?? 'USD';
+
+  const izeFromFiatBalance = usdToIze(
+    convertDisplayToUsdAmount(fiatValue, currencyCode, fxRates)
+  );
+  // Fiat-balance path: no quote is fetched before confirm (buyIze executes on
+  // confirm), so the fee is shown as an estimate in the user's display currency.
+  const fiatBalanceEstimatedFee = fiatValue * LOAD_FEE_RATE_ESTIMATE;
+
+  // ── Card path: fetch a live backend quote so the review step shows the
+  //    authoritative fee breakdown (feeAmount / feeBps / totalCost) instead
+  //    of a client-side estimate. The quote carries the Stripe PaymentIntent,
+  //    which we reuse on confirm — no duplicate intent is minted. Debounced so
+  //    we only request a quote once the user stops typing.
+  React.useEffect(() => {
+    if (source !== 'card') {
+      setCardQuote(null);
+      setQuoteLoading(false);
+      return;
+    }
+    if (!userId || !isWalletOperational || !Number.isFinite(fiatValue) || fiatValue <= 0) {
+      setCardQuote(null);
+      setQuoteLoading(false);
+      return;
+    }
+
+    const loadAmountUsd = Number(convertDisplayToUsdAmount(fiatValue, currencyCode, fxRates).toFixed(2));
+    if (!Number.isFinite(loadAmountUsd) || loadAmountUsd <= 0) {
+      setCardQuote(null);
+      setQuoteLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setQuoteLoading(true);
+    const handle = setTimeout(async () => {
+      const fingerprint = `${userId}:USD:${loadAmountUsd.toFixed(2)}`;
+      const idempotencyKey = `wallet_topup_${userId}_${Date.now()}`;
+      try {
+        const response = await createIzeMintQuote({
+          userId,
+          fiatAmount: loadAmountUsd,
+          fiatCurrency: 'USD',
+          idempotencyKey,
+          metadata: {
+            source: 'wallet_addmoney_sheet_quote_preview',
+            displayCurrency: currencyCode,
+            enteredDisplayAmount: fiatValue,
+            enteredUsdAmount: loadAmountUsd,
+          },
+        });
+        if (cancelled) return;
+        const expiresAtMs = response.quote.expiresAt
+          ? Date.parse(response.quote.expiresAt)
+          : Date.now() + response.quote.validForSeconds * 1000;
+        setCardQuote({ response, idempotencyKey, fingerprint, expiresAtMs });
+      } catch {
+        if (cancelled) return;
+        setCardQuote(null);
+      } finally {
+        if (!cancelled) setQuoteLoading(false);
+      }
+    }, 600);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, userId, fiatValue, currencyCode, fxRates, isWalletOperational]);
 
   const canSubmitCard =
     Number.isFinite(fiatValue) &&
@@ -134,34 +254,43 @@ export function AddMoneySheet({
       return;
     }
 
-    const loadAmountGbpRaw = convertDisplayToGbpAmount(fiatValue, currencyCode, goldRates);
-    const loadAmountGbp = Number(loadAmountGbpRaw.toFixed(2));
-    if (!Number.isFinite(loadAmountGbp) || loadAmountGbp <= 0) {
+    const loadAmountUsdRaw = convertDisplayToUsdAmount(fiatValue, currencyCode, fxRates);
+    const loadAmountUsd = Number(loadAmountUsdRaw.toFixed(2));
+    if (!Number.isFinite(loadAmountUsd) || loadAmountUsd <= 0) {
       show('Unable to convert that amount right now.', 'error');
       return;
     }
 
     setIsProcessing(true);
     try {
-      const topupFingerprint = `${userId}:GBP:${loadAmountGbp.toFixed(2)}`;
-      if (topupIdempotencyRef.current?.fingerprint !== topupFingerprint) {
-        topupIdempotencyRef.current = {
-          fingerprint: topupFingerprint,
-          key: `wallet_topup_${userId}_${Date.now()}`,
-        };
+      // Reuse the live preview quote when it is still valid — this avoids
+      // minting a second PaymentIntent. Otherwise fall back to a fresh quote.
+      const fingerprint = `${userId}:USD:${loadAmountUsd.toFixed(2)}`;
+      const hasFreshQuote =
+        cardQuote &&
+        cardQuote.fingerprint === fingerprint &&
+        Date.now() < cardQuote.expiresAtMs;
+
+      let quoteResponse: IzeMintQuoteResponse;
+      let idempotencyKey: string;
+      if (hasFreshQuote && cardQuote) {
+        quoteResponse = cardQuote.response;
+        idempotencyKey = cardQuote.idempotencyKey;
+      } else {
+        idempotencyKey = `wallet_topup_${userId}_${Date.now()}`;
+        quoteResponse = await createIzeMintQuote({
+          userId,
+          fiatAmount: loadAmountUsd,
+          fiatCurrency: 'USD',
+          idempotencyKey,
+          metadata: {
+            source: 'wallet_addmoney_sheet_topup_quote',
+            displayCurrency: currencyCode,
+            enteredDisplayAmount: fiatValue,
+            enteredUsdAmount: loadAmountUsd,
+          },
+        });
       }
-      const quoteResponse = await createIzeMintQuote({
-        userId,
-        fiatAmount: loadAmountGbp,
-        fiatCurrency: 'GBP',
-        idempotencyKey: topupIdempotencyRef.current.key,
-        metadata: {
-          source: 'wallet_addmoney_sheet_topup_quote',
-          displayCurrency: currencyCode,
-          enteredDisplayAmount: fiatValue,
-          enteredGbpAmount: loadAmountGbp,
-        },
-      });
 
       const intent = quoteResponse.intent;
       if (intent.clientSecret && intent.gatewayId === 'stripe_americas') {
@@ -211,10 +340,15 @@ export function AddMoneySheet({
       }
 
       setAmountInput('');
-      topupIdempotencyRef.current = null;
+      setCardQuote(null);
+      const op = quoteResponse.operation;
+      const actualFee = op.platformFeeAmount ?? op.feeAmount;
+      const feeLine = actualFee
+        ? ` · Fee ${formatFromFiat(actualFee, (op.fiatCurrency as SupportedCurrencyCode) ?? 'GBP', { displayMode: 'fiat' })}`
+        : '';
       setReceipt({
-        title: `${formatIzeAmount(quoteResponse.operation.izeAmount)} pending confirmation`,
-        subtitle: '1ZE is credited once your payment provider confirms settlement.',
+        title: `${formatIzeAmount(op.izeAmount)} pending confirmation`,
+        subtitle: `${formatFromFiat(op.fiatAmount, (op.fiatCurrency as SupportedCurrencyCode) ?? 'GBP', { displayMode: 'fiat' })} → 1ZE at par${feeLine}. Credited once your payment provider confirms settlement.`,
       });
       onCompleted();
     } catch (error) {
@@ -238,15 +372,21 @@ export function AddMoneySheet({
 
     setIsProcessing(true);
     try {
+      const idempotencyKey =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `buy_${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const result = await buyIze({
         userId,
         fiatAmount: fiatValue,
         fiatCurrency: currencyCode,
+        idempotencyKey,
       });
+      const p = result.purchase;
       setAmountInput('');
       setReceipt({
-        title: `${formatIzeAmount(result.purchase.izeAmount)} added to your wallet`,
-        subtitle: `Bought with ${formatFromFiat(result.purchase.fiatAmount, currencyCode, { displayMode: 'fiat' })} from your fiat balance.`,
+        title: `${formatIzeAmount(p.izeAmount)} added to your wallet`,
+        subtitle: `Paid ${formatFromFiat(p.fiatAmount, currencyCode, { displayMode: 'fiat' })} · Fee (${p.feeBps} bps) ${formatFromFiat(p.feeFiat, currencyCode, { displayMode: 'fiat' })} · 1ZE received ${formatIzeAmount(p.izeAmount)}`,
       });
       onCompleted();
     } catch (error) {
@@ -386,45 +526,89 @@ export function AddMoneySheet({
               accessibilityHint="Enter the amount to add to your wallet."
             />
 
-            {/* ── Review step ── */}
+            {/* ── Review step — transparent at-par breakdown ── */}
             {fiatValue > 0 && (
               <View style={[styles.reviewCard, { borderColor: colors.border }]}>
                 {source === 'card' ? (
                   <>
                     <ReviewRow
-                      label="Gross 1ZE"
-                      value={<CoOwnNumericText value={grossIze} unit="1ZE" size="priceList" align="right" />}
+                      label="You're adding"
+                      value={
+                        <Text style={[styles.reviewFiat, { color: colors.textPrimary }]}>
+                          {formatFromFiat(cardPrincipal, cardQuoteCurrency, { displayMode: 'fiat' })}
+                        </Text>
+                      }
                       colors={colors}
                     />
                     <ReviewRow
-                      label={`Platform fee (${feeRateLabel})`}
-                      value={<CoOwnNumericText value={feeIze} unit="1ZE" size="priceList" align="right" />}
+                      label="FX rate"
+                      value={
+                        <Text style={[styles.reviewRate, { color: colors.textSecondary }]}>
+                          1 1ZE = $1.00 USD · at par
+                        </Text>
+                      }
                       colors={colors}
                     />
                     <ReviewRow
-                      label="Net 1ZE credited"
-                      value={<CoOwnNumericText value={netIze} unit="1ZE" size="price" align="right" />}
+                      label={cardQuote ? cardFeeLabel : `Platform fee (~${estimateFeeRateLabel}, estimate)`}
+                      value={
+                        <Text style={[styles.reviewFiat, { color: colors.textPrimary }]}>
+                          {formatFromFiat(cardFee, cardQuoteCurrency, { displayMode: 'fiat' })}
+                          {!cardQuote && quoteLoading ? ' …' : ''}
+                        </Text>
+                      }
+                      colors={colors}
+                    />
+                    <ReviewRow
+                      label="You receive"
+                      value={<CoOwnNumericText value={cardIzeReceived} unit="1ZE" size="priceList" align="right" />}
+                      colors={colors}
+                    />
+                    <ReviewRow
+                      label="Total charge"
+                      value={
+                        <Text style={[styles.reviewFiat, { color: colors.textPrimary }]}>
+                          {formatFromFiat(cardTotal, cardQuoteCurrency, { displayMode: 'fiat' })}
+                        </Text>
+                      }
                       colors={colors}
                       total
                     />
+                    {!cardQuote && !quoteLoading && (
+                      <Text style={[styles.reviewRate, { color: colors.textMuted }]}>
+                        Fee shown is an estimate — the exact amount is confirmed at payment.
+                      </Text>
+                    )}
                   </>
                 ) : (
                   <>
                     <ReviewRow
-                      label="You'll receive"
-                      value={<CoOwnNumericText value={izeFromFiatBalance} unit="1ZE" size="priceList" align="right" />}
-                      colors={colors}
-                    />
-                    <ReviewRow
-                      label="From fiat balance"
+                      label="You pay"
                       value={
                         <Text style={[styles.reviewFiat, { color: colors.textPrimary }]}>
                           {formatFromFiat(fiatValue, currencyCode, { displayMode: 'fiat' })}
                         </Text>
                       }
                       colors={colors}
+                    />
+                    <ReviewRow
+                      label={`Fee (~${estimateFeeRateLabel}, estimate)`}
+                      value={
+                        <Text style={[styles.reviewFiat, { color: colors.textPrimary }]}>
+                          {formatFromFiat(fiatBalanceEstimatedFee, currencyCode, { displayMode: 'fiat' })}
+                        </Text>
+                      }
+                      colors={colors}
+                    />
+                    <ReviewRow
+                      label="1ZE received"
+                      value={<CoOwnNumericText value={izeFromFiatBalance} unit="1ZE" size="priceList" align="right" />}
+                      colors={colors}
                       total
                     />
+                    <Text style={[styles.reviewRate, { color: colors.textMuted }]}>
+                      Fee shown is an estimate — the exact amount is confirmed on execution.
+                    </Text>
                   </>
                 )}
               </View>
@@ -586,6 +770,12 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     letterSpacing: Type.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
+  },
+  reviewRate: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
   },
   offlineNote: {
     fontSize: Type.caption.size,

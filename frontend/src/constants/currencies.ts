@@ -14,7 +14,7 @@ export interface CurrencyMeta {
   name: string;
   symbol: string;
   locale: string;
-  goldRatePerGram: number;
+  fxRatePerUnit: number;
 }
 
 export const DEFAULT_CURRENCY_CODE: SupportedCurrencyCode = 'GBP';
@@ -25,62 +25,62 @@ export const CURRENCIES: Record<SupportedCurrencyCode, CurrencyMeta> = {
     name: 'British Pound',
     symbol: '£',
     locale: 'en-GB',
-    goldRatePerGram: 75.2,
+    fxRatePerUnit: 0.79,
   },
   USD: {
     code: 'USD',
     name: 'US Dollar',
     symbol: '$',
     locale: 'en-US',
-    goldRatePerGram: 95.4,
+    fxRatePerUnit: 1.0,
   },
   EUR: {
     code: 'EUR',
     name: 'Euro',
     symbol: '€',
     locale: 'de-DE',
-    goldRatePerGram: 88.1,
+    fxRatePerUnit: 0.92,
   },
   NGN: {
     code: 'NGN',
     name: 'Nigerian Naira',
     symbol: '₦',
     locale: 'en-NG',
-    goldRatePerGram: 72500,
+    fxRatePerUnit: 760,
   },
   JPY: {
     code: 'JPY',
     name: 'Japanese Yen',
     symbol: '¥',
     locale: 'ja-JP',
-    goldRatePerGram: 14380,
+    fxRatePerUnit: 151,
   },
   CAD: {
     code: 'CAD',
     name: 'Canadian Dollar',
     symbol: '$',
     locale: 'en-CA',
-    goldRatePerGram: 129.6,
+    fxRatePerUnit: 1.36,
   },
   AUD: {
     code: 'AUD',
     name: 'Australian Dollar',
     symbol: '$',
     locale: 'en-AU',
-    goldRatePerGram: 145.7,
+    fxRatePerUnit: 1.53,
   },
   AED: {
     code: 'AED',
     name: 'UAE Dirham',
     symbol: 'د.إ',
     locale: 'ar-AE',
-    goldRatePerGram: 350.4,
+    fxRatePerUnit: 3.67,
   },
   INR: {
     code: 'INR',
     name: 'Indian Rupee',
     symbol: '₹',
     locale: 'en-IN',
-    goldRatePerGram: 7940,
+    fxRatePerUnit: 83.3,
   },
 };

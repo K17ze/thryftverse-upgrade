@@ -117,7 +117,7 @@ export default function AuctionDetailScreen() {
   const { show } = useToast();
   const { requireAuth } = useSignupWall();
   const { formatFromFiat, currencySymbol } = useFormattedPrice();
-  const { currencyCode, goldRates, displayMode } = useCurrencyContext();
+  const { currencyCode, fxRates, displayMode } = useCurrencyContext();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
 
@@ -999,7 +999,7 @@ export default function AuctionDetailScreen() {
                 title: rel.title,
                 imageUrl: rel.imageUrl,
                 priceText: formatFromFiat(relPrice, currencyCode),
-                izeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, currencyCode, goldRates), 2) : undefined,
+                izeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, currencyCode, fxRates), 2) : undefined,
                 badgeText: relStateLabel,
                 mode: 'auction' as const,
                 stateText: relStateLabel,
@@ -1403,7 +1403,7 @@ export default function AuctionDetailScreen() {
                 : countdown.text,
           }}
           currencyCode={currencyCode}
-          goldRates={goldRates}
+          fxRates={fxRates}
           formatFromFiat={formatFromFiat}
           onSubmitBid={handleSubmitBid}
           onRefreshDetail={refreshDetailForTransaction}
@@ -1431,7 +1431,7 @@ export default function AuctionDetailScreen() {
             isSeller,
           }}
           currencyCode={currencyCode}
-          goldRates={goldRates}
+          fxRates={fxRates}
           formatFromFiat={formatFromFiat}
           onSubmitBuyNow={handleSubmitBuyNow}
           onRefreshDetail={refreshDetailForTransaction}

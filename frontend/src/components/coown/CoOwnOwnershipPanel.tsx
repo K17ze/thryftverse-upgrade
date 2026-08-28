@@ -6,7 +6,7 @@ import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 import type { CoOwnPositionState } from '../../data/coOwnModels';
 
-export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+export type CoOwnSettlementMode = 'ONEZE';
 
 /** Supply buckets — the instrument series structure (§01 §3). */
 export interface CoOwnSupplyBuckets {
@@ -65,10 +65,7 @@ export function CoOwnOwnershipPanel({
 }: CoOwnOwnershipPanelProps) {
   const { colors } = useAppTheme();
 
-  const settlementLabel = settlementMode === 'GBP' ? 'GBP'
-    : settlementMode === 'TVUSD' ? 'TVUSD'
-    : settlementMode === 'ONEZE' ? '1ZE'
-    : 'GBP + TVUSD';
+  const settlementLabel = '1ZE';
   const statusLabel = status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
   const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
 

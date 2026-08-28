@@ -56,6 +56,7 @@ import {
 import { BottomSheet } from '../components/BottomSheet';
 import {
   createCommercePaymentIntent,
+  createOnezeCheckoutIntent,
   createStripeOrderSheet,
   createOrder,
   cancelOrder,
@@ -163,6 +164,11 @@ export default function CheckoutScreen() {
   const [useBalance, setUseBalance] = useState(false);
   const [balanceLoading, setBalanceLoading] = useState(false);
 
+  // 1ZE wallet payment — when true, the buyer pays the full order total
+  // directly from their 1ZE wallet via the oneze_internal gateway.
+  const [useOnezePayment, setUseOnezePayment] = useState(false);
+  const [onezeBalance, setOnezeBalance] = useState(0);
+
   // Fetch wallet balance on mount
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -170,10 +176,16 @@ export default function CheckoutScreen() {
     setBalanceLoading(true);
     getIzePosition(currentUser.id, 'GBP')
       .then((position) => {
-        if (!cancelled) setWalletBalance(position.balances.userFiatValue);
+        if (!cancelled) {
+          setWalletBalance(position.balances.userFiatValue);
+          setOnezeBalance(position.balances.userIze);
+        }
       })
       .catch(() => {
-        if (!cancelled) setWalletBalance(0);
+        if (!cancelled) {
+          setWalletBalance(0);
+          setOnezeBalance(0);
+        }
       })
       .finally(() => {
         if (!cancelled) setBalanceLoading(false);
@@ -221,15 +233,19 @@ export default function CheckoutScreen() {
     if (isHydrating || isInteractionLocked) return false;
     if (!savedAddress?.id) return false;
     if (!postageOption.carrierId || !postageOption.quoteId) return false;
-    // If balance covers the full total, payment method is not required
     const grossTotal = item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp;
+    // 1ZE wallet payment — no card payment method needed, just check balance
+    if (useOnezePayment) {
+      return onezeBalance >= grossTotal;
+    }
+    // If balance covers the full total, payment method is not required
     const balanceCoversFull = useBalance && walletBalance >= grossTotal;
     if (!balanceCoversFull) {
       if (!savedPaymentMethod?.id) return false;
       if (!isPaymentMethodAllowed(checkoutCapabilities, savedPaymentMethod.type)) return false;
     }
     return true;
-  }, [currentUser?.id, item, isHydrating, isInteractionLocked, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, postageOption.quoteId, checkoutCapabilities, savedPaymentMethod?.type, useBalance, walletBalance, postageOption.priceFromGbp]);
+  }, [currentUser?.id, item, isHydrating, isInteractionLocked, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, postageOption.quoteId, checkoutCapabilities, savedPaymentMethod?.type, useBalance, walletBalance, postageOption.priceFromGbp, useOnezePayment, onezeBalance]);
 
   // --- Mount / unmount ---
   useEffect(() => {
@@ -509,11 +525,12 @@ export default function CheckoutScreen() {
       buyerId: userId,
       listingId: item.id,
       addressId: savedAddress?.id,
-      paymentMethodId: savedPaymentMethod?.id,
+      paymentMethodId: useOnezePayment ? undefined : savedPaymentMethod?.id,
       carrierId: postageOption.carrierId ?? undefined,
       platformCharge: PLATFORM_CHARGE,
       postageFee: POSTAGE_FEE,
       walletDebit: useBalance ? Math.min(walletBalance, item.price + PLATFORM_CHARGE + POSTAGE_FEE) : undefined,
+      paymentGatewayId: useOnezePayment ? 'oneze_internal' : undefined,
     });
 
     const attemptId = ++paymentAttemptRef.current;
@@ -563,7 +580,8 @@ export default function CheckoutScreen() {
           idempotencyKey: orderIdempotencyKeyRef.current,
           shippingQuoteId: postageOption.quoteId!,
           addressId: savedAddress?.id,
-          paymentMethodId: savedPaymentMethod?.id,
+          paymentMethodId: useOnezePayment ? undefined : savedPaymentMethod?.id,
+          paymentGatewayId: useOnezePayment ? 'oneze_internal' : undefined,
           platformChargeGbp: PLATFORM_CHARGE,
           buyerProtectionFeeGbp: PLATFORM_CHARGE,
           postageFeeGbp: POSTAGE_FEE,
@@ -586,6 +604,71 @@ export default function CheckoutScreen() {
 
       // Create payment intent
       setStage('opening_payment');
+
+      // ── 1ZE wallet payment path ──
+      // When the buyer selects 1ZE, we create a oneze_internal payment
+      // intent. The backend debits the 1ZE wallet atomically and settles
+      // inline — no Stripe PaymentSheet is needed. The intent returns
+      // already 'succeeded', so we go straight to settlement polling.
+      if (useOnezePayment) {
+        const intent = await createOnezeCheckoutIntent(orderId);
+
+        if (
+          !isMountedRef.current
+          || paymentAttemptRef.current !== attemptId
+        ) {
+          return;
+        }
+
+        pendingIntentIdRef.current = intent.intentId;
+        trackFunnelStep('checkout', 'payment_submitted', { order_id: orderId, method: 'oneze' });
+
+        // Poll for settlement (the intent should already be 'succeeded')
+        setStage('awaiting_payment');
+        const settlementStatus = await waitForPaymentIntentSettlement(
+          intent.intentId,
+          () => isMountedRef.current && paymentAttemptRef.current === attemptId
+        );
+
+        if (settlementStatus === 'aborted') {
+          return;
+        }
+
+        if (
+          !isMountedRef.current
+          || paymentAttemptRef.current !== attemptId
+        ) {
+          return;
+        }
+
+        if (settlementStatus === 'succeeded') {
+          setStage('payment_succeeded');
+          pendingIntentIdRef.current = null;
+          isSubmittingRef.current = false;
+          performance.mark('checkout:complete');
+          track('purchase_completed', { item_id: item.id, total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp, payment_method: 'oneze' });
+          trackFunnelStep('checkout', 'purchase_completed', { order_id: orderId });
+          handleSettlementNavigation('succeeded', orderId, attemptId);
+          return;
+        }
+
+        if (settlementStatus === 'pending') {
+          setStage('payment_pending');
+          isSubmittingRef.current = false;
+          handleSettlementNavigation('pending', orderId, attemptId);
+          return;
+        }
+
+        // Failed
+        setStage('payment_failed');
+        pendingIntentIdRef.current = null;
+        setOrderError('1ZE payment could not be completed. Try again.');
+        showError('Payment failed', '1ZE payment could not be completed. Try again.');
+        isSubmittingRef.current = false;
+        return;
+      }
+
+      // ── Stripe card payment path ──
       const intent = await createCommercePaymentIntent({
         orderId,
         idempotencyKey: `payment_${orderId}`,
@@ -765,6 +848,8 @@ export default function CheckoutScreen() {
     cancelStaleOrder,
     useBalance,
     walletBalance,
+    useOnezePayment,
+    onezeBalance,
   ]);
 
   // --- Address selection change ---
@@ -1190,9 +1275,11 @@ export default function CheckoutScreen() {
       ? 'Retry payment'
       : stage === 'payment_pending'
         ? 'Waiting for confirmation'
-        : walletAvailable
-          ? 'Pay with card'
-          : `Pay ${formatFromFiat(TOTAL, currencyCode)}`;
+        : useOnezePayment
+          ? `Pay ${Math.ceil(GROSS_TOTAL).toLocaleString()} 1ZE`
+          : walletAvailable
+            ? 'Pay with card'
+            : `Pay ${formatFromFiat(TOTAL, currencyCode)}`;
 
   // Whether the row-level errorText should be suppressed because the partial-
   // data banner already covers that case (avoids duplicate messaging).
@@ -1318,25 +1405,60 @@ export default function CheckoutScreen() {
         {/* 5. Payment method â€” unified with address/delivery row family */}
         <CheckoutSelectionRow
           label="Payment method"
-          title={savedPaymentMethod ? savedPaymentMethod.label : 'No payment method'}
-          subtitle={savedPaymentMethod?.details ?? undefined}
-          actionLabel={savedPaymentMethod ? 'Change' : 'Add'}
-          onPress={handlePaymentPress}
-          icon={savedPaymentMethod?.type === 'apple_pay' ? 'logo-apple' : 'card-outline'}
-          isFilled={!!savedPaymentMethod}
+          title={useOnezePayment
+            ? '1ZE Wallet'
+            : savedPaymentMethod
+              ? savedPaymentMethod.label
+              : 'No payment method'}
+          subtitle={useOnezePayment
+            ? `${onezeBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} 1ZE available`
+            : savedPaymentMethod?.details ?? undefined}
+          actionLabel={useOnezePayment ? 'Card' : savedPaymentMethod ? 'Change' : 'Add'}
+          onPress={useOnezePayment
+            ? () => { haptics.tap(); setUseOnezePayment(false); }
+            : handlePaymentPress}
+          icon={useOnezePayment ? 'wallet-outline' : (savedPaymentMethod?.type === 'apple_pay' ? 'logo-apple' : 'card-outline')}
+          isFilled={useOnezePayment || !!savedPaymentMethod}
           warningText={
-            !savedPaymentMethod && !allowCardPayments && checkoutCapabilities
+            !useOnezePayment && !savedPaymentMethod && !allowCardPayments && checkoutCapabilities
               ? 'Cards unavailable in your region'
               : undefined
           }
           errorText={suppressPaymentError ? undefined : (paymentError ?? undefined)}
           accessibilityLabel={
-            savedPaymentMethod
-              ? `Payment method: ${savedPaymentMethod.label}${savedPaymentMethod.details ? `, ${savedPaymentMethod.details}` : ''}. Change payment method.`
-              : 'Add payment method'
+            useOnezePayment
+              ? `1ZE Wallet payment, ${onezeBalance.toLocaleString()} 1ZE available. Switch to card payment.`
+              : savedPaymentMethod
+                ? `Payment method: ${savedPaymentMethod.label}${savedPaymentMethod.details ? `, ${savedPaymentMethod.details}` : ''}. Change payment method.`
+                : 'Add payment method'
           }
           accessibilityHint="Add or change your payment method"
         />
+
+        {/* 5a. 1ZE wallet payment option â€” shown alongside card payment so
+            the user sees both options side by side. Toggling switches the
+            funding source between 1ZE wallet and card without changing any
+            other checkout detail. */}
+        {onezeBalance > 0 && !balanceLoading && !useOnezePayment && (
+          <Pressable
+            style={({ pressed }) => [styles.onezeOptionRow, { borderColor: colors.border }, pressed && { opacity: 0.7 }]}
+            onPress={() => { haptics.tap(); setUseOnezePayment(true); if (useBalance) setUseBalance(false); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Pay with 1ZE Wallet. ${onezeBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} 1ZE available. ${Math.ceil(GROSS_TOTAL).toLocaleString()} 1ZE needed.`}
+            accessibilityHint="Switch to paying with your 1ZE wallet balance"
+          >
+            <Ionicons name="wallet-outline" size={20} color={colors.brand} aria-hidden={true} />
+            <View style={styles.onezeOptionTextCol}>
+              <Text style={[styles.onezeOptionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1}>
+                1ZE Wallet
+              </Text>
+              <Text style={[styles.onezeOptionSubtitle, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+                {onezeBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} 1ZE Â· {Math.ceil(GROSS_TOTAL).toLocaleString()} 1ZE needed
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+          </Pressable>
+        )}
 
         {/* Secure payment trust signal â€” placed inline near the payment method
             row where card-security anxiety peaks. Per 2026 UX research:
@@ -1362,8 +1484,9 @@ export default function CheckoutScreen() {
 
         {/* 6a. Balance-at-checkout toggle â€” kept inline so the user can
             apply wallet credit before reviewing the compact total in the
-            sticky footer. */}
-        {walletBalance > 0 && !balanceLoading && (
+            sticky footer. Hidden when 1ZE payment is selected (1ZE is the
+            full payment source, no split-tender needed). */}
+        {walletBalance > 0 && !balanceLoading && !useOnezePayment && (
           <View style={styles.balanceRow}>
             <Pressable
               style={({ pressed }) => [styles.balanceToggle, t.balanceToggle, pressed && styles.balanceTogglePressed]}
@@ -1718,6 +1841,31 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingVertical: Space.xs,
     paddingHorizontal: Space.xs,
+  },
+  onezeOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderWidth: Stroke.standard,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
+    marginTop: Space.xs,
+  },
+  onezeOptionTextCol: {
+    flex: 1,
+    flexDirection: 'column',
+    gap: 2,
+  },
+  onezeOptionTitle: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.body.lineHeight,
+  },
+  onezeOptionSubtitle: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   securePaymentText: {
     fontSize: TypographyV2.meta.size,

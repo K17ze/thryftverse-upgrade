@@ -53,7 +53,7 @@ export default function CreateCoOwnScreen() {
   const { colors } = useAppTheme();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, fxRates } = useCurrencyContext();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -148,10 +148,10 @@ export default function CreateCoOwnScreen() {
   const fromDisplayToGbp = React.useCallback(
     (amountDisplay: number) => {
       if (currencyCode === 'GBP') return amountDisplay;
-      const amountIze = toIze(amountDisplay, currencyCode, goldRates);
-      return toFiat(amountIze, 'GBP', goldRates);
+      const amountIze = toIze(amountDisplay, currencyCode, fxRates);
+      return toFiat(amountIze, 'GBP', fxRates);
     },
-    [currencyCode, goldRates]
+    [currencyCode, fxRates]
   );
 
   React.useEffect(() => {
@@ -188,7 +188,7 @@ export default function CreateCoOwnScreen() {
       return;
     }
 
-    const unitPriceStable = toIze(unitPriceGBP, 'GBP', goldRates);
+    const unitPriceStable = toIze(unitPriceGBP, 'GBP', fxRates);
     if (!Number.isFinite(unitPriceStable) || unitPriceStable <= 0) {
       show('Unable to derive a valid stablecoin value from this price', 'error');
       return;
@@ -267,15 +267,15 @@ export default function CreateCoOwnScreen() {
   }, [fromDisplayToGbp, totalUnitsInput, unitPriceInput]);
 
   const estimatedValueIze = React.useMemo(
-    () => (estimatedValue > 0 ? toIze(estimatedValue, 'GBP', goldRates) : 0),
-    [estimatedValue, goldRates]
+    () => (estimatedValue > 0 ? toIze(estimatedValue, 'GBP', fxRates) : 0),
+    [estimatedValue, fxRates]
   );
 
   const unitPriceStablePreview = React.useMemo(() => {
     const unitPriceGBP = fromDisplayToGbp(Number(unitPriceInput));
     if (!Number.isFinite(unitPriceGBP) || unitPriceGBP <= 0) return 0;
-    return toIze(unitPriceGBP, 'GBP', goldRates);
-  }, [fromDisplayToGbp, goldRates, unitPriceInput]);
+    return toIze(unitPriceGBP, 'GBP', fxRates);
+  }, [fromDisplayToGbp, fxRates, unitPriceInput]);
 
   const previewImage = selectedListing
     ? getListingCoverUri(selectedListing.images, selectedListing.imageUrl ?? '')

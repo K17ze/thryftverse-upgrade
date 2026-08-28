@@ -71,8 +71,8 @@ export interface CoOwnV2Reservation {
   assetId: string;
   userId: string;
   side: 'buy' | 'sell';
-  reserved1zeMg: number;
-  reserved1zeMgStr?: string;
+  reserved1zeUnits: number;
+  reserved1zeUnitsStr?: string;
   reservedUnits: number;
   referencePriceGbpStr: string;
   referencePriceGbp?: number; // DEPRECATED

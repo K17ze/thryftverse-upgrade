@@ -490,6 +490,9 @@ app.post('/orders', async (request, reply) => {
     listingId: z.string().min(2),
     addressId: z.coerce.number().int().positive().optional(),
     paymentMethodId: z.coerce.number().int().positive().optional(),
+    // When set to 'oneze_internal', the order will be paid via the buyer's
+    // 1ZE wallet instead of a Stripe card. No paymentMethodId is needed.
+    paymentGatewayId: z.string().min(2).max(60).optional(),
     idempotencyKey: z.string().min(8).max(140).optional(),
     shippingQuoteId: z.string().min(8).max(160).optional(),
     // Retained for backwards-compatible parsing only. Commerce charges are
@@ -710,6 +713,23 @@ app.post('/orders', async (request, reply) => {
         reply.code(400);
         return { ok: false, error: 'Payment method does not belong to buyer' };
       }
+    } else if (payload.paymentGatewayId === 'oneze_internal') {
+      // 1ZE wallet payment — no Stripe payment method needed.
+      // Verify the buyer has a 1ZE wallet with sufficient balance for
+      // the order total. The actual atomic debit happens during settlement.
+      const walletResult = await client.query<{ oneze_balance_units: string }>(
+        `SELECT oneze_balance_units::text FROM wallets WHERE user_id = $1 LIMIT 1`,
+        [actorUserId]
+      );
+      if (!walletResult.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(400);
+        return { ok: false, error: '1ZE wallet not found. Set up your wallet first.' };
+      }
+      // Balance check is deferred to settlement — the order total is not
+      // yet known at this point (it is computed below from the listing price
+      // and shipping quote). The settlement flow will reject with
+      // INSUFFICIENT_1ZE_BALANCE if the wallet cannot cover the total.
     }
 
     if (!payload.shippingQuoteId) {
@@ -2438,8 +2458,9 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
       status: string;
       subtotal_gbp: number | string;
       shipping_provider: string | null;
+      listing_id: string;
     }>(
-      `SELECT buyer_id, seller_id, status, subtotal_gbp, shipping_provider FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      `SELECT buyer_id, seller_id, status, subtotal_gbp, shipping_provider, listing_id FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
       [orderId]
     );
 

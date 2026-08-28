@@ -223,7 +223,7 @@ export interface MarketAuctionBidResult {
   } | null;
 }
 
-export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+export type CoOwnSettlementMode = 'ONEZE';
 
 export interface MarketCoOwnAsset {
   id: string;
@@ -1359,7 +1359,7 @@ function mockCoOwnAsset(
     availableUnits: available,
     unitPriceGbp: opts.unitPriceGbp ?? 25,
     unitPriceStable: opts.unitPriceStable ?? 30,
-    settlementMode: opts.settlementMode ?? 'HYBRID',
+    settlementMode: opts.settlementMode ?? 'ONEZE',
     issuerJurisdiction: opts.issuerJurisdiction ?? 'United Kingdom',
     marketMovePct24h: opts.marketMovePct24h ?? null,
     holders: opts.holders ?? total - available,
@@ -1469,7 +1469,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 35,
       unitPriceGbp: 85,
       unitPriceStable: 102,
-      settlementMode: 'HYBRID',
+      settlementMode: 'ONEZE',
       holders: 65,
       volume24hGbp: 1200,
       imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
@@ -1481,7 +1481,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 12,
       unitPriceGbp: 180,
       unitPriceStable: 216,
-      settlementMode: 'GBP',
+      settlementMode: 'ONEZE',
       holders: 38,
       volume24hGbp: 2400,
       imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
@@ -1493,7 +1493,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 200,
       unitPriceGbp: 22,
       unitPriceStable: 26,
-      settlementMode: 'TVUSD',
+      settlementMode: 'ONEZE',
       holders: 0,
       volume24hGbp: 0,
       imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
@@ -1505,7 +1505,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 5,
       unitPriceGbp: 650,
       unitPriceStable: 780,
-      settlementMode: 'HYBRID',
+      settlementMode: 'ONEZE',
       holders: 25,
       volume24hGbp: 5200,
       imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
@@ -1517,7 +1517,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 28,
       unitPriceGbp: 95,
       unitPriceStable: 114,
-      settlementMode: 'GBP',
+      settlementMode: 'ONEZE',
       holders: 52,
       volume24hGbp: 1800,
       imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
@@ -1529,7 +1529,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 40,
       unitPriceGbp: 420,
       unitPriceStable: 504,
-      settlementMode: 'TVUSD',
+      settlementMode: 'ONEZE',
       holders: 0,
       volume24hGbp: 0,
       imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
@@ -1541,7 +1541,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 48,
       unitPriceGbp: 18,
       unitPriceStable: 22,
-      settlementMode: 'HYBRID',
+      settlementMode: 'ONEZE',
       holders: 72,
       volume24hGbp: 600,
       imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
@@ -1553,7 +1553,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 18,
       unitPriceGbp: 140,
       unitPriceStable: 168,
-      settlementMode: 'GBP',
+      settlementMode: 'ONEZE',
       holders: 42,
       volume24hGbp: 900,
       imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
@@ -1924,9 +1924,9 @@ export interface CoOwnOrderReservationResponse {
     assetId: string;
     userId: string;
     side: CoOwnOrderSide;
-    reserved1zeMg: number;
+    reserved1zeUnits: number;
     /** P0.8: Exact decimal string. */
-    reserved1zeMgStr?: string;
+    reserved1zeUnitsStr?: string;
     reservedUnits: number;
     referencePriceGbp: number;
     /** P0.8: Exact decimal string. */
@@ -2038,7 +2038,7 @@ export interface CreateCoOwnAssetInput {
   totalUnits: number;
   unitPriceGbp: number;
   unitPriceStable?: number;
-  settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+  settlementMode?: 'ONEZE';
   issuerJurisdiction?: string;
   // ── Trust profile (WS1) ──
   legalVehicleType: 'spv' | 'llc' | 'trust' | 'series_llc' | 'none';

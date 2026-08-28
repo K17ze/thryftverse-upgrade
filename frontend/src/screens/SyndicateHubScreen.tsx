@@ -55,7 +55,7 @@ interface HubAsset {
   availableUnits: number;
   unitPriceGBP: number;
   unitPriceStable: number;
-  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+  settlementMode: 'ONEZE';
   issuerJurisdiction?: string;
   holders: number;
   yourUnits: number;

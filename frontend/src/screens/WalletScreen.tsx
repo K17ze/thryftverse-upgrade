@@ -20,7 +20,7 @@ import { useToast } from '../context/ToastContext';
 import { useA11yAudit } from '../hooks/useA11yAudit';
 import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, IconGrammar } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
-import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
+import { izeToUsd, formatUsd } from '../utils/currency';
 import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
@@ -54,7 +54,7 @@ export default function WalletScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode } = useCurrencyContext();
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
@@ -200,10 +200,11 @@ export default function WalletScreen({ navigation }: Props) {
     balance.unsettledSaleProceeds > 0 ? t('commerce.wallet.proceedsUnsettled', { amount: formatBalance(balance.unsettledSaleProceeds) }) : null,
   ].filter(Boolean).join(' · ');
 
-  // ── Local-fiat indication for spendable hero ──
-  const localFiatRate = convertGbpToDisplayAmount(1, currencyCode, goldRates);
-  const localFiatLabel = balance.available > 0 && localFiatRate > 0
-    ? `≈ ${formatFromFiat(balance.available, currencyCode, { displayMode: 'fiat' })}`
+  // ── At-par USD equivalent for spendable hero ──
+  // 1 1ZE = $1.00 USD — always, at par. Shown as the honest USD value.
+  const usdEquivalent = izeToUsd(balance.available);
+  const usdLabel = balance.available > 0
+    ? formatUsd(usdEquivalent)
     : undefined;
 
   // ── Add money (extracted AddMoneySheet — spec 17 dedicated flow) ──
@@ -445,12 +446,12 @@ export default function WalletScreen({ navigation }: Props) {
               <Text style={[styles.balanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
             </Text>
           )}
-          {localFiatLabel && !balanceHidden && (
+          {usdLabel && !balanceHidden && (
             <View style={styles.localFiatRow}>
               <Ionicons name="cash-outline" size={IconGrammar.badge} color={colors.textMuted} />
-              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${localFiatLabel}${currencyCode ? ` · ${currencyCode}` : ''}`}>
-                {localFiatLabel}
-                {currencyCode ? ` · ${currencyCode}` : ''}
+              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${usdLabel} USD at par`}>
+                {usdLabel}
+                <Text style={styles.localFiatSuffix}> USD · at par</Text>
               </Text>
             </View>
           )}
@@ -756,6 +757,12 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
+  },
+  localFiatSuffix: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
     letterSpacing: Type.meta.letterSpacing,
   },
 

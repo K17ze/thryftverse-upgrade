@@ -65,7 +65,7 @@ export function OfferToLikersSheet({
   };
   const styles = React.useMemo(() => createStyles(themed), [themed]);
   const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, fxRates } = useCurrencyContext();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
 
   const [selectedDiscount, setSelectedDiscount] = useState(15);
@@ -113,10 +113,10 @@ export function OfferToLikersSheet({
     const displayAmount = convertGbpToDisplayAmount(
       askingPrice * (1 - selectedDiscount / 100),
       currencyCode,
-      goldRates,
+      fxRates,
     );
     setCustomPrice((Number.isFinite(displayAmount) ? displayAmount : askingPrice).toFixed(2));
-  }, [askingPrice, selectedDiscount, currencyCode, goldRates]);
+  }, [askingPrice, selectedDiscount, currencyCode, fxRates]);
 
   const handleCustomPriceChange = useCallback((value: string) => {
     setCustomPrice(sanitizeDecimalInput(value));
@@ -201,7 +201,7 @@ export function OfferToLikersSheet({
               {DISCOUNT_PRESETS.map((pct) => {
                 const isActive = !useCustomPrice && selectedDiscount === pct;
                 const discountedGbp = askingPrice * (1 - pct / 100);
-                const displayAmount = convertGbpToDisplayAmount(discountedGbp, currencyCode, goldRates);
+                const displayAmount = convertGbpToDisplayAmount(discountedGbp, currencyCode, fxRates);
                 const label = Number.isFinite(displayAmount)
                   ? `${pct}% off · ${currencySymbol}${displayAmount.toFixed(0)}`
                   : `${pct}% off`;

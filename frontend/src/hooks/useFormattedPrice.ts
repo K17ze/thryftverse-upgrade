@@ -10,7 +10,7 @@ interface FormatOptions {
 }
 
 export function useFormattedPrice() {
-  const { currencyCode, displayMode, goldRates, rateSource, rateUpdatedAt, settlementCurrencies } = useCurrencyContext();
+  const { currencyCode, displayMode, fxRates, rateSource, rateUpdatedAt, settlementCurrencies } = useCurrencyContext();
 
   const formatFromIze = React.useCallback(
     (izeAmount: number, options: FormatOptions = {}) => {
@@ -18,17 +18,17 @@ export function useFormattedPrice() {
         izeAmount,
         displayMode: options.displayMode ?? displayMode,
         currencyCode,
-        goldRates,
+        fxRates,
         fiatFractionDigits: options.fiatFractionDigits,
         izeFractionDigits: options.izeFractionDigits,
       });
     },
-    [currencyCode, displayMode, goldRates]
+    [currencyCode, displayMode, fxRates]
   );
 
   /**
    * Convert a fiat amount from a source currency to the user's display
-   * currency via the 1ZE gold bridge, then format.
+   * currency via the 1ZE FX bridge, then format.
    *
    * Use this when the amount is denominated in a known source currency
    * (e.g. listing data stored in GBP). The display currency is always
@@ -47,10 +47,10 @@ export function useFormattedPrice() {
       sourceCurrency: SupportedCurrencyCode = DEFAULT_CURRENCY_CODE,
       options: FormatOptions = {}
     ) => {
-      const izeAmount = toIze(fiatAmount, sourceCurrency, goldRates);
+      const izeAmount = toIze(fiatAmount, sourceCurrency, fxRates);
       return formatFromIze(izeAmount, options);
     },
-    [formatFromIze, goldRates]
+    [formatFromIze, fxRates]
   );
 
   /**
@@ -81,7 +81,7 @@ export function useFormattedPrice() {
     currencyCode,
     currencySymbol,
     displayMode,
-    goldRates,
+    fxRates,
     rateSource,
     rateUpdatedAt,
     settlementCurrencies,

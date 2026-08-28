@@ -18,9 +18,10 @@ export type CapabilityPaymentGatewayId =
   | 'tap_gulf'
   // Wise has no active payment/refund adapter branch. Do not expose until a certified adapter is implemented.
   | 'wise_global'
+  | 'oneze_internal'
   | 'mock_fiat_gbp';
 
-export type CapabilityPaymentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal';
+export type CapabilityPaymentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal' | 'oneze_wallet';
 export type CapabilityPaymentMethodType = 'card' | 'bank_account' | 'wallet';
 
 export interface CapabilityCarrier {
@@ -208,6 +209,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       'co-own': ['razorpay_in', 'stripe_americas'],
       wallet_topup: ['razorpay_in', 'stripe_americas'],
       wallet_withdrawal: ['razorpay_in'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'INR',
     payoutSupportedCurrencies: ['INR', 'USD'],
@@ -255,6 +257,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       'co-own': ['stripe_americas'],
       wallet_topup: ['stripe_americas'],
       wallet_withdrawal: ['stripe_americas'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'USD',
     payoutSupportedCurrencies: ['USD'],
@@ -304,6 +307,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       'co-own': ['stripe_americas', 'mollie_eu'],
       wallet_topup: ['stripe_americas', 'mollie_eu'],
       wallet_withdrawal: ['stripe_americas', 'mollie_eu'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'GBP',
     payoutSupportedCurrencies: ['GBP', 'EUR', 'USD'],
@@ -352,6 +356,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       'co-own': ['mollie_eu', 'stripe_americas'],
       wallet_topup: ['mollie_eu', 'stripe_americas'],
       wallet_withdrawal: ['mollie_eu', 'stripe_americas'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'EUR',
     payoutSupportedCurrencies: ['EUR', 'GBP', 'USD'],
@@ -400,6 +405,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       'co-own': ['tap_gulf', 'stripe_americas'],
       wallet_topup: ['tap_gulf', 'stripe_americas'],
       wallet_withdrawal: ['tap_gulf', 'stripe_americas'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'AED',
     payoutSupportedCurrencies: ['AED', 'USD'],
@@ -450,6 +456,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       'co-own': ['stripe_americas'],
       wallet_topup: ['stripe_americas'],
       wallet_withdrawal: ['stripe_americas'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'USD',
     payoutSupportedCurrencies: ['USD'],
@@ -499,6 +506,7 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       'co-own': ['stripe_americas'],
       wallet_topup: ['stripe_americas'],
       wallet_withdrawal: ['stripe_americas'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'USD',
     payoutSupportedCurrencies: ['USD', 'GBP', 'EUR'],
@@ -563,6 +571,7 @@ function cloneTemplate(template: CapabilityTemplate): CapabilityTemplate {
       'co-own': [...template.gatewaysByChannel['co-own']],
       wallet_topup: [...template.gatewaysByChannel.wallet_topup],
       wallet_withdrawal: [...template.gatewaysByChannel.wallet_withdrawal],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: template.payoutDefaultCurrency,
     payoutSupportedCurrencies: [...template.payoutSupportedCurrencies],
@@ -753,6 +762,10 @@ export function resolveCountryCapabilities(input: ResolveCountryCapabilitiesInpu
     wallet_withdrawal: filterToConfiguredGateways(template.gatewaysByChannel.wallet_withdrawal, {
       cluster: countryCluster,
       channel: 'wallet_withdrawal',
+    }),
+    oneze_wallet: filterToConfiguredGateways(template.gatewaysByChannel.oneze_wallet ?? ['oneze_internal'], {
+      cluster: countryCluster,
+      channel: 'oneze_wallet',
     }),
   };
 

@@ -1,5 +1,5 @@
 import { fetchJson } from '../lib/apiClient';
-import { DEFAULT_GOLD_RATES, GoldRates } from '../utils/currency';
+import { DEFAULT_FX_RATES, FxRates } from '../utils/currency';
 import { SupportedCurrencyCode } from '../constants/currencies';
 
 export interface OnezeRateEntry {
@@ -19,7 +19,7 @@ export interface OnezeRatesResponse {
 }
 
 export interface OnezeDisplayRates {
-  goldRates: GoldRates;
+  fxRates: FxRates;
   rateSource: string;
   rateUpdatedAt: number;
   settlementCurrencies: Set<string>;
@@ -29,13 +29,13 @@ export async function fetchOnezeDisplayRates(): Promise<OnezeDisplayRates> {
   try {
     const payload = await fetchJson<OnezeRatesResponse>('/auctions/1ze-rates');
 
-    const goldRates = { ...DEFAULT_GOLD_RATES };
+    const fxRates = { ...DEFAULT_FX_RATES };
     const settlementCurrencies = new Set<string>();
 
     for (const [currency, entry] of Object.entries(payload.rates)) {
       const code = currency as SupportedCurrencyCode;
-      if (code in DEFAULT_GOLD_RATES && Number.isFinite(entry.rate) && entry.rate > 0) {
-        goldRates[code] = entry.rate;
+      if (code in DEFAULT_FX_RATES && Number.isFinite(entry.rate) && entry.rate > 0) {
+        fxRates[code] = entry.rate;
         if (entry.settlementSupported) {
           settlementCurrencies.add(code);
         }
@@ -43,14 +43,14 @@ export async function fetchOnezeDisplayRates(): Promise<OnezeDisplayRates> {
     }
 
     return {
-      goldRates,
+      fxRates,
       rateSource: payload.source,
       rateUpdatedAt: Date.now(),
       settlementCurrencies,
     };
   } catch {
     return {
-      goldRates: { ...DEFAULT_GOLD_RATES },
+      fxRates: { ...DEFAULT_FX_RATES },
       rateSource: 'fallback:static',
       rateUpdatedAt: Date.now(),
       settlementCurrencies: new Set(['GBP']),

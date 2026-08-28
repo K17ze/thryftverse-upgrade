@@ -315,7 +315,7 @@ export default function ItemDetailScreen() {
     }
   }, [item?.id, sectionKey, position, reasonCode, personalised]);
 
-  const { formatFromFiat, goldRates, displayMode } = useFormattedPrice();
+  const { formatFromFiat, fxRates, displayMode } = useFormattedPrice();
   const { show } = useToast();
   const haptic = useHaptic();
   const { requireAuth } = useSignupWall();
@@ -623,8 +623,8 @@ export default function ItemDetailScreen() {
   const formattedProtectionTotal = serverCommerce?.estimatedTotal != null
     ? formatFromFiat(serverCommerce.estimatedTotal, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
     : null;
-  const priceIzeText = hasPrice && goldRates && displayMode !== 'fiat'
-    ? formatIzeAmount(toIze(item.price!, 'GBP', goldRates))
+  const priceIzeText = hasPrice && fxRates && displayMode !== 'fiat'
+    ? formatIzeAmount(toIze(item.price!, 'GBP', fxRates))
     : null;
 
   const capabilities = buildCapabilities(item, currentUser?.id);
@@ -1002,7 +1002,7 @@ export default function ItemDetailScreen() {
             </View>
           ) : null}
 
-          {/* izeText — quiet gold-equivalent value on its own line
+          {/* izeText — quiet 1ZE-equivalent value on its own line
               below the attribute row. Kept separate because it is a
               price-adjacent fact, not an attribute. */}
           {priceIzeText ? (

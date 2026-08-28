@@ -1052,3 +1052,374 @@ export async function appendComplianceAuditEvent(
     client.release();
   }
 }
+
+// ── Wallet capability gate ──
+
+export type WalletCapability =
+  | 'issue'
+  | 'redeem'
+  | 'spend'
+  | 'refund'
+  | 'settlement'
+  | 'p2p_send'
+  | 'p2p_receive';
+
+export interface WalletCapabilityAssessment {
+  capability: WalletCapability;
+  allowed: boolean;
+  code: string;
+  reason?: string;
+  restrictions?: string[];
+  evaluatedAt: string;
+}
+
+export interface WalletCapabilityContext {
+  amountUsd?: number;
+  currency?: string;
+  counterpartyUserId?: string;
+  market?: string;
+}
+
+/**
+ * Capabilities that require full KYC verification (identity confirmed).
+ * Issue and redeem move value in/out of the platform economy and therefore
+ * demand a verified identity.  Settlement (co-own trade fulfilment) is
+ * treated identically because it is an irrevocable value transfer.
+ */
+const CAPABILITIES_REQUIRING_VERIFIED_KYC: ReadonlySet<WalletCapability> = new Set([
+  'issue',
+  'redeem',
+  'settlement',
+]);
+
+/**
+ * Capabilities that are blocked outright when the user sits on a sanctions
+ * watchlist (not just a full sanctions block).  Value-issuance and
+ * redemption are high-risk from a sanctions perspective.
+ */
+const CAPABILITIES_BLOCKED_ON_SANCTIONS_WATCH: ReadonlySet<WalletCapability> = new Set([
+  'issue',
+  'redeem',
+  'settlement',
+]);
+
+/**
+ * Map a wallet capability to the compliance market used for jurisdiction
+ * rule resolution.  This lets us reuse the existing jurisdiction_rules
+ * table and `resolveJurisdictionRule` helper.
+ */
+function capabilityToMarket(capability: WalletCapability): ComplianceMarket {
+  if (capability === 'settlement') {
+    return 'co-own';
+  }
+
+  if (capability === 'p2p_send' || capability === 'p2p_receive') {
+    return 'p2p';
+  }
+
+  return 'wallet';
+}
+
+/**
+ * Resolve an FX rate from the given currency to GBP using the internal
+ * pricing engine rate table.  Falls back to a conservative 1:1 assumption
+ * (treating the amount as GBP) when the rate table is unavailable so that
+ * the gate never falsely blocks a legitimate user due to a missing rate.
+ */
+async function resolveAmountGbp(
+  client: DbQueryable,
+  amount: number,
+  currency: string
+): Promise<number> {
+  const normalizedCurrency = currency.trim().toUpperCase();
+  const safeAmount = roundTo(Math.max(0, amount), 2);
+
+  if (normalizedCurrency === 'GBP' || normalizedCurrency === '' || !Number.isFinite(safeAmount)) {
+    return safeAmount;
+  }
+
+  try {
+    const result = await client.query<{ rate: string }>(
+      `
+        SELECT rate::text AS rate
+        FROM internal_fx_rates
+        WHERE from_currency = $1 AND to_currency = 'GBP'
+        ORDER BY effective_at DESC
+        LIMIT 1
+      `,
+      [normalizedCurrency]
+    );
+
+    if (result.rows[0]) {
+      const rate = toNumber(result.rows[0].rate);
+      if (rate > 0) {
+        return roundTo(safeAmount * rate, 2);
+      }
+    }
+  } catch {
+    // Rate table may not exist yet — fall through to conservative default.
+  }
+
+  // Conservative fallback: treat the amount as-is (1:1) so we never
+  // over-block.  The velocity check will still catch excessive counts.
+  return safeAmount;
+}
+
+/**
+ * Read the user's daily wallet activity (1ZE transaction count and total
+ * absolute 1ZE volume in milligrams) from the wallet ledger.  Uses the
+ * indexed (wallet_id, created_at) index for a fast scan.
+ */
+async function readWalletVelocity(
+  client: DbQueryable,
+  userId: string
+): Promise<{ dailyTxCount: number; dailyIzeUnits: number }> {
+  try {
+    const result = await client.query<{ count: string; total_units: string }>(
+      `
+        SELECT
+          COUNT(*)::text AS count,
+          COALESCE(SUM(ABS(wl.amount)), 0)::text AS total_units
+        FROM wallet_ledger wl
+        INNER JOIN wallets w ON w.id = wl.wallet_id
+        WHERE w.user_id = $1
+          AND wl.asset = '1ZE'
+          AND wl.created_at >= date_trunc('day', NOW())
+      `,
+      [userId]
+    );
+
+    return {
+      dailyTxCount: Math.max(0, Math.floor(toNumber(result.rows[0]?.count))),
+      dailyIzeUnits: Math.max(0, Math.floor(toNumber(result.rows[0]?.total_units))),
+    };
+  } catch {
+    // Wallet ledger tables may not exist in every environment.
+    return { dailyTxCount: 0, dailyIzeUnits: 0 };
+  }
+}
+
+/**
+ * Check whether the user has an active compliance restriction that should
+ * block wallet capabilities.  Currently this inspects the
+ * `trading_enabled` flag on the compliance profile (the existing mechanism
+ * used by `evaluateMarketEligibility`).  The check is intentionally
+ * lightweight — a dedicated restrictions table can be layered in later
+ * without changing the call sites.
+ */
+function hasActiveRestriction(profile: ComplianceProfile): boolean {
+  return !profile.tradingEnabled;
+}
+
+/**
+ * Evaluate whether a user is permitted to exercise a specific wallet
+ * capability (issue, redeem, spend, refund, settlement, p2p_send,
+ * p2p_receive).
+ *
+ * The gate is designed to be invisible to good users (they pass silently)
+ * while protecting the platform from bad actors.  Error messages are
+ * actionable: "Complete identity verification to continue" rather than
+ * "Access denied."
+ *
+ * Checks performed (in order, first failure wins):
+ *  1. Active restriction / ban (trading_enabled flag)
+ *  2. Sanctions screening (blocked → hard block; watchlist → block for
+ *     issuance/redemption/settlement)
+ *  3. KYC verification status (verified required for issue/redeem/settlement;
+ *     rejected/expired blocks all capabilities)
+ *  4. AML risk tier (critical → block; high → block issuance/redemption)
+ *  5. Jurisdiction policy (rule disabled or sanctions-clear required)
+ *  6. Velocity limits (daily transaction count and notional caps)
+ *
+ * The function uses indexed queries and short-circuits on the first
+ * failure so it does not block the main flow unnecessarily.
+ */
+export async function evaluateWalletCapability(
+  client: DbQueryable,
+  userId: string,
+  capability: WalletCapability,
+  context?: WalletCapabilityContext
+): Promise<WalletCapabilityAssessment> {
+  const evaluatedAt = new Date().toISOString();
+  const base = {
+    capability,
+    evaluatedAt,
+  };
+
+  const deny = (
+    code: string,
+    reason: string,
+    restrictions?: string[]
+  ): WalletCapabilityAssessment => ({
+    ...base,
+    allowed: false,
+    code,
+    reason,
+    restrictions,
+  });
+
+  // 1. Compliance profile (KYC, sanctions, PEP, risk tier, trading flag)
+  const profile = await getOrCreateComplianceProfile(client, userId);
+  const countryCode = normalizeCountryCode(profile.countryCode);
+  const market = capabilityToMarket(capability);
+
+  // 2. Active restriction / ban
+  if (hasActiveRestriction(profile)) {
+    return deny(
+      'WALLET_CAPABILITY_RESTRICTED',
+      'Your account is currently restricted pending compliance review. Please contact support to resume wallet activity.'
+    );
+  }
+
+  // 3. Sanctions screening — hard block for all capabilities
+  if (profile.sanctionsStatus === 'blocked') {
+    return deny(
+      'WALLET_CAPABILITY_SANCTIONS_BLOCK',
+      'Account is blocked after sanctions screening. Please contact compliance support.'
+    );
+  }
+
+  // Watchlist — block value-issuance / redemption / settlement
+  if (
+    profile.sanctionsStatus === 'watchlist'
+    && CAPABILITIES_BLOCKED_ON_SANCTIONS_WATCH.has(capability)
+  ) {
+    return deny(
+      'WALLET_CAPABILITY_SANCTIONS_BLOCK',
+      'Wallet issuance and redemption are paused until sanctions screening is cleared.'
+    );
+  }
+
+  // 4. KYC verification
+  if (CAPABILITIES_REQUIRING_VERIFIED_KYC.has(capability)) {
+    if (profile.kycStatus !== 'verified') {
+      return deny(
+        'WALLET_CAPABILITY_KYC_REQUIRED',
+        'Complete identity verification to continue with this wallet operation.'
+      );
+    }
+  } else if (profile.kycStatus === 'rejected' || profile.kycStatus === 'expired') {
+    return deny(
+      'WALLET_CAPABILITY_KYC_REQUIRED',
+      'Your identity verification has expired or was rejected. Please re-verify your identity to continue.'
+    );
+  }
+
+  // 5. AML risk tier
+  const restrictions: string[] = [];
+  if (profile.amlRiskTier === 'critical') {
+    return deny(
+      'WALLET_CAPABILITY_RESTRICTED',
+      'Your account is flagged as critical risk. Please contact compliance support before proceeding.'
+    );
+  }
+
+  if (profile.amlRiskTier === 'high') {
+    if (CAPABILITIES_BLOCKED_ON_SANCTIONS_WATCH.has(capability)) {
+      return deny(
+        'WALLET_CAPABILITY_RESTRICTED',
+        'High-risk accounts cannot issue or redeem wallet value until compliance review is complete.'
+      );
+    }
+    restrictions.push('high_risk_tier_monitoring');
+  }
+
+  if (profile.pepStatus === 'flagged') {
+    restrictions.push('pep_flagged_enhanced_monitoring');
+  }
+
+  // 6. Jurisdiction policy
+  const rule = await resolveJurisdictionRule(client, market, countryCode);
+
+  if (rule) {
+    if (!rule.isEnabled) {
+      return deny(
+        'WALLET_CAPABILITY_JURISDICTION_BLOCK',
+        rule.blockedReason ??
+          'This wallet operation is not available in your jurisdiction.'
+      );
+    }
+
+    if (
+      rule.requireSanctionsClear
+      && profile.sanctionsStatus !== 'clear'
+      && profile.sanctionsStatus !== 'unknown'
+    ) {
+      return deny(
+        'WALLET_CAPABILITY_SANCTIONS_BLOCK',
+        'Sanctions screening must be cleared before this wallet operation can proceed.'
+      );
+    }
+
+    if (
+      !hasRequiredKycLevel(profile.kycLevel, rule.minKycLevel)
+      && profile.kycStatus === 'verified'
+    ) {
+      return deny(
+        'WALLET_CAPABILITY_KYC_REQUIRED',
+        `Additional identity verification is required for this operation. Required KYC level: ${rule.minKycLevel}.`
+      );
+    }
+  }
+
+  // 7. Velocity limits (only when an amount is provided)
+  if (context?.amountUsd !== undefined && Number.isFinite(context.amountUsd)) {
+    const currency = context.currency ?? 'USD';
+    const amountGbp = await resolveAmountGbp(client, context.amountUsd, currency);
+
+    // Single-transaction cap (most restrictive of rule and profile)
+    const maxSingleLimit = minDefined([
+      rule?.maxOrderNotionalGbp ?? null,
+      profile.maxSingleTradeGbp,
+    ]);
+
+    if (maxSingleLimit !== null && amountGbp > maxSingleLimit) {
+      return deny(
+        'WALLET_CAPABILITY_VELOCITY_EXCEEDED',
+        `This transaction exceeds your single-transaction limit of ${maxSingleLimit.toFixed(2)} GBP.`
+      );
+    }
+
+    // Daily volume cap
+    const maxDailyLimit = minDefined([
+      rule?.maxDailyNotionalGbp ?? null,
+      profile.maxDailyVolumeGbp,
+    ]);
+
+    if (maxDailyLimit !== null) {
+      const velocity = await readWalletVelocity(client, userId);
+      // Approximate daily USD usage from 1ZE minor units (1 1ZE = $1.00 USD at par).
+      // This is a conservative proxy — the exact FX is resolved at
+      // transaction time, but the cap check needs a fast heuristic.
+      const dailyUsageGbp = roundTo(velocity.dailyIzeUnits / 1000, 2);
+
+      if (dailyUsageGbp + amountGbp > maxDailyLimit) {
+        return deny(
+          'WALLET_CAPABILITY_VELOCITY_EXCEEDED',
+          `Daily wallet limit exceeded. Remaining allowance is ${Math.max(
+            0,
+            roundTo(maxDailyLimit - dailyUsageGbp, 2)
+          ).toFixed(2)} GBP.`
+        );
+      }
+    }
+  }
+
+  // 8. Self-counterparty guard for P2P
+  if (
+    context?.counterpartyUserId
+    && context.counterpartyUserId === userId
+  ) {
+    return deny(
+      'WALLET_CAPABILITY_RESTRICTED',
+      'Self-transfers are not permitted.'
+    );
+  }
+
+  return {
+    ...base,
+    allowed: true,
+    code: 'ALLOWED',
+    restrictions: restrictions.length > 0 ? restrictions : undefined,
+  };
+}

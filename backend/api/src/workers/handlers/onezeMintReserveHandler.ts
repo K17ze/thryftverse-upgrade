@@ -108,7 +108,7 @@ export async function processQueuedOnezeMintReserveAllocation(input: {
             fiat_currency,
             net_fiat_amount_minor::text,
             platform_fee_minor::text,
-            ize_amount_mg::text,
+            ize_amount_units::text,
             rate_per_gram::text,
             rate_source,
             rate_locked_at::text,
@@ -160,7 +160,7 @@ export async function processQueuedOnezeMintReserveAllocation(input: {
             fiat_currency,
             net_fiat_amount_minor::text,
             platform_fee_minor::text,
-            ize_amount_mg::text,
+            ize_amount_units::text,
             rate_per_gram::text,
             rate_source,
             rate_locked_at::text,
@@ -194,14 +194,14 @@ export async function processQueuedOnezeMintReserveAllocation(input: {
     if (!mutableOperation.wallet_credit_tx_id) {
       const wallet = await ensureWallet(client, mutableOperation.user_id, mutableOperation.fiat_currency);
       const walletCreditTxId = createRuntimeId('mintcred');
-      const amountMg = Number(mutableOperation.ize_amount_mg);
+      const amountUnits = Number(mutableOperation.ize_amount_units);
       const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, mutableOperation.fiat_currency);
 
       await applyWalletLedgerDelta(client, {
         walletId: wallet.id,
         txId: walletCreditTxId,
         asset: '1ZE',
-        amount: amountMg,
+        amount: amountUnits,
         kind: 'MINT',
         refType: 'mint_operation',
         refId: mutableOperation.id,
@@ -218,7 +218,7 @@ export async function processQueuedOnezeMintReserveAllocation(input: {
       await creditWalletSegmentBalance(client, {
         wallet,
         txId: walletCreditTxId,
-        purchasedCreditMg: amountMg,
+        purchasedCreditUnits: amountUnits,
         originCountry: normalizeOnezeCountryTag(
           typeof mutableOperation.metadata?.originCountry === 'string'
             ? mutableOperation.metadata.originCountry
@@ -247,7 +247,7 @@ export async function processQueuedOnezeMintReserveAllocation(input: {
             fiat_currency,
             net_fiat_amount_minor::text,
             platform_fee_minor::text,
-            ize_amount_mg::text,
+            ize_amount_units::text,
             rate_per_gram::text,
             rate_source,
             rate_locked_at::text,

@@ -100,7 +100,7 @@ const baseAsset: MarketCoOwnAsset = {
   availableUnits: 60,
   unitPriceGbp: 12.5,
   unitPriceStable: 15.0,
-  settlementMode: 'GBP',
+  settlementMode: 'ONEZE',
   issuerJurisdiction: 'UK',
   marketMovePct24h: 2.5,
   holders: 8,

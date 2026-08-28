@@ -413,7 +413,7 @@ export default function TradeScreen() {
         reservationId: reserved.id,
         reservationExpiresAt: reserved.expiresAt,
         previewValidUntil: preview.validUntil,
-        maxReserved1ze: reserved.reserved1zeMg / 1000,
+        maxReserved1ze: reserved.reserved1zeUnits / 1000,
         marketDataTimestamp: orderBook.serverTimestamp,
       });
       idempotencyKeyRef.current = null;

@@ -1,5 +1,5 @@
 import { SupportedCurrencyCode } from '../constants/currencies';
-import { GoldRates, toFiat, toIze } from './currency';
+import { FxRates, toFiat, toIze } from './currency';
 
 const COMMERCE_PLATFORM_CHARGE_RATE = 0.05;
 const COMMERCE_PLATFORM_CHARGE_FIXED_GBP = 0.7;
@@ -23,27 +23,45 @@ export function sanitizeIntegerInput(rawValue: string): string {
 export function convertGbpToDisplayAmount(
   amountGbp: number,
   currencyCode: SupportedCurrencyCode,
-  goldRates: Partial<GoldRates>
+  fxRates: Partial<FxRates>
 ): number {
   if (currencyCode === 'GBP') {
     return amountGbp;
   }
 
-  const amountIze = toIze(amountGbp, 'GBP', goldRates);
-  return toFiat(amountIze, currencyCode, goldRates);
+  const amountIze = toIze(amountGbp, 'GBP', fxRates);
+  return toFiat(amountIze, currencyCode, fxRates);
 }
 
 export function convertDisplayToGbpAmount(
   amountDisplay: number,
   currencyCode: SupportedCurrencyCode,
-  goldRates: Partial<GoldRates>
+  fxRates: Partial<FxRates>
 ): number {
   if (currencyCode === 'GBP') {
     return amountDisplay;
   }
 
-  const amountIze = toIze(amountDisplay, currencyCode, goldRates);
-  return toFiat(amountIze, 'GBP', goldRates);
+  const amountIze = toIze(amountDisplay, currencyCode, fxRates);
+  return toFiat(amountIze, 'GBP', fxRates);
+}
+
+/**
+ * Convert a display-currency amount to USD.
+ * With the at-par model (1 1ZE = $1.00 USD), the USD amount equals the 1ZE
+ * amount, so this is equivalent to `toIze(amountDisplay, currencyCode, fxRates)`.
+ */
+export function convertDisplayToUsdAmount(
+  amountDisplay: number,
+  currencyCode: SupportedCurrencyCode,
+  fxRates: Partial<FxRates>
+): number {
+  if (currencyCode === 'USD') {
+    return amountDisplay;
+  }
+
+  const amountIze = toIze(amountDisplay, currencyCode, fxRates);
+  return toFiat(amountIze, 'USD', fxRates);
 }
 
 export function calculatePlatformChargeGbp(subtotalGbp: number): number {
@@ -57,11 +75,11 @@ export function calculatePlatformChargeGbp(subtotalGbp: number): number {
 export function getSuggestedBidDisplayAmount(
   currentBidGbp: number,
   currencyCode: SupportedCurrencyCode,
-  goldRates: Partial<GoldRates>
+  fxRates: Partial<FxRates>
 ): number {
   const minStep = Math.max(1, Number((currentBidGbp * 0.03).toFixed(2)));
   const suggestedBidGbp = Number((currentBidGbp + minStep).toFixed(2));
-  const suggestedDisplay = convertGbpToDisplayAmount(suggestedBidGbp, currencyCode, goldRates);
+  const suggestedDisplay = convertGbpToDisplayAmount(suggestedBidGbp, currencyCode, fxRates);
 
   return Number.isFinite(suggestedDisplay)
     ? Number(suggestedDisplay.toFixed(2))
@@ -78,9 +96,9 @@ export interface OfferSummary {
 export function calculateOfferSummaryFromDisplay(
   offerDisplay: number,
   currencyCode: SupportedCurrencyCode,
-  goldRates: Partial<GoldRates>
+  fxRates: Partial<FxRates>
 ): OfferSummary {
-  const offerGbpRaw = convertDisplayToGbpAmount(offerDisplay, currencyCode, goldRates);
+  const offerGbpRaw = convertDisplayToGbpAmount(offerDisplay, currencyCode, fxRates);
   const offerGbp = Number.isFinite(offerGbpRaw) && offerGbpRaw > 0 ? offerGbpRaw : 0;
   const platformChargeGbp = calculatePlatformChargeGbp(offerGbp);
   const totalGbp = Number((offerGbp + platformChargeGbp).toFixed(2));
@@ -96,9 +114,9 @@ export function calculateOfferSummaryFromDisplay(
 export function getDefaultWithdrawDisplayAmount(
   availableBalanceGbp: number,
   currencyCode: SupportedCurrencyCode,
-  goldRates: Partial<GoldRates>
+  fxRates: Partial<FxRates>
 ): number {
-  const displayAmount = convertGbpToDisplayAmount(availableBalanceGbp, currencyCode, goldRates);
+  const displayAmount = convertGbpToDisplayAmount(availableBalanceGbp, currencyCode, fxRates);
 
   return Number.isFinite(displayAmount)
     ? Number(displayAmount.toFixed(2))

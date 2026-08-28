@@ -52,7 +52,7 @@ export default function CreateAuctionScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, fxRates } = useCurrencyContext();
   const { listings, refreshListings } = useBackendData();
   const queryClient = useQueryClient();
 
@@ -79,19 +79,19 @@ export default function CreateAuctionScreen() {
   const fromGbpToDisplay = React.useCallback(
     (amountGbp: number) => {
       if (currencyCode === 'GBP') return amountGbp;
-      const amountIze = toIze(amountGbp, 'GBP', goldRates);
-      return toFiat(amountIze, currencyCode, goldRates);
+      const amountIze = toIze(amountGbp, 'GBP', fxRates);
+      return toFiat(amountIze, currencyCode, fxRates);
     },
-    [currencyCode, goldRates]
+    [currencyCode, fxRates]
   );
 
   const fromDisplayToGbp = React.useCallback(
     (amountDisplay: number) => {
       if (currencyCode === 'GBP') return amountDisplay;
-      const amountIze = toIze(amountDisplay, currencyCode, goldRates);
-      return toFiat(amountIze, 'GBP', goldRates);
+      const amountIze = toIze(amountDisplay, currencyCode, fxRates);
+      return toFiat(amountIze, 'GBP', fxRates);
     },
-    [currencyCode, goldRates]
+    [currencyCode, fxRates]
   );
 
   React.useEffect(() => {
@@ -490,7 +490,7 @@ export default function CreateAuctionScreen() {
                         </Body>
                         {startingBidInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, goldRates))}
+                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, fxRates))}
                           </Text>
                         )}
                       </View>
@@ -503,7 +503,7 @@ export default function CreateAuctionScreen() {
                         </Body>
                         {reservePriceInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, goldRates))}
+                            {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, fxRates))}
                           </Text>
                         )}
                       </View>
@@ -516,7 +516,7 @@ export default function CreateAuctionScreen() {
                         </Body>
                         {buyNowEnabled && buyNowInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, goldRates))}
+                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, fxRates))}
                           </Text>
                         )}
                       </View>
@@ -626,7 +626,7 @@ export default function CreateAuctionScreen() {
                   <Body style={styles.termsValue}>{resultData.startingBid}</Body>
                   {startingBidInput && (
                     <Text style={styles.termsIzeText}>
-                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, goldRates))}
+                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, fxRates))}
                     </Text>
                   )}
                 </View>
@@ -638,7 +638,7 @@ export default function CreateAuctionScreen() {
                     <Body style={styles.termsValue}>{resultData.reservePrice}</Body>
                     {reservePriceInput && (
                       <Text style={styles.termsIzeText}>
-                        {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, goldRates))}
+                        {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, fxRates))}
                       </Text>
                     )}
                   </View>
@@ -651,7 +651,7 @@ export default function CreateAuctionScreen() {
                     <Body style={styles.termsValue}>{resultData.buyNow}</Body>
                     {buyNowInput && (
                       <Text style={styles.termsIzeText}>
-                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, goldRates))}
+                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, fxRates))}
                       </Text>
                     )}
                   </View>

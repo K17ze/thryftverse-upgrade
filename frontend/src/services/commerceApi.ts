@@ -337,6 +337,8 @@ export interface CreateOrderInput {
   shippingQuoteId: string;
   addressId?: number;
   paymentMethodId?: number;
+  /** When 'oneze_internal', the order will be paid via the buyer's 1ZE wallet */
+  paymentGatewayId?: string;
   platformChargeGbp?: number;
   buyerProtectionFeeGbp?: number;
   postageFeeGbp?: number;
@@ -564,6 +566,34 @@ export async function createCommercePaymentIntent(
         channel: 'commerce',
         orderId: input.orderId,
         idempotencyKey: input.idempotencyKey,
+      }),
+    }
+  );
+
+  return payload.intent;
+}
+
+/**
+ * Create a 1ZE wallet checkout payment intent.
+ *
+ * This posts to /payments/intents with gatewayId: 'oneze_internal', which
+ * triggers the internal 1ZE payment flow — the buyer's 1ZE wallet is debited
+ * atomically at the at-par rate (1 1ZE ≈ 1 GBP) and the GBP amount is credited
+ * to escrow. No Stripe PaymentSheet is needed.
+ */
+export async function createOnezeCheckoutIntent(
+  orderId: string
+): Promise<PaymentIntentStatusResponse> {
+  const payload = await fetchJson<{ ok: true; intent: PaymentIntentStatusResponse }>(
+    '/payments/intents',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channel: 'commerce',
+        orderId,
+        gatewayId: 'oneze_internal',
+        idempotencyKey: `oneze_payment_${orderId}`,
       }),
     }
   );

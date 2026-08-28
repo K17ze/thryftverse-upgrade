@@ -100,7 +100,7 @@ export function AttributeSummaryRow({
         )}
       </View>
 
-      {/* izeText — quiet gold-equivalent value on its own line below the
+      {/* izeText — quiet 1ZE-equivalent value on its own line below the
           attribute row. Kept separate because it is a price-adjacent fact,
           not an attribute. */}
       {priceIzeText ? (
