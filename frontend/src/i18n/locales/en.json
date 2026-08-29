@@ -663,9 +663,9 @@
       "errorMessage": "The run could not be cancelled."
     },
     "tools": {
-      "search": "Search: {{query}}",
+      "search": "Search: {{searchQuery}}",
       "listing": "Listing: {{listingId}}",
-      "priceHistory": "Price history: {{query}}",
+      "priceHistory": "Price history: {{searchQuery}}",
       "readMessages": "Read {{count}} messages"
     },
     "time": {
@@ -683,8 +683,27 @@
       "comingUp": "Coming up",
       "openForBidding": "Open for bidding",
       "closingSoon": "Closing soon!",
+      "sold": "Sold for £{{price}}",
       "passed": "Passed (reserve not met)",
       "cancelled": "Cancelled"
+    },
+    "toast": {
+      "couldNotSend": "Could not send message",
+      "bidFailed": "Bid failed",
+      "bidNotAccepted": "Bid was not accepted",
+      "stillChecking": "Still checking — your bid may have been placed",
+      "purchaseComplete": "Purchase complete — check your inbox",
+      "couldNotPurchase": "Could not complete purchase",
+      "followDemoUnavailable": "Follow unavailable in demo mode",
+      "followUnavailable": "Follow unavailable",
+      "unfollowed": "Unfollowed",
+      "following": "Following",
+      "followError": "Could not update follow status",
+      "checkoutError": "Could not start checkout. Please try again."
+    },
+    "share": {
+      "message": "Watch {{sellerName}}'s live stream on ThryftVerse",
+      "defaultSeller": "this seller"
     },
     "connecting": {
       "title": "Connecting to stream",
@@ -756,10 +775,20 @@
     "sections": {
       "liveNow": "Live now",
       "comingUp": "Coming up",
-      "pastEvents": "Past Events"
+      "pastEvents": "Past Events",
+      "streaming": "{{count}} streaming",
+      "scheduled": "{{count}} scheduled",
+      "replays": "{{count}} replays",
+      "replay_one": "{{count}} replay",
+      "replay_other": "{{count}} replays"
     },
     "featured": {
       "currentBid": "Current bid"
+    },
+    "replay": {
+      "justEnded": "Just ended",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
     },
     "upcoming": {
       "waiting": "waiting",
@@ -767,12 +796,19 @@
       "notifyMe": "Notify me",
       "startingSoon": "Starting soon"
     },
+    "scheduled": {
+      "inMinutes": "In {{minutes}} min · {{time}}",
+      "inHours": "In {{hours}}h {{minutes}}m · {{time}}",
+      "inDays": "{{day}} · {{time}}"
+    },
     "noLive": {
       "text": "No one is live right now"
     },
     "error": {
       "title": "Couldn't load live sessions",
-      "retry": "Retry"
+      "retry": "Retry",
+      "subtitle": "Check your connection and try again.",
+      "loadFailed": "Failed to load live sessions"
     },
     "empty": {
       "title": "No live sessions right now",
@@ -803,10 +839,29 @@
       "refine": "Refine"
     },
     "error": {
-      "retry": "Retry"
+      "retry": "Retry",
+      "offline": "You are offline. Reconnect to search.",
+      "generic": "Something went wrong. Try again."
     },
     "input": {
       "placeholder": "Describe what you are looking for…"
+    },
+    "browseTitle": "Search results",
+    "filters": {
+      "brand": "Brand: {{value}}",
+      "category": "Category: {{value}}",
+      "size": "Size: {{value}}",
+      "condition": "Condition: {{value}}",
+      "colour": "Colour: {{value}}",
+      "style": "Style: {{value}}",
+      "priceLabel": "Price: ",
+      "priceUnder": "under {{value}}",
+      "priceOver": "over {{value}}",
+      "sustainableOnly": "Sustainable only"
+    },
+    "trust": {
+      "matchedKeywords": "Matched keywords: {{keywords}}",
+      "noMatch": "No keywords matched — showing a general response"
     }
   },
   "aiAgent": {
@@ -814,10 +869,29 @@
       "title": "Agent Studio",
       "subtitle": "Manage agents, connections, and keys"
     },
+    "demo": {
+      "banner": "Keys are validated by format only — no live request is sent to any provider."
+    },
     "sections": {
       "yourAgents": "YOUR AGENTS",
       "serverConnections": "SERVER CONNECTIONS",
       "deviceLocalKeys": "DEVICE-LOCAL KEYS"
+    },
+    "status": {
+      "agents": " agent(s)",
+      "connections": "connections",
+      "pendingApprovals": "{{count}} pending approval(s)",
+      "viewPending": "View {{count}} pending approval(s)",
+      "subtitleNone": "Create an agent and connect a provider to get started",
+      "subtitleNoAgents": "Connect a provider, then create your first agent",
+      "subtitleNoConnections": "Connect a provider server-side to power agent execution",
+      "subtitleReady": "Agents run on your connected server-side keys"
+    },
+    "agentStatus": {
+      "draft": "Draft",
+      "disabled": "Disabled",
+      "setupNeeded": "Setup needed",
+      "published": "Published"
     },
     "serverConnections": {
       "hint": "Keys verified and stored encrypted on the server. These power agent execution.",
@@ -834,6 +908,7 @@
       "create": "Create agent",
       "pauseAll": "Pause all agents",
       "noSessionsRunning": "No agent sessions running",
+      "sessionsRunning": "{{count}} agent session(s) running",
       "activity": "Agent activity",
       "activitySub": "Local log of agent actions and approvals"
     },
@@ -856,7 +931,57 @@
       "reverify": "Reverify",
       "verifying": "Verifying…",
       "remove": "Remove",
-      "removing": "Removing…"
+      "removing": "Removing…",
+      "verified": "Verified {{time}}",
+      "notVerified": "Not yet verified",
+      "modelsCount": "{{count}} model(s)",
+      "more": "more"
+    },
+    "health": {
+      "healthy": "Healthy",
+      "failed": "Failed",
+      "revoked": "Revoked",
+      "expired": "Expired",
+      "degraded": "Degraded",
+      "unverified": "Unverified"
+    },
+    "providerStatus": {
+      "comingSoon": "Coming soon",
+      "connected": "Connected",
+      "invalid": "Invalid",
+      "notConnected": "Not connected"
+    },
+    "provider": {
+      "soon": "Soon",
+      "comingSoon": "Coming soon — not yet available on this deployment.",
+      "modelsAvailable": "{{count}} model(s) available",
+      "discoveringModels": "Discovering models…",
+      "storedLocally": "Stored locally · {{storage}}",
+      "secureStorage": "Secure storage",
+      "deviceStorage": "Device storage",
+      "disconnect": "Disconnect",
+      "replaceKey": "Replace key",
+      "noKeySaved": "No key saved. Connect to use {{name}} models.",
+      "connect": "Connect",
+      "availableModels": "Available models",
+      "discoveringFrom": "Discovering models from {{name}}…",
+      "noModelsReturned": "No models returned by {{name}}.",
+      "modelsAfterConnect": "Models are discovered from {{name}} after you connect.",
+      "testing": "Testing…",
+      "testSave": "Test & save"
+    },
+    "toast": {
+      "connectionSaved": "Connection verified and saved.",
+      "verifyFailed": "Could not verify the key. Check the key and try again.",
+      "reverified": "Connection re-verified.",
+      "reverifyFailed": "Re-verification failed.",
+      "removedWithAgents": "Removed. {{count}} agent(s) updated.",
+      "connectionRemoved": "Connection removed.",
+      "removeFailed": "Could not remove connection."
+    },
+    "help": {
+      "title": "What agents can and cannot do",
+      "body": "Agents draft replies and summarise conversations using the provider keys you connect. They cannot access your wallet, make payments, or act outside the permissions you grant. Server-side keys are stored encrypted on the server; device-local keys never leave this device. Each agent action is logged in the activity ledger for transparency."
     }
   },
   "algorithm": {
@@ -1038,4 +1163,36 @@
     },
     "windowClosed": {
       "title": "Appeal window closed",
-      "body": "Decisions can
+      "body": "Decisions can be appealed within 6 months. This decision was communicated on {date}.",
+      "goBack": "Go back"
+    },
+    "offline": {
+      "title": "You are offline",
+      "subtitle": "Check your connection and try again.",
+      "tryAgain": "Try again",
+      "goBack": "Go back"
+    },
+    "submitted": {
+      "title": "Appeal submitted",
+      "body": "We'll review and let you know the outcome.",
+      "referenceNote": "Reference this number in future support contact.",
+      "done": "Done"
+    },
+    "duration": {
+      "permanent": "Permanent"
+    },
+    "grounds": {
+      "label": "Why do you think this decision was wrong?",
+      "placeholder": "Explain why the decision should be reconsidered"
+    },
+    "evidence": {
+      "label": "Evidence photos (optional)",
+      "camera": "Camera",
+      "gallery": "Gallery",
+      "count": "{count}/3 photos"
+    },
+    "submit": {
+      "label": "Submit appeal"
+    }
+  }
+}

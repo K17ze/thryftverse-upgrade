@@ -38,6 +38,7 @@ import {
   LIVE_SHOPPING_DEMO_MODE,
   type LiveSession,
   type LiveSessionSummary } from '../services/liveShoppingApi';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -80,10 +81,11 @@ function LivePulse({ size = 8, color }: { size?: number; color: string }) {
 function LiveBadge({ compact = false }: { compact?: boolean }) {
   const styles = useStyles();
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('liveShopping');
   return (
     <View style={[styles.liveBadge, compact && styles.liveBadgeCompact]}>
       <LivePulse size={compact ? 6 : 8} color={colors.danger} />
-      <Text style={[styles.liveBadgeText, compact && styles.liveBadgeTextCompact]}>LIVE</Text>
+      <Text style={[styles.liveBadgeText, compact && styles.liveBadgeTextCompact]}>{t('live.label')}</Text>
     </View>
   );
 }
@@ -112,6 +114,7 @@ const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
 }) {
   const styles = useStyles();
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('liveShopping');
   const bidLabel = session.currentBid != null ? formatBid(session.currentBid) : null;
 
   return (
@@ -160,7 +163,7 @@ const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
           <Text style={styles.featuredTitle} numberOfLines={2}>{session.title}</Text>
           {bidLabel && (
             <View style={styles.featuredBidRow}>
-              <Text style={styles.featuredBidLabel}>Current bid</Text>
+              <Text style={styles.featuredBidLabel}>{t('featured.currentBid')}</Text>
               <Text style={styles.featuredBidValue}>{bidLabel}</Text>
             </View>
           )}
@@ -179,6 +182,7 @@ const ReplayCard = React.memo(function ReplayCard({
 }) {
   const styles = useStyles();
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('liveShopping');
 
   const durationLabel = (() => {
     if (!session.startedAt || !session.endedAt) return '';
@@ -194,9 +198,9 @@ const ReplayCard = React.memo(function ReplayCard({
     const end = new Date(session.endedAt);
     const now = new Date();
     const diffHr = Math.round((now.getTime() - end.getTime()) / (60 * 60 * 1000));
-    if (diffHr < 1) return 'Just ended';
-    if (diffHr < 24) return `${diffHr}h ago`;
-    return `${Math.floor(diffHr / 24)}d ago`;
+    if (diffHr < 1) return t('replay.justEnded');
+    if (diffHr < 24) return t('replay.hoursAgo', { count: diffHr });
+    return t('replay.daysAgo', { count: Math.floor(diffHr / 24) });
   })();
 
   return (
@@ -266,6 +270,7 @@ const UpcomingRow = React.memo(function UpcomingRow({
 }) {
   const styles = useStyles();
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('liveShopping');
   const scheduledLabel = session.scheduledAt ? formatScheduled(session.scheduledAt) : '';
 
   return (
@@ -302,7 +307,7 @@ const UpcomingRow = React.memo(function UpcomingRow({
           <Text style={styles.upcomingTitle} numberOfLines={2}>{session.title}</Text>
           <View style={styles.upcomingMetaRow}>
             <Ionicons name="people-outline" size={16} color={styles.upcomingMetaText.color} />
-            <Text style={styles.upcomingMetaText}>{session.watchers} waiting</Text>
+            <Text style={styles.upcomingMetaText}>{session.watchers} {t('upcoming.waiting')}</Text>
           </View>
         </View>
       </View>
@@ -324,7 +329,7 @@ const UpcomingRow = React.memo(function UpcomingRow({
           color={notified ? colors.scrimTextPrimary : styles.notifyBtnText.color}
         />
         <Text style={[styles.notifyBtnText, notified && styles.notifyBtnTextActive]}>
-          {notified ? 'Notified' : 'Notify me'}
+          {notified ? t('upcoming.notified') : t('upcoming.notifyMe')}
         </Text>
       </AnimatedPressable>
     </View>
@@ -413,6 +418,7 @@ export default function LiveShoppingHomeScreen() {
   const haptic = useHaptic();
   const { currencyCode, formatFromFiat } = useFormattedPrice();
   const { width } = useWindowDimensions();
+  const { t } = useAppTranslation('liveShopping');
 
   const [summary, setSummary] = useState<LiveSessionSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -432,7 +438,7 @@ export default function LiveShoppingHomeScreen() {
       const result = await fetchLiveSessions({ category });
       setSummary(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load live sessions');
+      setError(e instanceof Error ? e.message : t('error.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -467,14 +473,14 @@ export default function LiveShoppingHomeScreen() {
     const diffMs = date.getTime() - now.getTime();
     const diffMin = Math.round(diffMs / 60_000);
     const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (diffMin <= 0) return 'Starting soon';
-    if (diffMin < 60) return `In ${diffMin} min · ${timeStr}`;
+    if (diffMin <= 0) return t('upcoming.startingSoon');
+    if (diffMin < 60) return t('scheduled.inMinutes', { minutes: diffMin, time: timeStr });
     const diffHr = Math.floor(diffMin / 60);
     const remMin = diffMin % 60;
-    if (diffHr < 24) return `In ${diffHr}h ${remMin}m · ${timeStr}`;
+    if (diffHr < 24) return t('scheduled.inHours', { hours: diffHr, minutes: remMin, time: timeStr });
     const dayStr = date.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
-    return `${dayStr} · ${timeStr}`;
-  }, []);
+    return t('scheduled.inDays', { day: dayStr, time: timeStr });
+  }, [t]);
 
   const handleNotify = useCallback(
     (sessionId: string) => {
@@ -530,11 +536,11 @@ export default function LiveShoppingHomeScreen() {
         {/* ── Header ── */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>Live</Text>
+            <Text style={styles.headerTitle}>{t('header.title')}</Text>
             <LivePulse size={10} color={colors.danger} />
             {LIVE_SHOPPING_DEMO_MODE && (
               <View style={styles.demoPill}>
-                <Text style={styles.demoPillText}>DEMO</Text>
+                <Text style={styles.demoPillText}>{t('live.demo')}</Text>
               </View>
             )}
           </View>
@@ -559,11 +565,11 @@ export default function LiveShoppingHomeScreen() {
         {showLoading && (
           <View style={{ gap: Space.lg, paddingTop: Space.md }}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Live now</Text>
+              <Text style={styles.sectionTitle}>{t('sections.liveNow')}</Text>
             </View>
             <FeaturedSkeleton />
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Coming up</Text>
+              <Text style={styles.sectionTitle}>{t('sections.comingUp')}</Text>
             </View>
             <UpcomingSkeleton />
           </View>
@@ -574,9 +580,9 @@ export default function LiveShoppingHomeScreen() {
           <View style={{ paddingTop: Space.xxl }}>
             <EmptyState
               icon="cloud-offline-outline"
-              title="Couldn't load live sessions"
-              subtitle={error ?? 'Check your connection and try again.'}
-              ctaLabel="Retry"
+              title={t('error.title')}
+              subtitle={error ?? t('error.subtitle')}
+              ctaLabel={t('error.retry')}
               onCtaPress={handleRetry}
             />
           </View>
@@ -587,9 +593,9 @@ export default function LiveShoppingHomeScreen() {
           <View style={{ paddingTop: Space.xxl }}>
             <EmptyState
               icon="videocam-outline"
-              title="No live sessions right now"
-              subtitle="Check back soon, or start your own session from the Seller Hub."
-              ctaLabel="Go to Seller Hub"
+              title={t('empty.title')}
+              subtitle={t('empty.subtitle')}
+              ctaLabel={t('empty.goToSellerHub')}
               onCtaPress={() => navigation.navigate('MyListings')}
             />
           </View>
@@ -602,8 +608,8 @@ export default function LiveShoppingHomeScreen() {
             {liveSessions.length > 0 ? (
               <View>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Live now</Text>
-                  <Text style={styles.sectionCount}>{liveSessions.length} streaming</Text>
+                  <Text style={styles.sectionTitle}>{t('sections.liveNow')}</Text>
+                  <Text style={styles.sectionCount}>{t('sections.streaming', { count: liveSessions.length })}</Text>
                 </View>
                 <HorizontalRail
                   contentContainerStyle={{ paddingHorizontal: Space.md, gap: Space.md }}
@@ -624,7 +630,7 @@ export default function LiveShoppingHomeScreen() {
             ) : (
               <View style={styles.noLiveStrip}>
                 <Ionicons name="radio-button-off" size={20} color={colors.textMuted} />
-                <Text style={styles.noLiveText}>No one is live right now</Text>
+                <Text style={styles.noLiveText}>{t('noLive.text')}</Text>
               </View>
             )}
 
@@ -632,8 +638,8 @@ export default function LiveShoppingHomeScreen() {
             {upcomingSessions.length > 0 && (
               <View>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Coming up</Text>
-                  <Text style={styles.sectionCount}>{upcomingSessions.length} scheduled</Text>
+                  <Text style={styles.sectionTitle}>{t('sections.comingUp')}</Text>
+                  <Text style={styles.sectionCount}>{t('sections.scheduled', { count: upcomingSessions.length })}</Text>
                 </View>
                 <View style={{ paddingHorizontal: Space.md, gap: Space.xs }}>
                   {upcomingSessions.map((session, index) => (
@@ -653,8 +659,8 @@ export default function LiveShoppingHomeScreen() {
             {endedSessions.length > 0 && (
               <View>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Past Events</Text>
-                  <Text style={styles.sectionCount}>{endedSessions.length} replay{endedSessions.length === 1 ? '' : 's'}</Text>
+                  <Text style={styles.sectionTitle}>{t('sections.pastEvents')}</Text>
+                  <Text style={styles.sectionCount}>{t('sections.replays', { count: endedSessions.length })}</Text>
                 </View>
                 <HorizontalRail
                   contentContainerStyle={{ paddingHorizontal: Space.md, gap: Space.md }}

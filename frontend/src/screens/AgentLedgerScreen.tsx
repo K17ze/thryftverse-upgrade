@@ -214,20 +214,20 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       }
       case 'search_listings': {
         const query = args.query;
-        return typeof query === 'string' ? t('tools.search', { query }) : '';
+        return typeof query === 'string' ? String(t('tools.search', { searchQuery: query })) : '';
       }
       case 'get_listing_details': {
         const listingId = args.listingId;
-        return typeof listingId === 'string' ? t('tools.listing', { listingId }) : '';
+        return typeof listingId === 'string' ? String(t('tools.listing', { listingId })) : '';
       }
       case 'check_price_history': {
         const query = args.query;
-        return typeof query === 'string' ? t('tools.priceHistory', { query }) : '';
+        return typeof query === 'string' ? String(t('tools.priceHistory', { searchQuery: query })) : '';
       }
       case 'read_conversation': {
         const limit = args.limit;
         const n = typeof limit === 'number' ? limit : 20;
-        return t('tools.readMessages', { count: n });
+        return String(t('tools.readMessages', { count: n }));
       }
       default: {
         try {

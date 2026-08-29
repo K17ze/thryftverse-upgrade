@@ -66,6 +66,7 @@ import {
 
 import { Space, Radius, Typography, Control, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'YourAlgorithm'>;
 
@@ -81,17 +82,24 @@ const TOPIC_CATEGORIES = [
 ] as const;
 
 // ─── Weight metadata ─────────────────────────────────────────────────────────
-const WEIGHT_META: Record<TopicWeight, { label: string; dotCount: number }> = {
-  low: { label: 'Low', dotCount: 1 },
-  medium: { label: 'Medium', dotCount: 2 },
-  high: { label: 'High', dotCount: 3 } };
+const WEIGHT_META: Record<TopicWeight, { dotCount: number }> = {
+  low: { dotCount: 1 },
+  medium: { dotCount: 2 },
+  high: { dotCount: 3 } };
 
 const WEIGHT_ORDER: TopicWeight[] = ['low', 'medium', 'high'];
 
-const SOURCE_LABEL: Record<SignalSource, string> = {
-  explicit: 'Explicit',
-  implicit: 'Implicit',
-  inferred: 'Inferred' };
+const WEIGHT_LABEL_FN: Record<TopicWeight, (t: (key: string) => string) => string> = {
+  low: (t) => t('weight.low'),
+  medium: (t) => t('weight.medium'),
+  high: (t) => t('weight.high'),
+};
+
+const SOURCE_LABEL_FN: Record<SignalSource, (t: (key: string) => string) => string> = {
+  explicit: (t) => t('source.explicit'),
+  implicit: (t) => t('source.implicit'),
+  inferred: (t) => t('source.inferred'),
+};
 
 // ─── Screen status ───────────────────────────────────────────────────────────
 type ScreenStatus = 'loading' | 'populated' | 'empty' | 'error' | 'offline';
@@ -101,6 +109,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
+  const { t } = useAppTranslation('algorithm');
 
   const [profile, setProfile] = useState<AlgorithmTransparencyProfile | null>(null);
   const [status, setStatus] = useState<ScreenStatus>('loading');
@@ -222,14 +231,14 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
       const now = new Date();
       const diffMs = now.getTime() - d.getTime();
       const diffH = Math.floor(diffMs / 3_600_000);
-      if (diffH < 1) return 'Just now';
-      if (diffH < 24) return `${diffH}h ago`;
+      if (diffH < 1) return t('time.justNow');
+      if (diffH < 24) return t('time.hoursAgo', { count: diffH });
       const diffD = Math.floor(diffH / 24);
-      return `${diffD}d ago`;
+      return t('time.daysAgo', { count: diffD });
     } catch {
       return '—';
     }
-  }, [profile?.lastUpdated]);
+  }, [profile?.lastUpdated, t]);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -238,8 +247,8 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Your Algorithm"
-          subtitle="The signals that shape your feed"
+          title={t('header.title')}
+          subtitle={t('header.subtitle')}
           onBack={() => navigation.goBack()}
         />
       }
@@ -253,7 +262,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
         >
           <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
           <Text style={styles.demoBannerText}>
-            Algorithm data is illustrative in demo mode.
+            {t('demo.banner')}
           </Text>
         </View>
       )}
@@ -267,7 +276,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
         >
           <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
           <Text style={styles.offlineBannerText}>
-            You are offline. Showing the last saved profile.
+            {t('offline.banner')}
           </Text>
         </View>
       )}
@@ -277,7 +286,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
 
       {/* ── Error state ── */}
       {status === 'error' && (
-        <ErrorState styles={styles} colors={colors} onRetry={handleRetry} />
+        <ErrorState styles={styles} colors={colors} onRetry={handleRetry} t={t} />
       )}
 
       {/* ── Populated / Empty / Offline-with-data ── */}
@@ -287,21 +296,21 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           <View style={styles.summaryStrip}>
             <SummaryStat
               value={String(topicCount)}
-              label="Active topics"
+              label={t('summary.activeTopics')}
               colors={colors}
               styles={styles}
             />
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
             <SummaryStat
               value={String(signalCount)}
-              label="Signals"
+              label={t('summary.signals')}
               colors={colors}
               styles={styles}
             />
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
             <SummaryStat
               value={lastUpdatedLabel}
-              label="Last updated"
+              label={t('summary.lastUpdated')}
               colors={colors}
               styles={styles}
             />
@@ -318,6 +327,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
             styles={styles}
             reducedMotion={reducedMotion}
             spring={spring}
+            t={t}
           />
 
           {/* ── Empty state ── */}
@@ -327,10 +337,10 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                 <Ionicons name="git-network-outline" size={28} color={colors.textMuted} />
               </View>
               <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-                No topics yet
+                {t('empty.title')}
               </Text>
               <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                Your feed is based on general popularity. Add a topic below to start shaping your recommendations.
+                {t('empty.subtitle')}
               </Text>
             </View>
           )}
@@ -339,10 +349,10 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           {status !== 'empty' && profile.topics.length > 0 && (
             <View style={styles.sectionWrap}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Topics that influence your feed
+                {t('topics.title')}
               </Text>
               <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-                Tap a topic to adjust its weight or remove it.
+                {t('topics.caption')}
               </Text>
 
               <View style={styles.topicList}>
@@ -362,6 +372,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                     reducedMotion={reducedMotion}
                     spring={spring}
                     haptic={haptic}
+                    t={t}
                   />
                 ))}
               </View>
@@ -372,10 +383,10 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           {profile.recentInfluences.length > 0 && (
             <View style={styles.sectionWrap}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Recent signals
+                {t('signals.title')}
               </Text>
               <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-                The latest actions that shaped your feed.
+                {t('signals.caption')}
               </Text>
               <View style={styles.signalList}>
                 {profile.recentInfluences.map((signal, index) => (
@@ -385,6 +396,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                     isLast={index === profile.recentInfluences.length - 1}
                     colors={colors}
                     styles={styles}
+                    t={t}
                   />
                 ))}
               </View>
@@ -394,16 +406,16 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           {/* ── Add a topic section ── */}
           <View style={styles.sectionWrap}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-              Add a topic
+              {t('addTopic.title')}
             </Text>
             <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-              Tell us what you're interested in.
-              {ALGORITHM_DEMO_MODE ? ' Added topics are illustrative in demo mode.' : ''}
+              {t('addTopic.caption')}
+              {ALGORITHM_DEMO_MODE ? ' ' + t('addTopic.demoSuffix') : ''}
             </Text>
 
             <View style={styles.addTopicRow}>
               <AppInput
-                placeholder="e.g. Vintage watches"
+                placeholder={t('addTopic.placeholder')}
                 value={newTopicLabel}
                 onChangeText={setNewTopicLabel}
                 accessibilityLabel="Topic label input"
@@ -504,7 +516,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                     { color: !newTopicLabel.trim() ? colors.textMuted : colors.textInverse },
                   ]}
                 >
-                  Add topic
+                  {t('addTopic.addBtn')}
                 </Text>
               )}
             </AnimatedPressable>
@@ -545,13 +557,15 @@ function HowItWorks({
   colors,
   styles,
   reducedMotion,
-  spring }: {
+  spring,
+  t }: {
   expanded: boolean;
   onToggle: () => void;
   colors: ReturnType<typeof useAppTheme>['colors'];
   styles: ReturnType<typeof createStyles>;
   reducedMotion: boolean;
   spring: ReturnType<typeof useMotionConfig>['spring'];
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const contentHeight = useSharedValue(0);
   const animatedHeight = useSharedValue(0);
@@ -585,7 +599,7 @@ function HowItWorks({
         accessibilityState={{ expanded }}
       >
         <Text style={[styles.howItWorksTitle, { color: colors.textPrimary }]}>
-          How this works
+          {t('howItWorks.title')}
         </Text>
         <Reanimated.View style={chevronStyle}>
           <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
@@ -601,14 +615,14 @@ function HowItWorks({
           style={styles.howItWorksContent}
         >
           <Text style={[styles.howItWorksBody, { color: colors.textSecondary }]}>
-            Your feed is shaped by topics and signals. Topics are the interests we've learned from your activity — some you told us explicitly, others we inferred from your behaviour. Signals are the individual actions (saves, searches, follows) that feed into those topics.
+            {t('howItWorks.body1')}
           </Text>
           <Text style={[styles.howItWorksBody, { color: colors.textSecondary }]}>
-            Adjust how strongly each topic influences your feed, remove topics you no longer want, or add new ones. Topics from your activity can be paused from your feed. Transaction records are kept for trust and accounting but you control whether they influence recommendations.
+            {t('howItWorks.body2')}
           </Text>
           {ALGORITHM_DEMO_MODE && (
             <Text style={[styles.howItWorksDemo, { color: colors.textMuted }]}>
-              In demo mode, changes update your session profile but do not affect a live feed.
+              {t('howItWorks.demoNote')}
             </Text>
           )}
         </View>
@@ -631,7 +645,8 @@ function TopicRow({
   styles,
   reducedMotion,
   spring,
-  haptic }: {
+  haptic,
+  t }: {
   topic: AlgorithmTopic;
   isExpanded: boolean;
   onToggle: () => void;
@@ -645,6 +660,7 @@ function TopicRow({
   reducedMotion: boolean;
   spring: ReturnType<typeof useMotionConfig>['spring'];
   haptic: ReturnType<typeof useHaptic>;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const contentHeight = useSharedValue(0);
   const animatedHeight = useSharedValue(0);
@@ -668,6 +684,8 @@ function TopicRow({
     transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }] }));
 
   const weightMeta = WEIGHT_META[topic.weight];
+  const weightLabel = WEIGHT_LABEL_FN[topic.weight](t);
+  const sourceLabel = SOURCE_LABEL_FN[topic.source](t);
 
   return (
     <View>
@@ -675,7 +693,7 @@ function TopicRow({
         style={[styles.topicRow, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
         onPress={onToggle}
         accessibilityRole="button"
-        accessibilityLabel={`${topic.label}, ${topic.category}, weight ${weightMeta.label}, source ${SOURCE_LABEL[topic.source]}`}
+        accessibilityLabel={`${topic.label}, ${topic.category}, ${t('topics.influenceWeight')} ${weightLabel}, ${sourceLabel}`}
         accessibilityHint={isExpanded ? 'Collapses topic controls' : 'Expands to show weight and remove controls'}
         accessibilityState={{ expanded: isExpanded }}
       >
@@ -702,7 +720,7 @@ function TopicRow({
               ))}
             </View>
             <Text style={[styles.topicSource, { color: colors.textMuted }]}>
-              {SOURCE_LABEL[topic.source]}
+              {SOURCE_LABEL_FN[topic.source](t)}
             </Text>
           </View>
         </View>
@@ -753,7 +771,7 @@ function TopicRow({
                   onPress={() => onWeightChange(w)}
                   disabled={isUpdating}
                   accessibilityRole="radio"
-                  accessibilityLabel={`${WEIGHT_META[w].label} weight`}
+                  accessibilityLabel={`${WEIGHT_LABEL_FN[w](t)} weight`}
                   accessibilityState={{ selected, disabled: isUpdating }}
                 >
                   <Text
@@ -762,7 +780,7 @@ function TopicRow({
                       { color: selected ? colors.textInverse : colors.textPrimary },
                     ]}
                   >
-                    {WEIGHT_META[w].label}
+                    {WEIGHT_LABEL_FN[w](t)}
                   </Text>
                 </Pressable>
               );
@@ -811,11 +829,13 @@ function SignalRow({
   signal,
   isLast,
   colors,
-  styles }: {
+  styles,
+  t }: {
   signal: AlgorithmSignal;
   isLast: boolean;
   colors: ReturnType<typeof useAppTheme>['colors'];
   styles: ReturnType<typeof createStyles>;
+  t: (key: string) => string;
 }) {
   const timeLabel = useMemo(() => {
     try {
@@ -836,14 +856,14 @@ function SignalRow({
     <View
       style={[styles.signalRow, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
       accessibilityRole="text"
-      accessibilityLabel={`${signal.label}, ${SOURCE_LABEL[signal.type]}, ${timeLabel}`}
+      accessibilityLabel={`${signal.label}, ${SOURCE_LABEL_FN[signal.type](t)}, ${timeLabel}`}
     >
       <View style={styles.signalMain}>
         <Text style={[styles.signalLabel, { color: colors.textPrimary }]} numberOfLines={2}>
           {signal.label}
         </Text>
         <Text style={[styles.signalMeta, { color: colors.textMuted }]}>
-          {SOURCE_LABEL[signal.type]} · {timeLabel}
+          {SOURCE_LABEL_FN[signal.type](t)} · {timeLabel}
         </Text>
       </View>
       {/* Weight bar — relative influence, not a percentage */}
@@ -910,10 +930,12 @@ function LoadingSkeleton({
 function ErrorState({
   styles,
   colors,
-  onRetry }: {
+  onRetry,
+  t }: {
   styles: ReturnType<typeof createStyles>;
   colors: ReturnType<typeof useAppTheme>['colors'];
   onRetry: () => void;
+  t: (key: string) => string;
 }) {
   return (
     <View style={styles.errorWrap}>

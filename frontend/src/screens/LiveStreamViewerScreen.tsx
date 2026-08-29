@@ -75,6 +75,7 @@ import {
   fetchStreamChatHistory,
   settleLot,
   type LotStatus } from '../services/liveShoppingApi';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -86,20 +87,20 @@ type ConnectionState = 'connecting' | 'live' | 'error' | 'ended' | 'offline';
 
 type BidOutcome = 'idle' | 'submitting' | 'accepted' | 'rejected' | 'unknown';
 
-function lotStatusLabel(status: LotStatus, currentPrice: number): string {
+function lotStatusLabel(status: LotStatus, currentPrice: number, t: (key: string, options?: Record<string, unknown>) => string): string {
   switch (status) {
     case 'scheduled':
-      return 'Coming up';
+      return t('lotStatus.comingUp');
     case 'open':
-      return 'Open for bidding';
+      return t('lotStatus.openForBidding');
     case 'closing':
-      return 'Closing soon!';
+      return t('lotStatus.closingSoon');
     case 'sold':
-      return `Sold for \u00A3${currentPrice}`;
+      return t('lotStatus.sold', { price: currentPrice });
     case 'passed':
-      return 'Passed (reserve not met)';
+      return t('lotStatus.passed');
     case 'cancelled':
-      return 'Cancelled';
+      return t('lotStatus.cancelled');
   }
 }
 
@@ -145,6 +146,7 @@ export function LiveStreamViewerScreen() {
   const reducedMotion = useReducedMotion();
   const { formatFromFiat, currencyCode, currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { t } = useAppTranslation('liveStreamViewer');
 
   const sessionId = route.params.sessionId;
 
@@ -270,7 +272,7 @@ export function LiveStreamViewerScreen() {
     try {
       await sendStreamChatMessage(sessionId, text);
     } catch {
-      show('Could not send message', 'error');
+      show(t('toast.couldNotSend'), 'error');
     }
   }, [chatInput, haptic, sessionId, show]);
 
@@ -292,7 +294,7 @@ export function LiveStreamViewerScreen() {
         haptic.success();
       } else {
         setBidOutcome('rejected');
-        show(result.error ?? 'Bid failed', 'error');
+        show(result.error ?? t('toast.bidFailed'), 'error');
         haptic.error();
       }
     } catch {
@@ -318,13 +320,13 @@ export function LiveStreamViewerScreen() {
         haptic.success();
       } else if (result.status === 'rejected') {
         setBidOutcome('rejected');
-        show(result.error ?? 'Bid was not accepted', 'error');
+        show(result.error ?? t('toast.bidNotAccepted'), 'error');
         haptic.error();
       } else {
-        show('Still checking — your bid may have been placed', 'info');
+        show(t('toast.stillChecking'), 'info');
       }
     } catch {
-      show('Still checking — your bid may have been placed', 'info');
+      show(t('toast.stillChecking'), 'info');
     } finally {
       setBidCheckPending(false);
     }
@@ -358,12 +360,12 @@ export function LiveStreamViewerScreen() {
     try {
       const result = await buyNowDuringStream(sessionId, currentLot.id);
       if (result.success) {
-        show('Purchase complete — check your inbox', 'success');
+        show(t('toast.purchaseComplete'), 'success');
       } else {
-        show(result.error ?? 'Could not complete purchase', 'error');
+        show(result.error ?? t('toast.couldNotPurchase'), 'error');
       }
     } catch {
-      show('Could not complete purchase', 'error');
+      show(t('toast.couldNotPurchase'), 'error');
     } finally {
       setBuyNowPending(false);
     }
@@ -373,7 +375,7 @@ export function LiveStreamViewerScreen() {
     haptic.light();
     try {
       await Share.share({
-        message: `Watch ${stream?.sellerName ?? 'this seller'}'s live stream on ThryftVerse` });
+        message: t('share.message', { sellerName: stream?.sellerName ?? t('share.defaultSeller') }) });
     } catch {
       // User cancelled the share sheet — no error toast needed.
     }
@@ -385,20 +387,20 @@ export function LiveStreamViewerScreen() {
     if (isDemo) {
       // Demo session may use a placeholder sellerId, not a real user record.
       // Following would call the API against a non-existent user; be truthful.
-      show('Follow unavailable in demo mode', 'info');
+      show(t('toast.followDemoUnavailable'), 'info');
       return;
     }
     if (!stream?.sellerId) {
-      show('Follow unavailable', 'info');
+      show(t('toast.followUnavailable'), 'info');
       return;
     }
     followMutation.mutate(!isFollowing, {
       onSuccess: () => {
         setIsFollowing((prev) => !prev);
-        show(isFollowing ? 'Unfollowed' : 'Following', 'success');
+        show(isFollowing ? t('toast.unfollowed') : t('toast.following'), 'success');
       },
       onError: () => {
-        show('Could not update follow status', 'error');
+        show(t('toast.followError'), 'error');
       } });
   }, [haptic, isDemo, followMutation, isFollowing, show, stream?.sellerId]);
 
@@ -428,7 +430,7 @@ export function LiveStreamViewerScreen() {
         navigation.navigate('Checkout', { itemId: currentLot.listingId });
       }
     } catch {
-      show('Could not start checkout. Please try again.', 'error');
+      show(t('toast.checkoutError'), 'error');
       haptic.error();
     } finally {
       setSettlePending(false);
@@ -488,7 +490,7 @@ export function LiveStreamViewerScreen() {
       <View style={styles.chatMessage}>
         {item.isSeller && (
           <View style={[styles.sellerBadge, { backgroundColor: colors.brand }]}>
-            <Text style={styles.sellerBadgeText}>SELLER</Text>
+            <Text style={styles.sellerBadgeText}>{t('chat.seller')}</Text>
           </View>
         )}
         <Text style={[styles.chatSender, { color: item.isSeller ? colors.brand : colors.textPrimary }]}>
@@ -508,8 +510,8 @@ export function LiveStreamViewerScreen() {
         <StatusBar barStyle="light-content" />
         <View style={styles.stateContainer}>
           <ActivityIndicator size="large" color={colors.brand} />
-          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Connecting to stream</Text>
-          <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>Setting up real-time connection</Text>
+          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>{t('connecting.title')}</Text>
+          <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>{t('connecting.subtitle')}</Text>
         </View>
       </View>
     );
@@ -522,15 +524,15 @@ export function LiveStreamViewerScreen() {
         <StatusBar barStyle="light-content" />
         <View style={styles.stateContainer}>
           <Ionicons name="cloud-offline-outline" size={48} color={colors.textMuted} />
-          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Couldn't connect to stream</Text>
-          <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>The stream may have ended or your connection dropped.</Text>
+          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>{t('error.title')}</Text>
+          <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>{t('error.subtitle')}</Text>
           <Pressable
             onPress={handleRetry}
             style={({ pressed }) => [styles.retryBtn, { backgroundColor: colors.danger }, pressed && { opacity: 0.85 }]}
             accessibilityRole="button"
             accessibilityLabel="Reconnect to stream"
           >
-            <Text style={styles.retryBtnText}>Reconnect</Text>
+            <Text style={styles.retryBtnText}>{t('error.reconnect')}</Text>
           </Pressable>
           <Pressable
             onPress={() => navigation.goBack()}
@@ -538,7 +540,7 @@ export function LiveStreamViewerScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>Go back</Text>
+            <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>{t('error.goBack')}</Text>
           </Pressable>
         </View>
       </View>
@@ -554,23 +556,23 @@ export function LiveStreamViewerScreen() {
           <View style={[styles.endedIcon, { backgroundColor: colors.successSubtle }]}>
             <Ionicons name="checkmark-done-circle" size={48} color={colors.success} />
           </View>
-          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Stream Ended</Text>
-          <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>Thanks for watching</Text>
+          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>{t('ended.title')}</Text>
+          <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>{t('ended.subtitle')}</Text>
           {streamEndSummary && (
             <View style={[styles.endedStats, { backgroundColor: colors.surface }]}>
               <View style={styles.endedStatItem}>
                 <Text style={[styles.endedStatValue, { color: colors.textPrimary }]}>{streamEndSummary.totalViewers}</Text>
-                <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>Viewers</Text>
+                <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>{t('ended.viewers')}</Text>
               </View>
               <View style={[styles.endedStatDivider, { backgroundColor: colors.border }]} />
               <View style={styles.endedStatItem}>
                 <Text style={[styles.endedStatValue, { color: colors.textPrimary }]}>{streamEndSummary.lotsSold}</Text>
-                <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>Lots Sold</Text>
+                <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>{t('ended.lotsSold')}</Text>
               </View>
               <View style={[styles.endedStatDivider, { backgroundColor: colors.border }]} />
               <View style={styles.endedStatItem}>
                 <Text style={[styles.endedStatValue, { color: colors.textPrimary }]}>{formatFromFiat(streamEndSummary.totalSales, currencyCode)}</Text>
-                <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>Total Sales</Text>
+                <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>{t('ended.totalSales')}</Text>
               </View>
             </View>
           )}
@@ -580,7 +582,7 @@ export function LiveStreamViewerScreen() {
             accessibilityRole="button"
             accessibilityLabel="Done"
           >
-            <Text style={styles.retryBtnText}>Done</Text>
+            <Text style={styles.retryBtnText}>{t('ended.done')}</Text>
           </Pressable>
         </View>
       </View>
@@ -597,14 +599,14 @@ export function LiveStreamViewerScreen() {
         {isDemo ? (
           <View style={styles.demoVideoPlaceholder}>
             <View style={styles.demoPill}>
-              <Text style={styles.demoPillText}>DEMO</Text>
+              <Text style={styles.demoPillText}>{t('demo.label')}</Text>
             </View>
             <Ionicons name="videocam-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.demoVideoText}>Demo stream</Text>
+            <Text style={styles.demoVideoText}>{t('demo.stream')}</Text>
           </View>
         ) : (
           <View style={styles.videoPlaceholder}>
-            <Text style={styles.videoPlaceholderText}>Connecting to stream...</Text>
+            <Text style={styles.videoPlaceholderText}>{t('video.connecting')}</Text>
           </View>
         )}
 
@@ -642,7 +644,7 @@ export function LiveStreamViewerScreen() {
                   {followMutation.isPending ? (
                     <ActivityIndicator size={10} color={colors.scrimTextPrimary} />
                   ) : (
-                    <Text style={styles.followChipText}>{isFollowing ? 'Following' : 'Follow'}</Text>
+                    <Text style={styles.followChipText}>{isFollowing ? t('seller.following') : t('seller.follow')}</Text>
                   )}
                 </Pressable>
               </View>
@@ -653,7 +655,7 @@ export function LiveStreamViewerScreen() {
           <View style={styles.topRightCluster}>
             <View style={styles.liveBadgeOverlay}>
               <View style={styles.liveDotOverlay} />
-              <Text style={styles.liveBadgeTextOverlay}>LIVE</Text>
+              <Text style={styles.liveBadgeTextOverlay}>{t('live.label')}</Text>
             </View>
             {viewerCount > 0 && (
               <View style={styles.viewerBadgeOverlay}>
@@ -716,7 +718,7 @@ export function LiveStreamViewerScreen() {
                     { color: lotStatusTextColor(derivedLotStatus, colors) },
                   ]}
                 >
-                  {lotStatusLabel(derivedLotStatus, currentLot.currentPrice)}
+                  {lotStatusLabel(derivedLotStatus, currentLot.currentPrice, t)}
                 </Text>
               </View>
               {isWinner && (
@@ -736,7 +738,7 @@ export function LiveStreamViewerScreen() {
                   {settlePending ? (
                     <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
-                    <Text style={styles.checkoutBtnText}>Complete checkout</Text>
+                    <Text style={styles.checkoutBtnText}>{t('bid.completeCheckout')}</Text>
                   )}
                 </Pressable>
               )}
@@ -760,7 +762,7 @@ export function LiveStreamViewerScreen() {
                   <Text style={styles.productTitleOverlay} numberOfLines={1}>{currentLot.title}</Text>
                   <View style={styles.productPriceRow}>
                     <Text style={styles.productPriceValue}>{formatFromFiat(currentLot.currentPrice, currencyCode)}</Text>
-                    <Text style={styles.productPriceLabel}>{currentLot.bidCount} bids</Text>
+                    <Text style={styles.productPriceLabel}>{currentLot.bidCount} {t('product.bids')}</Text>
                     {timeRemaining > 0 && (
                       <Text style={[styles.productTimer, { color: timeRemaining <= 10 ? colors.danger : colors.scrimTextSecondary }]}>
                         {formatTime(timeRemaining)}
@@ -780,7 +782,7 @@ export function LiveStreamViewerScreen() {
                   {bidPending ? (
                     <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
-                    <Text style={styles.bidBtnTextOverlay}>Bid {currencySymbol}{minNextBid}+</Text>
+                    <Text style={styles.bidBtnTextOverlay}>{t('bid.placeBid')} {currencySymbol}{minNextBid}+</Text>
                   )}
                 </Pressable>
                 {buyNowPrice > 0 && (
@@ -794,7 +796,7 @@ export function LiveStreamViewerScreen() {
                     {buyNowPending ? (
                       <ActivityIndicator size="small" color={colors.textPrimary} />
                     ) : (
-                      <Text style={styles.buyNowBtnTextOverlay}>Buy {currencySymbol}{buyNowPrice}</Text>
+                      <Text style={styles.buyNowBtnTextOverlay}>{t('bid.buyNow')} {currencySymbol}{buyNowPrice}</Text>
                     )}
                   </Pressable>
                 )}
@@ -806,7 +808,7 @@ export function LiveStreamViewerScreen() {
           <View style={[styles.chatInputRowOverlay, { paddingBottom: insets.bottom || Space.sm }]}>
             <TextInput
               style={styles.chatInputOverlay}
-              placeholder="Send a message..."
+              placeholder={t('chat.placeholder')}
               placeholderTextColor={colors.scrimTextTertiary}
               value={chatInput}
               onChangeText={setChatInput}
@@ -838,10 +840,10 @@ export function LiveStreamViewerScreen() {
             <Ionicons name="cloud-offline-outline" size={20} color={colors.warning} />
             <View style={styles.unknownBannerText}>
               <Text style={[styles.unknownBannerTitle, { color: colors.textPrimary }]}>
-                Bid status unknown
+                {t('unknown.title')}
               </Text>
               <Text style={[styles.unknownBannerSubtitle, { color: colors.textSecondary }]}>
-                Your bid may have been placed. We couldn't confirm the result.
+                {t('unknown.subtitle')}
               </Text>
             </View>
           </View>
@@ -862,7 +864,7 @@ export function LiveStreamViewerScreen() {
               {bidCheckPending ? (
                 <ActivityIndicator size="small" color={colors.textInverse} />
               ) : (
-                <Text style={styles.unknownCheckBtnText}>Check result</Text>
+                <Text style={styles.unknownCheckBtnText}>{t('unknown.checkResult')}</Text>
               )}
             </Pressable>
             <Pressable
@@ -871,7 +873,7 @@ export function LiveStreamViewerScreen() {
               accessibilityRole="button"
               accessibilityLabel="Dismiss unknown bid status"
             >
-              <Text style={[styles.unknownDismissBtnText, { color: colors.textSecondary }]}>Dismiss</Text>
+              <Text style={[styles.unknownDismissBtnText, { color: colors.textSecondary }]}>{t('unknown.dismiss')}</Text>
             </Pressable>
           </View>
         </View>
@@ -890,12 +892,12 @@ export function LiveStreamViewerScreen() {
             <Text style={[styles.bidSheetTitle, { color: colors.textPrimary }]}>{currentLot.title}</Text>
             <View style={styles.itemSheetPriceRow}>
               <View>
-                <Text style={[styles.bidSheetCurrentLabel, { color: colors.textSecondary }]}>Current bid</Text>
+                <Text style={[styles.bidSheetCurrentLabel, { color: colors.textSecondary }]}>{t('bidSheet.currentBid')}</Text>
                 <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>{formatFromFiat(currentLot.currentPrice, currencyCode)}</Text>
               </View>
               <View style={styles.itemSheetBidCount}>
                 <Ionicons name="pricetag" size={14} color={colors.textSecondary} />
-                <Text style={[styles.itemSheetBidCountText, { color: colors.textSecondary }]}>{currentLot.bidCount} bids</Text>
+                <Text style={[styles.itemSheetBidCountText, { color: colors.textSecondary }]}>{currentLot.bidCount} {t('product.bids')}</Text>
               </View>
             </View>
             {timeRemaining > 0 && (
@@ -913,7 +915,7 @@ export function LiveStreamViewerScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Place a bid"
               >
-                <Text style={styles.bidBtnText}>Bid {currencySymbol}{minNextBid}+</Text>
+                <Text style={styles.bidBtnText}>{t('bid.placeBid')} {currencySymbol}{minNextBid}+</Text>
               </Pressable>
               {buyNowPrice > 0 && (
                 <Pressable
@@ -926,7 +928,7 @@ export function LiveStreamViewerScreen() {
                   {buyNowPending ? (
                     <ActivityIndicator size="small" color={colors.textPrimary} />
                   ) : (
-                    <Text style={styles.buyNowBtnText}>Buy Now {currencySymbol}{buyNowPrice}</Text>
+                    <Text style={styles.buyNowBtnText}>{t('bid.buyNowFull')} {currencySymbol}{buyNowPrice}</Text>
                   )}
                 </Pressable>
               )}
@@ -937,7 +939,7 @@ export function LiveStreamViewerScreen() {
               accessibilityRole="button"
               accessibilityLabel="Close item details"
             >
-              <Text style={[styles.cancelBidText, { color: colors.textSecondary }]}>Close</Text>
+              <Text style={[styles.cancelBidText, { color: colors.textSecondary }]}>{t('bidSheet.close')}</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -952,15 +954,15 @@ export function LiveStreamViewerScreen() {
           accessibilityRole="button"
           >
             <View style={styles.bidSheetHandle} />
-            <Text style={[styles.bidSheetTitle, { color: colors.textPrimary }]}>Place a Bid</Text>
+            <Text style={[styles.bidSheetTitle, { color: colors.textPrimary }]}>{t('bidSheet.title')}</Text>
             <Text style={[styles.bidSheetCurrentLabel, { color: colors.textSecondary }]}>
-              Current bid
+              {t('bidSheet.currentBid')}
             </Text>
             <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>
               {currencySymbol}{currentLot.currentPrice}
             </Text>
             <Text style={[styles.bidSheetMinLabel, { color: colors.textMuted }]}>
-              Minimum next bid {currencySymbol}{minNextBid}
+              {t('bidSheet.minNextBid')} {currencySymbol}{minNextBid}
             </Text>
             <View style={styles.quickBidRow}>
               {[minNextBid, minNextBid + 5, minNextBid + 10, minNextBid + 20].map((amount) => (
@@ -987,7 +989,7 @@ export function LiveStreamViewerScreen() {
               accessibilityRole="button"
               accessibilityLabel="Cancel bid"
             >
-              <Text style={[styles.cancelBidText, { color: colors.textSecondary }]}>Cancel</Text>
+              <Text style={[styles.cancelBidText, { color: colors.textSecondary }]}>{t('bidSheet.cancel')}</Text>
             </Pressable>
           </Pressable>
         </Pressable>

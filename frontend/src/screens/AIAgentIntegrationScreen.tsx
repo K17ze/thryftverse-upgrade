@@ -74,6 +74,7 @@ import {
 import { useStore } from '../store/useStore';
 import type { ProviderConnectionInfo } from '../services/botsApi';
 import { AgentIcon } from '../components/agents/AgentIcon';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIAgentIntegration'>;
 
@@ -100,6 +101,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { t } = useAppTranslation('aiAgent');
 
   const [loading, setLoading] = React.useState(true);
   const [providers, setProviders] = React.useState<Record<AIProvider, ProviderState>>({
@@ -377,10 +379,10 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       setConnectKey('');
       setConnectLabel('');
       setConnectBaseUrl('');
-      showToast('success', 'Connection verified and saved.');
+      showToast('success', t('toast.connectionSaved'));
       haptic.selection();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not verify the key. Check the key and try again.';
+      const message = err instanceof Error ? err.message : t('toast.verifyFailed');
       showToast('error', message);
       haptic.medium();
     } finally {
@@ -393,10 +395,10 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     setReverifyingId(connectionId);
     try {
       await reverifyProviderConnection(connectionId);
-      showToast('success', 'Connection re-verified.');
+      showToast('success', t('toast.reverified'));
       haptic.selection();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Re-verification failed.';
+      const message = err instanceof Error ? err.message : t('toast.reverifyFailed');
       showToast('error', message);
       haptic.medium();
     } finally {
@@ -423,13 +425,13 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       const affectedAgents = await deleteProviderConnection(connection.id);
       setConfirmRemove(null);
       if (affectedAgents.length > 0) {
-        showToast('success', `Removed. ${affectedAgents.length} agent${affectedAgents.length === 1 ? '' : 's'} updated.`);
+        showToast('success', t('toast.removedWithAgents', { count: affectedAgents.length }));
       } else {
-        showToast('success', 'Connection removed.');
+        showToast('success', t('toast.connectionRemoved'));
       }
       haptic.selection();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not remove connection.';
+      const message = err instanceof Error ? err.message : t('toast.removeFailed');
       showToast('error', message);
       haptic.medium();
     } finally {
@@ -446,8 +448,8 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Agent Studio"
-          subtitle="Manage agents, connections, and keys"
+          title={t('header.title')}
+          subtitle={t('header.subtitle')}
           onBack={() => navigation.goBack()}
         />
       }
@@ -461,7 +463,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         >
           <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
           <Text style={styles.demoBannerText}>
-            Keys are validated by format only — no live request is sent to any provider.
+            {t('demo.banner')}
           </Text>
         </View>
       )}
@@ -482,29 +484,29 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
               <Text style={{ color: agentCount > 0 ? colors.textPrimary : colors.textMuted }}>
                 {agentCount}
               </Text>
-              {' agent' + (agentCount === 1 ? '' : 's')}
+              {t('status.agents', { count: agentCount })}
               {'  ·  '}
               <Text style={{ color: totalConnections > 0 ? colors.success : colors.textMuted }}>
                 {healthyConnections}/{totalConnections}
               </Text>
-              {' connections'}
+              {' ' + t('status.connections')}
               {pendingApprovalCount > 0 ? (
                 <>
                   {'  ·  '}
                   <Text style={{ color: colors.warning }}>
-                    {pendingApprovalCount} pending approval{pendingApprovalCount === 1 ? '' : 's'}
+                    {t('status.pendingApprovals', { count: pendingApprovalCount })}
                   </Text>
                 </>
               ) : null}
             </Text>
             <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
               {agentCount === 0 && totalConnections === 0
-                ? 'Create an agent and connect a provider to get started'
+                ? t('status.subtitleNone')
                 : agentCount === 0
-                  ? 'Connect a provider, then create your first agent'
+                  ? t('status.subtitleNoAgents')
                   : totalConnections === 0
-                    ? 'Connect a provider server-side to power agent execution'
-                    : 'Agents run on your connected server-side keys'}
+                    ? t('status.subtitleNoConnections')
+                    : t('status.subtitleReady')}
             </Text>
             {pendingApprovalCount > 0 ? (
               <Pressable
@@ -514,7 +516,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 accessibilityLabel={`View ${pendingApprovalCount} pending approval${pendingApprovalCount === 1 ? '' : 's'}`}
               >
                 <Text style={[styles.pendingActionText, { color: colors.warning }]}>
-                  View {pendingApprovalCount} pending approval{pendingApprovalCount === 1 ? '' : 's'} →
+                  {t('status.viewPending', { count: pendingApprovalCount })} →
                 </Text>
               </Pressable>
             ) : null}
@@ -526,7 +528,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           2. Your agents — flat list of custom bots
       ──────────────────────────────────────────────────────────────────── */}
       <View style={styles.sectionLabelWrap}>
-        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>YOUR AGENTS</Text>
+        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>{t('sections.yourAgents')}</Text>
       </View>
 
       {agentsLoading ? (
@@ -544,7 +546,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       ) : customBots.length === 0 ? (
         <View style={styles.emptyAgents}>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            No agents yet. Create one to give it a specialty, boundaries, and context.
+            {t('agents.empty')}
           </Text>
         </View>
       ) : (
@@ -559,12 +561,12 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                   ? colors.warning
                   : colors.success;
             const statusLabel = bot.isDraft
-              ? 'Draft'
+              ? t('agentStatus.draft')
               : bot.isDisabled
-                ? 'Disabled'
+                ? t('agentStatus.disabled')
                 : bot.runtimeReady === false
-                  ? 'Setup needed'
-                  : 'Published';
+                  ? t('agentStatus.setupNeeded')
+                  : t('agentStatus.published');
             const runtimeLabel = bot.runtimeMode === 'ai' ? 'AI' : (bot.runtimeMode ?? 'AI');
             const lastVersion = getLastPublishedVersion(bot.id);
             return (
@@ -610,7 +612,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         accessibilityLabel="Create agent"
       >
         <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
-        <Text style={[styles.createAgentText, { color: colors.brand }]}>Create agent</Text>
+        <Text style={[styles.createAgentText, { color: colors.brand }]}>{t('agents.create')}</Text>
       </Pressable>
 
       {/* Agent management quick actions — flat rows */}
@@ -637,12 +639,12 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
               { color: activeAgentSessions > 0 ? colors.textPrimary : colors.textMuted },
             ]}
           >
-            Pause all agents
+            {t('agents.pauseAll')}
           </Text>
           <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
             {activeAgentSessions > 0
-              ? `${activeAgentSessions} agent session${activeAgentSessions === 1 ? '' : 's'} running`
-              : 'No agent sessions running'}
+              ? t('agents.sessionsRunning', { count: activeAgentSessions })
+              : t('agents.noSessionsRunning')}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
@@ -657,10 +659,10 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         <Ionicons name="list-outline" size={20} color={colors.textPrimary} />
         <View style={styles.flatRowText}>
           <Text style={[styles.flatRowTitle, { color: colors.textPrimary }]}>
-            Agent activity
+            {t('agents.activity')}
           </Text>
           <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            Local log of agent actions and approvals
+            {t('agents.activitySub')}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
@@ -670,10 +672,10 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           3. Server connections — verified server-side keys (power execution)
       ──────────────────────────────────────────────────────────────────── */}
       <View style={styles.sectionLabelWrap}>
-        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SERVER CONNECTIONS</Text>
+        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>{t('sections.serverConnections')}</Text>
       </View>
       <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
-        Keys verified and stored encrypted on the server. These power agent execution.
+        {t('serverConnections.hint')}
       </Text>
 
       {/* Connect server-side action row */}
@@ -687,10 +689,10 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           <Ionicons name="server-outline" size={20} color={colors.brand} />
           <View style={styles.flatRowText}>
             <Text style={[styles.flatRowTitle, { color: colors.textPrimary }]}>
-              Connect server-side
+              {t('serverConnections.connectServerSide')}
             </Text>
             <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={2}>
-              Keys are verified and stored encrypted on the server.
+              {t('serverConnections.connectServerSideSub')}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
@@ -730,7 +732,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                     {label}
                   </Text>
                   {!isAvailable ? (
-                    <Text style={[styles.providerChipSoon, { color: colors.textMuted }]}>Soon</Text>
+                    <Text style={[styles.providerChipSoon, { color: colors.textMuted }]}>{t('provider.soon')}</Text>
                   ) : null}
                 </Pressable>
               );
@@ -741,7 +743,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             <Ionicons name="key-outline" size={16} color={colors.textMuted} />
             <TextInput
               style={[styles.input, { color: colors.inputText }]}
-              placeholder="API key"
+              placeholder={t('connect.apiKey')}
               placeholderTextColor={colors.textMuted}
               value={connectKey}
               onChangeText={setConnectKey}
@@ -756,7 +758,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
             <TextInput
               style={[styles.input, { color: colors.inputText }]}
-              placeholder="Label (optional)"
+              placeholder={t('connect.labelOptional')}
               placeholderTextColor={colors.textMuted}
               value={connectLabel}
               onChangeText={setConnectLabel}
@@ -770,7 +772,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             <Ionicons name="link-outline" size={16} color={colors.textMuted} />
             <TextInput
               style={[styles.input, { color: colors.inputText }]}
-              placeholder="Base URL (optional, custom providers)"
+              placeholder={t('connect.baseUrl')}
               placeholderTextColor={colors.textMuted}
               value={connectBaseUrl}
               onChangeText={setConnectBaseUrl}
@@ -783,14 +785,14 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
 
           <View style={styles.actionRow}>
             <SecondaryButton
-              label="Cancel"
+              label={t('connect.cancel')}
               onPress={cancelConnectForm}
               disabled={creatingConnection}
               colors={colors}
               styles={styles}
             />
             <PrimaryButton
-              label={creatingConnection ? 'Verifying…' : 'Verify & save'}
+              label={creatingConnection ? t('connect.verifying') : t('connect.verifySave')}
               onPress={handleCreateConnection}
               loading={creatingConnection}
               disabled={creatingConnection || connectKey.trim().length === 0}
@@ -807,7 +809,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       ) : providerConnections.length === 0 && !showConnectForm ? (
         <View style={styles.emptyServerConnections}>
           <Text style={[styles.connectHint, { color: colors.textMuted }]}>
-            No server connections yet. Connect a provider to power your agents.
+            {t('serverConnections.empty')}
           </Text>
         </View>
       ) : (
@@ -820,19 +822,19 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                   : conn.healthStatus === 'degraded' ? colors.warning
                     : colors.textMuted;
             const healthLabel =
-              conn.healthStatus === 'healthy' ? 'Healthy'
-                : conn.healthStatus === 'failed' ? 'Failed'
-                  : conn.healthStatus === 'revoked' ? 'Revoked'
-                    : conn.healthStatus === 'expired' ? 'Expired'
-                      : conn.healthStatus === 'degraded' ? 'Degraded'
-                        : 'Unverified';
+              conn.healthStatus === 'healthy' ? t('health.healthy')
+                : conn.healthStatus === 'failed' ? t('health.failed')
+                  : conn.healthStatus === 'revoked' ? t('health.revoked')
+                    : conn.healthStatus === 'expired' ? t('health.expired')
+                      : conn.healthStatus === 'degraded' ? t('health.degraded')
+                        : t('health.unverified');
             const providerLabel = conn.provider.charAt(0).toUpperCase() + conn.provider.slice(1);
             const titleText = conn.label ? `${providerLabel} — ${conn.label}` : providerLabel;
             const isReverifying = reverifyingId === conn.id;
             const isRemoving = removingId === conn.id;
             const verifiedText = conn.lastVerifiedAt
-              ? `Verified ${formatRelativeTime(conn.lastVerifiedAt)}`
-              : 'Not yet verified';
+              ? t('connection.verified', { time: formatRelativeTime(conn.lastVerifiedAt) })
+              : t('connection.notVerified');
 
             return (
               <View
@@ -868,21 +870,21 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
 
                 {conn.discoveredModels && conn.discoveredModels.length > 0 ? (
                   <Text style={[styles.modelsList, { color: colors.textSecondary }]} numberOfLines={2}>
-                    {conn.discoveredModels.length} model{conn.discoveredModels.length === 1 ? '' : 's'} · {conn.discoveredModels.slice(0, 6).map((m) => m.displayName).join(', ')}
-                    {conn.discoveredModels.length > 6 ? `, +${conn.discoveredModels.length - 6} more` : ''}
+                    {t('connection.modelsCount', { count: conn.discoveredModels.length })} · {conn.discoveredModels.slice(0, 6).map((m) => m.displayName).join(', ')}
+                    {conn.discoveredModels.length > 6 ? `, +${conn.discoveredModels.length - 6} ${t('connection.more')}` : ''}
                   </Text>
                 ) : null}
 
                 <View style={styles.actionRow}>
                   <SecondaryButton
-                    label={isReverifying ? 'Verifying…' : 'Reverify'}
+                    label={isReverifying ? t('connection.verifying') : t('connection.reverify')}
                     onPress={() => handleReverify(conn.id)}
                     disabled={isReverifying || isRemoving}
                     colors={colors}
                     styles={styles}
                   />
                   <SecondaryButton
-                    label={isRemoving ? 'Removing…' : 'Remove'}
+                    label={isRemoving ? t('connection.removing') : t('connection.remove')}
                     danger
                     onPress={() => handleRequestRemove(conn)}
                     disabled={isReverifying || isRemoving}
@@ -900,21 +902,21 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       {confirmRemove ? (
         <View style={[styles.confirmWrap, { backgroundColor: colors.dangerSubtle }]}>
           <Text style={[styles.confirmTitle, { color: colors.textPrimary }]}>
-            Remove this connection?
+            {t('confirm.title')}
           </Text>
           <Text style={[styles.confirmBody, { color: colors.textSecondary }]}>
-            Agents using this connection will no longer be able to run until you connect a replacement.
+            {t('confirm.body')}
           </Text>
           <View style={styles.actionRow}>
             <SecondaryButton
-              label="Cancel"
+              label={t('confirm.cancel')}
               onPress={cancelConfirmRemove}
               disabled={removingId !== null}
               colors={colors}
               styles={styles}
             />
             <PrimaryButton
-              label={removingId ? 'Removing…' : 'Remove'}
+              label={removingId ? t('confirm.removing') : t('confirm.remove')}
               onPress={handleConfirmRemove}
               loading={removingId !== null}
               colors={colors}
@@ -969,10 +971,10 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           >
             <View style={styles.collapseHeaderLeft}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-                DEVICE-LOCAL KEYS
+                {t('sections.deviceLocalKeys')}
               </Text>
               <Text style={[styles.deviceLocalNote, { color: colors.textMuted }]} numberOfLines={1}>
-                Discovery only — not used for execution
+                {t('deviceLocal.note')}
               </Text>
             </View>
             <Ionicons
@@ -985,7 +987,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           {showDeviceKeys ? (
             <>
               <Text style={[styles.deviceLocalNote, { color: colors.textMuted }]}>
-                Device-local keys are used for model discovery only. Server connections power agent execution.
+                {t('deviceLocal.expandedNote')}
               </Text>
 
           {PROVIDER_ORDER.map((providerId, index) => {
@@ -1039,12 +1041,12 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                     numberOfLines={1}
                   >
                     {isComingSoon
-                      ? 'Coming soon'
+                      ? t('providerStatus.comingSoon')
                       : status === 'connected'
-                        ? 'Connected'
+                        ? t('providerStatus.connected')
                         : status === 'invalid'
-                          ? 'Invalid'
-                          : 'Not connected'}
+                          ? t('providerStatus.invalid')
+                          : t('providerStatus.notConnected')}
                   </Text>
                 </View>
 
@@ -1071,7 +1073,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                     {state.discoveredModels && state.discoveredModels.length > 0 ? (
                       <View style={styles.modelsWrap}>
                         <Text style={[styles.modelsLabel, { color: colors.textMuted }]}>
-                          {state.discoveredModels.length} model{state.discoveredModels.length === 1 ? '' : 's'} available
+                          {t('provider.modelsAvailable', { count: state.discoveredModels.length })}
                         </Text>
                         <Text style={[styles.modelsList, { color: colors.textSecondary }]} numberOfLines={3}>
                           {state.discoveredModels.slice(0, 8).map((m) => m.displayName).join(', ')}
@@ -1084,23 +1086,23 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                       <View style={styles.modelDiscovering}>
                         <ActivityIndicator size="small" color={colors.textMuted} />
                         <Text style={[styles.modelHint, { color: colors.textMuted }]}>
-                          Discovering models…
+                          {t('provider.discoveringModels')}
                         </Text>
                       </View>
                     ) : null}
                     <Text style={[styles.storageNote, { color: colors.textMuted }]}>
-                      Stored locally · {state.stored.storageClass === 'secure' ? 'Secure storage' : 'Device storage'}
+                      {t('provider.storedLocally', { storage: state.stored.storageClass === 'secure' ? t('provider.secureStorage') : t('provider.deviceStorage') })}
                     </Text>
                     <View style={styles.actionRow}>
                       <SecondaryButton
-                        label="Disconnect"
+                        label={t('provider.disconnect')}
                         danger
                         onPress={() => handleDisconnect(providerId)}
                         colors={colors}
                         styles={styles}
                       />
                       <SecondaryButton
-                        label="Replace key"
+                        label={t('provider.replaceKey')}
                         onPress={() => startEdit(providerId)}
                         colors={colors}
                         styles={styles}
@@ -1113,10 +1115,10 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 {!isComingSoon && !state.stored && !state.editing ? (
                   <View style={styles.connectCta}>
                     <Text style={[styles.connectHint, { color: colors.textMuted }]}>
-                      No key saved. Connect to use {config.name} models.
+                      {t('provider.noKeySaved', { name: config.name })}
                     </Text>
                     <PrimaryButton
-                      label="Connect"
+                      label={t('provider.connect')}
                       onPress={() => startEdit(providerId)}
                       colors={colors}
                       styles={styles}
@@ -1173,7 +1175,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                         instead of a hardcoded catalogue. */}
                     <View style={styles.modelsWrap}>
                       <Text style={[styles.modelsLabel, { color: colors.textMuted }]}>
-                        Available models
+                        {t('provider.availableModels')}
                       </Text>
                       {state.discoveredModels && state.discoveredModels.length > 0 ? (
                         <Text style={[styles.modelsList, { color: colors.textSecondary }]} numberOfLines={4}>
@@ -1183,16 +1185,16 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                         <View style={styles.modelDiscovering}>
                           <ActivityIndicator size="small" color={colors.textMuted} />
                           <Text style={[styles.modelHint, { color: colors.textMuted }]}>
-                            Discovering models from {config.name}…
+                            {t('provider.discoveringFrom', { name: config.name })}
                           </Text>
                         </View>
                       ) : state.discoveredModels && state.discoveredModels.length === 0 ? (
                         <Text style={[styles.modelHint, { color: colors.textMuted }]}>
-                          No models returned by {config.name}.
+                          {t('provider.noModelsReturned', { name: config.name })}
                         </Text>
                       ) : (
                         <Text style={[styles.modelHint, { color: colors.textMuted }]}>
-                          Models are discovered from {config.name} after you connect.
+                          {t('provider.modelsAfterConnect', { name: config.name })}
                         </Text>
                       )}
                     </View>
@@ -1212,13 +1214,13 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
 
                     <View style={styles.actionRow}>
                       <SecondaryButton
-                        label="Cancel"
+                        label={t('connect.cancel')}
                         onPress={() => cancelEdit(providerId)}
                         colors={colors}
                         styles={styles}
                       />
                       <PrimaryButton
-                        label={state.testing ? 'Testing…' : 'Test & save'}
+                        label={state.testing ? t('provider.testing') : t('provider.testSave')}
                         onPress={() => handleTest(providerId)}
                         loading={state.testing}
                         disabled={state.testing || state.keyInput.trim().length === 0}
@@ -1232,7 +1234,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 {isComingSoon ? (
                   <View style={styles.connectCta}>
                     <Text style={[styles.connectHint, { color: colors.textMuted }]}>
-                      Coming soon — not yet available on this deployment.
+                      {t('provider.comingSoon')}
                     </Text>
                   </View>
                 ) : null}
@@ -1250,10 +1252,10 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         <View style={styles.securityNote}>
           <View style={styles.securityHeader}>
             <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} />
-            <Text style={[styles.securityTitle, { color: colors.textPrimary }]}>What agents can and cannot do</Text>
+            <Text style={[styles.securityTitle, { color: colors.textPrimary }]}>{t('help.title')}</Text>
           </View>
           <Text style={[styles.securityBody, { color: colors.textSecondary }]}>
-            Agents draft replies and summarise conversations using the provider keys you connect. They cannot access your wallet, make payments, or act outside the permissions you grant. Server-side keys are stored encrypted on the server; device-local keys never leave this device. Each agent action is logged in the activity ledger for transparency.
+            {t('help.body')}
           </Text>
         </View>
     </FlagshipScreen>

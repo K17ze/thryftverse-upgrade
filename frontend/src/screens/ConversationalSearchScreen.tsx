@@ -51,6 +51,7 @@ import {
   continueConversation,
   fetchSuggestions,
   startConversation } from '../services/conversationalSearchApi';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ConversationalSearch'>;
 
@@ -65,6 +66,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const { t } = useAppTranslation('conversationalSearch');
 
   // ── Store (for Browse filter hand-off) ──
   const resetBrowseFilters = useStore((state) => state.resetBrowseFilters);
@@ -129,7 +131,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       const trimmed = query.trim();
       if (!trimmed || isProcessing) return;
       if (isOffline) {
-        setError('You are offline. Reconnect to search.');
+        setError(t('error.offline'));
         return;
       }
 
@@ -149,12 +151,12 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
           setConversation({ ...conversation, messages: [...conversation.messages] });
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
+        setError(e instanceof Error ? e.message : t('error.generic'));
       } finally {
         setIsProcessing(false);
       }
     },
-    [conversation, isProcessing, isOffline],
+    [conversation, isProcessing, isOffline, t],
   );
 
   // ── Navigate to Browse with extracted filters applied ──
@@ -178,10 +180,10 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
 
       navigation.navigate('Browse', {
         categoryId: 'search',
-        title: 'Search results',
+        title: t('browseTitle'),
         searchQuery: queryText || undefined });
     },
-    [navigation, resetBrowseFilters, updateBrowseFilters],
+    [navigation, resetBrowseFilters, updateBrowseFilters, t],
   );
 
   // ── Render a filter chip inside an assistant message ──
@@ -207,37 +209,37 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
     (filters: SearchFilters): { label: string; key: string }[] => {
       const chips: { label: string; key: string }[] = [];
       if (filters.brands?.length) {
-        chips.push({ label: `Brand: ${filters.brands.join(', ')}`, key: 'brand' });
+        chips.push({ label: t('filters.brand', { value: filters.brands.join(', ') }), key: 'brand' });
       }
       if (filters.categories?.length) {
-        chips.push({ label: `Category: ${filters.categories.join(', ')}`, key: 'cat' });
+        chips.push({ label: t('filters.category', { value: filters.categories.join(', ') }), key: 'cat' });
       }
       if (filters.sizes?.length) {
-        chips.push({ label: `Size: ${filters.sizes.join(', ')}`, key: 'size' });
+        chips.push({ label: t('filters.size', { value: filters.sizes.join(', ') }), key: 'size' });
       }
       if (filters.conditions?.length) {
-        chips.push({ label: `Condition: ${filters.conditions.join(', ')}`, key: 'cond' });
+        chips.push({ label: t('filters.condition', { value: filters.conditions.join(', ') }), key: 'cond' });
       }
       if (filters.colors?.length) {
-        chips.push({ label: `Colour: ${filters.colors.join(', ')}`, key: 'colour' });
+        chips.push({ label: t('filters.colour', { value: filters.colors.join(', ') }), key: 'colour' });
       }
       if (filters.styles?.length) {
-        chips.push({ label: `Style: ${filters.styles.join(', ')}`, key: 'style' });
+        chips.push({ label: t('filters.style', { value: filters.styles.join(', ') }), key: 'style' });
       }
       if (filters.priceRange) {
         const { min, max } = filters.priceRange;
-        let priceLabel = 'Price: ';
+        let priceLabel = t('filters.priceLabel');
         if (min !== undefined && max !== undefined) priceLabel += `${formatFromFiat(min, currencyCode)}–${formatFromFiat(max, currencyCode)}`;
-        else if (max !== undefined) priceLabel += `under ${formatFromFiat(max, currencyCode)}`;
-        else if (min !== undefined) priceLabel += `over ${formatFromFiat(min, currencyCode)}`;
+        else if (max !== undefined) priceLabel += t('filters.priceUnder', { value: formatFromFiat(max, currencyCode) });
+        else if (min !== undefined) priceLabel += t('filters.priceOver', { value: formatFromFiat(min, currencyCode) });
         chips.push({ label: priceLabel, key: 'price' });
       }
       if (filters.sustainableOnly) {
-        chips.push({ label: 'Sustainable only', key: 'sust' });
+        chips.push({ label: t('filters.sustainableOnly'), key: 'sust' });
       }
       return chips;
     },
-    [formatFromFiat],
+    [formatFromFiat, t, currencyCode],
   );
 
   // ── Render an assistant message bubble ──
@@ -253,8 +255,8 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
         matchedCount >= 3 ? 'high' : matchedCount >= 1 ? 'medium' : 'low';
       const matchedSource =
         matchedCount > 0
-          ? `Matched keywords: ${chips.map((c) => c.label).join(', ')}`
-          : 'No keywords matched — showing a general response';
+          ? t('trust.matchedKeywords', { keywords: chips.map((c) => c.label).join(', ') })
+          : t('trust.noMatch');
       return (
         <View style={[localStyles.bubbleAssistant, { backgroundColor: colors.surface }]}>
           <Text
@@ -279,7 +281,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
                 style={[localStyles.matchedKeywordsLabel, { color: colors.textMuted }]}
                 accessibilityRole="text"
               >
-                Matched keywords
+                {t('matched.label')}
               </Text>
               <View style={localStyles.filterChipWrap}>
                 {chips.map((chip) => renderFilterChip(chip.label, chip.key))}
@@ -306,7 +308,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
                   style={[localStyles.viewResultsText, { color: colors.textInverse }]}
                   accessibilityRole="text"
                 >
-                  View results
+                  {t('actions.viewResults')}
                 </Text>
                 <Ionicons name="arrow-forward" size={16} color={colors.textInverse} />
               </AnimatedPressable>
@@ -320,7 +322,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
                 style={[localStyles.refineLabel, { color: colors.textMuted }]}
                 accessibilityRole="text"
               >
-                Refine
+                {t('actions.refine')}
               </Text>
               <ScrollView
                 horizontal
@@ -369,6 +371,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       handleViewResults,
       sendQuery,
       isProcessing,
+      t,
     ],
   );
 
@@ -432,13 +435,13 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
           style={[localStyles.greetingTitle, { color: colors.textPrimary }]}
           accessibilityRole="header"
         >
-          What are you looking for today?
+          {t('empty.greetingTitle')}
         </Text>
         <Text
           style={[localStyles.greetingSubtitle, { color: colors.textSecondary }]}
           accessibilityRole="text"
         >
-          Describe it in your own words.
+          {t('empty.greetingSubtitle')}
         </Text>
       </View>
 
@@ -448,7 +451,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
           style={[localStyles.suggestionsLabel, { color: colors.textMuted }]}
           accessibilityRole="text"
         >
-          Try one of these
+          {t('empty.suggestionsLabel')}
         </Text>
         {suggestionsLoading ? (
           <View style={localStyles.suggestionSkeletonRow}>
@@ -522,7 +525,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
           style={[localStyles.retryBtnText, { color: colors.textInverse }]}
           accessibilityRole="text"
         >
-          Retry
+          {t('error.retry')}
         </Text>
       </AnimatedPressable>
     </View>
@@ -543,7 +546,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
 
       {/* ── Header ── */}
       <ScreenHeader
-        title="Ask ThryftVerse"
+        title={t('header.title')}
         backIcon="arrow-back"
         onBack={() => navigation.goBack()}
         style={{
@@ -565,7 +568,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             style={[localStyles.demoBannerText, { color: colors.textMuted }]}
             accessibilityRole="text"
           >
-            Keyword matching — we extract filters from your description.
+            {t('demo.banner')}
           </Text>
         </View>
       )}
@@ -583,7 +586,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             style={[localStyles.offlineBannerText, { color: colors.textMuted }]}
             accessibilityRole="text"
           >
-            You are offline. Reconnect to search.
+            {t('offline.banner')}
           </Text>
         </View>
       )}
@@ -631,7 +634,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             <TextInput
               ref={inputRef}
               style={[localStyles.input, { color: colors.inputText }]}
-              placeholder="Describe what you are looking for…"
+              placeholder={t('input.placeholder')}
               placeholderTextColor={colors.textMuted}
               value={input}
               onChangeText={setInput}

@@ -1,24 +1,18 @@
-Phase 3D: Replace hardcoded fontSize with TypographyV2 tokens across 15 files
+Phase 2D: i18n migration — 6 screens migrated to useAppTranslation
 
-Poster/Creator components (9 files):
-- TextEditSheet.tsx: 6 fontSize values → TypographyV2 roles
-- BackgroundPicker.tsx: 5 fontSize values → TypographyV2 roles
-- DrawingCanvas.tsx: 5 fontSize values → TypographyV2 roles + import added
-- PerformanceOverlay.tsx: 5 fontSize values → TypographyV2 roles
-- ListingMediaStudio.tsx: 4 fontSize values → TypographyV2.meta.size
-- LookSourceTray.tsx: 4 fontSize values → TypographyV2.meta.size
-- ColorPickerPanel.tsx: 3 fontSize values → TypographyV2 roles + import added
-- FontColorPicker.tsx: 3 fontSize values → TypographyV2 roles
-- CreatorAssetPicker.tsx: 3 fontSize values → TypographyV2.meta.size
+Screens migrated:
+- AgentLedgerScreen.tsx: hardcoded English strings → t() calls with agentLedger namespace
+- LiveStreamViewerScreen.tsx: hardcoded English strings → t() calls with liveStreamViewer namespace
+- LiveShoppingHomeScreen.tsx: hardcoded English strings → t() calls with liveShopping namespace
+- ConversationalSearchScreen.tsx: hardcoded English strings → t() calls with conversationalSearch namespace
+- AIAgentIntegrationScreen.tsx: hardcoded English strings → t() calls with aiAgent namespace
+- YourAlgorithmScreen.tsx: hardcoded English strings → t() calls with algorithm namespace
+  - Fixed SOURCE_LABEL → SOURCE_LABEL_FN references
+  - Fixed WEIGHT_META.label → WEIGHT_LABEL_FN references
+  - Added t prop to ErrorState and SignalRow components
 
-Compliance/Data components (6 files):
-- AITransparencyDisclosure.tsx: 10 fontSize values → TypographyV2 roles
-- PrivacyManifest.tsx: 10 fontSize values → TypographyV2 roles + import added
-- CoOwnActivityRow.tsx: 3 fontSize values → TypographyV2.meta.size
-- LooksTab.tsx: 3 fontSize values → TypographyV2.meta.size
-- PeopleResultRow.tsx: 3 fontSize values → TypographyV2 roles + import added
-
-Fix: i18next.d.ts type augmentation — add 11 new namespaces (myProfile, galleria, agentLedger, liveStreamViewer, liveShopping, conversationalSearch, aiAgent, algorithm, aiListing, report, appeal) to CustomTypeOptions.resources
+en.json: Added 11 new namespaces with translation keys
+i18next.d.ts: Added 11 new namespaces to CustomTypeOptions type augmentation
 
 Generated with [Devin](https://devin.ai)
 
