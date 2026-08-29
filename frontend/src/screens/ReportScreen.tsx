@@ -32,93 +32,67 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Report'>;
 
 const REPORT_REASONS: Array<{
   key: ReportReason;
-  label: string;
-  description: string;
   labelKey: string;
   descKey: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
 }> = [
   {
     key: 'spam',
-    label: 'Spam',
-    description: 'Unwanted promotion, scams or repetitive messages',
     labelKey: 'reasons.spam',
     descKey: 'reasons.spamDesc',
     icon: 'mail-unread-outline' },
   {
     key: 'harassment',
-    label: 'Harassment',
-    description: 'Threatening, abusive or targeted unwanted contact',
     labelKey: 'reasons.harassment',
     descKey: 'reasons.harassmentDesc',
     icon: 'warning-outline' },
   {
     key: 'hate_speech',
-    label: 'Hate speech',
-    description: 'Slurs, dehumanizing language, or attacks on protected groups',
     labelKey: 'reasons.hateSpeech',
     descKey: 'reasons.hateSpeechDesc',
     icon: 'megaphone-outline' },
   {
     key: 'counterfeit',
-    label: 'Fake item',
-    description: 'Counterfeit goods or misleading authenticity claims',
     labelKey: 'reasons.counterfeit',
     descKey: 'reasons.counterfeitDesc',
     icon: 'pricetag-outline' },
   {
     key: 'prohibited',
-    label: 'Prohibited item',
-    description: 'Weapons, drugs, wildlife, or other prohibited categories',
     labelKey: 'reasons.prohibited',
     descKey: 'reasons.prohibitedDesc',
     icon: 'ban-outline' },
   {
     key: 'off_platform',
-    label: 'Off-platform request',
-    description: 'Asked to transact outside Thryftverse, against policy',
     labelKey: 'reasons.offPlatform',
     descKey: 'reasons.offPlatformDesc',
     icon: 'exit-outline' },
   {
     key: 'scam',
-    label: 'Scam or fraud',
-    description: 'Attempted financial fraud, phishing, or impersonation',
     labelKey: 'reasons.scam',
     descKey: 'reasons.scamDesc',
     icon: 'cash-outline' },
   {
     key: 'misinformation',
-    label: 'Misleading content',
-    description: 'False or misleading claims about an item',
     labelKey: 'reasons.misinformation',
     descKey: 'reasons.misinformationDesc',
     icon: 'information-circle-outline' },
   {
     key: 'privacy',
-    label: 'Privacy violation',
-    description: 'Shared private information without consent',
     labelKey: 'reasons.privacy',
     descKey: 'reasons.privacyDesc',
     icon: 'lock-closed-outline' },
   {
     key: 'impersonation',
-    label: 'Impersonation',
-    description: 'Pretending to be someone else',
     labelKey: 'reasons.impersonation',
     descKey: 'reasons.impersonationDesc',
     icon: 'person-outline' },
   {
     key: 'minor_safety',
-    label: 'Minor safety',
-    description: 'Content or behavior endangering minors',
     labelKey: 'reasons.minorSafety',
     descKey: 'reasons.minorSafetyDesc',
     icon: 'shield-outline' },
   {
     key: 'other',
-    label: 'Something else',
-    description: 'Tell the moderation team what happened',
     labelKey: 'reasons.other',
     descKey: 'reasons.otherDesc',
     icon: 'help-circle-outline' },
@@ -155,17 +129,17 @@ export default function ReportScreen({ navigation, route }: Props) {
 
   const handlePickEvidence = useCallback(async () => {
     if (evidenceItems.length >= 3) {
-      show('Attach up to 3 photos.', 'info');
+      show(t('toast.attachUpTo3'), 'info');
       return;
     }
     if (isOffline) {
-      show('You appear to be offline. Check your connection and try again.', 'error');
+      show(t('toast.offline'), 'error');
       return;
     }
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        show('Allow photo access to upload evidence.', 'error');
+        show(t('toast.allowPhotoAccess'), 'error');
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -197,30 +171,30 @@ export default function ReportScreen({ navigation, route }: Props) {
         }
       }
       if (successCount > 0) {
-        show(`${successCount} photo${successCount > 1 ? 's' : ''} attached.`, 'success');
+        show(t('toast.photosAttached', { count: successCount }), 'success');
       } else {
-        show('Unable to upload photo(s). Try again.', 'error');
+        show(t('toast.uploadFailed'), 'error');
       }
     } catch {
-      show('Unable to upload photo(s). Try again.', 'error');
+      show(t('toast.uploadFailed'), 'error');
     } finally {
       setIsUploading(false);
     }
-  }, [evidenceItems.length, isOffline, show]);
+  }, [evidenceItems.length, isOffline, show, t]);
 
   const handleTakeEvidence = useCallback(async () => {
     if (evidenceItems.length >= 3) {
-      show('Attach up to 3 photos.', 'info');
+      show(t('toast.attachUpTo3'), 'info');
       return;
     }
     if (isOffline) {
-      show('You appear to be offline. Check your connection and try again.', 'error');
+      show(t('toast.offline'), 'error');
       return;
     }
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        show('Allow camera access to take evidence photos.', 'error');
+        show(t('toast.allowCameraAccess'), 'error');
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -244,17 +218,17 @@ export default function ReportScreen({ navigation, route }: Props) {
               : it
           )
         );
-        show('Photo attached.', 'success');
+        show(t('toast.photoAttached'), 'success');
       } catch {
         setEvidenceItems((prev) => prev.filter((it) => it.id !== placeholder.id));
-        show('Unable to upload photo. Try again.', 'error');
+        show(t('toast.singleUploadFailed'), 'error');
       }
     } catch {
-      show('Unable to upload photo. Try again.', 'error');
+      show(t('toast.singleUploadFailed'), 'error');
     } finally {
       setIsUploading(false);
     }
-  }, [evidenceItems.length, isOffline, show]);
+  }, [evidenceItems.length, isOffline, show, t]);
 
   const handleRemoveEvidence = useCallback((id: string) => {
     setEvidenceItems((prev) => prev.filter((it) => it.id !== id));
@@ -293,7 +267,7 @@ export default function ReportScreen({ navigation, route }: Props) {
       setSubmittedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
       setIsSubmitted(true);
     } catch {
-      show('The report could not be sent. Check your connection and try again.', 'error');
+      show(t('toast.reportFailed'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -306,9 +280,9 @@ export default function ReportScreen({ navigation, route }: Props) {
       await blockUser(targetId);
       toggleBlocked(targetId);
       setHasBlocked(true);
-      show('Account blocked', 'success');
+      show(t('toast.accountBlocked'), 'success');
     } catch {
-      show('Could not block this account. Try again.', 'error');
+      show(t('toast.blockFailed'), 'error');
     } finally {
       setIsBlocking(false);
     }
@@ -374,7 +348,7 @@ export default function ReportScreen({ navigation, route }: Props) {
               scaleValue={0.98}
               disabled={isBlocking}
               accessibilityRole="button"
-              accessibilityLabel="Block this user"
+              accessibilityLabel={t('accessibility.blockUser')}
               accessibilityState={{ busy: isBlocking, disabled: isBlocking }}
             >
               {isBlocking ? (
@@ -409,7 +383,7 @@ export default function ReportScreen({ navigation, route }: Props) {
             activeOpacity={0.78}
             scaleValue={0.98}
             accessibilityRole="button"
-            accessibilityLabel="Done"
+            accessibilityLabel={t('received.done')}
           >
             <Text style={styles.doneActionText}>{t('received.done')}</Text>
           </AnimatedPressable>
@@ -444,7 +418,7 @@ export default function ReportScreen({ navigation, route }: Props) {
             activeOpacity={0.72}
             scaleValue={0.98}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel={t('unavailable.goBack')}
           >
             <Text style={styles.secondaryDoneText}>{t('unavailable.goBack')}</Text>
           </AnimatedPressable>
@@ -475,7 +449,7 @@ export default function ReportScreen({ navigation, route }: Props) {
           scaleValue={0.985}
           disabled={!canSubmit}
           accessibilityRole="button"
-          accessibilityLabel="Send report"
+          accessibilityLabel={t('submit.label')}
           accessibilityState={{ disabled: !canSubmit, busy: isSubmitting }}
         >
           {isSubmitting ? (
@@ -509,8 +483,8 @@ export default function ReportScreen({ navigation, route }: Props) {
               scaleValue={0.99}
               hapticFeedback="selection"
               accessibilityRole="radio"
-              accessibilityLabel={reason.label}
-              accessibilityHint={reason.description}
+              accessibilityLabel={t(reason.labelKey)}
+              accessibilityHint={t(reason.descKey)}
               accessibilityState={{ selected }}
             >
               <View style={[styles.reasonIcon, selected && styles.reasonIconSelected]}>
@@ -546,9 +520,9 @@ export default function ReportScreen({ navigation, route }: Props) {
             multiline
             maxLength={500}
             textAlignVertical="top"
-            accessibilityLabel="Additional report details"
+            accessibilityLabel={t('accessibility.detailsInput')}
           />
-          <Text style={styles.characterCount}>{details.length}/500</Text>
+          <Text style={styles.characterCount}>{t('details.characterCount', { current: details.length, max: 500 })}</Text>
 
           {/* Evidence photo upload */}
           <Text style={styles.evidenceLabel}>{t('evidence.label')}</Text>
@@ -561,7 +535,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                       source={{ uri: item.uri }}
                       style={styles.evidenceTile}
                       resizeMode="cover"
-                      accessibilityLabel={`Evidence photo ${i + 1}`}
+                      accessibilityLabel={t('accessibility.evidencePhoto', { index: i + 1 })}
                     />
                   ) : (
                     <View style={[styles.evidenceTile, styles.evidenceTilePlaceholder]} />
@@ -582,7 +556,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                       onPress={() => handleRemoveEvidence(item.id)}
                       hitSlop={8}
                       accessibilityRole="button"
-                      accessibilityLabel={`Remove evidence photo ${i + 1}`}
+                      accessibilityLabel={t('accessibility.removeEvidencePhoto', { index: i + 1 })}
                     >
                       <Ionicons name="close-circle" size={22} color={colors.danger} />
                     </Pressable>
@@ -599,7 +573,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                 scaleValue={0.97}
                 hapticFeedback="light"
                 accessibilityRole="button"
-                accessibilityLabel="Take evidence photo with camera"
+                accessibilityLabel={t('accessibility.takeEvidenceCamera')}
               >
                 <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
                 <Text style={styles.evidenceUploadText}>{t('evidence.camera')}</Text>
@@ -610,7 +584,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                 scaleValue={0.97}
                 hapticFeedback="light"
                 accessibilityRole="button"
-                accessibilityLabel="Choose evidence photos from gallery"
+                accessibilityLabel={t('accessibility.chooseEvidenceGallery')}
               >
                 {isUploading ? (
                   <ActivityIndicator size="small" color={colors.textPrimary} />

@@ -111,7 +111,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: 6 },
   countText: {
     fontFamily: Typography.family.medium,
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     color: colors.scrimTextSecondary,
     letterSpacing: 0.2 } });
 }

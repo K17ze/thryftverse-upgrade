@@ -466,7 +466,7 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
       marginTop: 2 },
     stepNumberText: {
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       fontFamily: Typography.family.semibold },
     stepContent: {
       flex: 1,

@@ -289,7 +289,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 2,
       borderRadius: Radius.sm },
     cardSoldText: {
-      fontSize: 10,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.bold,
       color: colors.background },
     cardBrand: {

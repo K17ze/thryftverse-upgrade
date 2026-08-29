@@ -13,6 +13,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Typography, Radius, Space, Stroke, Elevation } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import {
   View,
   StyleSheet,
@@ -449,14 +450,14 @@ function createStyles(colors: ThemeColors) {
       marginBottom: 6,
     },
     sliderLabel: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.semibold,
       color: colors.scrimTextSecondary,
       letterSpacing: 0.4,
       textTransform: 'uppercase',
     },
     sliderValue: {
-      fontSize: 12,
+      fontSize: TypographyV2.caption.size,
       fontFamily: Typography.family.bold,
       color: colors.scrimTextPrimary,
       fontVariant: ['tabular-nums'],

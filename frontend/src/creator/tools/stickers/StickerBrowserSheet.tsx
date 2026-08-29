@@ -97,6 +97,9 @@ export interface StickerBrowserSheetProps {
 // ── Geometry ─────────────────────────────────────────────────────────
 
 const GRID_COLUMNS = 4;
+// Sticker emoji glyph — not a typographic token. Emoji glyphs render at
+// a display size that is independent of the text type scale.
+const STICKER_GLYPH_SIZE = 32;
 // ── Sheet ────────────────────────────────────────────────────────────
 
 export function StickerBrowserSheet({
@@ -600,7 +603,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       justifyContent: 'center',
       flex: 1 } as ViewStyle,
     emoji: {
-      fontSize: 32,
+      fontSize: STICKER_GLYPH_SIZE,
       lineHeight: 38,
       color: colors.textPrimary } as TextStyle,
     cellDescription: {

@@ -52,6 +52,10 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import type { HomeDiscoveryItemVM } from '../../presentation/homeDiscoveryViewModel';
 
+// Large display glyph — not a typographic token. The brand monogram initial
+// IS the artwork, not a label, so it uses a display glyph size.
+const DISCOVERY_CARD_GLYPH_SIZE = 36;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type FormatPriceFn = (...args: any[]) => string;
 
@@ -352,7 +356,7 @@ const createStyles = (colors: ThemeColors) =>
     // Brand monogram: 36sp, light weight, low opacity — art-directed
     // typographic treatment. The initial IS the artwork, not a label.
     mediaPlaceholderMonogram: {
-      fontSize: 36,
+      fontSize: DISCOVERY_CARD_GLYPH_SIZE,
       lineHeight: 40,
       fontFamily: FontFamily.light,
       color: colors.textMuted,

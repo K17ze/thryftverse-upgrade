@@ -81,7 +81,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.scrimTextPrimary,
     letterSpacing: 0.2 },
   familyLabelCompact: {
-    fontSize: 10 },
+    fontSize: TypographyV2.meta.size },
   accentChip: {
     paddingVertical: Space.xs - 1,
     paddingHorizontal: Space.sm,
@@ -93,4 +93,4 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.scrimTextPrimary,
     letterSpacing: 0.2 },
   accentLabelCompact: {
-    fontSize: 10 } });
+    fontSize: TypographyV2.meta.size } });

@@ -86,6 +86,9 @@ import { isCapabilitySupported } from './capabilities/registry';
 // Shutter constants kept in sync with ShutterButton.tsx (78pt outer, 60pt inner).
 const CORNER_SIZE = 32;
 const CORNER_STROKE = 2;
+// Camera countdown shutter glyph — not a typographic token. This is a
+// large display effect glyph for the countdown overlay, not body text.
+const SHUTTER_GLYPH_SIZE = 96;
 // Video capture is gated by the capability registry — the single source
 // of truth for which creator capabilities have verified edit, viewer,
 // export, and backend support.
@@ -1720,7 +1723,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center' },
   countdownText: {
     fontFamily: Typography.family.bold,
-    fontSize: 96,
+    fontSize: SHUTTER_GLYPH_SIZE,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 2 },
@@ -1878,7 +1881,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)' },
   stagingDoneText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: TypographyV2.caption.size,
     fontFamily: Typography.family.semibold },
   // Bottom bar — gallery (left) | shutter (center) | flip (right).
   // The viewfinder dominates; controls are compact and purposeful.

@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden' },
   textModeBtnLabel: {
-    fontSize: 17,
+    fontSize: TypographyV2.sectionTitle.size,
     fontFamily: Typography.family.semibold },
 
   // Drafts button — transparent 44pt target (AGENTS.md §4: ordinary controls
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center' },
   draftsCountText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold },
 
   // Drafts sheet

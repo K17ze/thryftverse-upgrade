@@ -940,7 +940,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerBadgeText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
   },
   highlightsSection: {

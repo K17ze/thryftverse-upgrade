@@ -7,7 +7,12 @@ import Reanimated, {
   Easing as ReEasing,
 } from 'react-native-reanimated';
 import { Motion } from '../../theme/motionTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { GRAVITY, LIFETIME_MS, FADE_DELAY_MS } from '../../utils/posterPhysics';
+
+// Heart burst effect glyph — not a typographic token. This is a visual
+// effect particle size, not body text.
+const HEART_BURST_SIZE = 60;
 
 // ── Heart burst particle component ─────────────────────────────────────
 // Reanimated-based particle burst: 12–22 heart emoji particles explode
@@ -141,10 +146,10 @@ const heartBurstStyles = StyleSheet.create({
     zIndex: 30,
   },
   text: {
-    fontSize: 60,
+    fontSize: HEART_BURST_SIZE,
   },
   particle: {
     position: 'absolute',
-    fontSize: 28,
+    fontSize: TypographyV2.hero.size,
   },
 });

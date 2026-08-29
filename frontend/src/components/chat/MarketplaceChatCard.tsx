@@ -352,7 +352,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginLeft: 2,
   },
   offerDiscountText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     color: colors.success,
     fontVariant: ['tabular-nums'],

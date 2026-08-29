@@ -72,6 +72,7 @@ import {
   pauseAllAgents,
   getActiveAgentSessionCount } from '../services/chatAgentsApi';
 import { useStore } from '../store/useStore';
+import { useShallow } from 'zustand/react/shallow';
 import type { ProviderConnectionInfo } from '../services/botsApi';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { useAppTranslation } from '../i18n/useAppTranslation';
@@ -112,18 +113,18 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
   const [activeAgentSessions, setActiveAgentSessions] = React.useState(0);
 
   // Server-backed provider connections (Phase 3)
-  const providerConnections = useStore((s) => s.providerConnections);
+  const providerConnections = useStore(useShallow((s) => s.providerConnections));
   const loadProviderConnections = useStore((s) => s.loadProviderConnections);
   const createProviderConnection = useStore((s) => s.createProviderConnection);
   const deleteProviderConnection = useStore((s) => s.deleteProviderConnection);
   const reverifyProviderConnection = useStore((s) => s.reverifyProviderConnection);
 
   // Agent Studio hub data (Phase 7)
-  const customBots = useStore((s) => s.customBots);
+  const customBots = useStore(useShallow((s) => s.customBots));
   const loadBotsFromApi = useStore((s) => s.loadBotsFromApi);
-  const pendingApprovals = useStore((s) => s.pendingApprovals);
+  const pendingApprovals = useStore(useShallow((s) => s.pendingApprovals));
   const loadPendingApprovals = useStore((s) => s.loadPendingApprovals);
-  const botVersions = useStore((s) => s.botVersions);
+  const botVersions = useStore(useShallow((s) => s.botVersions));
   const loadBotVersions = useStore((s) => s.loadBotVersions);
 
   const [agentsLoading, setAgentsLoading] = React.useState(true);

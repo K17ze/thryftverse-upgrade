@@ -29,7 +29,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'center' },
     label: {
       flex: 1,
-      fontSize: 16,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.danger,
       letterSpacing: TypographyV2.body.letterSpacing } });

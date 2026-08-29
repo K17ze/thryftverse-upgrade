@@ -789,7 +789,7 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     fontFamily: TypographyV2.meta.fontFamily },
   tagEditorHint: {
     color: colors.scrimTextSecondary,
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
   tagRemoveBtn: {
     position: 'absolute',

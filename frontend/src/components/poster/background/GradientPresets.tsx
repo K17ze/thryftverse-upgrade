@@ -21,6 +21,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 
 import { Typography, Radius, Space, Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { AnimatedPressable } from '../../AnimatedPressable';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
   },
   gradientLabel: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.6)',

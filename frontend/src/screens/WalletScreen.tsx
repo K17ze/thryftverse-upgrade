@@ -45,6 +45,10 @@ import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
+// Wallet balance — large numeric display, not a typographic token.
+// This is a financial display glyph size, not body text.
+const WALLET_BALANCE_SIZE = 40;
+
 export default function WalletScreen({ navigation }: Props) {
   const a11yRef = useRef<any>(null);
   useA11yAudit(a11yRef, 'WalletScreen');
@@ -715,21 +719,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: -Space.xs },
   balanceMasked: {
-    fontSize: 40,
+    fontSize: WALLET_BALANCE_SIZE,
     lineHeight: 44,
     fontFamily: Typography.family.bold,
     letterSpacing: 2,
     marginTop: Space.xs },
   // Largest text on screen — tabular-nums, bold
   balanceValue: {
-    fontSize: 40,
+    fontSize: WALLET_BALANCE_SIZE,
     lineHeight: 44,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
     letterSpacing: -1,
     marginTop: Space.xs },
   balanceUnit: {
-    fontSize: 20,
+    fontSize: TypographyV2.priceList.size,
     lineHeight: 44,
     fontFamily: Typography.family.semibold },
   localFiatRow: {

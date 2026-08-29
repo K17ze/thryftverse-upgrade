@@ -57,7 +57,10 @@ export type TypographyV2RoleName =
   | 'body'
   | 'bodyStrong'
   | 'meta'
+  | 'caption'
+  | 'captionElevated'
   | 'label'
+  | 'hero'
   | 'priceHero'
   | 'priceList'
   | 'numericMeta'
@@ -86,6 +89,14 @@ export const TypographyV2: Record<TypographyV2RoleName, TypographyV2Role> = {
     role: 'display',
     size: 32,
     lineHeight: 38,
+    weight: '700',
+    letterSpacing: -0.5,
+    fontFamily: FontFamily.bold,
+  },
+  hero: {
+    role: 'hero',
+    size: 28,
+    lineHeight: 34,
     weight: '700',
     letterSpacing: -0.5,
     fontFamily: FontFamily.bold,
@@ -136,6 +147,22 @@ export const TypographyV2: Record<TypographyV2RoleName, TypographyV2Role> = {
     lineHeight: 14,
     weight: '500',
     letterSpacing: 0.15,
+    fontFamily: FontFamily.medium,
+  },
+  caption: {
+    role: 'caption',
+    size: 12,
+    lineHeight: 16,
+    weight: '400',
+    letterSpacing: 0.1,
+    fontFamily: FontFamily.regular,
+  },
+  captionElevated: {
+    role: 'captionElevated',
+    size: 13,
+    lineHeight: 18,
+    weight: '500',
+    letterSpacing: 0,
     fontFamily: FontFamily.medium,
   },
   label: {
@@ -255,8 +282,8 @@ export const LEGACY_TO_V2_MAP: Record<string, TypographyV2RoleName> = {
   priceList: 'priceList',
   priceLarge: 'priceHero',
   priceHero: 'priceHero',
-  caption: 'meta',
-  captionElevated: 'meta',
+  caption: 'caption',
+  captionElevated: 'captionElevated',
   meta: 'meta',
   metaElevated: 'label',
   label: 'label',

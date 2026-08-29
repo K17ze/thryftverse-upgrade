@@ -124,8 +124,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             : p,
         ),
       );
-      showInfo('Photo enhanced', handoff.appliedOperationLabel);
-    }, [showInfo]),
+      showInfo(t('toast.photoEnhanced'), handoff.appliedOperationLabel);
+    }, [showInfo, t]),
   );
 
   // -- Auto-analyze whenever the photo set changes --------------------------
@@ -149,7 +149,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        showError('Photo access needed', 'Photo access is required to add listing photos.');
+        showError(t('toast.photoAccessTitle'), t('toast.photoAccessBody'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -165,16 +165,16 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         height: a.height }));
       setPhotos((prev) => [...prev, ...assets].slice(0, 8));
     } catch {
-      showError('Pick failed', 'Could not pick photos. Try again.');
+      showError(t('toast.pickFailedTitle'), t('toast.pickFailedBody'));
     }
-  }, [showError]);
+  }, [showError, t]);
 
   const handlePickFromCamera = useCallback(async () => {
     haptics.tap();
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        showError('Camera access needed', 'Camera access is required to take listing photos.');
+        showError(t('toast.cameraAccessTitle'), t('toast.cameraAccessBody'));
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -189,9 +189,9 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         [...prev, { uri: asset.uri, width: asset.width, height: asset.height }].slice(0, 8),
       );
     } catch {
-      showError('Capture failed', 'Could not take a photo. Try again.');
+      showError(t('toast.captureFailedTitle'), t('toast.captureFailedBody'));
     }
-  }, [showError]);
+  }, [showError, t]);
 
   const handleRemovePhoto = useCallback((uri: string) => {
     haptics.tap();
@@ -313,19 +313,19 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
   const handlePublish = useCallback(async () => {
     if (!currentUser?.id) {
-      setPublishError('Sign in to publish a listing.');
+      setPublishError(t('publish.signInToPublish'));
       haptics.error();
       return;
     }
     if (isOffline) {
-      setPublishError('You appear to be offline. Check your connection and try again.');
+      setPublishError(t('publish.offline'));
       haptics.error();
       return;
     }
     const trimmedTitle = title.trim();
     const numericPrice = Number(sanitizeDecimalInput(price));
     if (!trimmedTitle || !numericPrice || photos.length === 0) {
-      setPublishError('Add at least one photo, a title and a price before publishing.');
+      setPublishError(t('publish.missingFields'));
       haptics.error();
       return;
     }
@@ -350,7 +350,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         (item) => item.state === 'uploaded' && item.publicUrl && item.finalizationId,
       );
       if (!coverUpload) {
-        throw new Error('A verified cover image is required before publishing.');
+        throw new Error(t('publish.missingCover'));
       }
       const coverImage = coverUpload.publicUrl!;
       const uploadedUrls = queueItems
@@ -395,8 +395,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       // Honest preview message when Smart Sell is enabled in preview mode
       if (smartSellPolicy.enabled && smartSellPolicy.capability.kind === 'preview') {
         showInfo(
-          'Smart Sell saved (preview)',
-          'Your settings will be activated when Smart Sell is fully available.',
+          t('toast.smartSellSavedPreviewTitle'),
+          t('toast.smartSellSavedPreviewBody'),
         );
       }
       navigation.replace('ListingSuccess', {
@@ -413,13 +413,13 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       const rawMsg =
         typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string'
           ? (e as Error).message
-          : 'Failed to publish. Try again.';
-      setPublishError(isNetwork ? 'You appear to be offline. Check your connection and try again.' : rawMsg);
+          : t('publish.failed');
+      setPublishError(isNetwork ? t('publish.offline') : rawMsg);
       haptics.error();
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentUser, isOffline, photos, title, price, description, category, brand, condition, materialComposition, weightKg, navigation, smartSellPolicy, showInfo]);
+  }, [currentUser, isOffline, photos, title, price, description, category, brand, condition, materialComposition, weightKg, navigation, smartSellPolicy, showInfo, t]);
 
   // -- Listing quality score (heuristic, updates live as the form fills) -----
   const qualityScore: ListingQualityScore = useMemo(() => {
@@ -590,8 +590,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                     style={({ pressed }) => [styles.pickerField, { borderColor: colors.border }, pressed && { opacity: 0.6 }]}
                     onPress={() => setPickerMode('Category')}
                     accessibilityRole="button"
-                    accessibilityLabel="Select category"
-                    accessibilityHint="Opens category picker"
+                    accessibilityLabel={t('accessibility.selectCategory')}
+                    accessibilityHint={t('accessibility.opensCategoryPicker')}
                   >
                     <Text
                       style={[
@@ -646,8 +646,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                     style={({ pressed }) => [styles.pickerField, { borderColor: colors.border }, pressed && { opacity: 0.6 }]}
                     onPress={() => setPickerMode('Condition')}
                     accessibilityRole="button"
-                    accessibilityLabel="Select condition"
-                    accessibilityHint="Opens condition picker"
+                    accessibilityLabel={t('accessibility.selectCondition')}
+                    accessibilityHint={t('accessibility.opensConditionPicker')}
                   >
                     <Text
                       style={[
@@ -712,8 +712,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                       onPress={() => handleRemoveTag(tag)}
                       style={({ pressed }) => pressed && { opacity: 0.5 }}
                       accessibilityRole="button"
-                      accessibilityLabel={`Remove tag ${tag}`}
-                      accessibilityHint={`Remove the tag ${tag} from this listing`}
+                      accessibilityLabel={t('accessibility.removeTag', { tag })}
+                      accessibilityHint={t('accessibility.removeTagHint', { tag })}
                     >
                       <Ionicons name="close" size={14} color={colors.textMuted} aria-hidden={true} />
                     </Pressable>
@@ -735,8 +735,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                       onPress={handleAddTag}
                       style={({ pressed }) => pressed && { opacity: 0.5 }}
                       accessibilityRole="button"
-                      accessibilityLabel="Add tag"
-                      accessibilityHint="Add this tag to the listing"
+                      accessibilityLabel={t('accessibility.addTag')}
+                      accessibilityHint={t('accessibility.addTagHint')}
                     >
                       <Ionicons name="add-circle" size={18} color={colors.brand} aria-hidden={true} />
                     </Pressable>
@@ -818,8 +818,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             loading={isSubmitting}
             variant="primary"
             size="lg"
-            accessibilityLabel="Publish listing"
-            accessibilityHint="Submit your listing for publishing"
+            accessibilityLabel={t('accessibility.publishListing')}
+            accessibilityHint={t('accessibility.publishListingHint')}
             icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} aria-hidden={true} />}
           />
         </View>
@@ -863,7 +863,7 @@ function SuggestionRow({ suggestion, onAccept, onDismiss, colors, styles, compac
 
   const evidenceText = suggestion.evidence.length > 0
     ? suggestion.evidence[0].ref
-    : 'Suggested';
+    : t('suggestion.suggested');
 
   return (
     <View style={[styles.suggestionRow, compact && styles.suggestionRowCompact]}>
@@ -888,8 +888,8 @@ function SuggestionRow({ suggestion, onAccept, onDismiss, colors, styles, compac
             pressed && { opacity: 0.6 },
           ]}
           accessibilityRole="button"
-          accessibilityLabel={`Accept suggestion: ${candidateText}`}
-          accessibilityHint="Apply this suggestion to the field"
+          accessibilityLabel={t('accessibility.acceptSuggestion', { text: candidateText })}
+          accessibilityHint={t('accessibility.acceptSuggestionHint')}
         >
           <Text style={[styles.suggestionAcceptText, { color: colors.brand }]}>
             {t('suggestion.use')}
@@ -900,8 +900,8 @@ function SuggestionRow({ suggestion, onAccept, onDismiss, colors, styles, compac
           onPress={onDismiss}
           style={({ pressed }) => pressed && { opacity: 0.5 }}
           accessibilityRole="button"
-          accessibilityLabel="Dismiss suggestion"
-          accessibilityHint="Hide this suggestion without applying it"
+          accessibilityLabel={t('accessibility.dismissSuggestion')}
+          accessibilityHint={t('accessibility.dismissSuggestionHint')}
         >
           <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
         </Pressable>
@@ -974,8 +974,8 @@ function PhotoCaptureSection({
                 style={({ pressed }) => [styles.photoRemoveBtn, pressed && { opacity: 0.5 }]}
                 onPress={() => onRemovePhoto(photo.uri)}
                 accessibilityRole="button"
-                accessibilityLabel="Remove photo"
-                accessibilityHint="Remove this photo from the listing"
+                accessibilityLabel={t('accessibility.removePhoto')}
+                accessibilityHint={t('accessibility.removePhotoHint')}
               >
                 <Ionicons name="close-circle" size={22} color={colors.textInverse} aria-hidden={true} />
               </Pressable>
@@ -983,8 +983,8 @@ function PhotoCaptureSection({
                 style={({ pressed }) => [styles.photoEnhanceBtn, { backgroundColor: colors.overlay }, pressed && { opacity: 0.6 }]}
                 onPress={() => onEnhancePhoto(photo.uri)}
                 accessibilityRole="button"
-                accessibilityLabel="Enhance photo"
-                accessibilityHint="Opens photo enhancement to improve this listing image"
+                accessibilityLabel={t('accessibility.enhancePhoto')}
+                accessibilityHint={t('accessibility.enhancePhotoHint')}
               >
                 <Ionicons name="color-filter-outline" size={12} color={colors.brand} aria-hidden={true} />
                 <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>{t('photo.enhance')}</Text>
@@ -999,8 +999,8 @@ function PhotoCaptureSection({
           style={({ pressed }) => [styles.captureBtn, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && { opacity: 0.6 }]}
           onPress={onPickFromCamera}
           accessibilityRole="button"
-          accessibilityLabel="Take a photo with the camera"
-          accessibilityHint="Open camera to capture a photo"
+          accessibilityLabel={t('accessibility.takePhotoWithCamera')}
+          accessibilityHint={t('accessibility.takePhotoWithCameraHint')}
         >
           <Ionicons name="camera-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
           <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>{t('photo.camera')}</Text>
@@ -1009,8 +1009,8 @@ function PhotoCaptureSection({
           style={({ pressed }) => [styles.captureBtn, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && { opacity: 0.6 }]}
           onPress={onPickFromLibrary}
           accessibilityRole="button"
-          accessibilityLabel="Pick photos from gallery"
-          accessibilityHint="Open gallery to select photos"
+          accessibilityLabel={t('accessibility.pickPhotosFromGallery')}
+          accessibilityHint={t('accessibility.pickPhotosFromGalleryHint')}
         >
           <Ionicons name="images-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
           <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>{t('photo.library')}</Text>
@@ -1028,10 +1028,11 @@ function ListingFormSkeleton({
   styles }: {
   styles: ReturnType<typeof createStyles>;
 }) {
+  const { t } = useAppTranslation('aiListing');
   return (
     <View
-      accessibilityLabel="Loading suggestions"
-      accessibilityHint="Suggestions are being generated"
+      accessibilityLabel={t('accessibility.loadingSuggestions')}
+      accessibilityHint={t('accessibility.loadingSuggestionsHint')}
       accessibilityState={{ busy: true }}
     >
       <View style={styles.skeletonFieldGroup}>
@@ -1141,8 +1142,8 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
           onPress={onDismiss}
           style={({ pressed }) => pressed && { opacity: 0.5 }}
           accessibilityRole="button"
-          accessibilityLabel="Dismiss error"
-          accessibilityHint="Dismiss this error message"
+          accessibilityLabel={t('accessibility.dismissError')}
+          accessibilityHint={t('accessibility.dismissErrorHint')}
         >
           <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
         </Pressable>
@@ -1151,8 +1152,8 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
         style={({ pressed }) => [styles.errorRetryBtn, { borderColor: colors.danger }, pressed && { opacity: 0.6 }]}
         onPress={onRetry}
         accessibilityRole="button"
-        accessibilityLabel="Retry"
-        accessibilityHint="Retry the failed action"
+        accessibilityLabel={t('error.retry')}
+        accessibilityHint={t('accessibility.retryHint')}
       >
         <Text style={[styles.errorRetryText, { color: colors.danger }]}>{t('error.retry')}</Text>
       </Pressable>
@@ -1175,8 +1176,9 @@ interface PickerSheetProps {
 
 function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors }: PickerSheetProps) {
   const insets = useSafeAreaInsets();
+  const { t } = useAppTranslation('aiListing');
   return (
-    <Pressable style={[pickerStyles.overlay, { backgroundColor: colors.overlay }]} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close picker" accessibilityHint="Close the picker sheet">
+    <Pressable style={[pickerStyles.overlay, { backgroundColor: colors.overlay }]} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('accessibility.closePicker')} accessibilityHint={t('accessibility.closePickerHint')}>
       <Pressable
         style={[
           pickerStyles.sheet,
@@ -1203,8 +1205,8 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
                 ]}
                 onPress={() => onSelect(opt)}
                 accessibilityRole="button"
-                accessibilityLabel={`Select ${opt}`}
-                accessibilityHint={`Choose ${opt} as the selected option`}
+                accessibilityLabel={t('accessibility.selectOption', { option: opt })}
+                accessibilityHint={t('accessibility.chooseOption', { option: opt })}
               >
                 <Text
                   style={[

@@ -1,22 +1,28 @@
-Phase 4 Wave 1: P0 dead controls, springify+duration fix, useReducedMotion gaps, stale Dimensions.get migration
+Phase 4 Wave 2: i18n completion, fontSize tokenization, FlashList migration, Zustand shallow selectors
 
-P0 Dead Controls:
-- Wire checkCoOwnEligibility to enforce KYC, risk disclosure, stablecoin wallet, education, DAC7 compliance gates
-- Wire InAppNotificationBanner onAction prop with action button rendering + navigation handler in InAppNotificationCenter
-- Wire SellerFulfilmentScreen hasReview via getOrderReview fetch instead of hardcoded false
+i18n Completion (5 screens):
+- Fix appeal.windowClosed.body interpolation bug ({date} → {{date}})
+- Add 70+ missing i18n keys across myProfile, galleria, aiListing, report, appeal namespaces
+- Wire all hardcoded English strings in MyProfileScreen, GalleriaScreen, AIPoweredListingScreen, ReportScreen, AppealScreen to t()/tt() calls
+- ReportScreen: replace hardcoded label/description in REPORT_REASONS with labelKey/descKey + t() calls
+- GalleriaScreen: add useAppTranslation to CollectionRailCard, FeaturedAssetCard, EditorialListItem sub-components
 
-Motion Language:
-- Remove .duration() from springify() chains in SignUp, Login, CatalogImport, UpdateManager (spring+duration don't compose)
-- Fix VisualSearchCamera useNativeDriver: false → true (transform/opacity support native driver)
-- Add useReducedMotion gating to AttachmentMenu, MessageContextMenu, TextEditorSheet, StickerBrowserSheet, CaptionEditorSheet
-- Add useReducedMotion gating to LayoutAnimation in InventoryManagement, CreatorAnalyticsDashboard, ChatListingContextBar
+fontSize Tokenization (55 files):
+- Add TypographyV2.caption, captionElevated, hero roles to typography.v2.ts
+- Update LEGACY_TO_V2_MAP for caption/captionElevated (previously mapped to meta)
+- Replace 76 raw fontSize values with TypographyV2 tokens across components, creator, screens, platform
+- Extract 6 non-typographic sizes as named constants (SHUTTER_GLYPH_SIZE, WALLET_BALANCE_SIZE, etc.)
 
-Stale Dimensions.get Migration:
-- Migrate 32 files from module-level Dimensions.get('window') to reactive useWindowDimensions()
-- Screens: MyProfile, OutfitBuilder, AIPoweredListing, PosterArchive, Galleria, Home, StyleQuiz, PosterViewer, PosterHighlightViewer, MoodboardHome, MoodboardEditor, ManageListing, LookDetail, LiveStreamSeller, ListingPreview, GalleriaCollectionDetail, ExploreCollection, CreatePosterHighlight, CollectionDetail, Closet, AIPhotoEnhancement, LiveStreamViewer
-- Components: ProfileSkeleton, ProductGridSkeleton, AppTooltip, AppPopover, ImageViewer, Confetti
-- Hooks/Utils: usePosterViewerGesture, accessibility.ts, designTokens.ts
-- Dev: DesignReviewScreen
+FlashList Migration (3 screens):
+- MyProfileScreen: ScrollView+map grid → FlashList with numColumns=3, scrollEnabled=false (nested in parallax ScrollView)
+- SavedAddressesScreen: ScrollView+map → FlashList with ListHeader/Footer/Empty components
+- SellerVerificationScreen: two .map() calls → FlatList with scrollEnabled=false (nested in ScrollView)
+
+Zustand + useMemo Performance:
+- Add useShallow from zustand/react/shallow for array selectors in MyProfileScreen, AgentLedgerScreen, AIAgentIntegrationScreen
+- Wrap label-building string operations in useMemo (EditListingScreen, SellScreen)
+- Extract inline tabs array to useMemo (MyProfileScreen)
+- Lazy useState initializer (InventoryManagementScreen)
 
 Generated with [Devin](https://devin.ai)
 

@@ -384,7 +384,7 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'] },
   liveText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.warning,
     fontVariant: ['tabular-nums'],

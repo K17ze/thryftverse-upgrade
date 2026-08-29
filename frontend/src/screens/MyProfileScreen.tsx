@@ -25,6 +25,7 @@ import { Space, FontFamily, Control, LetterSpacing } from '../theme/designTokens
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useStore } from '../store/useStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useNavigation, useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -52,6 +53,7 @@ import { fetchPosterHighlights, type PosterHighlight } from '../services/posters
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { FlashList } from '@shopify/flash-list';
 import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -226,11 +228,11 @@ export default function MyProfileScreen() {
       })
       .catch((err) => {
         if (cancelled) return;
-        const parsed = parseApiError(err, 'Unable to load portfolio');
+        const parsed = parseApiError(err, tt('toast.portfolioLoadFailed'));
         show(parsed.message, 'error');
       });
     return () => { cancelled = true; };
-  }, [currentUser?.id, show]);
+  }, [currentUser?.id, show, tt]);
 
   const userAvatar = useStore((state) => state.userAvatar);
   const userCover = useStore((state) => state.userCover);
@@ -468,15 +470,15 @@ export default function MyProfileScreen() {
     haptic.light();
     try {
       await Share.share({
-        message: `Check out @${user.username} on Thryftverse! https://thryftverse.com/@${user.username}`,
+        message: tt('share.message', { username: user.username }),
         url: `https://thryftverse.com/@${user.username}`,
-        title: `${user.displayName || user.username} on Thryftverse` });
+        title: tt('share.title', { name: user.displayName || user.username }) });
     } catch { /* user cancelled or share unavailable */ }
   };
 
   const wishlistCount = useStore((state) => state.wishlist.length);
   const savedCount = useStore((state) => state.savedProducts.length);
-  const savedProductIds = useStore((state) => state.savedProducts);
+  const savedProductIds = useStore(useShallow((state) => state.savedProducts));
   const savedListings = React.useMemo(
     () => listings.filter((item) => savedProductIds.includes(item.id)),
     [listings, savedProductIds]
@@ -488,39 +490,39 @@ export default function MyProfileScreen() {
         icon: 'bag-handle-outline' as const,
         label: tt('utility.orders'),
         onPress: () => { haptic.light(); navigation.navigate('MyOrders'); },
-        accessibilityLabel: 'Orders' },
+        accessibilityLabel: tt('accessibility.orders') },
       {
         icon: 'pulse-outline' as const,
         label: tt('utility.analytics'),
         onPress: () => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); },
-        accessibilityLabel: 'Creator analytics' },
+        accessibilityLabel: tt('accessibility.creatorAnalytics') },
       {
         icon: 'bookmark-outline' as const,
         label: tt('utility.closet'),
         value: tt('utility.itemsCount', { count: savedCount + wishlistCount }),
         onPress: () => { haptic.light(); navigation.navigate('Closet'); },
-        accessibilityLabel: 'Closet' },
+        accessibilityLabel: tt('accessibility.closet') },
       {
         icon: 'wallet-outline' as const,
         label: tt('utility.wallet'),
         onPress: () => { haptic.light(); navigation.navigate('Wallet'); },
-        accessibilityLabel: 'Wallet' },
+        accessibilityLabel: tt('accessibility.wallet') },
       {
         icon: 'timer-outline' as const,
         label: tt('utility.auctions'),
         onPress: () => { haptic.light(); navigation.navigate('AuctionHome'); },
-        accessibilityLabel: 'Browse auctions' },
+        accessibilityLabel: tt('accessibility.browseAuctions') },
       {
         icon: 'layers-outline' as const,
         label: tt('utility.coOwn'),
         value: coOwnHoldings.length > 0 ? tt('utility.assetsCount', { count: coOwnHoldings.length }) : undefined,
         onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
-        accessibilityLabel: 'Browse co-own market' },
+        accessibilityLabel: tt('accessibility.browseCoOwnMarket') },
       {
         icon: 'storefront-outline' as const,
         label: tt('utility.sellerHub'),
         onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
-        accessibilityLabel: 'Seller Hub' },
+        accessibilityLabel: tt('accessibility.sellerHub') },
     ],
     [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation, tt]
   );
@@ -548,12 +550,15 @@ export default function MyProfileScreen() {
   const GRID_COLS = 3;
   const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
   const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait grid
-  // Hero span — the first listing spans 2 columns as a wide anchor, breaking
-  // the uniform 3-column grid (Instagram/Pinterest mixed-layout pattern).
-  // Only applied when there are 3+ listings so the grid still reads as a grid.
-  const HERO_WIDTH = CARD_WIDTH * 2 + GRID_GAP;
-  const HERO_HEIGHT = CARD_HEIGHT;
-  const showHero = allOwnedListings.length >= 3;
+
+  const tabs = React.useMemo(
+    () => [
+      { key: 'listings', label: tt('tabs.shop'), count: allOwnedListings.length },
+      { key: 'looks', label: tt('tabs.looks'), count: myLooks.length },
+      { key: 'about', label: tt('tabs.about') },
+    ],
+    [tt, allOwnedListings.length, myLooks.length]
+  );
 
   return (
     <View testID="profile-screen" style={[styles.container, t.container]}>
@@ -593,9 +598,9 @@ export default function MyProfileScreen() {
           <AnimatedPressable
             style={styles.topUtilityIconBtn}
             onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
-            accessibilityLabel="Open settings"
+            accessibilityLabel={tt('accessibility.openSettings')}
             accessibilityRole="button"
-            accessibilityHint="Opens settings"
+            accessibilityHint={tt('accessibility.openSettingsHint')}
           >
             <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
               <Ionicons name="settings-outline" size={22} color={colors.scrimTextPrimary} aria-hidden={true} />
@@ -606,9 +611,9 @@ export default function MyProfileScreen() {
             <AnimatedPressable
               style={styles.topUtilityIconBtn}
               onPress={handleShare}
-              accessibilityLabel="Share profile"
+              accessibilityLabel={tt('accessibility.shareProfile')}
               accessibilityRole="button"
-              accessibilityHint="Opens the system share sheet to share your profile"
+              accessibilityHint={tt('accessibility.shareProfileHint')}
             >
               <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
                 <Ionicons name="share-outline" size={18} color={colors.scrimTextPrimary} aria-hidden={true} />
@@ -629,7 +634,7 @@ export default function MyProfileScreen() {
               style={styles.coverFailureAction}
               onPress={retryCover}
               accessibilityRole="button"
-              accessibilityLabel="Retry cover upload"
+              accessibilityLabel={tt('accessibility.retryCoverUpload')}
               hitSlop={5}
             >
               <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>{tt('cover.retry')}</Text>
@@ -638,7 +643,7 @@ export default function MyProfileScreen() {
               style={styles.coverFailureAction}
               onPress={revertCover}
               accessibilityRole="button"
-              accessibilityLabel="Cancel cover change"
+              accessibilityLabel={tt('accessibility.cancelCoverChange')}
               hitSlop={5}
             >
               <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>{tt('cover.cancel')}</Text>
@@ -653,8 +658,8 @@ export default function MyProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel={
               coverState.status === 'uploading'
-                ? 'Uploading profile cover'
-                : 'Change profile cover'
+                ? tt('accessibility.uploadingCover')
+                : tt('accessibility.changeCover')
             }
             accessibilityState={{ disabled: coverState.status === 'uploading', busy: coverState.status === 'uploading' }}
           >
@@ -714,7 +719,7 @@ export default function MyProfileScreen() {
               style={[myProfileStyles.awayBanner, tMyProfile.awayBanner]}
               onPress={() => navigation.navigate('PrivacySettings')}
               accessibilityRole="button"
-              accessibilityLabel="Holiday mode is on — tap to manage"
+              accessibilityLabel={tt('accessibility.holidayMode')}
             >
               <Ionicons name="pause-circle" size={18} color={colors.textMuted} aria-hidden={true} />
               <View style={myProfileStyles.awayBannerTextWrap}>
@@ -755,11 +760,7 @@ export default function MyProfileScreen() {
 
           {/* ── 9. STICKY FLAT TAB RAIL ── */}
           <MyProfileTabRail
-            tabs={[
-              { key: 'listings', label: tt('tabs.shop'), count: allOwnedListings.length },
-              { key: 'looks', label: tt('tabs.looks'), count: myLooks.length },
-              { key: 'about', label: tt('tabs.about') },
-            ]}
+            tabs={tabs}
             activeKey={activeTab}
             onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
           />
@@ -797,8 +798,8 @@ export default function MyProfileScreen() {
                   style={styles.listingsEmptyImportLink}
                   onPress={() => navigation.navigate('CatalogImportStart')}
                   accessibilityRole="button"
-                  accessibilityLabel="Bring over your existing listings"
-                  accessibilityHint="Start a catalogue import from eBay or a file"
+                  accessibilityLabel={tt('listings.bringOverListings')}
+                  accessibilityHint={tt('accessibility.importListingsHint')}
                   hitSlop={8}
                 >
                   <Text style={[styles.listingsEmptyImportText, { color: colors.brand }]}>
@@ -819,76 +820,60 @@ export default function MyProfileScreen() {
                     <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>{tt('listings.viewAll')}</Text>
                   </Pressable>
                 </View>
-                <View style={styles.grid}>
-                  {allOwnedListings.map((item, index) => {
-                    const isHero = showHero && index === 0;
+                <FlashList
+                  data={allOwnedListings}
+                  numColumns={3}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item, index }) => {
                     const isFeatured = item.featured === true;
-                    const cardW = isHero ? HERO_WIDTH : CARD_WIDTH;
-                    const cardH = isHero ? HERO_HEIGHT : CARD_HEIGHT;
+                    const colIndex = index % 3;
                     return (
-                    <AnimatedPressable
-                      key={item.id}
-                      style={[styles.gridCard, { width: cardW }]}
-                      onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Manage ${item.title}${isFeatured ? ', pinned' : ''}`}
-                    >
-                      <SharedTransitionView
-                        style={[styles.gridImageWrap, { width: cardW, height: cardH }]}
-                        sharedTransitionTag={`image-${item.id}-0`}
+                      <View
+                        style={{
+                          paddingLeft: colIndex === 0 ? Space.md : Space.xs / 2,
+                          paddingRight: colIndex === 2 ? Space.md : Space.xs / 2,
+                          paddingBottom: Space.sm,
+                        }}
                       >
-                        <CachedImage
-                          uri={item.images?.[0] ?? ''}
-                          style={styles.gridImage}
-                          containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
-                          contentFit="cover"
-                        />
-                        {isFeatured ? (
-                          <View style={[styles.pinnedBadge, t.pinnedBadge]} pointerEvents="none">
-                            <Ionicons name="pin" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
-                          </View>
-                        ) : null}
-                        {item.isSold ? (
-                          <View style={[styles.soldOverlay, t.soldOverlay]}>
-                            <Text style={[styles.soldText, t.soldText]}>{tt('listings.sold')}</Text>
-                          </View>
-                        ) : null}
-                        {/* Hero card: price overlays on a bottom gradient so the
-                            first viewport is media-dense (Pinterest/Instagram
-                            pattern). Regular cards keep price below the image. */}
-                        {isHero && !item.isSold ? (
-                          <>
-                            <LinearGradient
-                              colors={['transparent', 'rgba(0,0,0,0.55)']}
-                              style={styles.heroPriceGradient}
-                              pointerEvents="none"
+                        <AnimatedPressable
+                          style={styles.gridCard}
+                          onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Manage ${item.title}${isFeatured ? ', pinned' : ''}`}
+                        >
+                          <SharedTransitionView
+                            style={[styles.gridImageWrap, { height: CARD_HEIGHT }]}
+                            sharedTransitionTag={`image-${item.id}-0`}
+                          >
+                            <CachedImage
+                              uri={item.images?.[0] ?? ''}
+                              style={styles.gridImage}
+                              containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
+                              contentFit="cover"
                             />
-                            <View style={styles.heroPriceOverlay} pointerEvents="none">
-                              <Text style={[styles.heroPriceText, { color: colors.scrimTextPrimary }]} numberOfLines={1}>
-                                {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
-                              </Text>
-                              {item.brand ? (
-                                <Text style={[styles.heroBrandText, { color: colors.scrimTextSecondary }]} numberOfLines={1}>{item.brand}</Text>
-                              ) : null}
-                            </View>
-                          </>
-                        ) : null}
-                      </SharedTransitionView>
-                      {/* Regular cards: price + brand below the image */}
-                      {isHero ? null : (
-                        <>
+                            {isFeatured ? (
+                              <View style={[styles.pinnedBadge, t.pinnedBadge]} pointerEvents="none">
+                                <Ionicons name="pin" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
+                              </View>
+                            ) : null}
+                            {item.isSold ? (
+                              <View style={[styles.soldOverlay, t.soldOverlay]}>
+                                <Text style={[styles.soldText, t.soldText]}>{tt('listings.sold')}</Text>
+                              </View>
+                            ) : null}
+                          </SharedTransitionView>
                           <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
                             {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
                           </Text>
                           {item.brand ? (
                             <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
                           ) : null}
-                        </>
-                      )}
-                    </AnimatedPressable>
+                        </AnimatedPressable>
+                      </View>
                     );
-                  })}
-                </View>
+                  }}
+                  scrollEnabled={false}
+                />
               </>
             )}
           </Reanimated.View>
@@ -902,7 +887,7 @@ export default function MyProfileScreen() {
             style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
           >
             {looksLoading ? (
-              <View style={{ paddingHorizontal: Space.md, gap: Space.md }} accessibilityLabel="Loading your Looks">
+              <View style={{ paddingHorizontal: Space.md, gap: Space.md }} accessibilityLabel={tt('accessibility.loadingLooks')}>
                 <SkeletonLoader width="100%" height={360} borderRadius={RadiusRoleValue.standalonePanel} />
                 <SkeletonLoader width="100%" height={280} borderRadius={RadiusRoleValue.standalonePanel} />
               </View>
@@ -954,8 +939,8 @@ export default function MyProfileScreen() {
                 style={[styles.portfolioPreview, t.portfolioPreview]}
                 onPress={() => { haptic.light(); navigation.navigate('CoOwnHub'); }}
                 accessibilityRole="button"
-                accessibilityLabel="View Co-Own portfolio"
-                accessibilityHint="Opens your Co-Own holdings hub"
+                accessibilityLabel={tt('accessibility.viewCoOwnPortfolio')}
+                accessibilityHint={tt('accessibility.viewCoOwnPortfolioHint')}
               >
                 <View style={styles.portfolioHeader}>
                   <Text style={[styles.portfolioLabel, t.portfolioLabel]}>{tt('about.coOwnPortfolio')}</Text>
@@ -1064,7 +1049,7 @@ export default function MyProfileScreen() {
                 style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
                 onPress={() => { haptic.light(); setCompletionDismissed(true); }}
                 accessibilityRole="button"
-                accessibilityLabel="Dismiss profile completion prompt"
+                accessibilityLabel={tt('accessibility.dismissCompletion')}
               >
                 <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
               </AnimatedPressable>
@@ -1096,7 +1081,7 @@ export default function MyProfileScreen() {
                 style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
                 onPress={() => { haptic.light(); setGrowthDismissed(true); }}
                 accessibilityRole="button"
-                accessibilityLabel="Dismiss growth prompts"
+                accessibilityLabel={tt('accessibility.dismissGrowth')}
               >
                 <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
               </AnimatedPressable>
@@ -1107,8 +1092,8 @@ export default function MyProfileScreen() {
                 style={[styles.growthRow, t.growthRow]}
                 onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
                 accessibilityRole="button"
-                accessibilityLabel="List your first item"
-                accessibilityHint="Opens the sell flow to create your first listing"
+                accessibilityLabel={tt('growth.listFirstItemTitle')}
+                accessibilityHint={tt('accessibility.listFirstItemHint')}
               >
                 <View style={styles.growthRowText}>
                   <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.listFirstItemTitle')}</Text>
@@ -1125,8 +1110,8 @@ export default function MyProfileScreen() {
                 style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
                 onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
                 accessibilityRole="button"
-                accessibilityLabel="Grow your audience"
-                accessibilityHint="Opens creator analytics with audience growth tools"
+                accessibilityLabel={tt('growth.growAudienceTitle')}
+                accessibilityHint={tt('accessibility.growAudienceHint')}
               >
                 <View style={styles.growthRowText}>
                   <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.growAudienceTitle')}</Text>

@@ -1968,7 +1968,7 @@ const styles = StyleSheet.create({
     borderLeftColor: '#C9A46A' },
   recoveryText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
     marginLeft: 8 },
   recoveryBtn: {
     backgroundColor: 'rgba(201, 164, 106, 0.15)',
@@ -1977,7 +1977,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6 },
   recoveryBtnText: {
     color: '#C9A46A',
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
     fontWeight: '600' },
   recoveryDismiss: {
     padding: 8,

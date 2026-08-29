@@ -35,6 +35,7 @@ import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
 import { Radius, Space, IconGrammar, Elevation } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -251,7 +252,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   segmentLabel: {
-    fontSize: 13,
+    fontSize: TypographyV2.captionElevated.size,
     letterSpacing: 0,
   },
 });

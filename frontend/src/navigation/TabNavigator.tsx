@@ -461,7 +461,7 @@ const tabStyles = StyleSheet.create({
     paddingHorizontal: Space.xs,
     borderWidth: Stroke.standard },
   badgeText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     includeFontPadding: false,
     textAlign: 'center' },
@@ -494,7 +494,7 @@ const tabStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center' },
   avatarFallbackText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold } });
 
 // Dynamic sheet styles (theme-aware via colors parameter)

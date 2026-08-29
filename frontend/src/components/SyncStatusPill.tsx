@@ -84,4 +84,4 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1 },
   textCompact: {
-    fontSize: 10 } });
+    fontSize: TypographyV2.meta.size } });

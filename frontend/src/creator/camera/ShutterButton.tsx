@@ -8,6 +8,7 @@ import Reanimated, {
   withSequence,
 } from 'react-native-reanimated';
 import { Radius, Typography, Type, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
   },
   speedBadgeText: {
     fontFamily: Typography.family.bold,
-    fontSize: 10.5,
+    fontSize: TypographyV2.meta.size,
     color: '#fff',
   },
 });

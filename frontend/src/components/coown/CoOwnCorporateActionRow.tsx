@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
   },

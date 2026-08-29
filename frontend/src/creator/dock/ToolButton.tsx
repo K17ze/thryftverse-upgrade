@@ -9,6 +9,7 @@ import Reanimated, {
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
@@ -198,13 +199,13 @@ const styles = StyleSheet.create({
   // legibility. Secondary tools use medium weight; primary tools use semibold
   // for hierarchy.
   toolLabel: {
-    fontSize: 10.5,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.medium,
     marginTop: 2,
   },
   toolLabelPrimary: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10.5,
+    fontSize: TypographyV2.meta.size,
   },
 });
 

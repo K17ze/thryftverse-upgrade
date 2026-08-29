@@ -277,7 +277,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     alignItems: 'center' },
   coverText: {
     color: colors.background,
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold },
   hintText: {
     color: colors.textMuted,

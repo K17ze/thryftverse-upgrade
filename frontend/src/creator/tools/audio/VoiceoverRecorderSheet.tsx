@@ -61,6 +61,8 @@ import type { MeteringListener } from '../../core/audio/VoiceoverRecorder';
 // ── Constants ─────────────────────────────────────────────────────────
 
 const RECORD_BUTTON_SIZE = 64;
+// Recorder timer display — large numeric display glyph, not a typographic token.
+const RECORDER_GLYPH_SIZE = 32;
 const RING_BASE_SIZE = RECORD_BUTTON_SIZE + 12;
 const WAVEFORM_BAR_COUNT = 48;
 const WAVEFORM_MAX_HEIGHT = 56;
@@ -772,7 +774,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.lg },
     timer: {
       fontFamily: FontFamily.medium,
-      fontSize: 32,
+      fontSize: RECORDER_GLYPH_SIZE,
       fontVariant: ['tabular-nums'],
       letterSpacing: 2 },
     recordingIndicator: {

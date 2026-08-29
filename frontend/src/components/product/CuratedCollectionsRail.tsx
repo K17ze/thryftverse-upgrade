@@ -274,7 +274,7 @@ function createStyles(colors: ThemeColors) {
     minWidth: 0,
     gap: Space.xs },
   cardKicker: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     letterSpacing: 0.6,

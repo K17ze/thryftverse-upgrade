@@ -67,7 +67,7 @@ const HeroEditorialCard = React.memo(function HeroEditorialCard({
     <View
       style={styles.heroContainer}
       accessibilityRole="image"
-      accessibilityLabel={`Editorial: ${editorial.title}`}
+      accessibilityLabel={t('accessibility.editorial', { title: editorial.title })}
     >
       <CachedImage
         uri={editorial.heroImage}
@@ -105,6 +105,7 @@ const CollectionRailCard = React.memo(function CollectionRailCard({
   onPress: () => void;
 }) {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
 
   return (
     <AnimatedPressable
@@ -113,8 +114,8 @@ const CollectionRailCard = React.memo(function CollectionRailCard({
       activeOpacity={0.92}
       scaleValue={0.98}
       accessibilityRole="button"
-      accessibilityLabel={`Collection: ${collection.title}`}
-      accessibilityHint="Opens the collection detail"
+      accessibilityLabel={t('accessibility.collection', { title: collection.title })}
+      accessibilityHint={t('accessibility.collectionHint')}
     >
       <View style={styles.collectionImageWrap}>
         <CachedImage
@@ -167,8 +168,8 @@ const FeaturedCollectionCard = React.memo(function FeaturedCollectionCard({
       activeOpacity={0.94}
       scaleValue={0.99}
       accessibilityRole="button"
-      accessibilityLabel={`Featured collection: ${collection.title}`}
-      accessibilityHint="Opens the collection detail"
+      accessibilityLabel={t('accessibility.featuredCollection', { title: collection.title })}
+      accessibilityHint={t('accessibility.collectionHint')}
     >
       <CachedImage
         uri={collection.coverImage}
@@ -212,6 +213,7 @@ const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
   testID?: string;
 }) {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
   const { formatFromFiat } = useFormattedPrice();
   const { width: SCREEN_W } = useWindowDimensions();
   const MASONRY_COL_WIDTH =
@@ -226,8 +228,8 @@ const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
       activeOpacity={0.92}
       scaleValue={0.98}
       accessibilityRole="button"
-      accessibilityLabel={`${asset.title}, valued at ${formatFromFiat(asset.valuation)}`}
-      accessibilityHint="Opens the asset detail"
+      accessibilityLabel={t('accessibility.asset', { title: asset.title, value: formatFromFiat(asset.valuation) })}
+      accessibilityHint={t('accessibility.assetHint')}
       testID={testID}
     >
       <View style={[styles.assetImageWrap, { height: imageHeight }]}>
@@ -266,6 +268,7 @@ const EditorialListItem = React.memo(function EditorialListItem({
   size?: 'large' | 'standard';
 }) {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
   const { width: SCREEN_W } = useWindowDimensions();
   const heroHeight = size === 'large'
     ? Math.round(SCREEN_W * (5 / 8))
@@ -275,7 +278,7 @@ const EditorialListItem = React.memo(function EditorialListItem({
     <View style={[styles.editorialItem, isLast && styles.editorialItemLast]}>
       <View
         accessibilityRole="image"
-        accessibilityLabel={`Editorial: ${editorial.title}`}
+        accessibilityLabel={t('accessibility.editorial', { title: editorial.title })}
       >
         <View style={[styles.editorialHeroWrap, { height: heroHeight }]}>
           <CachedImage
@@ -362,11 +365,12 @@ function HeroSkeleton() {
 
 function CollectionRailSkeleton() {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
   return (
     <HorizontalRail
       contentContainerStyle={styles.railContent}
       showsHorizontalScrollIndicator={false}
-      accessibilityLabel="Loading curated collections"
+      accessibilityLabel={t('accessibility.loadingCollections')}
     >
       {Array.from({ length: 4 }).map((_, i) => (
         <View key={i} style={[styles.collectionCard, { width: COLLECTION_CARD_WIDTH }]}>
@@ -588,7 +592,7 @@ export default function GalleriaScreen() {
               <HorizontalRail
                 contentContainerStyle={styles.railContent}
                 showsHorizontalScrollIndicator={false}
-                accessibilityLabel="Curated collections rail"
+                accessibilityLabel={t('accessibility.collectionsRail')}
               >
                 {railCollections.map((col) => (
                   <CollectionRailCard
@@ -661,8 +665,8 @@ export default function GalleriaScreen() {
             activeOpacity={0.92}
             scaleValue={0.98}
             accessibilityRole="button"
-            accessibilityLabel="Open Poster Studio"
-            accessibilityHint="Create posters, looks, and moodboard collages"
+            accessibilityLabel={t('accessibility.openPosterStudio')}
+            accessibilityHint={t('accessibility.posterStudioHint')}
           >
             <Ionicons name="create-outline" size={22} color={colors.brand} />
             <View style={styles.moodboardCtaCopy}>

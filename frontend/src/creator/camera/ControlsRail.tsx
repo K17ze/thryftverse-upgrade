@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Type, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 const CONTROL_RAIL_ICON = 22;
 
@@ -93,7 +94,7 @@ const styles = StyleSheet.create({
   },
   railLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     color: 'rgba(255,255,255,0.85)',
   },
   btnPressed: {

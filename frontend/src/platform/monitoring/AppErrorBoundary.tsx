@@ -305,7 +305,7 @@ function createStyles(colors: ThemeColors) {
     logoText: {
       color: colors.textPrimary,
       fontFamily: Typography.family.bold,
-      fontSize: 24,
+      fontSize: TypographyV2.display.size,
       letterSpacing: -0.4,
       textAlign: 'center' },
     iconBox: {

@@ -106,7 +106,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
     cancelLabel: string;
     onConfirm: () => void;
     variant: 'default' | 'danger';
-  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
+  }>(() => ({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' as const }));
 
   const load = useCallback(async (silent = false) => {
     if (!currentUser?.id) {

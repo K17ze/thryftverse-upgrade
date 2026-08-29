@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   RefreshControl,
   ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +20,7 @@ import {
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { FlashList } from '@shopify/flash-list';
 
 import { Space, Radius, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -286,8 +286,10 @@ export default function SavedAddressesScreen({ navigation }: Props) {
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
-      <ScrollView
-        style={{ flex: 1 }}
+      <FlashList
+        data={loadState === 'populated' ? addresses : []}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={({ item, index }) => renderAddressCard(item, index)}
         contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xl }}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -297,53 +299,59 @@ export default function SavedAddressesScreen({ navigation }: Props) {
             tintColor={colors.textMuted}
           />
         }
-      >
-        {loadState === 'loading' ? (
-          <View style={styles.skeletonWrap}>
-            {[0, 1].map((i) => (
-              <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.skeletonLine, { width: '30%', backgroundColor: colors.surfaceAlt }]} />
-                <View style={{ height: 8 }} />
-                <View style={[styles.skeletonLine, { width: '90%', backgroundColor: colors.surfaceAlt }]} />
-                <View style={{ height: 6 }} />
-                <View style={[styles.skeletonLine, { width: '60%', backgroundColor: colors.surfaceAlt }]} />
-              </View>
-            ))}
-          </View>
-        ) : loadState === 'empty' ? (
-          <FlagshipState
-            variant="empty"
-            icon="location-outline"
-            title="No saved addresses"
-            subtitle="Add a delivery address for faster checkout. Add multiple addresses and choose a default."
-            actionLabel="Add address"
-            onAction={handleAdd}
-          />
-        ) : loadState === 'error' ? (
-          <FlagshipState
-            variant="error"
-            title="Could not load addresses"
-            subtitle="Check your connection and try again."
-            actionLabel="Retry"
-            onAction={() => void fetchAddresses()}
-          />
-        ) : (
-          <View style={styles.listWrap}>
-              <View style={styles.postureSummary}>
-                <Text style={[styles.postureTitle, { color: colors.textPrimary }]}>
-                  {addresses.length} address{addresses.length === 1 ? '' : 'es'}
-                </Text>
-                <Text style={[styles.postureSubtitle, { color: colors.textSecondary }]}>
-                  {addresses.find((a) => a.isDefault) ? `${addresses.find((a) => a.isDefault)?.name} is default` : 'No default set'}
-                </Text>
-              </View>
-            {addresses.map((address, index) => renderAddressCard(address, index))}
+        ListHeaderComponent={
+          loadState === 'populated' ? (
+            <View style={styles.postureSummary}>
+              <Text style={[styles.postureTitle, { color: colors.textPrimary }]}>
+                {addresses.length} address{addresses.length === 1 ? '' : 'es'}
+              </Text>
+              <Text style={[styles.postureSubtitle, { color: colors.textSecondary }]}>
+                {addresses.find((a) => a.isDefault) ? `${addresses.find((a) => a.isDefault)?.name} is default` : 'No default set'}
+              </Text>
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          loadState === 'populated' ? (
             <Text style={[styles.listFootnote, { color: colors.textMuted }]}>
               Addresses are used at checkout and for delivery. The default address is selected automatically.
             </Text>
-          </View>
-        )}
-      </ScrollView>
+          ) : null
+        }
+        ListEmptyComponent={
+          loadState === 'loading' ? (
+            <View style={styles.skeletonWrap}>
+              {[0, 1].map((i) => (
+                <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View style={[styles.skeletonLine, { width: '30%', backgroundColor: colors.surfaceAlt }]} />
+                  <View style={{ height: 8 }} />
+                  <View style={[styles.skeletonLine, { width: '90%', backgroundColor: colors.surfaceAlt }]} />
+                  <View style={{ height: 6 }} />
+                  <View style={[styles.skeletonLine, { width: '60%', backgroundColor: colors.surfaceAlt }]} />
+                </View>
+              ))}
+            </View>
+          ) : loadState === 'empty' ? (
+            <FlagshipState
+              variant="empty"
+              icon="location-outline"
+              title="No saved addresses"
+              subtitle="Add a delivery address for faster checkout. Add multiple addresses and choose a default."
+              actionLabel="Add address"
+              onAction={handleAdd}
+            />
+          ) : loadState === 'error' ? (
+            <FlagshipState
+              variant="error"
+              title="Could not load addresses"
+              subtitle="Check your connection and try again."
+              actionLabel="Retry"
+              onAction={() => void fetchAddresses()}
+            />
+          ) : null
+        }
+        ItemSeparatorComponent={loadState === 'populated' ? () => <View style={{ height: Space.md }} /> : undefined}
+      />
 
       <ConfirmationSheet
         visible={confirmSheet.visible}

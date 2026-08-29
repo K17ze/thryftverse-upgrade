@@ -105,5 +105,5 @@ function createStyles(colors: ThemeColors) {
     color: colors.brand,
     letterSpacing: 0.1 },
   chipTextSm: {
-    fontSize: 10 } });
+    fontSize: TypographyV2.meta.size } });
 }

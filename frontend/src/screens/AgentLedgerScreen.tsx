@@ -31,6 +31,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useStore } from '../store/useStore';
+import { useShallow } from 'zustand/react/shallow';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import type { AgentRunInfo, ApprovalRequestInfo } from '../services/botsApi';
 import { useAppTranslation } from '../i18n/useAppTranslation';
@@ -79,15 +80,15 @@ export default function AgentLedgerScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { t } = useAppTranslation('agentLedger');
 
-  const agentRuns = useStore((s) => s.agentRuns);
+  const agentRuns = useStore(useShallow((s) => s.agentRuns));
   const loadAgentRuns = useStore((s) => s.loadAgentRuns);
   const cancelAgentRun = useStore((s) => s.cancelAgentRun);
-  const pendingApprovals = useStore((s) => s.pendingApprovals);
+  const pendingApprovals = useStore(useShallow((s) => s.pendingApprovals));
   const loadPendingApprovals = useStore((s) => s.loadPendingApprovals);
   const approveRequest = useStore((s) => s.approveRequest);
   const rejectRequest = useStore((s) => s.rejectRequest);
-  const customBots = useStore((s) => s.customBots);
-  const availableChatBots = useStore((s) => s.availableChatBots);
+  const customBots = useStore(useShallow((s) => s.customBots));
+  const availableChatBots = useStore(useShallow((s) => s.availableChatBots));
 
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);

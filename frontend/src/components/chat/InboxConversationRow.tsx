@@ -331,7 +331,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 5,
     marginLeft: 2 },
   unreadBadgeText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
     lineHeight: 12 },

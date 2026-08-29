@@ -5,7 +5,8 @@ import {
   StyleSheet,
   Pressable,
   RefreshControl,
-  ScrollView } from 'react-native';
+  ScrollView,
+  FlatList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -300,7 +301,12 @@ export default function SellerVerificationScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
                   Action required
                 </Text>
-                {pendingDemands.map((d, i) => renderDemand(d, i === pendingDemands.length - 1))}
+                <FlatList
+                  data={pendingDemands}
+                  keyExtractor={(item) => String(item.id)}
+                  renderItem={({ item, index }) => renderDemand(item, index === pendingDemands.length - 1)}
+                  scrollEnabled={false}
+                />
               </View>
             )}
 
@@ -310,7 +316,12 @@ export default function SellerVerificationScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
                   History
                 </Text>
-                {otherDemands.map((d, i) => renderDemand(d, i === otherDemands.length - 1))}
+                <FlatList
+                  data={otherDemands}
+                  keyExtractor={(item) => String(item.id)}
+                  renderItem={({ item, index }) => renderDemand(item, index === otherDemands.length - 1)}
+                  scrollEnabled={false}
+                />
               </View>
             )}
           </>

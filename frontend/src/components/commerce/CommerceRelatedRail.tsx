@@ -172,7 +172,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.xs,
     borderRadius: Radius.md },
   badgeText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.scrimTextPrimary,
     letterSpacing: 0.3 },
@@ -194,7 +194,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: TypographyV2.meta.fontFamily },
   cardMeta: {
     marginTop: 2,
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.regular },
   cardMetaStrong: {
     fontFamily: Typography.family.semibold } });

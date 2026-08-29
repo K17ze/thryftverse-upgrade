@@ -23,6 +23,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { FontFamily, Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
@@ -124,7 +125,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: FontFamily.semibold,
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
     color: ZONE_LABEL,
     letterSpacing: 0.2,
   },

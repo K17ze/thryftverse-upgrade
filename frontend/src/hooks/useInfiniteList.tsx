@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator, Pressable, StyleSheet } from 'react-nati
 import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants

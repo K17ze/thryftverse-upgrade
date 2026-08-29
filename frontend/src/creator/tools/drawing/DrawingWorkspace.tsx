@@ -1067,11 +1067,11 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       justifyContent: 'center' },
     emojiCellText: {
       // Emoji glyph size — canvas-specific, not a type token.
-      fontSize: 28,
+      fontSize: TypographyV2.hero.size,
       lineHeight: 32 },
     emojiSizePreview: {
       // Emoji glyph preview — canvas-specific, not a type token.
-      fontSize: 24,
+      fontSize: TypographyV2.display.size,
       width: Control.chrome,
       textAlign: 'center' } });
 }

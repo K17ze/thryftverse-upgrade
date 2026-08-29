@@ -200,7 +200,7 @@ function createStyles(colors: ThemeColors) {
     height: 28,
     backgroundColor: 'rgba(255,255,255,0.12)' },
   toolLabel: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     color: 'rgba(255,255,255,0.75)' },
   toolLabelActive: {

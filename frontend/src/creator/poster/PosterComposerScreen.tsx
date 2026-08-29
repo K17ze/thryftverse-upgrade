@@ -2898,7 +2898,7 @@ function createStyles(colors: ThemeColors) {
   },
   recoveryText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
     marginLeft: 8,
   },
   recoveryBtn: {
@@ -2908,7 +2908,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: 6,
   },
   recoveryBtnText: {
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
     fontWeight: '600',
   },
   recoveryDismiss: {

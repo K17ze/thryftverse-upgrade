@@ -1466,7 +1466,7 @@ function createStyles(colors: ThemeColorsType) {
     // Small, muted, regular weight — NOT uppercase eyebrows. These help
     // the user scan the sheet without adding visual noise.
     sectionLabel: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       marginBottom: Space.xs },

@@ -410,13 +410,15 @@ export default function EditListingScreen() {
     shippingMethod: 'shipping method',
     shippingPayer: 'shipping payer' };
 
-  const editCompletenessLabel = editCompleteness.canActivate
+  const editCompletenessLabel = useMemo(() => editCompleteness.canActivate
     ? 'Ready to publish'
-    : `Missing: ${editCompleteness.missingRequired.map((f) => editFieldLabelMap[f]).join(', ')}`;
+    : `Missing: ${editCompleteness.missingRequired.map((f) => editFieldLabelMap[f]).join(', ')}`,
+    [editCompleteness.canActivate, editCompleteness.missingRequired, editFieldLabelMap]);
 
-  const editRecommendedLabel = editCompleteness.missingRecommended.length > 0
+  const editRecommendedLabel = useMemo(() => editCompleteness.missingRecommended.length > 0
     ? `Suggested: ${editCompleteness.missingRecommended.map((f) => editFieldLabelMap[f]).join(', ')}`
-    : null;
+    : null,
+    [editCompleteness.missingRecommended, editFieldLabelMap]);
 
   const validate = useCallback(() => {
     const trimmedTitle = title.trim();

@@ -929,7 +929,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted },
     reactionEmoji: {
-      fontSize: 20,
+      fontSize: TypographyV2.screenTitle.size,
       lineHeight: 24 },
     // ── Empty state ────────────────────────────────────────────────────
     emptyBody: {

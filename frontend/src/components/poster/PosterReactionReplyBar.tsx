@@ -600,7 +600,7 @@ function createStyles(colors: ThemeColors) {
     // tray emoji so the reply input remains the primary element and
     // the reaction toggle reads as a secondary control.
     iconEmoji: {
-      fontSize: 24,
+      fontSize: TypographyV2.display.size,
       lineHeight: 28,
       textAlign: 'center' },
     // Reply input wrapper — frosted glass pill.
@@ -640,7 +640,7 @@ function createStyles(colors: ThemeColors) {
       position: 'absolute',
       bottom: 2,
       right: Space.sm,
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.regular,
       color: colors.scrimTextSecondary,
       fontVariant: ['tabular-nums'] },

@@ -3,6 +3,7 @@ import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography , Space, Radius, Elevation  } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption } from '../ui/Text';
 
@@ -84,7 +85,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.background,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
   },
 });

@@ -1252,7 +1252,7 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       borderRadius: Radius.sm },
     mediaGridDuration: {
       color: '#fff',
-      fontSize: 10,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: 0.2 },
     mediaGridSelectionBadge: {
@@ -1266,7 +1266,7 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       alignItems: 'center',
       ...Elevation.modal },
     mediaGridSelectionText: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.bold },
     gridFooter: {
       paddingVertical: Space.md,

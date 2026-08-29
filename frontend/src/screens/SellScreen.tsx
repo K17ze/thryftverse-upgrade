@@ -322,13 +322,15 @@ export default function SellScreen() {
     shippingMethod: 'shipping method',
     shippingPayer: 'shipping payer' };
 
-  const completenessLabel = completeness.canActivate
+  const completenessLabel = useMemo(() => completeness.canActivate
     ? 'Ready to publish'
-    : `Missing: ${completeness.missingRequired.map((f) => fieldLabelMap[f]).join(', ')}`;
+    : `Missing: ${completeness.missingRequired.map((f) => fieldLabelMap[f]).join(', ')}`,
+    [completeness.canActivate, completeness.missingRequired, fieldLabelMap]);
 
-  const recommendedLabel = completeness.missingRecommended.length > 0
+  const recommendedLabel = useMemo(() => completeness.missingRecommended.length > 0
     ? `Suggested: ${completeness.missingRecommended.map((f) => fieldLabelMap[f]).join(', ')}`
-    : null;
+    : null,
+    [completeness.missingRecommended, fieldLabelMap]);
 
   useEffect(() => {
     if (publishReady && (errorMsg || Object.keys(errors).length > 0)) {

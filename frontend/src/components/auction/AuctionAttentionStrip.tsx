@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     gap: 4 },
   kind: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     letterSpacing: 0.5,
     textTransform: 'uppercase' },
   title: {

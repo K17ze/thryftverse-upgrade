@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3 },
   videoInfoText: {
     color: '#fff',
-    fontSize: 7,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     lineHeight: 9,
     textAlign: 'center' },

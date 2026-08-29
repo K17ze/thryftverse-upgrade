@@ -227,7 +227,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.bold,
     color: colors.textPrimary },
   tabCount: {
-    fontSize: 12,
+    fontSize: TypographyV2.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     minWidth: 14 },
@@ -247,7 +247,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: 10,
     paddingHorizontal: Space.md },
   segmentLabel: {
-    fontSize: 13,
+    fontSize: TypographyV2.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     letterSpacing: -0.1 },

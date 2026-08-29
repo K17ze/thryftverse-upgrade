@@ -2474,7 +2474,7 @@ function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
           {payload.temperature}° {payload.condition}
         </Text>
         {payload.locationName ? (
-          <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: 10, color: payload.textColor, opacity: 0.7 }} numberOfLines={1}>
+          <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: payload.textColor, opacity: 0.7 }} numberOfLines={1}>
             {payload.locationName}
           </Text>
         ) : null}
@@ -2805,7 +2805,7 @@ function createProductStyles(colors: ThemeColors) {
   imageTitle: {
     color: '#fff',
     fontFamily: TypographyV2.body.fontFamily,
-    fontSize: 10 },
+    fontSize: TypographyV2.meta.size },
   imagePrice: {
     color: colors.brand,
     fontFamily: TypographyV2.body.fontFamily,
@@ -2915,7 +2915,7 @@ function createVoteStyles(colors: ThemeColors) {
     timerText: {
       color: colors.scrimTextPrimary,
       fontFamily: TypographyV2.body.fontFamily,
-      fontSize: 10 },
+      fontSize: TypographyV2.meta.size },
     optionsRow: {
       flexDirection: 'row',
       gap: 6,

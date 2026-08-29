@@ -134,7 +134,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center' } as ViewStyle,
     emoji: {
-      fontSize: 28,
+      fontSize: TypographyV2.hero.size,
       lineHeight: 32 } as TextStyle,
     emptyState: {
       alignItems: 'center',

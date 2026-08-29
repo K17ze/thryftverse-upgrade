@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
     zIndex: 5 },
   axisLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: 10.5,
+    fontSize: TypographyV2.meta.size,
     letterSpacing: LetterSpacing.normal },
   pointHit: {
     position: 'absolute',

@@ -1024,7 +1024,7 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     justifyContent: 'center',
     paddingHorizontal: Space.xs + 2 },
   activeCountBadgeText: {
-    fontSize: 11,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     color: colors.textInverse },
   clearBtn: {
@@ -1222,7 +1222,7 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     justifyContent: 'center',
     paddingHorizontal: Space.xs },
   sectionCountBadgeText: {
-    fontSize: 11,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     color: colors.textSecondary },
   seeAllRow: {

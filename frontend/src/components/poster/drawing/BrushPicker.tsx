@@ -17,6 +17,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Radius, Space } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { AnimatedPressable } from '../../AnimatedPressable';
 import type { BrushType } from '../DrawingCanvas';

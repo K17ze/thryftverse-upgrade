@@ -106,17 +106,17 @@ export default function AppealScreen({ navigation, route }: Props) {
   // ── Evidence handlers (reuse ReportScreen filmstrip pattern) ──────────
   const handlePickEvidence = useCallback(async () => {
     if (evidenceItems.length >= 3) {
-      show('Attach up to 3 photos.', 'info');
+      show(t('toast.attachUpTo3'), 'info');
       return;
     }
     if (isOffline) {
-      show('You appear to be offline. Check your connection and try again.', 'error');
+      show(t('toast.offline'), 'error');
       return;
     }
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        show('Allow photo access to upload evidence.', 'error');
+        show(t('toast.allowPhotoAccess'), 'error');
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -148,30 +148,30 @@ export default function AppealScreen({ navigation, route }: Props) {
         }
       }
       if (successCount > 0) {
-        show(`${successCount} photo${successCount > 1 ? 's' : ''} attached.`, 'success');
+        show(t('toast.photosAttached', { count: successCount }), 'success');
       } else {
-        show('Unable to upload photo(s). Try again.', 'error');
+        show(t('toast.uploadFailed'), 'error');
       }
     } catch {
-      show('Unable to upload photo(s). Try again.', 'error');
+      show(t('toast.uploadFailed'), 'error');
     } finally {
       setIsUploading(false);
     }
-  }, [evidenceItems.length, isOffline, show]);
+  }, [evidenceItems.length, isOffline, show, t]);
 
   const handleTakeEvidence = useCallback(async () => {
     if (evidenceItems.length >= 3) {
-      show('Attach up to 3 photos.', 'info');
+      show(t('toast.attachUpTo3'), 'info');
       return;
     }
     if (isOffline) {
-      show('You appear to be offline. Check your connection and try again.', 'error');
+      show(t('toast.offline'), 'error');
       return;
     }
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        show('Allow camera access to take evidence photos.', 'error');
+        show(t('toast.allowCameraAccess'), 'error');
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -195,17 +195,17 @@ export default function AppealScreen({ navigation, route }: Props) {
               : it,
           ),
         );
-        show('Photo attached.', 'success');
+        show(t('toast.photoAttached'), 'success');
       } catch {
         setEvidenceItems((prev) => prev.filter((it) => it.id !== placeholder.id));
-        show('Unable to upload photo. Try again.', 'error');
+        show(t('toast.singleUploadFailed'), 'error');
       }
     } catch {
-      show('Unable to upload photo. Try again.', 'error');
+      show(t('toast.singleUploadFailed'), 'error');
     } finally {
       setIsUploading(false);
     }
-  }, [evidenceItems.length, isOffline, show]);
+  }, [evidenceItems.length, isOffline, show, t]);
 
   const handleRemoveEvidence = useCallback((id: string) => {
     setEvidenceItems((prev) => prev.filter((it) => it.id !== id));
@@ -234,7 +234,7 @@ export default function AppealScreen({ navigation, route }: Props) {
       );
       setIsSubmitted(true);
     } catch {
-      show('The appeal could not be submitted. Check your connection and try again.', 'error');
+      show(t('toast.appealFailed'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -296,7 +296,7 @@ export default function AppealScreen({ navigation, route }: Props) {
             activeOpacity={0.78}
             scaleValue={0.98}
             accessibilityRole="button"
-            accessibilityLabel="Done"
+            accessibilityLabel={t('submitted.done')}
           >
             <Text style={styles.doneActionText}>{t('submitted.done')}</Text>
           </AnimatedPressable>
@@ -379,7 +379,7 @@ export default function AppealScreen({ navigation, route }: Props) {
             activeOpacity={0.72}
             scaleValue={0.98}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel={t('windowClosed.goBack')}
           >
             <Text style={styles.secondaryDoneText}>{t('windowClosed.goBack')}</Text>
           </AnimatedPressable>
@@ -436,7 +436,7 @@ export default function AppealScreen({ navigation, route }: Props) {
           scaleValue={0.985}
           disabled={!canSubmit}
           accessibilityRole="button"
-          accessibilityLabel="Submit appeal"
+          accessibilityLabel={t('submit.label')}
           accessibilityState={{ disabled: !canSubmit, busy: isSubmitting }}
         >
           {isSubmitting ? (
@@ -493,14 +493,14 @@ export default function AppealScreen({ navigation, route }: Props) {
           multiline
           maxLength={2000}
           textAlignVertical="top"
-          accessibilityLabel="Grounds for appeal"
+          accessibilityLabel={t('accessibility.groundsInput')}
         />
-        <Text style={styles.characterCount}>{grounds.length}/2000</Text>
+        <Text style={styles.characterCount}>{t('grounds.characterCount', { current: grounds.length, max: 2000 })}</Text>
       </View>
 
       {/* ── Evidence filmstrip (reuses ReportScreen visual language) ── */}
       <View style={styles.evidence}>
-        <Text style={styles.evidenceLabel}>Evidence photos (optional)</Text>
+        <Text style={styles.evidenceLabel}>{t('evidence.label')}</Text>
         {evidenceItems.length > 0 ? (
           <View style={styles.evidenceGrid}>
             {evidenceItems.map((item, i) => (
@@ -510,7 +510,7 @@ export default function AppealScreen({ navigation, route }: Props) {
                     source={{ uri: item.uri }}
                     style={styles.evidenceTile}
                     resizeMode="cover"
-                    accessibilityLabel={`Evidence photo ${i + 1}`}
+                    accessibilityLabel={t('accessibility.evidencePhoto', { index: i + 1 })}
                   />
                 ) : (
                   <View style={[styles.evidenceTile, styles.evidenceTilePlaceholder]} />
@@ -531,7 +531,7 @@ export default function AppealScreen({ navigation, route }: Props) {
                     onPress={() => handleRemoveEvidence(item.id)}
                     hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove evidence photo ${i + 1}`}
+                    accessibilityLabel={t('accessibility.removeEvidencePhoto', { index: i + 1 })}
                   >
                     <Ionicons name="close-circle" size={22} color={colors.danger} />
                   </Pressable>
@@ -548,10 +548,10 @@ export default function AppealScreen({ navigation, route }: Props) {
               scaleValue={0.97}
               hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel="Take evidence photo with camera"
+              accessibilityLabel={t('accessibility.takeEvidenceCamera')}
             >
               <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
-              <Text style={styles.evidenceUploadText}>Camera</Text>
+              <Text style={styles.evidenceUploadText}>{t('evidence.camera')}</Text>
             </AnimatedPressable>
             <AnimatedPressable
               style={[styles.evidenceUploadBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
@@ -559,19 +559,19 @@ export default function AppealScreen({ navigation, route }: Props) {
               scaleValue={0.97}
               hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel="Choose evidence photos from gallery"
+              accessibilityLabel={t('accessibility.chooseEvidenceGallery')}
             >
               {isUploading ? (
                 <ActivityIndicator size="small" color={colors.textPrimary} />
               ) : (
                 <Ionicons name="images-outline" size={18} color={colors.textPrimary} />
               )}
-              <Text style={styles.evidenceUploadText}>Gallery</Text>
+              <Text style={styles.evidenceUploadText}>{t('evidence.gallery')}</Text>
             </AnimatedPressable>
           </View>
         ) : null}
         <Text style={styles.evidenceCount}>
-          {evidenceItems.length}/3 photos
+          {t('evidence.count', { count: evidenceItems.length })}
         </Text>
       </View>
     </FlagshipScreen>
