@@ -142,7 +142,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
-    textTransform: 'uppercase',
   },
   itemValue: {
     fontSize: TypographyV2.body.size,

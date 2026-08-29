@@ -36,7 +36,7 @@ interface CategoryConfig {
   label: string;
   description: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
-  iconColor?: keyof ThemeColors;
+  iconColor?: Exclude<keyof ThemeColors, 'outfitBackgrounds'>;
   defaultEnabled: boolean;
   locked?: boolean;
 }

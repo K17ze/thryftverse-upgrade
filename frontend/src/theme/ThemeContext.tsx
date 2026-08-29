@@ -91,6 +91,10 @@ export interface ThemeColors {
   shadow: string;
   glassBg: string;
   glassBorder: string;
+  /** Outfit builder background swatches — warm-paper neutrals for light mode,
+   *  muted darks for dark mode. 8 curated tones per theme; replaces the
+   *  static OutfitColors array so the picker respects dark-mode parity. */
+  outfitBackgrounds: readonly string[];
 }
 
 const DARK_COLORS: ThemeColors = RAW_DARK_COLORS as ThemeColors;

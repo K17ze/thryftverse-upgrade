@@ -1,12 +1,13 @@
-Phase 4: Fix MessageContextMenu SCREEN_HEIGHT, label-everything removal, dead code cleanup
+Phase 4: label-everything removal, skeleton responsive dims, outfit theme-awareness, i18n migration, expo-image video thumbnails
 
-- Fix MessageContextMenu.tsx: replace undefined SCREEN_HEIGHT with useWindowDimensions
-- ChatInfoSection: remove toSentenceCase wrapper, use title directly
-- OrderSupportScreen: change uppercase EVIDENCE to sentence case, remove LetterSpacing.caps
-- SupportCaseDetailScreen: remove TIMELINE eyebrow, de-uppercase ADD INFORMATION, remove letterSpacing
-- SellerAnalyticsScreen: remove decorative sparkles icon from section header
-- OrderDetailScreen: remove ~400 lines of dead style definitions (counterparty, eta, escrow, shipment, detail rows)
-- en.json: add missing i18n keys for report/appeal screens, fix {count} to {{count}} interpolation
+- Remove uppercase textTransform and decorative eyebrows across CoOwn, ProductCard, CommerceDetailIdentity, SustainabilityBadge (AGENTS.md §4 label-everything disease)
+- Migrate skeletons from stale Dimensions.get('window') to reactive useWindowDimensions() (BoardSkeleton, ItemDetailSkeleton, LookDetailSkeleton, PosterViewerSkeleton)
+- Tokenize OutfitBuilder BG_COLORS to colors.outfitBackgrounds with light/dark parity (8 curated warm-paper neutrals per theme)
+- Migrate MyProfileScreen toast/completion CTAs to i18n
+- Add expo-image for SharedConversationMediaScreen video thumbnails with poster field readiness
+- Remove stale module-level Dimensions.get from AuthLandingScreen, EditListingScreen, SellScreen
+- Add ThemeColors outfitBackgrounds with readonly string[] support
+- Add i18n keys for report, appeal, sell, galleria, myProfile namespaces
 
 Generated with [Devin](https://devin.ai)
 

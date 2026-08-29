@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  Pressable,
-  Dimensions } from 'react-native';
+  Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -47,8 +46,6 @@ import {
   type ListingFieldValues,
   type ListingFieldKey } from '../contracts/listingCategoryPolicy';
 import { t } from '../i18n';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 type PickerMode = 'Category' | 'Brand' | 'Size' | 'Condition' | null;
 type RouteT = RouteProp<RootStackParamList, 'EditListing'>;

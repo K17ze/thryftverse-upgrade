@@ -1,14 +1,14 @@
 import React from 'react';
-import { View, Dimensions } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 import { Radius, Space, AvatarSize } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-const { width: W } = Dimensions.get('window');
 
 export function ItemDetailSkeleton() {
   const { colors } = useAppTheme();
+  const { width: W } = useWindowDimensions();
   const sellerCardBg = colors.surface;
 
   return (

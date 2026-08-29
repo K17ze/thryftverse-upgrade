@@ -103,6 +103,20 @@ export const DARK_COLORS = {
   shadow: '#000000',
   glassBg: 'rgba(255,255,255,0.04)',
   glassBorder: 'rgba(255,255,255,0.08)',
+
+  // Outfit builder background swatches — muted darks for dark mode.
+  // Restrained, authored palette: warm-charcoal neutrals and deep tonal
+  // backdrops, never bright/saturated. Pairs with light-mode warm-paper set.
+  outfitBackgrounds: [
+    '#1A1A1A', // deep charcoal
+    '#241F1A', // deep warm brown
+    '#1E2226', // deep slate blue
+    '#1B201C', // deep forest
+    '#221E20', // deep taupe
+    '#241E22', // deep plum
+    '#26221C', // deep clay
+    '#202020', // deep neutral grey
+  ],
 } as const;
 
 export const LIGHT_COLORS = {
@@ -188,6 +202,20 @@ export const LIGHT_COLORS = {
   shadow: '#000000',
   glassBg: 'rgba(0,0,0,0.04)',
   glassBorder: 'rgba(0,0,0,0.08)',
+
+  // Outfit builder background swatches — warm-paper neutrals for light mode.
+  // Pinterest-paper aesthetic: muted neutrals, warm greys, soft pastels.
+  // Restrained, authored palette — not a rainbow. Pairs with dark-mode set.
+  outfitBackgrounds: [
+    '#F5F1EA', // warm off-white (paper)
+    '#EDE6DA', // warm cream
+    '#E2D9CB', // light taupe
+    '#D4C9BE', // clay
+    '#CDD4DE', // dusty blue
+    '#D4D8CC', // soft sage
+    '#E0D2D0', // muted rose
+    '#D8D0E1', // soft lavender
+  ],
 } as const;
 
 // ============================================================================
@@ -213,7 +241,11 @@ export const LIGHT_COLORS = {
 // - Tab bar specific colors (use text hierarchy)
 // - sold, star colors (use text or brand)
 
-type ThemeColors = { [Key in keyof typeof DARK_COLORS]: string };
+type ThemeColors = {
+  [Key in keyof typeof DARK_COLORS]: typeof DARK_COLORS[Key] extends string
+    ? string
+    : readonly string[];
+};
 
 // Backward-compatibility alias: `borderLight` was the legacy field name for
 // what ThemeContext calls `borderSubtle`. We keep `borderLight` accessible on

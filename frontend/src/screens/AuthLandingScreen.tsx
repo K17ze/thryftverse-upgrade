@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  Dimensions,
   Pressable,
   ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -23,8 +22,6 @@ import { AppInput } from '../components/ui/AppInput';
 import { useStore } from '../store/useStore';
 import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken, loginWithPassword, type MagicLinkConsumeError } from '../services/authApi';
 import { loginWithPasskey } from '../services/passkeyApi';
-
-const { width, height } = Dimensions.get('window');
 
 WebBrowser.maybeCompleteAuthSession();
 

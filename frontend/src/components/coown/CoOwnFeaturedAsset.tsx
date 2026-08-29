@@ -177,8 +177,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   eyebrow: {
     fontSize: TypographyV2.label.size,
     fontFamily: TypographyV2.label.fontFamily,
-    letterSpacing: 1.0,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
     color: colors.scrimTextSecondary,
   },
   title: {

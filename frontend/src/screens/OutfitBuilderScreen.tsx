@@ -38,7 +38,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import { Typography, DockConstants, Radius, Space, Stroke, LetterSpacing, Control, OutfitColors } from '../theme/designTokens';
+import { Typography, DockConstants, Radius, Space, Stroke, LetterSpacing, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import {
   OutfitSlot,
@@ -55,9 +55,6 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const SLOT_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * 4) / 5;
 
 const SLOTS: OutfitSlot[] = ['top', 'bottom', 'shoes', 'outerwear', 'accessory'];
-
-/** Background swatches for the outfit preview — pastels + dark from the design token system. */
-const BG_COLORS = [...OutfitColors.pastels, OutfitColors.dark];
 
 // ── Helper Components ──
 
@@ -626,7 +623,7 @@ export default function OutfitBuilderScreen() {
               >
                 <Ionicons name="close" size={14} color={colors.textMuted} />
               </AnimatedPressable>
-              {BG_COLORS.map((c) => (
+              {colors.outfitBackgrounds.map((c) => (
                 <AnimatedPressable
                   key={c}
                   style={[

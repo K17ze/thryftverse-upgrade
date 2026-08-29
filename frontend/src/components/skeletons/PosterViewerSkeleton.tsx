@@ -1,13 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { Space, Radius } from '../../theme/designTokens';
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 // Mirrors PosterViewerScreen layout: full-screen dark immersive media viewer
 // with story progress segments at top and a subtle media placeholder.
 export function PosterViewerSkeleton() {
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   return (
     <View style={styles.container}>
       {/* Story progress segments — matches progressSegments layout */}

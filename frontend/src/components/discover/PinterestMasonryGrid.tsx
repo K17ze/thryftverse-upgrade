@@ -668,11 +668,14 @@ const BREAK_HAIRLINE_WIDTH = 24;
 function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) {
   const { colors } = useAppTheme();
   // TypographyV2 has no dedicated `eyebrow` role; `label` is the canonical
-  // uppercase role (11/14/600, letterSpacing 0.5) and is the closest semantic
-  // match for a quiet section-divider eyebrow.
+  // role (11/14/600, letterSpacing 0.5). We override the uppercase transform
+  // to keep the break label in sentence case — per anti-AI design policy,
+  // uppercase eyebrows above self-evident sections are label-everything disease.
   const eyebrowStyle = React.useMemo(
     () => ({
       ...typographyV2Style('label'),
+      textTransform: 'none' as const,
+      letterSpacing: 0.2,
       color: colors.textSecondary }),
     [colors.textSecondary],
   );

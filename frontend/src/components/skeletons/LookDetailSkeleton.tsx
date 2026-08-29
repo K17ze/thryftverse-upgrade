@@ -1,17 +1,16 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Control, AvatarSize } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 // Mirrors the LookDetailScreen layout: full-bleed hero (SCREEN_W x SCREEN_W*1.15),
 // editorial info section (eyebrow + caption + creator row), social actions row,
 // and a horizontal "Shop the look" tray with 3 placeholder cards.
 export function LookDetailSkeleton() {
   const { colors } = useAppTheme();
+  const { width: SCREEN_W } = useWindowDimensions();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

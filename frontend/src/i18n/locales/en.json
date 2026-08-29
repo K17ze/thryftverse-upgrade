@@ -573,6 +573,23 @@
       "listFirstItemSub": "Photograph and publish an item to start selling.",
       "growAudienceTitle": "Grow your audience",
       "growAudienceSub": "Share your profile and create content to attract followers."
+    },
+    "toast": {
+      "coverUpdated": "Cover updated",
+      "coverUploadFailed": "Cover upload failed",
+      "avatarUpdated": "Avatar updated",
+      "avatarUploadFailed": "Avatar upload failed"
+    },
+    "completionCta": {
+      "addName": "Add name",
+      "addBio": "Add bio",
+      "addPhoto": "Add photo",
+      "addCover": "Add cover",
+      "editProfile": "Edit profile"
+    },
+    "share": {
+      "message": "Check out @{{username}} on Thryftverse! https://thryftverse.com/@{{username}}",
+      "title": "{{name}} on Thryftverse"
     }
   },
   "galleria": {
@@ -612,6 +629,12 @@
       "title": "The Galleria is being curated",
       "subtitle": "Our curators are preparing new collections and editorial pieces. Check back soon.",
       "refresh": "Refresh"
+    },
+    "accessibility": {
+      "loadingCollections": "Loading curated collections",
+      "collectionsRail": "Curated collections rail",
+      "openPosterStudio": "Open Poster Studio",
+      "posterStudioHint": "Create posters, looks, and moodboard collages"
     }
   },
   "agentLedger": {
@@ -1064,10 +1087,6 @@
       "label": "Preview",
       "completeness": "Completeness"
     },
-    "publish": {
-      "publishing": "Publishing…",
-      "reviewPublish": "Review & publish"
-    },
     "photo": {
       "cover": "Cover",
       "enhance": "Enhance",
@@ -1087,6 +1106,27 @@
     },
     "error": {
       "retry": "Retry"
+    },
+    "toast": {
+      "photoEnhanced": "Photo enhanced",
+      "photoAccessTitle": "Photo access needed",
+      "photoAccessBody": "Photo access is required to add listing photos.",
+      "pickFailedTitle": "Pick failed",
+      "pickFailedBody": "Could not pick photos. Try again.",
+      "cameraAccessTitle": "Camera access needed",
+      "cameraAccessBody": "Camera access is required to take listing photos.",
+      "captureFailedTitle": "Capture failed",
+      "captureFailedBody": "Could not take a photo. Try again.",
+      "smartSellSavedPreviewTitle": "Smart Sell saved (preview)",
+      "smartSellSavedPreviewBody": "Your settings will be activated when Smart Sell is fully available."
+    },
+    "publish": {
+      "publishing": "Publishing…",
+      "reviewPublish": "Review & publish",
+      "signInToPublish": "Sign in to publish a listing.",
+      "offline": "You appear to be offline. Check your connection and try again.",
+      "missingFields": "Add at least one photo, a title and a price before publishing.",
+      "failed": "Failed to publish. Try again."
     }
   },
   "report": {
@@ -1154,6 +1194,19 @@
       "minorSafetyDesc": "Content or behavior endangering minors",
       "other": "Something else",
       "otherDesc": "Tell the moderation team what happened"
+    },
+    "toast": {
+      "attachUpTo3": "Attach up to 3 photos.",
+      "offline": "You appear to be offline. Check your connection and try again.",
+      "allowPhotoAccess": "Allow photo access to upload evidence.",
+      "allowCameraAccess": "Allow camera access to take evidence photos.",
+      "photosAttached": "{{count}} photo(s) attached.",
+      "uploadFailed": "Unable to upload photo(s). Try again.",
+      "singleUploadFailed": "Unable to upload photo. Try again.",
+      "photoAttached": "Photo attached.",
+      "reportFailed": "The report could not be sent. Check your connection and try again.",
+      "accountBlocked": "Account blocked",
+      "blockFailed": "Could not block this account. Try again."
     }
   },
   "appeal": {
@@ -1211,6 +1264,17 @@
     },
     "submit": {
       "label": "Submit appeal"
+    },
+    "toast": {
+      "attachUpTo3": "Attach up to 3 photos.",
+      "offline": "You appear to be offline. Check your connection and try again.",
+      "allowPhotoAccess": "Allow photo access to upload evidence.",
+      "allowCameraAccess": "Allow camera access to take evidence photos.",
+      "photosAttached": "{{count}} photo(s) attached.",
+      "uploadFailed": "Unable to upload photo(s). Try again.",
+      "singleUploadFailed": "Unable to upload photo. Try again.",
+      "photoAttached": "Photo attached.",
+      "appealFailed": "The appeal could not be submitted. Check your connection and try again."
     }
   }
 }

@@ -476,8 +476,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase' },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   title: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,

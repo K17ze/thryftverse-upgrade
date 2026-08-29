@@ -124,7 +124,7 @@ export function SustainabilityBadge({
         </View>
         <View style={styles.detailedHeaderText}>
           <Text style={[styles.eyebrow, { color: colors.textMuted }]}>
-            ENVIRONMENTAL IMPACT
+            Environmental impact
           </Text>
           <Text style={[styles.detailedTitle, { color: colors.textPrimary }]}>
             {meta.label}
@@ -246,8 +246,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase' },
+    letterSpacing: 0.2 },
   detailedTitle: {
     fontSize: TypographyV2.sectionTitle.size,
     lineHeight: TypographyV2.sectionTitle.lineHeight,

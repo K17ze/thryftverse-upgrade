@@ -90,9 +90,6 @@ export function CoOwnOwnershipPanel({
     >
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} numberOfLines={1}>
-            OWNERSHIP
-          </Text>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your stake</Text>
         </View>
         <View style={styles.headerRight}>
@@ -302,12 +299,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  sectionEyebrow: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 1.0,
-    textTransform: 'uppercase',
-  },
   sectionTitle: {
     fontSize: TypographyV2.screenTitle.size,
     fontFamily: TypographyV2.screenTitle.fontFamily,
@@ -339,7 +330,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
-    textTransform: 'uppercase',
   },
   priceRow: {
     flexDirection: 'row',
@@ -371,7 +361,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
-    textTransform: 'uppercase',
   },
   statValue: {
     fontSize: TypographyV2.bodyStrong.size,
@@ -473,7 +462,6 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
   },
   supplyRows: {
     gap: Space.xs,

@@ -166,8 +166,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.label.size,
     fontWeight: '600',
     color: colors.textSecondary,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   title: {
     fontSize: TypographyV2.screenTitle.size,

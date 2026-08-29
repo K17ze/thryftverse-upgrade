@@ -314,9 +314,9 @@ export default function MyProfileScreen() {
   const prevCoverStatus = React.useRef(coverState.status);
   React.useEffect(() => {
     if (coverState.status === 'confirmed' && prevCoverStatus.current !== 'confirmed') {
-      show('Cover updated', 'success');
+      show(tt('toast.coverUpdated'), 'success');
     } else if (coverState.status === 'failed' && prevCoverStatus.current !== 'failed') {
-      show('Cover upload failed', 'error');
+      show(tt('toast.coverUploadFailed'), 'error');
     }
     prevCoverStatus.current = coverState.status;
   }, [coverState.status, show]);
@@ -325,9 +325,9 @@ export default function MyProfileScreen() {
   const prevAvatarStatus = React.useRef(avatarState.status);
   React.useEffect(() => {
     if (avatarState.status === 'confirmed' && prevAvatarStatus.current !== 'confirmed') {
-      show('Avatar updated', 'success');
+      show(tt('toast.avatarUpdated'), 'success');
     } else if (avatarState.status === 'failed' && prevAvatarStatus.current !== 'failed') {
-      show('Avatar upload failed', 'error');
+      show(tt('toast.avatarUploadFailed'), 'error');
     }
     prevAvatarStatus.current = avatarState.status;
   }, [avatarState.status, show]);
@@ -389,12 +389,12 @@ export default function MyProfileScreen() {
   // direct profile field. Listing/audience growth CTAs live in the separate
   // growth-tasks section below the identity hero.
   const completionCta = React.useMemo<{ label: string; focus?: 'avatar' | 'cover' }>(() => {
-    if (!user?.displayName?.trim()) return { label: 'Add name' };
-    if (!user?.bio?.trim()) return { label: 'Add bio' };
-    if (!displayAvatar) return { label: 'Add photo', focus: 'avatar' };
-    if (!displayCover) return { label: 'Add cover', focus: 'cover' };
-    return { label: 'Edit profile' };
-  }, [user?.displayName, user?.bio, displayAvatar, displayCover]);
+    if (!user?.displayName?.trim()) return { label: tt('completionCta.addName') };
+    if (!user?.bio?.trim()) return { label: tt('completionCta.addBio') };
+    if (!displayAvatar) return { label: tt('completionCta.addPhoto'), focus: 'avatar' };
+    if (!displayCover) return { label: tt('completionCta.addCover'), focus: 'cover' };
+    return { label: tt('completionCta.editProfile') };
+  }, [user?.displayName, user?.bio, displayAvatar, displayCover, tt]);
 
   const [completionDismissed, setCompletionDismissed] = React.useState(false);
   // Re-show the prompt when completion improves so progress is celebrated once.

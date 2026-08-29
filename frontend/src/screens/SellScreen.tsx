@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  Dimensions,
   Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -70,8 +69,6 @@ import AuctionFieldsSection from '../components/sell/AuctionFieldsSection';
 import SellerTipsBanner from '../components/sell/SellerTipsBanner';
 import ShippingPickerSheet from '../components/sell/ShippingPickerSheet';
 import TagInputWithSuggestions from '../components/sell/TagInputWithSuggestions';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export default function SellScreen() {
   const a11yRef = useRef<any>(null);

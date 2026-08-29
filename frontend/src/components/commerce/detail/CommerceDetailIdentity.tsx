@@ -227,7 +227,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6 },

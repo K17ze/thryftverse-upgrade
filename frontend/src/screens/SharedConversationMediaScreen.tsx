@@ -6,6 +6,7 @@ import {
   useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
+import { Image as ExpoImage } from 'expo-image';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -25,6 +26,8 @@ const GAP = 2;
 const COLS = 3;
 const FILTER_THRESHOLD = 6;
 const CHECK_SIZE = 22;
+const VIDEO_PLAY_BADGE = 40;
+const VIDEO_PLAY_ICON = 22;
 
 type MediaItem = {
   id: string;
@@ -32,6 +35,14 @@ type MediaItem = {
   isVideo: boolean;
   senderLabel: string;
   timestamp?: string;
+  /**
+   * Optional poster/thumbnail URL for video items. The current Message
+   * contract (domain/conversation.ts) only carries `mediaUri`/`mediaType`,
+   * so this is undefined today — mapped here so the tile renders a real
+   * thumbnail the moment a poster field is added upstream, instead of
+   * regressing to a placeholder play-icon tile (AGENTS.md §4).
+   */
+  thumbnailUri?: string;
 };
 
 type Filter = 'all' | 'photos' | 'videos';
@@ -65,7 +76,8 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         mediaUri: m.mediaUri!,
         isVideo: m.mediaType === 'video' || isVideoUri(m.mediaUri!),
         senderLabel: m.senderId === 'me' ? 'You' : 'Thryft user',
-        timestamp: m.timestamp }));
+        timestamp: m.timestamp,
+        thumbnailUri: undefined as string | undefined }));
   }, [conversation]);
 
   const photos = useMemo(() => allMedia.filter((m) => !m.isVideo), [allMedia]);
@@ -172,7 +184,16 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       >
         {item.isVideo ? (
           <View style={[styles.thumb, styles.videoTile, { width: thumbSize, height: thumbSize }]}>
-            <Ionicons name="play" size={28} color={colors.scrimTextPrimary} />
+            {item.thumbnailUri ? (
+              <ExpoImage
+                source={{ uri: item.thumbnailUri }}
+                style={[styles.thumb, { width: thumbSize, height: thumbSize }]}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={item.thumbnailUri}
+                accessibilityLabel="Video thumbnail"
+              />
+            ) : null}
           </View>
         ) : (
           <CachedImage
@@ -183,7 +204,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         )}
         {item.isVideo && !selectionMode && (
           <View style={styles.videoBadge}>
-            <Ionicons name="play" size={12} color={colors.scrimTextPrimary} />
+            <Ionicons name="play" size={VIDEO_PLAY_ICON} color={colors.scrimTextPrimary} />
           </View>
         )}
         {selectionMode && (
@@ -348,18 +369,18 @@ function createStyles(colors: ThemeColors) {
     thumb: {
       borderRadius: Radius.sm },
     videoTile: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center' },
     videoBadge: {
       position: 'absolute',
       top: '50%',
       left: '50%',
-      marginTop: -(Space.lg + 4) / 2,
-      marginLeft: -(Space.lg + 4) / 2,
-      width: Space.lg + 4,
-      height: Space.lg + 4,
-      borderRadius: Radius.xl,
+      marginTop: -VIDEO_PLAY_BADGE / 2,
+      marginLeft: -VIDEO_PLAY_BADGE / 2,
+      width: VIDEO_PLAY_BADGE,
+      height: VIDEO_PLAY_BADGE,
+      borderRadius: Radius.full,
       backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center' },

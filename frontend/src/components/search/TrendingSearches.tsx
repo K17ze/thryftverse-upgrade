@@ -36,7 +36,7 @@ const TREND_ICON: Record<TrendDirection, keyof typeof Ionicons.glyphMap> = {
   new: 'flash-outline',
   stable: 'remove' };
 
-const TREND_COLOR_KEY: Record<TrendDirection, keyof ThemeColors> = {
+const TREND_COLOR_KEY: Record<TrendDirection, Exclude<keyof ThemeColors, 'outfitBackgrounds'>> = {
   up: 'success',
   down: 'danger',
   new: 'brand',
