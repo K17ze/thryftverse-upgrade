@@ -62,7 +62,7 @@ function createStyles(colors: ThemeColors) {
     },
     brushTypeText: {
       color: colors.textSecondary,
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       fontFamily: Typography.family.medium,
     },
     brushTypeTextActive: {

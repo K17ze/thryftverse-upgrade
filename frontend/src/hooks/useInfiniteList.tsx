@@ -441,12 +441,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
   },
   emptyText: {
-    fontSize: 15,
+    fontSize: TypographyV2.bodyStrong.size,
     textAlign: 'center',
     marginBottom: 12,
   },
   retryText: {
-    fontSize: 15,
+    fontSize: TypographyV2.bodyStrong.size,
     fontWeight: '600',
   },
   footerContainer: {
