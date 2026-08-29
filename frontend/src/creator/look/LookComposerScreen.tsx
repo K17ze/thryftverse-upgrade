@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, Radius, Type, Typography, FontFamily, FontSize, Control, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, FontSize, Control, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke} from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { BlurView } from 'expo-blur';
@@ -27,6 +27,7 @@ import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
 import type { CreatorLayer } from '../composition';
 import { computeLookLayout, hasFullBleedMedia, LOOK_DEFAULT_ASPECT_RATIO, safeValidateDocument } from '../composition';
+import { layerTypeLabel } from '../shared/layerUtils';
 import { CreatorCanvas } from '../CreatorCanvas';
 import { CreatorLayersSheet } from '../CreatorLayersSheet';
 import { CreatorPublishSheet } from '../CreatorPublishSheet';
@@ -48,6 +49,7 @@ import { InlineTextEditor } from '../tools/text/InlineTextEditor';
 import { TrashZone } from '../surfaces/TrashZone';
 import { BackgroundSheet } from './BackgroundSheet';
 import type { CreatorBackground } from '../composition';
+import { OverflowItem } from '../studio/OverflowMenu';
 import { LookSourceTray, SourceTrayPeek } from './LookSourceTray';
 import { ContextToolRail } from '../surfaces/ContextToolRail';
 import { HelpShortcutsSheet } from '../surfaces/HelpShortcutsSheet';
@@ -98,31 +100,6 @@ import { deriveLookToolContext, buildLookToolGroups } from './lookToolRailConfig
 // This replaces the old pattern of multiple permanent rails (AutoLayoutBar,
 // LayoutPreviewRail, LookSourceTray) competing with the canvas.
 type BottomSurface = 'tools' | 'items' | 'layout' | 'effects' | null;
-
-function layerTypeLabel(type: CreatorLayer['type']): string {
-  switch (type) {
-    case 'media': return 'Photo';
-    case 'text': return 'Text';
-    case 'product': return 'Item';
-    case 'mention': return 'Mention';
-    case 'look': return 'Look';
-    case 'vote': return 'Vote';
-    case 'quiz': return 'Quiz';
-    case 'question': return 'Question';
-    case 'emojiSlider': return 'Slider';
-    case 'countdown': return 'Countdown';
-    case 'decorative': return 'Shape';
-    case 'draw': return 'Drawing';
-    case 'gif': return 'GIF';
-    case 'music': return 'Music';
-    case 'link': return 'Link';
-    case 'location': return 'Location';
-    case 'hashtag': return 'Hashtag';
-    case 'time': return 'Time';
-    case 'weather': return 'Weather';
-    default: return 'Object';
-  }
-}
 
 // ── SlideUpSurface — wraps a bottom surface with a slide-up entrance ──
 // Per spec: "Reanimated for surface transitions (slide in/out)." Each
@@ -1343,7 +1320,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
 
                 <View style={styles.topCenter}>
                   <Text style={[styles.titleText, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {layerTypeLabel(selectedLayer.type)}
+                    {layerTypeLabel(selectedLayer.type, 'look')}
                   </Text>
                 </View>
 
@@ -1658,7 +1635,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
             <OverflowItem
               icon={showSafeZone ? 'scan-circle-outline' : 'scan-outline'}
               label={showSafeZone ? 'Safe Zone On' : 'Safe Zone'}
-              onPress={() => { setShowSafeZone(!showSafeZone); setShowOverflow(false); haptic.light(); }}
+              onPress={() => { setShowSafeZone(!showSafeZone); setShowOverflow(false); }}
               colors={colors}
             />
             <OverflowItem
@@ -1735,7 +1712,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         visible={showA11yZOrder}
         layers={(page?.layers ?? []).map((l) => ({
           id: l.id,
-          label: layerTypeLabel(l.type),
+          label: layerTypeLabel(l.type, 'look'),
           zIndex: l.zIndex,
         })) as ZOrderLayer[]}
         selectedLayerId={selectedLayerId}
@@ -1918,32 +1895,6 @@ const LayoutPanel = React.memo(function LayoutPanel({
         {children}
       </View>
     </View>
-  );
-});
-
-// ── Overflow menu item ───────────────────────────────────────────────
-const OverflowItem = React.memo(function OverflowItem({
-  icon,
-  label,
-  onPress,
-  colors,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  onPress: () => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-}) {
-  return (
-    <PressScale
-      onPress={onPress}
-      style={styles.overflowItem}
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
-    >
-      <Ionicons name={icon} size={IconGrammar.standard} color={colors.textPrimary} />
-      <Text style={[styles.overflowItemText, { color: colors.textPrimary }]}>{label}</Text>
-    </PressScale>
   );
 });
 
@@ -2139,7 +2090,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
     borderRadius: EditorRadius.plate,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: EditorMaterial.plate.hairline,
     overflow: 'hidden',
   },
@@ -2174,7 +2125,7 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     minHeight: Control.hit,
     backgroundColor: 'rgba(201, 164, 106, 0.08)',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(201, 164, 106, 0.2)',
     borderRadius: Radius.md,
   },
@@ -2240,17 +2191,6 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     minWidth: 180,
     overflow: 'hidden',
-  },
-  overflowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-  },
-  overflowItemText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
   },
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,

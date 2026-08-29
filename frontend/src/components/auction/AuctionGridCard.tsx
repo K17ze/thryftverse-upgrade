@@ -157,7 +157,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.border}40`,
+    borderColor: colors.borderSubtle,
   },
   personalMarkerOutbid: {
     backgroundColor: colors.danger,

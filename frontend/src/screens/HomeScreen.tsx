@@ -60,7 +60,7 @@ import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, FontFamily, Stroke, Type, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Type, Typography, Elevation, Control, AvatarSize } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
@@ -103,6 +103,9 @@ const POSTER_CARD_WIDTH = 76;
 const POSTER_CARD_HEIGHT = 135;
 const LISTING_CARD_CHROME_HEIGHT = 110;
 const SCREEN_WIDTH = Dimensions.get('window').width;
+// Look rail card dimensions — used in the feed interruption rail for Looks.
+const LOOK_CARD_WIDTH = 120;
+const LOOK_CARD_HEIGHT = 160;
 
 // Skeleton variation communicates loading without inventing media geometry.
 const SKELETON_HEIGHT_RATIOS = [1.25, 1.08, 1.32, 1.16] as const;
@@ -869,20 +872,20 @@ export default function HomeScreen() {
                   <Pressable
                     key={look.id}
                     onPress={() => { haptic.light(); navigation.navigate('LookDetail', { lookId: look.id }); }}
-                    style={{ width: 120, borderRadius: Radius.lg, overflow: 'hidden' }}
+                    style={{ width: LOOK_CARD_WIDTH, borderRadius: Radius.lg, overflow: 'hidden' }}
                     accessibilityRole="button"
                     accessibilityLabel={`Open Look${look.title ? ` ${look.title}` : ''}${look.taggedCount ? `, ${look.taggedCount} tagged items` : ''}`}
                     accessibilityHint="Opens Look details"
                   >
                     <CachedImage
                       uri={look.mediaUri}
-                      style={{ width: 120, height: 160 }}
+                      style={{ width: LOOK_CARD_WIDTH, height: LOOK_CARD_HEIGHT }}
                       contentFit="cover"
-                      downscaleWidth={120}
+                      downscaleWidth={LOOK_CARD_WIDTH}
                     />
                     {look.taggedCount && look.taggedCount > 0 ? (
-                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.overlay, borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: 2 }}>
-                        <Text style={{ color: colors.scrimTextPrimary, fontSize: 10, fontFamily: Typography.family.semibold }}>
+                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.overlay, borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: Space.xxs }}>
+                        <Text style={{ color: colors.scrimTextPrimary, fontSize: Type.meta.size, fontFamily: Typography.family.semibold }}>
                           {look.taggedCount} items
                         </Text>
                       </View>
@@ -934,13 +937,13 @@ export default function HomeScreen() {
       <Reanimated.View style={[styles.floatingHeaderShell, headerHeightStyle, headerShadowStyle]}>
         <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
 
-        <View style={[styles.headerForeground, { paddingTop: insets.top + 2, paddingBottom: 8 }]}>
+        <View style={[styles.headerForeground, { paddingTop: insets.top + Space.xxs, paddingBottom: Space.sm }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
             <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3}>Thryftverse</Text>
             {isGuest ? (
               <Pressable
                 onPress={() => navigation.navigate('AuthLanding')}
-                hitSlop={{ top: 4, bottom: 4, left: 0, right: 0 }}
+                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                 accessibilityRole="link"
                 accessibilityLabel="Browsing as guest. Tap to sign in."
                 accessibilityHint="Opens the sign-in screen"
@@ -1180,12 +1183,12 @@ export default function HomeScreen() {
         ListFooterComponent={
           isLoadingMore ? (
             <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-              <Text style={{ color: colors.textMuted, fontSize: 13 }} maxFontSizeMultiplier={1.8}>Loading more...</Text>
+              <Text style={{ color: colors.textMuted, fontSize: Type.captionElevated.size }} maxFontSizeMultiplier={1.8}>Loading more...</Text>
             </View>
           ) : !hasMore && feedGridData.length > 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: Space.lg, gap: Space.sm }}>
               <View style={{ width: 40, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: Typography.family.regular }} maxFontSizeMultiplier={1.8}>
+              <Text style={{ color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.regular }} maxFontSizeMultiplier={1.8}>
                 You've reached the end
               </Text>
             </View>
@@ -1321,8 +1324,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // Guest indicator — a small, restrained text label below the brand title.
   // Not a banner; communicates state and provides a sign-in entry point.
   guestLabel: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: FontFamily.medium,
     letterSpacing: 0.1,
     color: colors.textMuted,
@@ -1330,7 +1333,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   headerRight: {
     flexDirection: 'row',
-    gap: 2,
+    gap: Space.xxs,
   },
   // Live shopping badge — additive entry point gated by the
   // live_shopping_enabled feature flag. A compact pill with a live dot so
@@ -1343,7 +1346,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.sm,
     marginRight: Space.xxs,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: `${colors.danger}14`,
+    backgroundColor: colors.dangerSubtle,
     alignSelf: 'center',
   },
   liveDot: {
@@ -1383,8 +1386,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   headerBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1398,22 +1401,22 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     borderWidth: Stroke.standard,
     borderColor: colors.background,
   },
   notificationBadgeText: {
     color: colors.textInverse,
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: 'Inter_700Bold',
-    lineHeight: 12,
+    lineHeight: Type.meta.lineHeight,
     fontVariant: ['tabular-nums'],
   },
   feedContent: {
     paddingBottom: 120,
   },
   feedTabBar: {
-    minHeight: 44,
+    minHeight: Control.hit,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     flexDirection: 'row',
@@ -1424,7 +1427,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   feedTab: {
     minWidth: 76,
-    minHeight: 44,
+    minHeight: Control.hit,
     paddingHorizontal: Space.xxs,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1575,17 +1578,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     top: 5,
     left: 5,
-    width: 24,
-    height: 24,
+    width: AvatarSize.inline,
+    height: AvatarSize.inline,
     borderRadius: Radius.full,
     overflow: 'hidden',
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.scrimTextPrimary,
     ...Elevation.floating,
   },
   posterAvatarOverlayWrap: {
-    width: 24,
-    height: 24,
+    width: AvatarSize.inline,
+    height: AvatarSize.inline,
     borderRadius: Radius.full,
   },
   posterAvatarOverlayImage: {
@@ -1601,7 +1604,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   posterOwnerPill: {
     flexDirection: 'row',
@@ -1611,7 +1614,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 3,
     borderRadius: Radius.lg,
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   posterOwnerAvatarWrap: {
     width: 14,
@@ -1625,7 +1628,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   posterOwnerName: {
     color: colors.scrimTextPrimary,
-    fontSize: 8,
+    fontSize: Type.meta.size,
     fontFamily: FontFamily.medium,
     flex: 1,
   },
@@ -1640,7 +1643,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   posterExpiryText: {
     color: colors.scrimTextPrimary,
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: FontFamily.bold,
   },
   posterBottomOverlay: {
@@ -1648,14 +1651,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 7,
     backgroundColor: colors.overlay,
   },
   posterCaption: {
     color: colors.scrimTextPrimary,
-    fontSize: 9,
-    lineHeight: 12,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: FontFamily.medium,
   },
   posterCreatorOverlay: {
@@ -1666,7 +1669,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     minHeight: 22,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     paddingHorizontal: 6,
     borderRadius: RadiusRoleValue.compactControl,
     backgroundColor: colors.overlay,
@@ -1674,8 +1677,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterCreatorName: {
     flex: 1,
     color: colors.scrimTextPrimary,
-    fontSize: 9,
-    lineHeight: 12,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: FontFamily.semibold,
   },
   frameCountBadge: {
@@ -1684,15 +1687,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: Space.xxs,
     backgroundColor: colors.overlay,
     borderRadius: Radius.md,
     paddingHorizontal: 5,
-    paddingVertical: 2,
+    paddingVertical: Space.xxs,
   },
   frameCountBadgeText: {
     color: colors.scrimTextPrimary,
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: FontFamily.bold,
   },
   unwatchedBadge: {
@@ -1702,11 +1705,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.brand,
     borderRadius: Radius.md,
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: Space.xxs,
   },
   unwatchedBadgeText: {
     color: colors.textInverse,
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: FontFamily.bold,
   },
   posterFreshDot: {
@@ -1781,18 +1784,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   peekGhostBtn: {
     flex: 1,
-    height: 44,
+    height: Control.hit,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'transparent',
   },
   peekGhostText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.semibold,
     color: colors.textPrimary,
   },
   peekPrimaryBtn: {
     flex: 1,
-    height: 44,
+    height: Control.hit,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'transparent',
   },
@@ -1803,7 +1806,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'transparent',
   },
   peekPrimaryText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.bold,
     color: colors.background,
   },

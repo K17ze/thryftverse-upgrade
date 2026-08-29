@@ -133,14 +133,14 @@ export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
                 <ShimmerBar
                   width="100%"
                   height={12}
-                  color={isMe ? `${colors.textInverse}25` : barColor}
+                  color={isMe ? colors.scrimTextTertiary : barColor}
                   shimmer={shimmer}
                 />
                 <ShimmerBar
                   width="60%"
                   height={12}
                   style={{ marginTop: Space.xs }}
-                  color={isMe ? `${colors.textInverse}25` : barColor}
+                  color={isMe ? colors.scrimTextTertiary : barColor}
                   shimmer={shimmer}
                 />
               </View>

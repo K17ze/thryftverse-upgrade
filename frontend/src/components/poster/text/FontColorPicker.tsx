@@ -512,7 +512,7 @@ function createStyles(colors: ThemeColors) {
       width: 32,
       height: 32,
       borderRadius: Radius.full,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.borderSubtle,
       alignItems: 'center',
       justifyContent: 'center',

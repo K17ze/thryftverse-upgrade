@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type, Stroke} from '../../theme/designTokens';
 
 export interface OrderActionConfig {
   label: string;
@@ -129,7 +129,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   btnSecondary: {
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   btnDestructive: {

@@ -499,9 +499,9 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: `${colors.brand}08`,
+    backgroundColor: colors.brandSubtle,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.brand}25`,
+    borderColor: colors.brandBorder,
     gap: Space.xs + 2,
   },
   guidanceHeader: {
@@ -545,7 +545,7 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   topicRowActive: {
-    backgroundColor: `${colors.brand}0A`,
+    backgroundColor: colors.brandSubtle,
   },
   topicText: {
     flex: 1,

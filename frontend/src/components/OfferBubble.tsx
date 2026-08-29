@@ -61,7 +61,7 @@ export function OfferBubble({
           icon: 'pricetag',
           color: colors.brand,
           label: 'Offer',
-          bgColor: `${colors.brand}15`,
+          bgColor: colors.brandSubtle,
         };
       case 'counter':
         return {
@@ -75,14 +75,14 @@ export function OfferBubble({
           icon: 'checkmark-circle',
           color: colors.success,
           label: 'Accepted',
-          bgColor: `${colors.success}15`,
+          bgColor: colors.successSubtle,
         };
       case 'decline':
         return {
           icon: 'close-circle',
           color: colors.danger,
           label: 'Declined',
-          bgColor: `${colors.danger}15`,
+          bgColor: colors.dangerSubtle,
         };
       case 'expired':
         return {
@@ -267,7 +267,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm + 2,
-      backgroundColor: `${colors.textPrimary}08`,
+      backgroundColor: colors.surfaceAlt,
       padding: Space.sm,
       borderRadius: Radius.md,
       marginBottom: Space.smMd,

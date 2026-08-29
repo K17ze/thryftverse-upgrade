@@ -347,7 +347,7 @@ function createStyles(colors: ThemeColors) {
     width: 28,
     height: 28,
     borderRadius: Radius.xl,
-    backgroundColor: `${colors.brand}20`,
+    backgroundColor: colors.brandSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -404,7 +404,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.sm,
-    backgroundColor: `${colors.brand}10`,
+    backgroundColor: colors.brandSubtle,
     alignSelf: 'flex-start',
   },
   answerBtnPressed: {

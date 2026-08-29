@@ -135,13 +135,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   backgroundLeft: {
     left: 0,
-    backgroundColor: `${colors.textMuted}30`,
+    backgroundColor: colors.borderSubtle,
     borderTopLeftRadius: Radius.lg,
     borderBottomLeftRadius: Radius.lg,
   },
   backgroundRight: {
     right: 0,
-    backgroundColor: `${colors.brand}30`,
+    backgroundColor: colors.brandSubtle,
     borderTopRightRadius: Radius.lg,
     borderBottomRightRadius: Radius.lg,
   },

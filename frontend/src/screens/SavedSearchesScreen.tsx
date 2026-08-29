@@ -106,7 +106,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       alignItems: 'center',
     },
     tabActive: {
-      backgroundColor: `${colors.brand}12`,
+      backgroundColor: colors.brandSubtle,
       borderColor: colors.brand,
     },
     tabText: {
@@ -174,7 +174,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       gap: Space.xs + 2,
     },
     newBadge: {
-      backgroundColor: `${colors.brand}15`,
+      backgroundColor: colors.brandSubtle,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.xs + 3,
       paddingVertical: Space.xs / 2,
@@ -190,7 +190,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      backgroundColor: `${colors.brand}10`,
+      backgroundColor: colors.brandSubtle,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 2,

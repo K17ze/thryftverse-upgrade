@@ -1488,7 +1488,7 @@ function createStyles(colors: ThemeColorsType) {
       overflow: 'hidden',
     },
     textInput: {
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,

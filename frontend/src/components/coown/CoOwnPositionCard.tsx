@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 import type { CoOwnPositionState as CanonicalCoOwnPositionState } from '../../data/coOwnModels';
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   sellBtnText: {
     fontSize: Type.body.size,

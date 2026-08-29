@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
   // ── Phase 2.5: market warning card ──
   warningCard: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     padding: Space.md,
     gap: Space.xs,
   },

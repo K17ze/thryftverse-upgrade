@@ -951,6 +951,7 @@ export default function ItemDetailScreen() {
                     style={[
                       styles.conditionChip,
                       {
+                        // TODO: replace `${conditionMeta.color}66` and `${conditionMeta.color}14` with conditionColorSubtle token when available
                         borderColor: conditionMeta ? `${conditionMeta.color}66` : colors.borderSubtle,
                         backgroundColor: conditionMeta ? `${conditionMeta.color}14` : 'transparent',
                       },
@@ -1416,7 +1417,7 @@ export default function ItemDetailScreen() {
                         Price drop alerts
                       </Text>
                     </View>
-                    <View style={[styles.toggleTrack, { borderColor: priceAlertEnabled ? colors.brand : colors.border, backgroundColor: priceAlertEnabled ? `${colors.brand}20` : colors.surfaceAlt }]}>
+                    <View style={[styles.toggleTrack, { borderColor: priceAlertEnabled ? colors.brand : colors.border, backgroundColor: priceAlertEnabled ? colors.brandSubtle : colors.surfaceAlt }]}>
                       <View style={[styles.toggleThumb, { backgroundColor: priceAlertEnabled ? colors.brand : colors.textMuted, alignSelf: priceAlertEnabled ? 'flex-end' : 'flex-start' }]} />
                     </View>
                   </Pressable>
@@ -2023,6 +2024,7 @@ export default function ItemDetailScreen() {
             </Pressable>
           </View>
           <View style={styles.conditionSheetBody}>
+            {/* TODO: replace `${conditionMeta.color}1F` with conditionColorSubtle token when available */}
             <View style={[styles.conditionSheetBadge, { backgroundColor: conditionMeta ? `${conditionMeta.color}1F` : colors.surfaceAlt }]}>
               <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
               <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={1}>

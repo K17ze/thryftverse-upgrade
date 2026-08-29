@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke} from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
@@ -199,7 +199,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     overflow: 'hidden',
     marginHorizontal: Space.md,
@@ -259,7 +259,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
     minHeight: Space.xl + Space.sm + 2,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 10,
@@ -277,7 +277,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.xl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',

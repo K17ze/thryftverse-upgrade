@@ -137,6 +137,7 @@ function CollectionCard({
             </View>
           </View>
         )}
+        {/* TODO: Replace runtime accent color hex-alpha with theme token when color source is staticized */}
         <View style={[styles.cardMediaTint, { backgroundColor: `${accent}0A` }]} />
         <View style={styles.cardItemCountBadge}>
           <Text style={styles.cardItemCountBadgeText}>

@@ -94,10 +94,10 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 1,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs / 2 + 1,
-    backgroundColor: `${colors.brand}10`,
+    backgroundColor: colors.brandSubtle,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.brand}30`,
+    borderColor: colors.brandBorder,
   },
   chipSm: {
     paddingHorizontal: Space.xs + 3,

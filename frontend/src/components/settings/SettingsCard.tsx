@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Elevation, Stroke} from '../../theme/designTokens';
 import { Glass } from '../../theme/gradients';
 
 export type SettingsCardVariant = 'surface' | 'elevated' | 'tint' | 'glass';
@@ -73,7 +73,7 @@ export function SettingsCard({
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   base: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     overflow: 'hidden',
     marginHorizontal: Space.md,
     marginBottom: Space.md,

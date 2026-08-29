@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable, Share } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable, Share } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -9,6 +9,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
 import { Caption } from '../components/ui/Text';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -55,6 +56,14 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const [isArchiving, setIsArchiving] = useState(false);
   const [isTogglingMute, setIsTogglingMute] = useState(false);
   const [inviteLink, setInviteLink] = useState<GroupInviteLink | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const conversation = useMemo(
     () => conversations.find((item) => item.id === conversationId),
@@ -105,59 +114,53 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   }));
 
   const leaveGroup = () => {
-    Alert.alert(
-      'Leave group?',
-      'You will be removed from this group on all devices. Other members will keep their copy.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Leave group',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setIsLeaving(true);
-            try {
-              await deleteConversationOnApi(conversationId, 'leave');
-              deleteConversation(conversationId);
-              show('You left the group', 'info');
-              navigation.navigate('MainTabs', { screen: 'Inbox' });
-            } catch {
-              show('Could not leave group. Check your connection and try again.', 'error');
-            } finally {
-              setIsLeaving(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Leave group?',
+      message: 'You will be removed from this group on all devices. Other members will keep their copy.',
+      confirmLabel: 'Leave group',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setIsLeaving(true);
+        try {
+          await deleteConversationOnApi(conversationId, 'leave');
+          deleteConversation(conversationId);
+          show('You left the group', 'info');
+          navigation.navigate('MainTabs', { screen: 'Inbox' });
+        } catch {
+          show('Could not leave group. Check your connection and try again.', 'error');
+        } finally {
+          setIsLeaving(false);
+        }
+      },
+    });
   };
 
   const deleteForMe = () => {
-    Alert.alert(
-      'Remove from inbox?',
-      'This removes the conversation from your inbox on all your devices.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setIsDeleting(true);
-            try {
-              await deleteConversationOnApi(conversationId, 'me');
-              deleteConversation(conversationId);
-              show('Conversation removed from your inbox', 'info');
-              navigation.navigate('MainTabs', { screen: 'Inbox' });
-            } catch {
-              show('Could not delete conversation. Check your connection and try again.', 'error');
-            } finally {
-              setIsDeleting(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove from inbox?',
+      message: 'This removes the conversation from your inbox on all your devices.',
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setIsDeleting(true);
+        try {
+          await deleteConversationOnApi(conversationId, 'me');
+          deleteConversation(conversationId);
+          show('Conversation removed from your inbox', 'info');
+          navigation.navigate('MainTabs', { screen: 'Inbox' });
+        } catch {
+          show('Could not delete conversation. Check your connection and try again.', 'error');
+        } finally {
+          setIsDeleting(false);
+        }
+      },
+    });
   };
 
   const archive = async () => {
@@ -426,6 +429,15 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           )}
         </View>
       </ScrollView>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'danger'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }
@@ -916,7 +928,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: `${colors.brand}14`,
+    backgroundColor: colors.brandSubtle,
   },
   addMembersText: {
     color: colors.brand,
@@ -960,7 +972,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
   },
   roleBadgeOwner: {
-    backgroundColor: `${colors.brand}14`,
+    backgroundColor: colors.brandSubtle,
   },
   roleBadgeText: {
     color: colors.textSecondary,

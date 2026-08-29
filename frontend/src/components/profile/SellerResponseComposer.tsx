@@ -182,7 +182,7 @@ function createStyles(colors: ThemeColors) {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}15`,
+    backgroundColor: colors.brandSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,

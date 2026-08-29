@@ -31,6 +31,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import type { AgentRunInfo, ApprovalRequestInfo } from '../services/botsApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AgentLedger'>;

@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Text, ScrollView } from 'react-native';
 import { FieldErrors } from 'react-hook-form';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type } from '../../theme/designTokens';
+import { Typography, Radius, Type, Stroke} from '../../theme/designTokens';
 
 export interface FormErrorSummaryProps {
   errors: FieldErrors<any>;
@@ -34,12 +34,12 @@ export function FormErrorSummary({ errors, title = 'Fix the following:' }: FormE
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
-    backgroundColor: `${colors.danger}10`,
+    backgroundColor: colors.dangerSubtle,
     borderRadius: Radius.lg,
     padding: 12,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: `${colors.danger}30`,
+    borderWidth: Stroke.standard,
+    borderColor: colors.dangerBorder,
   },
   title: {
     fontSize: Type.body.size,

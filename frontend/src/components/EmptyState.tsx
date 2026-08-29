@@ -5,7 +5,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, Stroke} from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
@@ -324,7 +324,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingHorizontal: Space.md + Space.sm,
     paddingVertical: Space.smMd,
     borderRadius: Radius.xxl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   ctaSecondaryText: {
@@ -356,7 +356,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingVertical: Space.sm,
     borderRadius: Radius.xxl,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   chipText: {

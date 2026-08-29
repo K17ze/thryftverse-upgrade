@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
 
 export interface PriceInsightStripProps {
   /** Current listing price in fiat */
@@ -246,13 +246,13 @@ function createStyles(colors: ThemeColors) {
     height: 20,
     borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     justifyContent: 'center',
     paddingHorizontal: 2,
   },
   toggleTrackActive: {
-    backgroundColor: `${colors.brand}20`,
+    backgroundColor: colors.brandSubtle,
     borderColor: colors.brand,
   },
   toggleThumb: {

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke} from '../theme/designTokens';
 
 interface Props {
   title?: string;
@@ -46,7 +46,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surfaceAlt,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.borderSubtle,
     },
     title: {

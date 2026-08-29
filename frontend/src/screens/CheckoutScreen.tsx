@@ -8,7 +8,6 @@ import {
   Platform,
   Pressable,
   AppState,
-  Alert,
   RefreshControl,
 } from 'react-native';
 import { useA11yAudit } from '../hooks/useA11yAudit';
@@ -54,6 +53,7 @@ import {
   buildOrderSignature,
 } from '../utils/checkoutFlow';
 import { BottomSheet } from '../components/BottomSheet';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import {
   createCommercePaymentIntent,
   createOnezeCheckoutIntent,
@@ -106,7 +106,7 @@ export default function CheckoutScreen() {
     container: { backgroundColor: colors.background },
     header: { borderBottomColor: colors.border },
     headerTitle: { color: colors.textPrimary },
-    savingsBadge: { backgroundColor: `${colors.success}12` },
+    savingsBadge: { backgroundColor: colors.successSubtle },
     savingsText: { color: colors.success },
     protectionIncludedText: { color: colors.success },
     balanceToggle: { borderColor: colors.border },
@@ -130,8 +130,9 @@ export default function CheckoutScreen() {
     signedOutBtnText: { color: colors.textInverse },
     capabilityRetryBtn: { borderColor: colors.border, backgroundColor: colors.surface },
     capabilityRetryText: { color: colors.textPrimary },
-    partialDataBanner: { borderColor: `${colors.warning}59`, backgroundColor: `${colors.warning}14` },
+    partialDataBanner: { borderColor: colors.warningBorder, backgroundColor: colors.warningSubtle },
     partialDataMessage: { color: colors.warning },
+    // TODO: replace `${colors.warning}80` and `${colors.surfaceAlt}99` with tokens when available
     partialDataAction: { borderColor: `${colors.warning}80`, backgroundColor: `${colors.surfaceAlt}99` },
     partialDataActionText: { color: colors.warning },
     compactSummaryRow: { color: colors.textSecondary },
@@ -226,6 +227,16 @@ export default function CheckoutScreen() {
 
   const isSubmitting = stage === 'creating_order' || stage === 'opening_payment' || stage === 'authenticating' || stage === 'awaiting_payment';
   const isInteractionLocked = isSubmitting || isCancellingOrder;
+
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   // --- Eligibility ---
   const checkoutEligible = useMemo(() => {
@@ -970,22 +981,19 @@ export default function CheckoutScreen() {
   // --- Close handler ---
   const handleClose = useCallback(() => {
     if (isSubmitting) {
-      Alert.alert(
-        'Payment in progress',
-        'Payment confirmation may still complete after you leave. Check your Orders before trying again.',
-        [
-          { text: 'Stay', style: 'cancel' },
-          {
-            text: 'Leave',
-            style: 'destructive',
-            onPress: () => {
-              paymentAttemptRef.current += 1;
-              pendingIntentIdRef.current = null;
-              navigation.goBack();
-            },
-          },
-        ]
-      );
+      setConfirmSheet({
+        visible: true,
+        title: 'Payment in progress',
+        message: 'Payment confirmation may still complete after you leave. Check your Orders before trying again.',
+        confirmLabel: 'Leave',
+        cancelLabel: 'Stay',
+        onConfirm: () => {
+          paymentAttemptRef.current += 1;
+          pendingIntentIdRef.current = null;
+          navigation.goBack();
+        },
+        variant: 'danger',
+      });
       return;
     }
     navigation.goBack();
@@ -1781,6 +1789,17 @@ export default function CheckoutScreen() {
           </View>
         </View>
       </BottomSheet>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </SafeAreaView>
   );
 }

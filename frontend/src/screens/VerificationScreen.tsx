@@ -467,7 +467,7 @@ export default function VerificationScreen({ navigation }: Props) {
                     styles.docOption,
                     {
                       borderColor: kycDocumentType === doc ? colors.brand : colors.border,
-                      backgroundColor: kycDocumentType === doc ? `${colors.brand}10` : colors.surfaceAlt,
+                      backgroundColor: kycDocumentType === doc ? colors.brandSubtle : colors.surfaceAlt,
                     },
                   ]}
                   onPress={() => setKycDocumentType(doc)}
@@ -722,7 +722,7 @@ export default function VerificationScreen({ navigation }: Props) {
                       styles.countryChip,
                       {
                         borderColor: dac7Country === code ? colors.brand : colors.border,
-                        backgroundColor: dac7Country === code ? `${colors.brand}10` : colors.surfaceAlt,
+                        backgroundColor: dac7Country === code ? colors.brandSubtle : colors.surfaceAlt,
                       },
                     ]}
                     onPress={() => {

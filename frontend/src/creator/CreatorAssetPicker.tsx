@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
-import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, IconGrammar, Stroke} from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -2095,7 +2095,7 @@ const TextPicker = React.memo(function TextPicker({ onClose, onAddLayer, editing
                     { color: sampleColor },
                     e.key === 'shadow' && { textShadowColor: '#000', textShadowOffset: { width: 1, height: 2 }, textShadowRadius: 3 },
                     e.key === 'neon' && { textShadowColor: isActive ? colors.brand : '#7B68EE', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
-                    e.key === 'outline' && { borderWidth: 1, borderColor: sampleColor, paddingHorizontal: Space.xs, borderRadius: Radius.sm },
+                    e.key === 'outline' && { borderWidth: Stroke.standard, borderColor: sampleColor, paddingHorizontal: Space.xs, borderRadius: Radius.sm },
                     e.key === 'glow' && { textShadowColor: isActive ? colors.brand : '#F5D547', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 },
                   ]}
                 >
@@ -4639,7 +4639,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: 8 },
   searchIcon: {},
   searchInput: {
-    flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md,
+    flex: 1, borderWidth: Stroke.standard, borderColor: colors.border, borderRadius: Radius.md,
     paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: colors.textPrimary,
   },
   // ── Product picker source tabs ──
@@ -4679,7 +4679,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   },
   sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   textInput: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: Radius.lg,
+    borderWidth: Stroke.standard, borderColor: colors.border, borderRadius: Radius.lg,
     paddingHorizontal: Space.md, paddingVertical: Space.md, fontSize: Type.body.size, color: colors.textPrimary, minHeight: 52,
   },
   saveBtn: { height: 48, borderRadius: Radius.lg, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
@@ -4688,13 +4688,13 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
   styleScroll: { marginHorizontal: -Space.md, paddingHorizontal: Space.md },
   styleOption: { paddingHorizontal: Space.md + 2, paddingVertical: Space.sm + 2, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt },
-  styleOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: 1.5 },
+  styleOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
   styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   styleOptionTextActive: { color: colors.brand },
   colorRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
   colorOption: { width: 44, height: 44, borderRadius: Radius.full, borderWidth: 2, borderColor: 'transparent', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   colorOptionActive: { borderColor: colors.brand, shadowColor: colors.brand, shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 0 }, elevation: 2 },
-  colorOptionTransparent: { borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  colorOptionTransparent: { borderWidth: Stroke.standard, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentRow: { flexDirection: 'row', gap: Space.sm },
   alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.08) },
@@ -4772,7 +4772,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   quizAddOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm },
   quizAddOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.brand },
   // ── Countdown picker ──
-  countdownDateBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border },
+  countdownDateBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.md, borderWidth: Stroke.standard, borderColor: colors.border },
   countdownDateText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   // ── Sticker tray ──
   stickerSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt, borderRadius: Radius.lg, marginHorizontal: Space.md, marginBottom: Space.sm },
@@ -4787,7 +4787,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   stickerCategorySection: { marginBottom: Space.lg },
   stickerCategoryTitle: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
   stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
-  stickerCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: 1, borderColor: colors.borderSubtle },
+  stickerCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: Stroke.standard, borderColor: colors.borderSubtle },
   stickerCellLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   stickerEmptyState: { paddingVertical: Space.xxl, alignItems: 'center', gap: Space.md },
   stickerEmptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
@@ -4823,16 +4823,16 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   brushSliderTrack: { width: 28, height: 120, borderRadius: Radius.full, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
   brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.full },
   brushSliderHandle: { position: 'absolute', left: '50%', marginLeft: -11, width: 22, height: 22, justifyContent: 'center', alignItems: 'center' },
-  brushSliderDot: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  brushSliderDot: { borderWidth: Stroke.standard, borderColor: 'rgba(255,255,255,0.4)' },
   // ── Text effect chips (visual preview) ──
   effectChip: { width: 56, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
-  effectChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: 1.5 },
+  effectChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
   effectChipSample: { fontFamily: Typography.family.bold, fontSize: Type.priceList.size, lineHeight: 24 },
   effectChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary },
   effectChipLabelActive: { color: colors.brand },
   // ── Text animation chips (visual preview) ──
   animChip: { width: 48, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
-  animChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: 1.5 },
+  animChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
   animChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
   animChipLabelActive: { color: colors.brand },
   // ── Draw brush chips (premium tool selection) ──
@@ -4850,7 +4850,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   votePreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   votePreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, marginBottom: Space.sm, textAlign: 'center' },
   votePreviewOptions: { flexDirection: 'row', gap: Space.sm },
-  votePreviewOption: { flex: 1, paddingVertical: Space.sm, paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: 1.5, alignItems: 'center' },
+  votePreviewOption: { flex: 1, paddingVertical: Space.sm, paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: Stroke.standard, alignItems: 'center' },
   votePreviewOptionText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
   addOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm, marginBottom: Space.xs },
   addOptionBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.brand },

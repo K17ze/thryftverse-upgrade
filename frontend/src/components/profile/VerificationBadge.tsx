@@ -46,7 +46,7 @@ export function VerificationBadge({ tier, compact = false }: VerificationBadgePr
   }
 
   return (
-    <View style={[styles.pill, { backgroundColor: `${color}15`, borderColor: `${color}30` }]}>
+    <View style={[styles.pill, { backgroundColor: `${color}15` /* TODO: replace with subtle token once color is resolved */, borderColor: `${color}30` /* TODO: replace with subtle token once color is resolved */ }]}>
       <Ionicons name={info.icon as keyof typeof Ionicons.glyphMap} size={13} color={color} />
       <Text style={[styles.pillText, { color }]} numberOfLines={1}>
         {info.label}

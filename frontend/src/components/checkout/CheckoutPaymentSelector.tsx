@@ -152,7 +152,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
   rowSelected: {
-    backgroundColor: `${colors.brand}06`,
+    backgroundColor: colors.brandSubtle,
   },
   rowPressed: {
     opacity: 0.7,
@@ -195,7 +195,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     color: colors.textSecondary,
   },
   defaultBadge: {
-    backgroundColor: `${colors.brand}12`,
+    backgroundColor: colors.brandSubtle,
     borderRadius: Radius.md,
     paddingHorizontal: 6,
     paddingVertical: 1,

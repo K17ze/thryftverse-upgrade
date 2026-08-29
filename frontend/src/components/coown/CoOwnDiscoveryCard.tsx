@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 export interface CoOwnDiscoveryCardProps {
@@ -80,7 +80,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   imageWrap: {

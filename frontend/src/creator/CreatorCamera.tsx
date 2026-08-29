@@ -26,7 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, Stroke} from '../theme/designTokens';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -1879,7 +1879,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 52,
     borderRadius: Radius.sm,
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
     borderColor: 'rgba(255,255,255,0.9)',
   },
   // Order index badge — bottom-left, the verified multi-select pattern.
@@ -1924,7 +1924,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(255,255,255,0.3)',
   },
   stagingDoneText: {

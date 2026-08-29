@@ -587,7 +587,7 @@ function createStyles(colors: ThemeColors) {
       width: Control.chromeCompact,
       height: Space.xl + Space.xs,
       borderRadius: Radius.xl,
-      backgroundColor: `${colors.brand}15`,
+      backgroundColor: colors.brandSubtle,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -637,19 +637,20 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
     },
     badgeMuted: {
+      // TODO: replace `${colors.textMuted}15` with textMutedSubtle token when available
       backgroundColor: `${colors.textMuted}15`,
     },
     badgeMutedText: {
       color: colors.textMuted,
     },
     badgeBrand: {
-      backgroundColor: `${colors.brand}15`,
+      backgroundColor: colors.brandSubtle,
     },
     badgeBrandText: {
       color: colors.brand,
     },
     badgeSuccess: {
-      backgroundColor: `${colors.success}15`,
+      backgroundColor: colors.successSubtle,
     },
     badgeSuccessText: {
       color: colors.success,

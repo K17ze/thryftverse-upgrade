@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { Stroke } from '../../theme/designTokens';
 
 interface ThryftCartIconProps {
   size?: number;
@@ -45,7 +46,7 @@ const styles = StyleSheet.create({
     top: 4,
     left: 3,
     height: 6,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     borderTopRightRadius: 2,
     borderBottomLeftRadius: 2,
     borderBottomRightRadius: 3,

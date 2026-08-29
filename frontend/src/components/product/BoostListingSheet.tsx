@@ -73,7 +73,7 @@ export function BoostListingSheet({
         showsVerticalScrollIndicator={false}
       >
         {isCurrentlyBoosted && (
-          <View style={[styles.activeBoostBanner, { backgroundColor: `${colors.brand}12` }]}>
+          <View style={[styles.activeBoostBanner, { backgroundColor: colors.brandSubtle }]}>
             <Ionicons name="trending-up-outline" size={16} color={colors.brand} />
             <Text style={[styles.activeBoostText, { color: colors.brand }]}>
               Currently boosted until {formatFullDate(currentBoostedUntil!)}

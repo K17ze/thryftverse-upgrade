@@ -131,7 +131,7 @@ function PeakTimeChart({
     .map((d) => d.hour);
   const peakHour = peakHours[0];
 
-  const barColor = `${colors.brand}66`; // 40% opacity
+  const barColor = colors.brandSubtle; // 40% opacity
   const peakColor = colors.antiqueGold;
 
   return (

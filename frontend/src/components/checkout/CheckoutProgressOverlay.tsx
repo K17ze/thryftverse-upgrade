@@ -51,7 +51,7 @@ export function CheckoutProgressOverlay({
       pointerEvents="none"
       style={[
         progressOverlayStyles.overlay,
-        { backgroundColor: `${colors.background}F2`, borderColor: colors.border, shadowColor: colors.shadow },
+        { backgroundColor: colors.overlay, borderColor: colors.border, shadowColor: colors.shadow },
       ]}
       accessibilityLabel={label}
       accessibilityRole="alert"

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
@@ -215,12 +215,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
   iconWrap: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Space.xs,
-    marginTop: 2,
+    marginTop: Space.xxs,
   },
   body: {
     flex: 1,
@@ -230,7 +230,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: Space.xxs,
     gap: Space.sm,
   },
   title: {
@@ -270,7 +270,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cancelAction: {
     alignSelf: 'flex-start',
-    minHeight: 44,
+    minHeight: Control.hit,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,

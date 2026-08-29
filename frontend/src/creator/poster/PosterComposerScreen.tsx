@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim } from '../../theme/designTokens';
+import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -26,6 +26,7 @@ import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
 import type { CreatorLayer, EffectNode } from '../composition';
 import { hasFullBleedMedia } from '../composition';
+import { layerTypeLabel } from '../shared/layerUtils';
 import { makeStableId } from '../../utils/createStableId';
 import { CreatorCanvas } from '../CreatorCanvas';
 import { CreatorLayersSheet } from '../CreatorLayersSheet';
@@ -48,7 +49,7 @@ import type { CaptureViewport } from '../capture/CaptureViewport';
 import type { CreatorTemplate } from '../templates';
 import { FrameTray } from '../studio/FrameTray';
 import { PageMenu } from '../studio/PageMenu';
-import { OverflowItem } from './PosterComposerParts';
+import { OverflowItem } from '../studio/OverflowMenu';
 import { ContextToolRail } from '../surfaces/ContextToolRail';
 import { HelpShortcutsSheet } from '../surfaces/HelpShortcutsSheet';
 import { TrashZone } from '../surfaces/TrashZone';
@@ -111,31 +112,6 @@ import { usePerformanceMonitor } from '../core/performance/usePerformanceMonitor
 // does NOT import from CreatorStudioShell — it is a dedicated
 // frame-native composer.
 // ───────────────────────────────────────────────────────────────────────────
-
-function layerTypeLabel(type: CreatorLayer['type']): string {
-  switch (type) {
-    case 'media': return 'Media';
-    case 'text': return 'Text';
-    case 'product': return 'Product';
-    case 'mention': return 'Mention';
-    case 'look': return 'Look';
-    case 'vote': return 'Vote';
-    case 'quiz': return 'Quiz';
-    case 'question': return 'Question';
-    case 'emojiSlider': return 'Slider';
-    case 'countdown': return 'Countdown';
-    case 'decorative': return 'Shape';
-    case 'draw': return 'Drawing';
-    case 'gif': return 'GIF';
-    case 'music': return 'Music';
-    case 'link': return 'Link';
-    case 'location': return 'Location';
-    case 'hashtag': return 'Hashtag';
-    case 'time': return 'Time';
-    case 'weather': return 'Weather';
-    default: return 'Layer';
-  }
-}
 
 function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'look' | 'poster') => void }) {
   const navigation = useNavigation<any>();
@@ -3129,7 +3105,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(201,164,106,0.25)',
     borderStyle: 'dashed',
   },

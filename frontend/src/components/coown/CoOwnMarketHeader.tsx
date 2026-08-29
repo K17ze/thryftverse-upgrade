@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Control, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Control, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 export interface CoOwnMarketHeaderAction {
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     height: 17,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.xs,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -31,7 +31,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { Radius, Space } from '../../theme/designTokens';
+import { Radius, Space, Stroke} from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { FontFamily } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -192,7 +192,7 @@ export function CreatorDestructiveButton({
           {
             borderRadius: Radius.lg,
             backgroundColor: confirming ? dangerColor : 'transparent',
-            borderWidth: 1,
+            borderWidth: Stroke.standard,
             borderColor: dangerColor,
           },
           animatedStyle,

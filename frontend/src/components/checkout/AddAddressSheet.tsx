@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, Platform, Pressable } from 'react-native';
 import { BottomSheet } from '../BottomSheet';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
@@ -360,7 +360,7 @@ function createStyles(colors: any) {
       paddingHorizontal: Space.lg,
       height: 52,
       justifyContent: 'center',
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
     },
     input: {
       fontSize: Type.bodyStrong.size,
@@ -375,7 +375,7 @@ function createStyles(colors: any) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md + 2,
       borderRadius: Radius.xl,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       minHeight: 52,
     },
     countryText: {
@@ -387,7 +387,7 @@ function createStyles(colors: any) {
     defaultToggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       padding: Space.md,
       borderRadius: Radius.xl,
       marginTop: Space.md,
@@ -410,7 +410,7 @@ function createStyles(colors: any) {
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
     },
     saveBtnText: {
       fontSize: Type.bodyStrong.size,

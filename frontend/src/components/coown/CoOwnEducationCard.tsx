@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 export interface CoOwnEducationTopic {
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     marginTop: Space.xs,
   },
   learnMoreText: {

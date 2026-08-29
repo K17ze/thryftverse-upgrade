@@ -29,7 +29,7 @@ import {
   fitbox as skiaFitbox,
   rect as skiaRect,
 } from '@shopify/react-native-skia';
-import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, IconGrammar, Stroke} from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -2923,7 +2923,7 @@ function createProductStyles(colors: ThemeColors) {
     height: 7,
     borderRadius: Radius.full,
     backgroundColor: '#fff',
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     borderColor: colors.brand,
   },
   hotspotLabel: {

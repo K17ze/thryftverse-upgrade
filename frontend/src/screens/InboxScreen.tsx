@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { View, Text, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { FlashList, type FlashListProps, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
@@ -98,6 +99,14 @@ export default function InboxScreen() {
   // Additional classifiers (Requests, Unread, Archived, Groups) are behind
   // a filter icon — expands on tap to show secondary scope chips.
   const [filterExpanded, setFilterExpanded] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -218,17 +227,17 @@ export default function InboxScreen() {
     snippet: { color: colors.textSecondary },
     unreadPill: { backgroundColor: colors.textPrimary },
     unreadPillText: { color: colors.textInverse },
-    requestRowAccent: { borderLeftColor: colors.brand, backgroundColor: `${colors.brand}06` },
+    requestRowAccent: { borderLeftColor: colors.brand, backgroundColor: colors.brandSubtle },
     requestBtnDecline: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     requestBtnDeclineText: { color: colors.textPrimary },
     requestBtnAccept: { backgroundColor: colors.brand },
-    requestsAvatar: { backgroundColor: `${colors.brand}12` },
+    requestsAvatar: { backgroundColor: colors.brandSubtle },
     requestsBadge: { backgroundColor: colors.textPrimary },
     requestsBadgeText: { color: colors.textInverse },
     requestsBannerText: { color: colors.textPrimary },
     requestsBannerSub: { color: colors.textMuted },
     requestBtnAcceptText: { color: colors.textInverse },
-    errorBanner: { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border },
+    errorBanner: { backgroundColor: colors.dangerSubtle, borderBottomColor: colors.border },
     errorBannerTitle: { color: colors.danger },
     errorBannerSub: { color: colors.textMuted },
     errorBannerRetry: { color: colors.brand },
@@ -304,30 +313,27 @@ export default function InboxScreen() {
   );
   const handleDelete = useCallback((id: string) => {
     haptic.medium();
-    Alert.alert(
-      'Remove from inbox?',
-      'This conversation will be hidden from your inbox. The other participant keeps their copy.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            const previous = conversations.find((c) => c.id === id);
-            deleteConversation(id);
-            showError('Conversation removed', 'This conversation was removed from your inbox.');
-            try {
-              await deleteConversationOnApi(id, 'me');
-            } catch {
-              showError('Delete failed', 'Failed to delete on server. Restoring conversation.');
-              if (previous) {
-                upsertConversation(previous);
-              }
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove from inbox?',
+      message: 'This conversation will be hidden from your inbox. The other participant keeps their copy.',
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        const previous = conversations.find((c) => c.id === id);
+        deleteConversation(id);
+        showError('Conversation removed', 'This conversation was removed from your inbox.');
+        try {
+          await deleteConversationOnApi(id, 'me');
+        } catch {
+          showError('Delete failed', 'Failed to delete on server. Restoring conversation.');
+          if (previous) {
+            upsertConversation(previous);
+          }
+        }
+      },
+    });
   }, [conversations, deleteConversation, upsertConversation, showError, haptic]);
   const handleMute = useCallback((id: string) => {
     haptic.light();
@@ -884,6 +890,15 @@ export default function InboxScreen() {
           </>
         )}
       </View>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </SafeAreaView>
     );
 }

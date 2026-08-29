@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke, Control, AvatarSize } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
@@ -266,7 +266,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: Type.itemTitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
@@ -288,8 +288,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm,
   },
   avatarWrap: {
-    width: 32,
-    height: 32,
+    width: AvatarSize.sm,
+    height: AvatarSize.sm,
     borderRadius: Radius.xl,
     overflow: 'hidden',
     alignItems: 'center',
@@ -297,13 +297,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   avatar: {
-    width: 32,
-    height: 32,
+    width: AvatarSize.sm,
+    height: AvatarSize.sm,
     borderRadius: Radius.xl,
   },
   commentBody: {
     flex: 1,
-    gap: 2,
+    gap: Space.xxs,
   },
   commentAuthor: {
     fontSize: Type.caption.size,
@@ -314,13 +314,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
   },
   commentTime: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xxs,
   },
   emptyWrap: {
     alignItems: 'center',
@@ -382,11 +382,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 44,
+    gap: Space.sm,
+    height: Control.hit,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.xxl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.brand,
     backgroundColor: colors.brandSubtle,
   },

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   actionText: {
     fontSize: Type.body.size,

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 /** Vehicle document — tap to open. */
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

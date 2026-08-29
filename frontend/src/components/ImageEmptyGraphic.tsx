@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, Stroke} from '../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -133,7 +133,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surfaceAlt,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.borderSubtle,
     },
     labelWrap: {

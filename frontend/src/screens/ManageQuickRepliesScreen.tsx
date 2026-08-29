@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  Alert,
   Modal,
   KeyboardAvoidingView,
   Platform,
@@ -22,6 +21,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { useHaptic } from '../hooks/useHaptic';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageQuickReplies'>;
 
@@ -49,6 +49,14 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
   const [draftTitle, setDraftTitle] = useState('');
   const [draftMessage, setDraftMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -112,26 +120,22 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
   };
 
   const handleDelete = (index: number) => {
-    Alert.alert(
-      'Delete quick reply?',
-      'This reply will be removed from your list.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await removeReplyOnApi(role, index);
-              haptic.medium();
-              show('Quick reply deleted', 'info');
-            } catch {
-              show('Could not delete this reply. Check your connection and try again.', 'error');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete quick reply?',
+      message: 'This reply will be removed from your list.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await removeReplyOnApi(role, index);
+          haptic.medium();
+          show('Quick reply deleted', 'info');
+        } catch {
+          show('Could not delete this reply. Check your connection and try again.', 'error');
+        }
+      },
+    });
   };
 
   const title = role === 'seller' ? 'Seller quick replies' : 'Buyer quick replies';
@@ -320,6 +324,16 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
         </KeyboardAvoidingView>
       </Pressable>
     </Modal>
+
+    <ConfirmationSheet
+      visible={confirmSheet.visible}
+      onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+      title={confirmSheet.title}
+      message={confirmSheet.message}
+      confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+      variant={confirmSheet.variant ?? 'default'}
+      onConfirm={confirmSheet.onConfirm}
+    />
     </>
   );
 }

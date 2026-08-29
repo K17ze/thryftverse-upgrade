@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 const COVER_H = 120;
@@ -194,7 +194,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(255,255,255,0.2)',
   },
   editCoverBtnEmpty: {

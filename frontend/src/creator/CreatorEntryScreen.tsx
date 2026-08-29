@@ -10,7 +10,7 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Radius, Type, Space, EditorMaterial } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, EditorMaterial, Stroke} from '../theme/designTokens';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { BlurView } from 'expo-blur';
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: EditorMaterial.plate.hairline,
     justifyContent: 'center',
     alignItems: 'center',
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(0,0,0,0.4)',
   },
   // Count badge — when there are 2+ drafts, show the number instead of a dot.
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
     height: 175,
     borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(255,255,255,0.06)',
   },
   draftThumbPlaceholder: {

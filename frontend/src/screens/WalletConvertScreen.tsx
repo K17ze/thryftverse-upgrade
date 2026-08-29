@@ -599,7 +599,7 @@ export default function WalletConvertScreen() {
         <View
           style={[
             styles.offlineBanner,
-            { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border },
+            { backgroundColor: colors.dangerSubtle, borderBottomColor: colors.border },
           ]}
         >
           <Ionicons name="cloud-offline-outline" size={IconGrammar.metadata} color={colors.danger} />

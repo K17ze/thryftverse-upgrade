@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   View,
@@ -12,6 +11,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -48,6 +48,14 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
   const deployBotToConversation = useStore((state) => state.deployBotToConversation);
   const undeployBotFromConversation = useStore((state) => state.undeployBotFromConversation);
   const [pendingBotId, setPendingBotId] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const conversation = useMemo(
     () => conversations.find((item) => item.id === conversationId),
@@ -73,26 +81,27 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
   );
 
   const handleRemove = (botId: string, botName: string) => {
-    Alert.alert('Remove agent?', `${botName} will stop responding in this chat.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          haptic.medium();
-          setPendingBotId(botId);
-          try {
-            await undeployBotFromConversationOnApi(conversationId, botId);
-            undeployBotFromConversation(conversationId, botId);
-            show(`${botName} removed`, 'info');
-          } catch {
-            show('Failed to remove agent. Try again.', 'error');
-          } finally {
-            setPendingBotId(null);
-          }
-        },
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove agent?',
+      message: `${botName} will stop responding in this chat.`,
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.medium();
+        setPendingBotId(botId);
+        try {
+          await undeployBotFromConversationOnApi(conversationId, botId);
+          undeployBotFromConversation(conversationId, botId);
+          show(`${botName} removed`, 'info');
+        } catch {
+          show('Failed to remove agent. Try again.', 'error');
+        } finally {
+          setPendingBotId(null);
+        }
       },
-    ]);
+    });
   };
 
   const handleDeploy = async (botId: string) => {
@@ -170,6 +179,15 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
           />
         )}
       </ScrollView>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'danger'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

@@ -64,7 +64,7 @@ export function SettingsCell({
           <Ionicons
             name={icon}
             size={20}
-            color={iconColor ? `${iconColor}cc` : colors.textMuted}
+            color={iconColor ? `${iconColor}cc` /* TODO: replace with subtle token once iconColor is resolved */ : colors.textMuted}
           />
         </View>
       )}
@@ -301,7 +301,7 @@ function createStyles(colors: ThemeColors) {
     },
     sectionHeader_lowest: {
       fontFamily: Typography.family.medium,
-      color: `${colors.textMuted}99`,
+      color: colors.textMuted,
       marginTop: Space.md,
     },
     sectionFooter: {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, AspectRatio } from '../../theme/designTokens';
+import { Space, Radius, AspectRatio, Type, Control } from '../../theme/designTokens';
 
 export function ProductDetailSkeleton() {
   const { colors } = useAppTheme();
@@ -79,19 +79,19 @@ const styles = StyleSheet.create({
   },
   brand: {
     width: 84,
-    height: 11,
+    height: Type.meta.lineHeight,
   },
   title: {
     width: '84%',
-    height: 28,
+    height: Type.title.lineHeight,
   },
   price: {
     width: 112,
-    height: 25,
+    height: Type.priceLarge.lineHeight,
   },
   meta: {
     width: '58%',
-    height: 13,
+    height: Type.captionElevated.lineHeight,
   },
   hairline: {
     height: StyleSheet.hairlineWidth,
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   },
   trustChip: {
     width: 96,
-    height: 16,
+    height: Type.caption.lineHeight,
     borderRadius: Radius.sm,
   },
   seller: {
@@ -127,15 +127,15 @@ const styles = StyleSheet.create({
   },
   sellerName: {
     width: '52%',
-    height: 14,
+    height: Type.body.lineHeight,
   },
   sellerMeta: {
     width: '68%',
-    height: 11,
+    height: Type.meta.lineHeight,
   },
   sellerAction: {
     width: 48,
-    height: 12,
+    height: Type.caption.lineHeight,
   },
   section: {
     paddingHorizontal: Space.md,
@@ -144,15 +144,15 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     width: 128,
-    height: 17,
+    height: Type.subtitle.lineHeight,
   },
   bodyLine: {
     width: '100%',
-    height: 13,
+    height: Type.body.lineHeight,
   },
   bodyLineShort: {
     width: '78%',
-    height: 13,
+    height: Type.body.lineHeight,
   },
   dock: {
     position: 'absolute',
@@ -168,11 +168,11 @@ const styles = StyleSheet.create({
   },
   dockPrice: {
     width: 80,
-    height: 22,
+    height: Type.bodyLarge.lineHeight,
   },
   dockBtn: {
     width: 120,
-    height: 36,
+    height: Control.chrome,
     borderRadius: Radius.sm,
   },
 });

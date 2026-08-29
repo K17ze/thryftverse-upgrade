@@ -761,6 +761,7 @@ export default function PortfolioScreen() {
             {summary.totalRealizedGbp !== 0 && (
               <View style={[styles.realisedCard, { borderBottomColor: colors.border }]}>
                 <View style={styles.realisedHeader}>
+                  {/* TODO: replace dynamic `${...}15` with successSubtle/dangerSubtle token when available */}
                   <View style={[styles.realisedIcon, { backgroundColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}15` }]}>
                     <Ionicons
                       name={summary.totalRealizedGbp >= 0 ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
@@ -807,7 +808,7 @@ export default function PortfolioScreen() {
                 scaleValue={0.98}
                 hapticFeedback="light"
               >
-                <View style={[styles.watchlistIcon, { backgroundColor: `${colors.brand}15` }]}>
+                <View style={[styles.watchlistIcon, { backgroundColor: colors.brandSubtle }]}>
                   <Ionicons name="eye-outline" size={15} color={colors.brand} />
                 </View>
                 <View style={styles.watchlistBody}>

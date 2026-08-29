@@ -204,7 +204,7 @@ export function ChatMessageRow({
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
-      backgroundColor: `${colors.brand}14`,
+      backgroundColor: colors.brandSubtle,
     },
 
     unreadDividerText: {

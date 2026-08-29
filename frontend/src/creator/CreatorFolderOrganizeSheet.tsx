@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, FontFamily, Control } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, Control, Stroke} from '../theme/designTokens';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
@@ -804,7 +804,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       fontSize: Type.bodyStrong.size,
       color: colors.textPrimary,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.md,

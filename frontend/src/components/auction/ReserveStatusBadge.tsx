@@ -40,8 +40,8 @@ export function ReserveStatusBadge({ status, compact, showExplanation }: Props) 
         style={[
           styles.pill,
           {
-            backgroundColor: `${color}15`,
-            borderColor: `${color}40`,
+            backgroundColor: `${color}15` /* TODO: replace with subtle token once color is resolved */,
+            borderColor: `${color}40` /* TODO: replace with subtle token once color is resolved */,
             paddingHorizontal: pillPaddingH,
             paddingVertical: pillPaddingV,
           },

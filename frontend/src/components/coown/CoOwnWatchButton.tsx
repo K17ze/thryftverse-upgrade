@@ -39,7 +39,7 @@ export function CoOwnWatchButton({ assetId, assetTitle }: CoOwnWatchButtonProps)
       style={[
         styles.container,
         { backgroundColor: colors.surface, borderColor: colors.border },
-        isWatched && { backgroundColor: `${colors.brand}10`, borderColor: `${colors.brand}40` },
+        isWatched && { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder },
       ]}
       onPress={handlePress}
       activeOpacity={0.8}

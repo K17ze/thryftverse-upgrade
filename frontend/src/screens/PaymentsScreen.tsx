@@ -30,6 +30,7 @@ import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { t } from '../i18n';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'Payments'>;
@@ -46,6 +47,15 @@ export default function PaymentsScreen({ navigation }: Props) {
   const [addCardSheetVisible, setAddCardSheetVisible] = useState(false);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
   const [isUpdatingDefault, setIsUpdatingDefault] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
   const currentUser = useStore((state) => state.currentUser);
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
   const clearSavedPaymentMethod = useStore((state) => state.clearSavedPaymentMethod);
@@ -151,33 +161,30 @@ export default function PaymentsScreen({ navigation }: Props) {
   };
 
   const handleRemovePaymentMethod = (method: CommercePaymentMethod) => {
-    Alert.alert(
-      t('payments.alert.removeTitle'),
-      t('payments.alert.removeMessage', { label: method.label }),
-      [
-        { text: t('payments.alert.cancel'), style: 'cancel' },
-        {
-          text: t('payments.alert.remove'),
-          style: 'destructive',
-          onPress: async () => {
-            const previous = backendPaymentMethods;
-            setBackendPaymentMethods((prev) => prev.filter((m) => m.id !== method.id));
-            show(t('payments.toast.removed'), 'info');
-            const userId = currentUser?.id;
-            if (!userId) return;
-            try {
-              await deleteUserPaymentMethod(userId, method.providerPaymentMethodId);
-              if (method.id === defaultMethod?.id) {
-                clearSavedPaymentMethod();
-              }
-            } catch {
-              show(t('payments.toast.detachFailed'), 'error');
-              setBackendPaymentMethods(previous);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: t('payments.alert.removeTitle'),
+      message: t('payments.alert.removeMessage', { label: method.label }),
+      confirmLabel: t('payments.alert.remove'),
+      cancelLabel: t('payments.alert.cancel'),
+      onConfirm: async () => {
+        const previous = backendPaymentMethods;
+        setBackendPaymentMethods((prev) => prev.filter((m) => m.id !== method.id));
+        show(t('payments.toast.removed'), 'info');
+        const userId = currentUser?.id;
+        if (!userId) return;
+        try {
+          await deleteUserPaymentMethod(userId, method.providerPaymentMethodId);
+          if (method.id === defaultMethod?.id) {
+            clearSavedPaymentMethod();
+          }
+        } catch {
+          show(t('payments.toast.detachFailed'), 'error');
+          setBackendPaymentMethods(previous);
+        }
+      },
+      variant: 'danger',
+    });
   };
 
   const handlePaymentMethodPress = (method: CommercePaymentMethod) => {
@@ -437,6 +444,17 @@ export default function PaymentsScreen({ navigation }: Props) {
         onSuccess={() => {
           void syncPaymentMethods();
         }}
+      />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
       />
     </FlagshipScreen>
   );

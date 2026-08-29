@@ -24,7 +24,7 @@ import {
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -545,7 +545,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.sm,
     overflow: 'hidden',
     opacity: 0.5,
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
     borderColor: 'transparent',
   },
   thumbnailActive: {

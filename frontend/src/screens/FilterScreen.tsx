@@ -840,7 +840,7 @@ export default function FilterScreen() {
                         styles.sustainableToggle,
                         {
                           borderColor: sustainableOnly ? colors.success : colors.border,
-                          backgroundColor: sustainableOnly ? `${colors.success}22` : colors.surfaceAlt,
+                          backgroundColor: sustainableOnly ? colors.successSubtle : colors.surfaceAlt,
                         },
                       ]}
                     >

@@ -147,6 +147,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
             isFirst
             isLast
           >
+            {/* TODO: replace `${postureColor}18` with postureColorSubtle token when available */}
             <View style={[styles.postureBadge, { backgroundColor: `${postureColor}18` }]}>
               <Text style={[styles.postureBadgeText, { color: postureColor }]}>
                 {postureLabel}

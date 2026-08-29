@@ -6,7 +6,6 @@ import {
   StatusBar,
   RefreshControl,
   Dimensions,
-  Alert,
   AccessibilityInfo,
   TextInput,
 } from 'react-native';
@@ -26,6 +25,7 @@ import { fetchPosterStoryArchive, deletePosterStory, fetchPosterHighlights } fro
 import type { PosterStory, PosterHighlight } from '../services/postersApi';
 import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PosterArchive'>;
 
@@ -68,6 +68,14 @@ export default function PosterArchiveScreen({ navigation }: Props) {
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState<'all' | 'active' | 'archived' | 'highlights'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const currentUser = useStore((state) => state.currentUser);
 
   const filteredStories = useMemo(() => {
@@ -122,29 +130,25 @@ export default function PosterArchiveScreen({ navigation }: Props) {
 
   const handleDelete = (storyId: string) => {
     haptic.medium();
-    Alert.alert(
-      'Delete story?',
-      'This will permanently remove your poster story.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deletePosterStory(storyId);
-              setStories((prev) => prev.filter((s) => s.id !== storyId));
-              haptic.success();
-              AccessibilityInfo.announceForAccessibility('Story deleted');
-              show('Story deleted', 'info');
-            } catch {
-              haptic.error();
-              show('Failed to delete story', 'error');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete story?',
+      message: 'This will permanently remove your poster story.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deletePosterStory(storyId);
+          setStories((prev) => prev.filter((s) => s.id !== storyId));
+          haptic.success();
+          AccessibilityInfo.announceForAccessibility('Story deleted');
+          show('Story deleted', 'info');
+        } catch {
+          haptic.error();
+          show('Failed to delete story', 'error');
+        }
+      },
+    });
   };
 
   const renderItem = ({ item }: { item: PosterStory }) => {
@@ -491,6 +495,16 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         }
         // Performance: archive grids can grow large; FlashList v2 handles
         // recycling automatically.
+      />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
       />
     </SafeAreaView>
   );

@@ -4,6 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Elevation, Type } from '../../theme/designTokens';
+
+/** Shared drop-shadow offset for card/image-wrap elevation on iOS.
+ *  Extracted so both card variants use the same shadow geometry. */
+const CARD_SHADOW_OFFSET = { width: 0, height: 2 } as const;
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionStateBadge } from './AuctionStateBadge';
@@ -230,7 +234,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     overflow: 'hidden',
     backgroundColor: colors.surface,
     ...Platform.select({
-      ios: { shadowColor: colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
+      ios: { shadowColor: colors.shadow, shadowOffset: CARD_SHADOW_OFFSET, shadowOpacity: 0.06, shadowRadius: 8 },
       android: { elevation: 1 },
     }),
   },
@@ -250,7 +254,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.lg,
     overflow: 'hidden',
     ...Platform.select({
-      ios: { shadowColor: colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6 },
+      ios: { shadowColor: colors.shadow, shadowOffset: CARD_SHADOW_OFFSET, shadowOpacity: 0.05, shadowRadius: 6 },
       android: { elevation: 1 },
     }),
   },
@@ -295,7 +299,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.border}40`,
+    borderColor: colors.borderSubtle,
   },
   bottomContent: {
     position: 'absolute',
@@ -316,7 +320,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontSize: Type.priceList.size,
     color: colors.textInverse,
     letterSpacing: -0.5,
-    lineHeight: 24,
+    lineHeight: Type.priceList.lineHeight,
     marginBottom: Space.xs,
   },
   metaRow: {
@@ -335,7 +339,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   // ── Metadata-below variant ──
   belowBody: {
     paddingTop: Space.md - 2,
-    paddingHorizontal: 2,
+    paddingHorizontal: Space.xxs,
     gap: 5,
   },
   belowBrand: {
@@ -349,8 +353,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontSize: Type.priceList.size,
     color: colors.textPrimary,
     letterSpacing: -0.5,
-    lineHeight: 24,
-    marginBottom: 2,
+    lineHeight: Type.priceList.lineHeight,
+    marginBottom: Space.xxs,
   },
   belowMetaRow: {
     flexDirection: 'row',

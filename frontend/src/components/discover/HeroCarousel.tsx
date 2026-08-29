@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space, Stroke} from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -226,7 +226,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: 18,
       paddingVertical: 10,
       borderRadius: Radius.xxl,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.glassBorder,
     },
     visitBtnText: {

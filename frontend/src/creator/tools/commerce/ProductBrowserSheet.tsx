@@ -624,7 +624,7 @@ function createStyles(colors: ThemeColors) {
     searchIcon: {},
     searchInput: {
       flex: 1,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,

@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, FontFamily } from '../../theme/designTokens';
+import { Space, FontFamily, Stroke} from '../../theme/designTokens';
 import { IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     height: THUMB_HEIGHT,
     borderRadius: RadiusRoleValue.compactControl,
     overflow: 'hidden',
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
     borderColor: 'transparent',
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     width: THUMB_WIDTH,
     height: THUMB_HEIGHT,
     borderRadius: RadiusRoleValue.compactControl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(255,255,255,0.2)',
     borderStyle: 'dashed',
     alignItems: 'center',

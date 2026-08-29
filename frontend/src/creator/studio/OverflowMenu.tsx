@@ -16,19 +16,44 @@ import { Space, Radius, Type, Typography, IconGrammar } from '../../theme/design
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
+import { CreatorGlyph, type CreatorGlyphName } from '../controls/CreatorGlyph';
 
 // ── Overflow menu item ─────────────────────────────────────────────
+// Canonical overflow row used by the Studio overflow menu, the Poster
+// composer overflow sheet, and the Look composer overflow menu.
+// Supports both Ionicons (icon) and CreatorGlyph (glyph) so creative
+// tools that use custom SVG glyphs in the rail also show their glyph
+// in the overflow menu — not a silently-dropped fallback.
+// When `colors` is provided, text/icon use theme tokens; otherwise the
+// row renders white-on-dark (poster/look full-bleed chrome).
 
-interface OverflowItemProps {
+export interface OverflowItemProps {
   icon: React.ComponentProps<typeof Ionicons>['name'];
+  glyph?: CreatorGlyphName;
   label: string;
-  colors: ThemeColors;
+  colors?: ThemeColors;
   onPress: () => void;
   disabled?: boolean;
+  danger?: boolean;
+  selected?: boolean;
 }
 
-const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemProps) {
+export const OverflowItem = React.memo(function OverflowItem({
+  icon,
+  glyph,
+  label,
+  colors,
+  onPress,
+  disabled = false,
+  danger = false,
+  selected = false,
+}: OverflowItemProps) {
   const haptic = useHaptic();
+  const contentColor = disabled
+    ? (colors?.textMuted ?? 'rgba(255,255,255,0.4)')
+    : danger
+      ? '#ff6b6b'
+      : (colors?.textPrimary ?? '#fff');
   return (
     <PressScale
       onPress={() => {
@@ -39,22 +64,21 @@ const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onP
       disabled={disabled}
       style={[styles.overflowItem, disabled ? { opacity: 0.4 } : {}]}
       accessibilityLabel={label}
-      accessibilityState={{ disabled }}
+      accessibilityRole="button"
+      accessibilityState={selected ? { selected: true } : disabled ? { disabled: true } : undefined}
       hitSlop={12}
     >
-      <Ionicons
-        name={icon}
-        size={IconGrammar.standard}
-        color={disabled ? colors.textMuted : colors.textPrimary}
-      />
-      <Text
-        style={[
-          styles.overflowItemText,
-          { color: disabled ? colors.textMuted : colors.textPrimary },
-        ]}
-      >
+      {glyph ? (
+        <CreatorGlyph name={glyph} size={IconGrammar.standard} color={contentColor} />
+      ) : (
+        <Ionicons name={icon} size={IconGrammar.standard} color={contentColor} />
+      )}
+      <Text style={[styles.overflowItemText, { color: contentColor }]}>
         {label}
       </Text>
+      {selected && (
+        <Ionicons name="checkmark" size={IconGrammar.standard} color={contentColor} />
+      )}
     </PressScale>
   );
 });
@@ -235,6 +259,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   overflowItemText: {
+    flex: 1,
     fontFamily: Typography.family.medium,
     fontSize: Type.bodyStrong.size,
   },

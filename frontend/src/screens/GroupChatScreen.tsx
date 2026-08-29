@@ -407,7 +407,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                   onPress={() => handleRemoveAgent(agent.id)}
                   style={({ pressed }) => [
                     styles.agentChip,
-                    { backgroundColor: pressed ? colors.surface : `${colors.brand}14` },
+                    { backgroundColor: pressed ? colors.surface : colors.brandSubtle },
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={`Remove ${agent.name} agent`}

@@ -17,7 +17,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { haptics } from '../../utils/haptics';
 
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   },
   auctionCard: {
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     padding: Space.sm,
     gap: Space.xs,
   },
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   secondaryBtnText: {
     fontSize: Type.body.size,

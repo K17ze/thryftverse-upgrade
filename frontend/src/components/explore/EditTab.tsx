@@ -11,7 +11,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Type, Space, Radius, Typography } from '../../theme/designTokens';
+import { Type, Space, Radius, Typography, Stroke} from '../../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
@@ -293,7 +293,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     marginHorizontal: Space.md,
     padding: Space.md,

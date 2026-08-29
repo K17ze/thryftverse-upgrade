@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,6 +13,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { ConversationListSkeleton } from '../components/SkeletonLoader';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import type { Conversation } from '../domain';
 import { deleteConversationOnApi, unarchiveConversationOnApi } from '../services/chatApi';
 
@@ -31,6 +32,15 @@ export default function ArchivedConversationsScreen() {
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
+
   const archivedConversations = useMemo(() => {
     return conversations.filter((c) => archivedIds.includes(c.id));
   }, [conversations, archivedIds]);
@@ -46,59 +56,53 @@ export default function ArchivedConversationsScreen() {
   };
 
   const handleDelete = (id: string, title: string) => {
-    Alert.alert(
-      'Remove from inbox?',
-      `"${title}" will be removed from your archived conversations.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteConversationOnApi(id, 'me');
-              deleteConversation(id);
-              show('Conversation removed', 'info');
-            } catch {
-              show('Could not delete this conversation. Check your connection and try again.', 'error');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove from inbox?',
+      message: `"${title}" will be removed from your archived conversations.`,
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        try {
+          await deleteConversationOnApi(id, 'me');
+          deleteConversation(id);
+          show('Conversation removed', 'info');
+        } catch {
+          show('Could not delete this conversation. Check your connection and try again.', 'error');
+        }
+      },
+    });
   };
 
   const handleClearAll = () => {
     if (archivedConversations.length === 0) return;
-    Alert.alert(
-      'Clear all archived?',
-      'All archived conversations will be permanently deleted.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear all',
-          style: 'destructive',
-          onPress: async () => {
-            let failedCount = 0;
-            await Promise.all(
-              archivedConversations.map(async (c) => {
-                try {
-                  await deleteConversationOnApi(c.id, 'me');
-                  deleteConversation(c.id);
-                } catch {
-                  failedCount++;
-                }
-              })
-            );
-            if (failedCount > 0) {
-              show(`${archivedConversations.length - failedCount} deleted · ${failedCount} failed`, 'error');
-            } else {
-              show('Archive cleared', 'info');
+    setConfirmSheet({
+      visible: true,
+      title: 'Clear all archived?',
+      message: 'All archived conversations will be permanently deleted.',
+      confirmLabel: 'Clear all',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        let failedCount = 0;
+        await Promise.all(
+          archivedConversations.map(async (c) => {
+            try {
+              await deleteConversationOnApi(c.id, 'me');
+              deleteConversation(c.id);
+            } catch {
+              failedCount++;
             }
-          },
-        },
-      ]
-    );
+          })
+        );
+        if (failedCount > 0) {
+          show(`${archivedConversations.length - failedCount} deleted · ${failedCount} failed`, 'error');
+        } else {
+          show('Archive cleared', 'info');
+        }
+      },
+    });
   };
 
   return (
@@ -174,6 +178,15 @@ export default function ArchivedConversationsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

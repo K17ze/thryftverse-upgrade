@@ -15,7 +15,6 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -25,6 +24,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
@@ -64,6 +64,14 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [unlinkingId, setUnlinkingId] = React.useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const load = React.useCallback(async () => {
     try {
@@ -84,31 +92,27 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
 
   const handleUnlink = (account: ConnectedAccount) => {
     const meta = PROVIDER_META[account.provider] ?? { label: account.provider };
-    Alert.alert(
-      `Unlink ${meta.label}?`,
-      `You'll no longer be able to sign in with ${meta.label}. Ensure you have another way to access your account.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Unlink',
-          style: 'destructive',
-          onPress: async () => {
-            setUnlinkingId(account.id);
-            try {
-              await unlinkConnectedAccount(account.id);
-              haptic.success();
-              show(`${meta.label} account unlinked`, 'success');
-              await load();
-            } catch (err) {
-              const message = err instanceof Error ? err.message : 'Failed to unlink account';
-              show(message, 'error');
-            } finally {
-              setUnlinkingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: `Unlink ${meta.label}?`,
+      message: `You'll no longer be able to sign in with ${meta.label}. Ensure you have another way to access your account.`,
+      confirmLabel: 'Unlink',
+      variant: 'danger',
+      onConfirm: async () => {
+        setUnlinkingId(account.id);
+        try {
+          await unlinkConnectedAccount(account.id);
+          haptic.success();
+          show(`${meta.label} account unlinked`, 'success');
+          await load();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to unlink account';
+          show(message, 'error');
+        } finally {
+          setUnlinkingId(null);
+        }
+      },
+    });
   };
 
   if (isLoading) {
@@ -202,6 +206,16 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
 
         <View style={{ height: Space.xxl }} />
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

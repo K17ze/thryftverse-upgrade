@@ -53,6 +53,7 @@ export function ConditionInfoSheet({
           </Pressable>
         </View>
         <View style={styles.conditionSheetBody}>
+          {/* TODO: Replace runtime conditionMeta.color hex-alpha with theme token when color source is staticized */}
           <View style={[styles.conditionSheetBadge, { backgroundColor: conditionMeta ? `${conditionMeta.color}1F` : colors.surfaceAlt }]}>
             <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
             <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={1}>

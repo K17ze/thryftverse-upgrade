@@ -168,7 +168,7 @@ const OverlayBar = React.memo(function OverlayBar({
           {
             left,
             width,
-            backgroundColor: `${color}33`, // 20% fill
+            backgroundColor: `${color}33` /* TODO: replace with subtle token once color is resolved */, // 20% fill
             borderColor: color,
             borderWidth: isSelected ? 2 : 1,
           },

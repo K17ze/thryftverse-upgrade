@@ -315,10 +315,10 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs / 2 + 1,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2,
-    backgroundColor: `${colors.brand}10`,
+    backgroundColor: colors.brandSubtle,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.brand}25`,
+    borderColor: colors.borderSubtle,
   },
   standardsBadgeText: {
     fontSize: Type.meta.size - 2,

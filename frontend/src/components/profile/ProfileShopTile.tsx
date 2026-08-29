@@ -6,7 +6,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type, IconGrammar } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type, IconGrammar, GlyphShadow } from '../../theme/designTokens';
 import { SupportedCurrencyCode } from '../../constants/currencies';
 import { CurrencyDisplayMode } from '../../utils/currency';
 import type { ListingApiItem } from '../../services/listingsApi';
@@ -149,16 +149,15 @@ function createStyles(colors: ThemeColors) {
   soldLabelWrap: {
     position: 'absolute',
     bottom: 6,
-    left: 8,
+    left: Space.sm,
   },
   soldText: {
     color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
+    ...GlyphShadow.label,
     textShadowColor: colors.shadow,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   gridPrice: { fontSize: Type.caption.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: Space.xs + 1, fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   gridBrand: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },

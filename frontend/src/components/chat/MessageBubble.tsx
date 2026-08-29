@@ -150,10 +150,10 @@ function MessageBubbleBase({
   const bubbleBg = isMe
     ? colors.brand
     : isAgent
-      ? `${colors.brand}0D`
+      ? colors.brandSubtle
       : colors.surfaceAlt;
   const bubbleText = isMe ? colors.textInverse : colors.textPrimary;
-  const metaColor = isMe ? `${colors.textInverse}80` : colors.textMuted;
+  const metaColor = isMe ? colors.scrimTextTertiary : colors.textMuted;
   const bubbleBorder = undefined;
 
   const isStandalone = isFirstInCluster && isLastInCluster;
@@ -188,7 +188,7 @@ function MessageBubbleBase({
     <Reanimated.View style={[styles.row, isMe && styles.rowRight]} entering={bubbleEntering}>
       {showAvatar && !isMe ? (
         isAgent ? (
-          <View style={[styles.agentAvatar, { backgroundColor: `${colors.brand}12`, borderColor: `${colors.brand}26` }]}>
+          <View style={[styles.agentAvatar, { backgroundColor: colors.brandSubtle, borderColor: colors.borderSubtle }]}>
             <Ionicons
               name={(agentAvatar ?? 'cube-outline') as keyof typeof Ionicons.glyphMap}
               size={14}
@@ -209,7 +209,7 @@ function MessageBubbleBase({
           <View style={styles.senderLabelRow}>
             <Text style={styles.senderName}>{senderLabel}</Text>
             {isAgent ? (
-              <View style={[styles.aiChip, { backgroundColor: `${colors.brand}12`, borderColor: `${colors.brand}26` }]}>
+              <View style={[styles.aiChip, { backgroundColor: colors.brandSubtle, borderColor: colors.borderSubtle }]}>
                 <Ionicons name="cube-outline" size={9} color={colors.brand} />
                 <Text style={[styles.aiChipText, { color: colors.brand }]}>AI</Text>
               </View>
@@ -233,7 +233,7 @@ function MessageBubbleBase({
         accessibilityRole="button"
         >
           {replyTo ? (
-            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${colors.textInverse}30` : colors.border }]} accessibilityRole="button">
+            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? colors.scrimTextTertiary : colors.border }]} accessibilityRole="button">
               <Text style={[styles.replyName, { color: metaColor }]}>
                 {replyTo.senderName}
               </Text>
@@ -471,14 +471,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignSelf: 'flex-start',
   },
   bubbleFailed: {
-    backgroundColor: `${colors.danger}12`,
-    borderWidth: 1,
-    borderColor: `${colors.danger}30`,
+    backgroundColor: colors.dangerSubtle,
+    borderWidth: Stroke.standard,
+    borderColor: colors.dangerBorder,
   },
   bubbleDraft: {
     backgroundColor: `${colors.surfaceAlt}80`,
-    borderWidth: 1,
-    borderColor: `${colors.border}80`,
+    borderWidth: Stroke.standard,
+    borderColor: colors.borderSubtle,
   },
   draftBadge: {
     flexDirection: 'row',
@@ -500,7 +500,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.sm - 1,
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}12`,
+    backgroundColor: colors.brandSubtle,
     alignSelf: 'flex-start',
     minHeight: 32,
   },
@@ -596,7 +596,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.sm - 1,
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.danger}10`,
+    backgroundColor: colors.dangerSubtle,
     alignSelf: 'flex-start',
   },
   retryText: {
@@ -626,7 +626,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     minHeight: 26,
   },
   reactionChipActive: {
-    backgroundColor: `${colors.brand}12`,
+    backgroundColor: colors.brandSubtle,
   },
   reactionEmoji: {
     fontSize: Type.caption.size,

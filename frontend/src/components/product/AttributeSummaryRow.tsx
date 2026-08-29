@@ -51,6 +51,7 @@ export function AttributeSummaryRow({
               style={[
                 styles.conditionChip,
                 {
+                  // TODO: Replace runtime conditionMeta.color hex-alpha with theme token when color source is staticized
                   borderColor: conditionMeta ? `${conditionMeta.color}66` : colors.borderSubtle,
                   backgroundColor: conditionMeta ? `${conditionMeta.color}14` : 'transparent',
                 },

@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Type, FontFamily } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { ConfirmationSheet } from '../ConfirmationSheet';
 
 export interface SettingsSignOutRowProps {
   username?: string | null;
@@ -40,33 +41,24 @@ export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowPr
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [isBusy, setIsBusy] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
 
   const handlePress = useCallback(() => {
     if (isBusy) return;
-    Alert.alert(
-      'Sign Out',
-      username
-        ? `You'll be signed out of @${username} on this device.`
-        : 'You\'ll be signed out of your account on this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            setIsBusy(true);
-            try {
-              await onSignOut();
-            } finally {
-              setIsBusy(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [isBusy, onSignOut]);
+    setConfirmVisible(true);
+  }, [isBusy]);
+
+  const handleConfirm = useCallback(async () => {
+    setIsBusy(true);
+    try {
+      await onSignOut();
+    } finally {
+      setIsBusy(false);
+    }
+  }, [onSignOut]);
 
   return (
+    <>
     <AnimatedPressable
       onPress={handlePress}
       activeOpacity={0.7}
@@ -89,5 +81,20 @@ export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowPr
         </Text>
       </View>
     </AnimatedPressable>
+
+    <ConfirmationSheet
+      visible={confirmVisible}
+      onDismiss={() => setConfirmVisible(false)}
+      title="Sign Out"
+      message={
+        username
+          ? `You'll be signed out of @${username} on this device.`
+          : 'You\'ll be signed out of your account on this device.'
+      }
+      confirmLabel="Sign Out"
+      variant="danger"
+      onConfirm={handleConfirm}
+    />
+    </>
   );
 }

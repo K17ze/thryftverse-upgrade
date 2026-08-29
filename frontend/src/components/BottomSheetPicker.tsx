@@ -171,7 +171,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     marginHorizontal: 20,
     paddingHorizontal: Space.md,

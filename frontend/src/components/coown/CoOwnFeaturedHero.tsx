@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Elevation, Stroke} from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 export interface CoOwnFeaturedHeroProps {
@@ -116,7 +116,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: Space.lg,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     ...Elevation.subtle,
   },
@@ -145,7 +145,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   statusDot: {
     width: 8,

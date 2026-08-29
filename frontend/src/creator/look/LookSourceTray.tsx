@@ -20,7 +20,7 @@ import Reanimated, {
   runOnJS,
   type SharedValue,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Elevation, Stroke} from '../../theme/designTokens';
 import { IconGrammar } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: Radius.full,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     borderColor: '#fff',
   },
   itemImagePlaceholder: {

@@ -8,7 +8,7 @@ import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TabParamList, RootStackParamList } from './types';
-import { Space, Radius, Typography, Type } from '../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke} from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -478,7 +478,7 @@ const tabStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xs,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
   },
   badgeText: {
     fontSize: 10,

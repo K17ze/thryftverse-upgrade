@@ -41,7 +41,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography } from '../../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../../theme/designTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     width: 72,
     paddingVertical: Space.sm,
     gap: Space.xs,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderRadius: Radius.lg,
   },
   actionLabel: {

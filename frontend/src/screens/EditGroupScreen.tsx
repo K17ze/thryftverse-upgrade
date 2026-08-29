@@ -1,7 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,6 +30,7 @@ import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
 import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
 import { Caption, Meta } from '../components/ui/Text';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { createStableId } from '../utils/createStableId';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditGroup'>;
@@ -64,6 +64,15 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const [isLeaving, setIsLeaving] = useState(false);
   const [saveIssue, setSaveIssue] = useState<string | null>(null);
   const [outcomeUnknown, setOutcomeUnknown] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const pendingSaveKeyRef = useRef<string | null>(null);
 
   const role = currentUser?.id ? conversation?.memberRoles?.[currentUser.id] : undefined;
@@ -321,41 +330,46 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 
   const handleBack = () => {
     if (hasChanges) {
-      Alert.alert('Discard changes?', 'Your group edits have not been saved.', [
-        { text: 'Keep editing', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-      ]);
+      setConfirmSheet({
+        visible: true,
+        title: 'Discard changes?',
+        message: 'Your group edits have not been saved.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        variant: 'danger',
+        onConfirm: () => {
+          setConfirmSheet((s) => ({ ...s, visible: false }));
+          navigation.goBack();
+        },
+      });
       return;
     }
     navigation.goBack();
   };
 
   const handleLeaveGroup = () => {
-    Alert.alert(
-      'Leave group?',
-      'You will be removed from this group on all devices. Other members will keep the conversation.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Leave group',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setIsLeaving(true);
-            try {
-              await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
-              deleteConversation(conversationId);
-              show('You left the group.', 'info');
-              navigation.navigate('MainTabs', { screen: 'Inbox' });
-            } catch (error) {
-              show(parseApiError(error, 'Could not leave the group.').message, 'error');
-            } finally {
-              setIsLeaving(false);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Leave group?',
+      message: 'You will be removed from this group on all devices. Other members will keep the conversation.',
+      confirmLabel: 'Leave group',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setIsLeaving(true);
+        try {
+          await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
+          deleteConversation(conversationId);
+          show('You left the group.', 'info');
+          navigation.navigate('MainTabs', { screen: 'Inbox' });
+        } catch (error) {
+          show(parseApiError(error, 'Could not leave the group.').message, 'error');
+        } finally {
+          setIsLeaving(false);
+        }
+      },
+    });
   };
 
   const mosaicMembers = (conversation.participantProfiles ?? []).map((member) => ({
@@ -592,6 +606,16 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         </AnimatedPressable>
         </View>
       </ScrollView>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        cancelLabel={confirmSheet.cancelLabel ?? 'Cancel'}
+        variant={confirmSheet.variant ?? 'danger'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

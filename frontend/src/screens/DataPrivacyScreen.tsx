@@ -213,7 +213,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
         description="Deletion is permanent. Open orders, disputes or payouts may need to be resolved first."
         noCard
       >
-        <View style={[styles.destructiveDivider, { borderTopColor: `${colors.danger}40` }]}>
+        <View style={[styles.destructiveDivider, { borderTopColor: colors.dangerBorder }]}>
           <SettingsRow
             icon="trash-outline"
             title="Delete account"

@@ -188,7 +188,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}15`,
+    backgroundColor: colors.brandSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.xs,

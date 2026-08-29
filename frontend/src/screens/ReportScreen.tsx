@@ -665,6 +665,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
   },
   reasonIconSelected: {
+    // TODO: replace `${colors.textPrimary}14` with textPrimarySubtle token when available
     backgroundColor: `${colors.textPrimary}14`,
   },
   reasonCopy: {

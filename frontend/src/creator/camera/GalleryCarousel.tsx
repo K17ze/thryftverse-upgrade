@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Radius, Space } from '../../theme/designTokens';
+import { Radius, Space, Stroke} from '../../theme/designTokens';
 import { IconGrammar } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     width: GALLERY_THUMB_SIZE,
     height: GALLERY_THUMB_SIZE,
     borderRadius: Radius.md,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(255,255,255,0.9)',
   },
   // Transparent 44pt target for the no-recent-image state. No fill, no border —

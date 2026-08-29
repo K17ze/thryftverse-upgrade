@@ -86,7 +86,7 @@ export function AuctionBidHistorySheet({
               return (
                 <View
                   key={bid.id}
-                  style={[styles.bidRow, { borderBottomColor: colors.border }, row.isTopBid && { backgroundColor: `${colors.success}08` }]}
+                  style={[styles.bidRow, { borderBottomColor: colors.border }, row.isTopBid && { backgroundColor: colors.successSubtle }]}
                 >
                   <View style={styles.bidRowLeft}>
                     {row.isViewer && (

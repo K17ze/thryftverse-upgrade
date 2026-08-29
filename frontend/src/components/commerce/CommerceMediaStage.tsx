@@ -28,7 +28,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Control } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Control, Stroke} from '../../theme/designTokens';
 import { isVideoUri, getCategoryFocalPoint } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -1379,7 +1379,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.sm,
     overflow: 'hidden',
     opacity: 0.5,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'transparent',
   },
   thumbnailActive: {

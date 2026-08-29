@@ -52,7 +52,7 @@ export function IdentityCard({ user, onPress, variant = 'default' }: IdentityCar
             <Text style={[styles.meta, { color: colors.textSecondary }]}>{isCommanding ? 'Tap to edit your profile' : 'Account details, privacy and security'}</Text>
           )}
           {user?.isVerified && (
-            <View style={[styles.verifiedRow, { backgroundColor: `${colors.success}18` }]}>
+            <View style={[styles.verifiedRow, { backgroundColor: colors.successSubtle }]}>
               <Ionicons name="checkmark-circle" size={12} color={colors.success} />
               <Text style={[styles.verifiedLabel, { color: colors.success }]}>Verified</Text>
             </View>

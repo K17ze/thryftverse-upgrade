@@ -50,15 +50,15 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
       return {
         fill: colors.success,
         onFill: colors.scrimTextPrimary,
-        tint: `${colors.success}22`,
+        tint: colors.successSubtle,
         label: 'High avoided emissions',
       };
     case 'B':
       // Light green — positive, slightly less.
       return {
-        fill: `${colors.success}CC`,
+        fill: colors.overlay,
         onFill: colors.scrimTextPrimary,
-        tint: `${colors.success}14`,
+        tint: colors.successSubtle,
         label: 'Medium-high avoided emissions',
       };
     case 'C':
@@ -66,7 +66,7 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
       return {
         fill: colors.warning,
         onFill: colors.textInverse,
-        tint: `${colors.warning}1F`,
+        tint: colors.warningSubtle,
         label: 'Medium avoided emissions',
       };
     case 'D':

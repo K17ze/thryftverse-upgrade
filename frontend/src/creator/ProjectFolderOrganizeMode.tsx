@@ -36,7 +36,7 @@ import Reanimated, {
   Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../theme/designTokens';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -824,7 +824,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       fontSize: Type.bodyStrong.size,
       color: colors.textPrimary,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.md,

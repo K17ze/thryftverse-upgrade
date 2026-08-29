@@ -15,7 +15,6 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +26,7 @@ import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { EmptyState } from '../components/EmptyState';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import {
   fetchCoOwnPriceAlerts,
   deleteCoOwnPriceAlert,
@@ -61,6 +61,15 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [togglingIds, setTogglingIds] = React.useState<Set<string>>(new Set());
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const load = React.useCallback(async () => {
     try {
@@ -108,27 +117,24 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
 
   const handleDelete = (alert: CoOwnPriceAlert) => {
     haptic.heavy();
-    Alert.alert(
-      'Delete alert?',
-      `Remove the ${alert.condition} ${formatGbp(alert.targetPriceGbpMinor)} alert?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteCoOwnPriceAlert(alert.id);
-              haptic.success();
-              show('Alert deleted', 'success');
-              await load();
-            } catch {
-              show('Failed to delete alert', 'error');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete alert?',
+      message: `Remove the ${alert.condition} ${formatGbp(alert.targetPriceGbpMinor)} alert?`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      onConfirm: async () => {
+        try {
+          await deleteCoOwnPriceAlert(alert.id);
+          haptic.success();
+          show('Alert deleted', 'success');
+          await load();
+        } catch {
+          show('Failed to delete alert', 'error');
+        }
+      },
+      variant: 'danger',
+    });
   };
 
   if (isLoading) {
@@ -217,7 +223,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           {isToggling ? (
                             <ActivityIndicator size="small" color={colors.brand} />
                           ) : (
-                            <View style={[styles.toggleTrack, { borderColor: alert.active ? colors.brand : colors.border, backgroundColor: alert.active ? `${colors.brand}20` : colors.surfaceAlt }]}>
+                            <View style={[styles.toggleTrack, { borderColor: alert.active ? colors.brand : colors.border, backgroundColor: alert.active ? colors.brandSubtle : colors.surfaceAlt }]}>
                               <View style={[styles.toggleThumb, { backgroundColor: alert.active ? colors.brand : colors.textMuted, alignSelf: alert.active ? 'flex-end' : 'flex-start' }]} />
                             </View>
                           )}
@@ -285,7 +291,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           {isToggling ? (
                             <ActivityIndicator size="small" color={colors.brand} />
                           ) : (
-                            <View style={[styles.toggleTrack, { borderColor: alert.active ? colors.brand : colors.border, backgroundColor: alert.active ? `${colors.brand}20` : colors.surfaceAlt }]}>
+                            <View style={[styles.toggleTrack, { borderColor: alert.active ? colors.brand : colors.border, backgroundColor: alert.active ? colors.brandSubtle : colors.surfaceAlt }]}>
                               <View style={[styles.toggleThumb, { backgroundColor: alert.active ? colors.brand : colors.textMuted, alignSelf: alert.active ? 'flex-end' : 'flex-start' }]} />
                             </View>
                           )}
@@ -357,6 +363,17 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
         )}
         <View style={{ height: Space.xxl }} />
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }

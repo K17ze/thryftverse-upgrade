@@ -22,7 +22,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 
 export interface CoOwnRightsRow {
   label: string;
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -609,7 +609,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
   const renderSearchLoadingState = () => (
     <View style={styles.loadingStateWrap}>
       <View style={styles.loadingSection}>
-        <SkeletonLoader width="32%" height={14} borderRadius={Radius.md} style={{ marginBottom: 12 }} />
+        <SkeletonLoader width="32%" height={14} borderRadius={Radius.md} style={{ marginBottom: Space.smMd }} />
         <View style={styles.loadingTagsRow}>
           {Array.from({ length: 4 }).map((_, index) => (
             <SkeletonLoader key={`search_tag_loading_${index}`} width={96} height={36} borderRadius={Radius.xl} />
@@ -621,7 +621,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
         {Array.from({ length: 4 }).map((_, index) => (
           <View key={`search_recent_loading_${index}`} style={styles.loadingRecentRow}>
             <SkeletonLoader width={20} height={20} borderRadius={Radius.lg} />
-            <SkeletonLoader width="62%" height={13} borderRadius={Radius.sm} style={{ marginLeft: 12 }} />
+            <SkeletonLoader width="62%" height={13} borderRadius={Radius.sm} style={{ marginLeft: Space.smMd }} />
           </View>
         ))}
       </View>
@@ -921,7 +921,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                 {conversationalSearchEnabled ? (
                   <View style={styles.aiSearchPillWrap}>
                     <AnimatedPressable
-                      style={[styles.aiSearchPill, { borderColor: `${colors.brand}40`, backgroundColor: `${colors.brand}0D` }]}
+                      style={[styles.aiSearchPill, { borderColor: colors.brandBorder, backgroundColor: colors.brandSubtle }]}
                       onPress={() => navigation.navigate('ConversationalSearch')}
                       accessibilityRole="button"
                       accessibilityLabel="AI Search — search in natural language"
@@ -1123,12 +1123,12 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                     }}
                     isRetrying={isSyncing || isSearching}
                     telemetryContext="global_search_sync"
-                    containerStyle={{ marginHorizontal: 20, marginBottom: 12 }}
+                    containerStyle={{ marginHorizontal: 20, marginBottom: Space.smMd }}
                   />
                 ) : null}
 
                 {isSearching && searchScope === 'items' && (
-                  <View style={{ paddingHorizontal: 20, marginBottom: 8 }}>
+                  <View style={{ paddingHorizontal: 20, marginBottom: Space.sm }}>
                     <SkeletonLoader width="40%" height={14} borderRadius={Radius.md} />
                   </View>
                 )}
@@ -1183,7 +1183,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                         {[0, 1, 2].map((i) => (
                           <View key={`people-skel-${i}`} style={[peopleRowStyles.row, { borderBottomColor: colors.border }]}>
                             <SkeletonLoader width={44} height={44} borderRadius={Radius.xxl} />
-                            <View style={{ flex: 1, gap: 4 }}>
+                            <View style={{ flex: 1, gap: Space.xs }}>
                               <SkeletonLoader width="50%" height={14} borderRadius={Radius.md} />
                               <SkeletonLoader width="30%" height={12} borderRadius={Radius.sm} />
                             </View>
@@ -1518,7 +1518,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                 style={({ pressed }) => [
                   styles.sortSheetRow,
                   t.sortSheetRow,
-                  isActive && { backgroundColor: `${colors.brand}0A` },
+                  isActive && { backgroundColor: colors.brandSubtle },
                   pressed && { opacity: 0.6 },
                 ]}
                 onPress={() => handleSelectSort(option)}
@@ -1607,7 +1607,7 @@ const styles = StyleSheet.create({
   },
   statusPillWrap: {
     paddingHorizontal: 20,
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
 
   // Focused typeahead is part of the page, not a floating card. The flat
@@ -1627,16 +1627,16 @@ const styles = StyleSheet.create({
   },
   typeaheadSubmitText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.semibold,
   },
   typeaheadText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.regular,
   },
   typeaheadKind: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: FontFamily.medium,
   },
   typeaheadLoading: {
@@ -1650,7 +1650,7 @@ const styles = StyleSheet.create({
   },
   typeaheadStatus: {
     paddingTop: Space.md,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     lineHeight: 19,
     fontFamily: FontFamily.regular,
   },
@@ -1671,7 +1671,7 @@ const styles = StyleSheet.create({
   loadingRecentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: Space.smMd,
   },
 
   // Sections
@@ -1696,7 +1696,7 @@ const styles = StyleSheet.create({
   },
   focusIntentText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.regular,
   },
   focusClearRow: {
@@ -1721,7 +1721,7 @@ const styles = StyleSheet.create({
     minHeight: Control.chrome,
   },
   recentChipText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.medium,
   },
   clearRecentBtn: {
@@ -1729,7 +1729,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   clearRecentText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.medium,
   },
 
@@ -1747,7 +1747,7 @@ const styles = StyleSheet.create({
   },
   recentRowText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.regular,
   },
 
@@ -1758,7 +1758,7 @@ const styles = StyleSheet.create({
     gap: Space.sm + 2,
   },
   emptySearchPromptText: {
-    fontSize: 15,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.regular,
     textAlign: 'center',
   },
@@ -1781,7 +1781,7 @@ const styles = StyleSheet.create({
   },
   categoryGridLabel: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.medium,
   },
 
@@ -1797,10 +1797,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: RadiusRoleValue.compactControl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   trendingFocusText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.medium,
   },
 
@@ -1815,7 +1815,7 @@ const styles = StyleSheet.create({
   },
   filterBarCount: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.medium,
     fontVariant: ['tabular-nums'],
   },
@@ -1841,12 +1841,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
   },
   filterIconBadgeText: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: FontFamily.bold,
-    lineHeight: 12,
+    lineHeight: Type.meta.lineHeight,
   },
 
   // Sort chip — labeled, always shows current sort
@@ -1859,7 +1859,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
   },
   sortChipText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.medium,
   },
 
@@ -1879,7 +1879,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   activeFilterChipText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: FontFamily.medium,
   },
 
@@ -1889,7 +1889,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   sortSheetTitle: {
-    fontSize: 16,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.bold,
     marginBottom: Space.sm,
   },
@@ -1901,7 +1901,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   sortSheetRowText: {
-    fontSize: 15,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.regular,
   },
   savedSearchListWrap: {
@@ -1910,7 +1910,7 @@ const styles = StyleSheet.create({
   savedSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     minHeight: 52,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -1922,37 +1922,37 @@ const styles = StyleSheet.create({
   },
   savedSearchTextWrap: {
     flex: 1,
-    gap: 2,
+    gap: Space.xxs,
   },
   savedSearchQuery: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: FontFamily.semibold,
   },
   savedSearchMeta: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: FontFamily.regular,
   },
   savedSearchToggle: {
-    width: 36,
-    height: 36,
+    width: Control.chrome,
+    height: Control.chrome,
     borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
   },
   savedSearchRemove: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   masonryGrid: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Space.sm,
     paddingHorizontal: 20,
   },
   masonryColumn: {
     flex: 1,
-    gap: 8,
+    gap: Space.sm,
   },
   masonryItemWrap: {
     borderRadius: RadiusRoleValue.standalonePanel,
@@ -1969,40 +1969,40 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    paddingVertical: Space.sm,
+    borderBottomLeftRadius: Radius.xl,
+    borderBottomRightRadius: Radius.xl,
   },
   resultPrice: {
     fontFamily: FontFamily.bold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontVariant: ['tabular-nums'],
   },
   recoEmptyState: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: RadiusRoleValue.standalonePanel,
     paddingVertical: 14,
-    paddingHorizontal: 12,
+    paddingHorizontal: Space.smMd,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     marginHorizontal: 20,
     flexWrap: 'wrap',
   },
   recoEmptyText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: FontFamily.medium,
     flex: 1,
   },
   recoEmptyCta: {
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderRadius: RadiusRoleValue.mediaThumbnail,
     paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginTop: 4,
+    paddingHorizontal: Space.smMd,
+    marginTop: Space.xs,
   },
   recoEmptyCtaText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: FontFamily.semibold,
   },
 
@@ -2014,25 +2014,25 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     borderRadius: RadiusRoleValue.standalonePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: 8,
+    gap: Space.sm,
   },
   noResultsTitle: {
-    fontSize: 16,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.semibold,
     textAlign: 'center',
     letterSpacing: -0.2,
   },
   noResultsSubtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.regular,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   noResultsActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 8,
+    marginTop: Space.sm,
   },
   noResultsPrimaryCta: {
     borderRadius: RadiusRoleValue.pillAvatar,
@@ -2040,17 +2040,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   noResultsPrimaryCtaText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.semibold,
   },
   noResultsSecondaryCta: {
     borderRadius: RadiusRoleValue.pillAvatar,
     paddingVertical: 10,
     paddingHorizontal: 18,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   noResultsSecondaryCtaText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.semibold,
   },
 
@@ -2061,7 +2061,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   noResultsCategoriesLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -2077,7 +2077,7 @@ const styles = StyleSheet.create({
   scopeTabBar: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     gap: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -2092,11 +2092,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   scopeTabText: {
-    fontSize: 15,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.medium,
   },
   scopeTabCount: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: FontFamily.regular,
     fontVariant: ['tabular-nums'],
   },

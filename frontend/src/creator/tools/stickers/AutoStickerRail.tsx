@@ -29,8 +29,7 @@ import {
   Radius,
   Type,
   FontFamily,
-  Control,
-} from '../../../theme/designTokens';
+  Control, Stroke} from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -136,7 +135,7 @@ function createStyles(colors: ThemeColors) {
       height: Control.hit,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.borderSubtle,
       alignItems: 'center',
       justifyContent: 'center',

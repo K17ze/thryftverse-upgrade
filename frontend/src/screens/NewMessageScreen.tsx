@@ -12,7 +12,7 @@ import { createDmConversationOnApi, joinGroupByInviteOnApi } from '../services/c
 import { parseApiError } from '../lib/apiClient';
 import { getAvailableAgents, deployAgent, type ChatAgent } from '../services/chatAgentsApi';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Typography, Control, Stroke} from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { CachedImage } from '../components/CachedImage';
@@ -650,7 +650,7 @@ const joinStyles = StyleSheet.create({
   input: {
     minHeight: 44,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     paddingHorizontal: Space.md,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,

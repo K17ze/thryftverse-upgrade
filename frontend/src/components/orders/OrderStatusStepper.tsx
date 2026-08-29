@@ -90,7 +90,7 @@ export function OrderStatusStepper({
               <View
                 style={[
                   styles.stageIconWrap,
-                  { backgroundColor: isCompleted || isCurrent ? `${colors.brand}15` : colors.surfaceAlt },
+                  { backgroundColor: isCompleted || isCurrent ? colors.brandSubtle : colors.surfaceAlt },
                   isCurrent && styles.stageIconWrapActive,
                 ]}
               >
@@ -184,7 +184,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm + 2,
   },
   failureIconWrap: {
-    backgroundColor: `${colors.danger}15`,
+    backgroundColor: colors.dangerSubtle,
   },
   failureLabel: {
     fontSize: Type.bodyStrong.size,

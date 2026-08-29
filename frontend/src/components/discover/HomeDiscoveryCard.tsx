@@ -48,7 +48,7 @@ import { MediaPreview as CanonicalMediaPreview } from '../MediaPreview';
 import { useStore } from '../../store/useStore';
 import { useHaptic } from '../../hooks/useHaptic';
 import { ProductAnalytics } from '../../platform/product/productAnalytics';
-import { Space, FontFamily, Radius, Type } from '../../theme/designTokens';
+import { Space, FontFamily, Radius, Type, Control, GlyphShadow } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import type { HomeDiscoveryItemVM } from '../../presentation/homeDiscoveryViewModel';
 
@@ -202,7 +202,7 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
           <Pressable
             onPress={handleSavePress}
             style={styles.saveButton}
-            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            hitSlop={{ top: Space.xs, bottom: Space.xs, left: Space.xs, right: Space.xs }}
             accessibilityLabel={item.saved ? 'Unsave item' : 'Save item'}
             accessibilityRole="button"
           >
@@ -352,8 +352,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     // Category label: 13sp, medium, letter-spaced — quiet but confident.
     mediaPlaceholderText: {
-      fontSize: 13,
-      lineHeight: 18,
+      fontSize: Type.captionElevated.size,
+      lineHeight: Type.captionElevated.lineHeight,
       fontFamily: FontFamily.medium,
       color: colors.textMuted,
       letterSpacing: 0.3,
@@ -373,17 +373,16 @@ const createStyles = (colors: ThemeColors) =>
       position: 'absolute',
       top: Space.xs,
       right: Space.xs,
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'transparent',
       zIndex: 5,
     },
     saveGlyph: {
+      ...GlyphShadow.glyph,
       textShadowColor: colors.shadow,
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 3,
     },
     // ── Below-media metadata ──
     meta: {
@@ -392,8 +391,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     // Identity: 14sp, medium weight, max 2 lines
     identity: {
-      fontSize: 14,
-      lineHeight: 19,
+      fontSize: Type.body.size,
+      lineHeight: Type.body.lineHeight,
       fontFamily: FontFamily.medium,
       color: colors.textPrimary,
       letterSpacing: -0.15,
@@ -407,16 +406,16 @@ const createStyles = (colors: ThemeColors) =>
     },
     // Price: 15sp, semibold, tabular figures
     price: {
-      fontSize: 15,
-      lineHeight: 20,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
       letterSpacing: -0.1,
     } as TextStyle,
     priceOriginal: {
-      fontSize: 13,
-      lineHeight: 18,
+      fontSize: Type.captionElevated.size,
+      lineHeight: Type.captionElevated.lineHeight,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       textDecorationLine: 'line-through',
@@ -424,8 +423,8 @@ const createStyles = (colors: ThemeColors) =>
     } as TextStyle,
     // Context: 12sp, secondary color, max one fact
     contextText: {
-      fontSize: 12,
-      lineHeight: 16,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
       marginTop: Space.xxs,
@@ -439,8 +438,8 @@ const createStyles = (colors: ThemeColors) =>
       marginTop: Space.xxs,
     },
     likesText: {
-      fontSize: 12,
-      lineHeight: 16,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       fontVariant: ['tabular-nums'],
@@ -460,15 +459,14 @@ const createStyles = (colors: ThemeColors) =>
       right: Space.xs + 1,
     },
     overlayPriceText: {
-      fontSize: 15,
-      lineHeight: 20,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: FontFamily.semibold,
       fontVariant: ['tabular-nums'],
       letterSpacing: -0.1,
       color: colors.scrimTextPrimary,
+      ...GlyphShadow.glyph,
       textShadowColor: colors.shadow,
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 3,
     } as TextStyle,
   });
 

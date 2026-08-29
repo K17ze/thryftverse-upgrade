@@ -929,7 +929,7 @@ function createStyles(colors: ThemeColors) {
       minHeight: 44,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
     },
     imageChangeBtnText: {
       fontFamily: Typography.family.medium,

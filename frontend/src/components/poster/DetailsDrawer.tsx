@@ -21,7 +21,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space, Stroke, Control } from '../../theme/designTokens';
 import { KeyboardAwareScrollView } from '../../platform/keyboard/KeyboardProvider';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -337,8 +337,8 @@ function createStyles(colors: any) {
     right: 0,
     height: DRAWER_HEIGHT,
     backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
     overflow: 'hidden',
   },
   keyboardWrap: {
@@ -363,8 +363,8 @@ function createStyles(colors: any) {
     zIndex: 10,
   },
   closeBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -375,7 +375,7 @@ function createStyles(colors: any) {
     gap: Space.md,
   },
   section: {
-    gap: 8,
+    gap: Space.sm,
   },
   sectionLabel: {
     fontSize: Type.caption.size,
@@ -393,7 +393,7 @@ function createStyles(colors: any) {
     borderRadius: Radius.xl,
     overflow: 'hidden',
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   listingCardSelected: {
@@ -431,12 +431,12 @@ function createStyles(colors: any) {
   },
   expiryRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Space.sm,
   },
   expiryPill: {
     flex: 1,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     paddingVertical: 10,
@@ -458,14 +458,14 @@ function createStyles(colors: any) {
   captionInput: {
     minHeight: 80,
     borderRadius: Radius.xl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     color: colors.textPrimary,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    paddingHorizontal: 12,
-    paddingTop: 12,
+    paddingHorizontal: Space.smMd,
+    paddingTop: Space.smMd,
   },
   charCount: {
     fontSize: Type.meta.size,
@@ -477,7 +477,7 @@ function createStyles(colors: any) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Space.sm,
     backgroundColor: colors.brand,
     borderRadius: Radius.xl,
     paddingVertical: 14,

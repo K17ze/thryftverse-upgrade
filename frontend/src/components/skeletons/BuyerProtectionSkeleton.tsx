@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
 
 // Mirrors BuyerProtectionScreen layout: coverage summary card (icon + title + subtitle + detail rows),
 // "What's covered" section card with checklist, claims history placeholder, claim CTA button.
@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
   coverageCard: {
     borderRadius: Radius.xl,
     padding: Space.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   coverageHeader: {
     flexDirection: 'row',
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   sectionCard: {
     borderRadius: Radius.xl,
     padding: Space.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     gap: Space.sm,
   },
   coverageList: {

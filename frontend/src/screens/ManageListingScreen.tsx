@@ -50,6 +50,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { t } from '../i18n';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -74,6 +75,15 @@ export default function ManageListingScreen() {
   const [isNotFound, setIsNotFound] = React.useState(false);
   const [hasError, setHasError] = React.useState(false);
   const [imgIndex, setImgIndex] = React.useState(0);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
   const currentUser = useStore((s) => s.currentUser);
 
   React.useEffect(() => {
@@ -212,24 +222,25 @@ export default function ManageListingScreen() {
   };
 
   const handleDeleteListing = () => {
-    Alert.alert('Delete Listing', 'This cannot be undone. Permanently remove this listing?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteListingOnApi(itemId);
-            show('Listing deleted.', 'success');
-            void refreshListings();
-            void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
-            navigation.goBack();
-          } catch {
-            show('Failed to delete listing', 'error');
-          }
-        },
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete Listing',
+      message: 'This cannot be undone. Permanently remove this listing?',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      onConfirm: async () => {
+        try {
+          await deleteListingOnApi(itemId);
+          show('Listing deleted.', 'success');
+          void refreshListings();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
+          navigation.goBack();
+        } catch {
+          show('Failed to delete listing', 'error');
+        }
       },
-    ]);
+      variant: 'danger',
+    });
   };
 
   const status = item.status ?? 'active';
@@ -373,6 +384,7 @@ export default function ManageListingScreen() {
           <Text style={styles.identityPrice}>{formatFromFiat(item.priceGbp ?? 0, currencyCode, { displayMode: 'fiat' })}</Text>
 
           <View style={styles.statusRow}>
+            {/* TODO: replace `${statusColor}1A` with statusColorSubtle token when available */}
             <View style={[styles.statusPillFlat, { backgroundColor: `${statusColor}1A` }]}>
               <View style={[styles.statusDotFlat, { backgroundColor: statusColor }]} />
               <Text style={[styles.statusPillFlatText, { color: statusColor }]}>{statusLabel}</Text>

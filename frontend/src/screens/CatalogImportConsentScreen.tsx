@@ -15,7 +15,6 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,6 +41,7 @@ import {
   CatalogImportError,
 } from '../services/catalogImportApi';
 import type { CatalogImportStackParamList } from './CatalogImportStartScreen';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Nav = NativeStackNavigationProp<CatalogImportStackParamList, 'CatalogImportConsent'>;
 type ConsentRoute = RouteProp<CatalogImportStackParamList, 'CatalogImportConsent'>;
@@ -90,6 +90,14 @@ export default function CatalogImportConsentScreen() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const isMountedRef = useRef(true);
   React.useEffect(() => {
@@ -196,18 +204,18 @@ export default function CatalogImportConsentScreen() {
 
   const handleBack = useCallback(() => {
     if (uploading || creating) {
-      Alert.alert(
-        'Discard this import?',
-        'Your file selection and attestations will be cleared.',
-        [
-          { text: 'Keep', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-        ]
-      );
+      setConfirmSheet({
+        visible: true,
+        title: 'Discard this import?',
+        message: 'Your file selection and attestations will be cleared.',
+        confirmLabel: 'Discard',
+        variant: 'danger',
+        onConfirm: () => navigation.goBack(),
+      });
       return;
     }
     navigation.goBack();
-  }, [uploading, creating, navigation]);
+  }, [uploading, creating, navigation, setConfirmSheet]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -342,6 +350,16 @@ export default function CatalogImportConsentScreen() {
           )}
         </AnimatedPressable>
       </View>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </View>
   );
 }

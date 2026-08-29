@@ -294,7 +294,7 @@ export function CoOwnPriceChart({
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Price</Text>
           {/* Phase 2: last-age badge */}
           {lastAgeLabel && (
-            <View style={[styles.lastAgeBadge, { backgroundColor: (isStaleLast ? colors.warning : colors.textMuted) + '22' }]}>
+            <View style={[styles.lastAgeBadge, { backgroundColor: (isStaleLast ? colors.warning : colors.textMuted) + '22' /* TODO: replace with subtle token once dynamic color is resolved */ }]}>
               <Ionicons name="time-outline" size={10} color={isStaleLast ? colors.warning : colors.textMuted} />
               <Text style={[styles.lastAgeText, { color: isStaleLast ? colors.warning : colors.textMuted }]}>
                 {lastAgeLabel}
@@ -303,7 +303,7 @@ export function CoOwnPriceChart({
           )}
         </View>
         {hasMovement && (
-          <View style={[styles.changeBadge, { backgroundColor: `${changeColor}15` }]}>
+          <View style={[styles.changeBadge, { backgroundColor: `${changeColor}15` /* TODO: replace with subtle token once changeColor is resolved */ }]}>
             <Ionicons
               name={isPositive ? 'trending-up' : 'trending-down'}
               size={11}
@@ -336,7 +336,7 @@ export function CoOwnPriceChart({
                   style={[
                     styles.periodChip,
                     { borderColor: colors.border },
-                    isActive && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
+                    isActive && { backgroundColor: colors.brandSubtle, borderColor: colors.brand },
                   ]}
                   onPress={() => handlePeriodChange(p)}
                   activeOpacity={0.8}
@@ -366,7 +366,7 @@ export function CoOwnPriceChart({
                 style={[
                   styles.toggleBtn,
                   { borderColor: colors.border },
-                  showVolume && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
+                  showVolume && { backgroundColor: colors.brandSubtle, borderColor: colors.brand },
                 ]}
                 onPress={handleVolumeToggle}
                 activeOpacity={0.8}
@@ -384,7 +384,7 @@ export function CoOwnPriceChart({
                 style={[
                   styles.toggleBtn,
                   { borderColor: colors.border },
-                  chartMode === 'candle' && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
+                  chartMode === 'candle' && { backgroundColor: colors.brandSubtle, borderColor: colors.brand },
                 ]}
                 onPress={handleModeToggle}
                 activeOpacity={0.8}

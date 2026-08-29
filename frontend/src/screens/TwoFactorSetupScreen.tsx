@@ -233,7 +233,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const renderDisableOverview = () => (
     <>
       <View style={styles.phaseIntro}>
-        <View style={[styles.statusBadge, { backgroundColor: `${colors.success}15` }]}>
+        <View style={[styles.statusBadge, { backgroundColor: colors.successSubtle }]}>
           <Ionicons name="shield-checkmark" size={18} color={colors.success} />
           <Text style={[styles.statusBadgeText, { color: colors.success }]}>Protected</Text>
         </View>
@@ -282,7 +282,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const renderDisableConfirm = () => (
     <>
       <View style={styles.phaseIntro}>
-        <View style={[styles.statusBadge, { backgroundColor: `${colors.danger}15` }]}>
+        <View style={[styles.statusBadge, { backgroundColor: colors.dangerSubtle }]}>
           <Ionicons name="shield-outline" size={18} color={colors.danger} />
           <Text style={[styles.statusBadgeText, { color: colors.danger }]}>Remove protection</Text>
         </View>
@@ -345,7 +345,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
             />
           </View>
         ) : (
-          <View style={[styles.qrError, { borderColor: `${colors.danger}30` }]}>
+          <View style={[styles.qrError, { borderColor: colors.dangerBorder }]}>
             <Ionicons name="alert-circle-outline" size={28} color={colors.danger} />
             <Text style={[styles.qrErrorText, { color: colors.danger }]}>Could not generate QR code</Text>
             <AnimatedPressable onPress={() => void fetchEnrollment()} scaleValue={0.96}>
@@ -459,7 +459,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
   const renderRecovery = () => (
     <>
       <View style={styles.phaseIntro}>
-        <View style={[styles.statusBadge, { backgroundColor: `${colors.success}15` }]}>
+        <View style={[styles.statusBadge, { backgroundColor: colors.successSubtle }]}>
           <Ionicons name="checkmark-circle" size={18} color={colors.success} />
           <Text style={[styles.statusBadgeText, { color: colors.success }]}>Enabled</Text>
         </View>

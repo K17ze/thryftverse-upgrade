@@ -541,10 +541,10 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    backgroundColor: `${colors.brand}08`,
+    backgroundColor: colors.brandSubtle,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,
-    borderColor: `${colors.brand}20`,
+    borderColor: colors.brandBorder,
     gap: Space.sm,
   },
   tipsHeader: {

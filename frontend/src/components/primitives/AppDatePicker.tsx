@@ -16,8 +16,7 @@ import {
   Type,
   Typography,
   Elevation,
-  Control,
-} from '../../theme/designTokens';
+  Control, Stroke} from '../../theme/designTokens';
 
 export type AppDatePickerMode = 'date' | 'time' | 'datetime';
 
@@ -383,7 +382,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       backgroundColor: colors.input,
       minHeight: Control.hit,

@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
 import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -164,7 +164,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: 3,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}12`,
+    backgroundColor: colors.brandSubtle,
   },
   bundleCountText: {
     fontSize: Type.meta.size,
@@ -239,9 +239,9 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: `${colors.brand}40`,
-    backgroundColor: `${colors.brand}08`,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.brandSubtle,
   },
   createBundleBtnPressed: {
     opacity: 0.7,

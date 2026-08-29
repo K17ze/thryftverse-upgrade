@@ -105,6 +105,7 @@ export default function ResolutionCentreScreen() {
             <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
             <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
             <View style={styles.ticketMetaRow}>
+              {/* TODO: replace `${statusCfg.color}12` with statusColorSubtle token when available */}
               <View style={[styles.statusPill, { backgroundColor: `${statusCfg.color}12` }]}>
                 <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusCfg.label}</Text>
               </View>

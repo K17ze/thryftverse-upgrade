@@ -993,7 +993,7 @@ function PhotoCaptureSection({
                 <Ionicons name="close-circle" size={22} color={colors.textInverse} aria-hidden={true} />
               </Pressable>
               <Pressable
-                style={({ pressed }) => [styles.photoEnhanceBtn, { backgroundColor: `${colors.background}E6` }, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.photoEnhanceBtn, { backgroundColor: colors.overlay }, pressed && { opacity: 0.6 }]}
                 onPress={() => onEnhancePhoto(photo.uri)}
                 accessibilityRole="button"
                 accessibilityLabel="Enhance photo"

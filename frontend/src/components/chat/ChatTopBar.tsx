@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Typography, Control } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Typography, Control, AvatarSize } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 
@@ -250,8 +250,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 0,
   },
   searchNavBtn: {
-    width: 36,
-    height: 36,
+    width: Control.chrome,
+    height: Control.chrome,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -271,8 +271,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     minHeight: 56,
   },
   backBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: -2,
@@ -285,8 +285,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     minWidth: 0,
   },
   avatar: {
-    width: 40,
-    height: 40,
+    width: AvatarSize.md,
+    height: AvatarSize.md,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
@@ -294,8 +294,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexShrink: 0,
   },
   avatarImage: {
-    width: 40,
-    height: 40,
+    width: AvatarSize.md,
+    height: AvatarSize.md,
     borderRadius: Radius.full,
   },
   presenceDotOuter: {
@@ -326,7 +326,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     minWidth: 0,
   },
   title: {
@@ -352,8 +352,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 0,
   },
   iconBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },

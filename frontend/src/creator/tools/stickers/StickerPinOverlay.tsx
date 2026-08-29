@@ -31,7 +31,7 @@ import Reanimated, {
   useDerivedValue,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Radius, Control } from '../../../theme/designTokens';
+import { Radius, Control, Stroke} from '../../../theme/designTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import type { StickerPin } from './StickerPinTracker';
@@ -274,7 +274,7 @@ const crosshairStyles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(255,255,255,0.85)',
   } as ViewStyle,
   handle: {

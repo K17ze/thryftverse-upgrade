@@ -7,7 +7,6 @@ import {
   Pressable,
   TextInput,
   ActivityIndicator,
-  Alert,
   Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +33,7 @@ import {
 } from '../services/shippingProviderRegistry';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { haptics } from '../utils/haptics';
 import { t } from '../i18n';
 
@@ -95,6 +95,15 @@ export default function SellerFulfilmentScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isDispatching, setIsDispatching] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   // Manual shipping form state
   const [trackingNumber, setTrackingNumber] = useState('');
@@ -594,18 +603,27 @@ export default function SellerFulfilmentScreen() {
           <Pressable
             style={[styles.dispatchBtn, isDispatching && styles.dispatchBtnDisabled]}
             onPress={() => {
-              Alert.alert(
-                'Confirm dispatch?',
-                trackingNumber.trim()
-                  ? `The order will be dispatched with ${shippingProvider} tracking number ${trackingNumber.trim()}. The buyer will be notified.`
-                  : 'Enter a tracking number and carrier to confirm dispatch.',
-                [
-                  { text: 'Not yet', style: 'cancel' },
-                  ...(trackingNumber.trim() && shippingProvider.trim()
-                    ? [{ text: 'Confirm dispatch', style: 'default' as const, onPress: handleManualDispatch }]
-                    : []),
-                ]
-              );
+              if (trackingNumber.trim() && shippingProvider.trim()) {
+                setConfirmSheet({
+                  visible: true,
+                  title: 'Confirm dispatch?',
+                  message: `The order will be dispatched with ${shippingProvider} tracking number ${trackingNumber.trim()}. The buyer will be notified.`,
+                  confirmLabel: 'Confirm dispatch',
+                  cancelLabel: 'Not yet',
+                  onConfirm: handleManualDispatch,
+                  variant: 'default',
+                });
+              } else {
+                setConfirmSheet({
+                  visible: true,
+                  title: 'Confirm dispatch?',
+                  message: 'Enter a tracking number and carrier to confirm dispatch.',
+                  confirmLabel: 'OK',
+                  cancelLabel: 'Not yet',
+                  onConfirm: () => {},
+                  variant: 'default',
+                });
+              }
             }}
             disabled={isDispatching}
             accessibilityRole="button"
@@ -619,6 +637,17 @@ export default function SellerFulfilmentScreen() {
           </Pressable>
         </View>
       )}
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }

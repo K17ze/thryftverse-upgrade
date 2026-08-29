@@ -5,7 +5,6 @@ import {
   StyleSheet,
   RefreshControl,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -16,6 +15,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { parseApiError } from '../lib/apiClient';
 import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipNavigationRow } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { Space, Radius, Type, Typography, Stroke, IconGrammar } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import {
@@ -90,6 +90,14 @@ export default function AccountSecurityScreen({ navigation }: Props) {
   const [passkeys, setPasskeys] = useState<PasskeyInfo[]>([]);
   const [registeringPasskey, setRegisteringPasskey] = useState(false);
   const [removingPasskeyId, setRemovingPasskeyId] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const loadData = useCallback(async () => {
     try {
@@ -137,31 +145,27 @@ export default function AccountSecurityScreen({ navigation }: Props) {
   }, [haptic, show]);
 
   const handleRevokeOthers = useCallback(async () => {
-    Alert.alert(
-      'Revoke other sessions',
-      'This will sign out all other devices. You will stay signed in on this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Revoke',
-          style: 'destructive',
-          onPress: async () => {
-            setRevokingOthers(true);
-            try {
-              const result = await revokeOtherSecuritySessions();
-              haptic.heavy();
-              show(`${result.revokedCount} session${result.revokedCount === 1 ? '' : 's'} revoked`, 'success');
-              setSessions((prev) => prev.map((s) => s.isCurrent ? s : { ...s, isRevoked: true }));
-            } catch (err) {
-              const parsed = parseApiError(err, 'Could not revoke other sessions.');
-              show(parsed.message, 'error');
-            } finally {
-              setRevokingOthers(false);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Revoke other sessions',
+      message: 'This will sign out all other devices. You will stay signed in on this device.',
+      confirmLabel: 'Revoke',
+      variant: 'danger',
+      onConfirm: async () => {
+        setRevokingOthers(true);
+        try {
+          const result = await revokeOtherSecuritySessions();
+          haptic.heavy();
+          show(`${result.revokedCount} session${result.revokedCount === 1 ? '' : 's'} revoked`, 'success');
+          setSessions((prev) => prev.map((s) => s.isCurrent ? s : { ...s, isRevoked: true }));
+        } catch (err) {
+          const parsed = parseApiError(err, 'Could not revoke other sessions.');
+          show(parsed.message, 'error');
+        } finally {
+          setRevokingOthers(false);
+        }
+      },
+    });
   }, [haptic, show]);
 
   const handleRegisterPasskey = useCallback(async () => {
@@ -182,58 +186,50 @@ export default function AccountSecurityScreen({ navigation }: Props) {
   }, [haptic, show]);
 
   const handleRemovePasskey = useCallback(async (credentialId: string) => {
-    Alert.alert(
-      'Remove passkey',
-      'You will need to use another sign-in method if you remove this passkey.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setRemovingPasskeyId(credentialId);
-            try {
-              await removeUserPasskey(credentialId);
-              haptic.medium();
-              show('Passkey removed', 'success');
-              setPasskeys((prev) => prev.filter((p) => p.credentialId !== credentialId));
-            } catch (err) {
-              const parsed = parseApiError(err, 'Could not remove passkey');
-              show(parsed.message, 'error');
-            } finally {
-              setRemovingPasskeyId(null);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove passkey',
+      message: 'You will need to use another sign-in method if you remove this passkey.',
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setRemovingPasskeyId(credentialId);
+        try {
+          await removeUserPasskey(credentialId);
+          haptic.medium();
+          show('Passkey removed', 'success');
+          setPasskeys((prev) => prev.filter((p) => p.credentialId !== credentialId));
+        } catch (err) {
+          const parsed = parseApiError(err, 'Could not remove passkey');
+          show(parsed.message, 'error');
+        } finally {
+          setRemovingPasskeyId(null);
+        }
+      },
+    });
   }, [haptic, show]);
 
   const handleDeclareCompromise = useCallback(async () => {
-    Alert.alert(
-      'Secure your account',
-      'If you think someone else accessed your account, we will sign out other sessions and hold payouts until you confirm it is safe.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Secure account',
-          style: 'destructive',
-          onPress: async () => {
-            setDeclaring(true);
-            try {
-              const result = await declareCompromise({});
-              haptic.heavy();
-              navigation.navigate('AccountSecurityRecovery', { caseId: result.caseId });
-            } catch (err) {
-              const parsed = parseApiError(err, 'Could not start account recovery.');
-              show(parsed.message, 'error');
-            } finally {
-              setDeclaring(false);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Secure your account',
+      message: 'If you think someone else accessed your account, we will sign out other sessions and hold payouts until you confirm it is safe.',
+      confirmLabel: 'Secure account',
+      variant: 'danger',
+      onConfirm: async () => {
+        setDeclaring(true);
+        try {
+          const result = await declareCompromise({});
+          haptic.heavy();
+          navigation.navigate('AccountSecurityRecovery', { caseId: result.caseId });
+        } catch (err) {
+          const parsed = parseApiError(err, 'Could not start account recovery.');
+          show(parsed.message, 'error');
+        } finally {
+          setDeclaring(false);
+        }
+      },
+    });
   }, [haptic, show, navigation]);
 
   // ── Loading state ──────────────────────────────────────────────────
@@ -429,6 +425,16 @@ export default function AccountSecurityScreen({ navigation }: Props) {
         />
       </View>
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

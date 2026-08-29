@@ -76,9 +76,9 @@ export function DispatchCountdown({ createdAt, shipByDate, windowHours = 24, shi
     colors.textPrimary;
 
   const bgColor =
-    urgency === 'overdue' ? `${colors.danger}15` :
-    urgency === 'urgent' ? `${colors.danger}10` :
-    urgency === 'warning' ? `${colors.warning}10` :
+    urgency === 'overdue' ? colors.dangerSubtle :
+    urgency === 'urgent' ? colors.dangerSubtle :
+    urgency === 'warning' ? colors.warningSubtle :
     colors.surface;
 
   const icon: React.ComponentProps<typeof Ionicons>['name'] =

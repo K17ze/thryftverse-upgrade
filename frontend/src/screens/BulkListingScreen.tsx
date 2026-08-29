@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -31,6 +30,7 @@ import { AppInput } from '../components/ui/AppInput';
 import { BottomSheet } from '../components/BottomSheet';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { CachedImage } from '../components/CachedImage';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useTaxonomy } from '../context/TaxonomyContext';
@@ -101,6 +101,15 @@ export default function BulkListingScreen({ navigation }: Props) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishProgress, setPublishProgress] = useState({ done: 0, total: 0 });
   const [publishResults, setPublishResults] = useState<BulkListingResult[] | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   // Sheet form state (used for both add and edit)
   const [form, setForm] = useState<BulkListingItem>(emptyDraft());
@@ -239,19 +248,20 @@ export default function BulkListingScreen({ navigation }: Props) {
 
   const clearAll = useCallback(() => {
     if (items.length === 0) return;
-    Alert.alert('Clear all drafts', 'Remove all draft listings from this batch?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: () => {
-          setItems([]);
-          setExpandedId(null);
-          setPublishResults(null);
-          haptics.selection();
-        },
+    setConfirmSheet({
+      visible: true,
+      title: 'Clear all drafts',
+      message: 'Remove all draft listings from this batch?',
+      confirmLabel: 'Clear',
+      cancelLabel: 'Cancel',
+      onConfirm: () => {
+        setItems([]);
+        setExpandedId(null);
+        setPublishResults(null);
+        haptics.selection();
       },
-    ]);
+      variant: 'danger',
+    });
   }, [items.length]);
 
   const renderItem = useCallback(
@@ -423,6 +433,17 @@ export default function BulkListingScreen({ navigation }: Props) {
             setForm((prev) => ({ ...prev, condition: value }));
           }
         }}
+      />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
       />
     </FlagshipScreen>
   );

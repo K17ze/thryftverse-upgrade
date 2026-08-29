@@ -159,7 +159,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   chipActive: {
     borderColor: colors.brand,
-    backgroundColor: `${colors.brand}10`,
+    backgroundColor: colors.brandSubtle,
   },
   emoji: {
     fontSize: Type.body.size,

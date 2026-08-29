@@ -242,6 +242,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
                   const isException = item.orderStatus === 'cancelled' || item.orderStatus === 'refunded' || item.orderStatus === 'returned' || item.orderStatus === 'delivery_failed';
                   const isDisputed = item.orderStatus === 'disputed' || item.orderStatus === 'under_review';
                   return (
+                    // TODO: replace `${colors.danger}30` / `${colors.warning}30` with dangerBorder / warningBorder tokens when available
                     <View key={item.orderId} style={[styles.scheduleItem, { borderColor: isException ? `${colors.danger}30` : isDisputed ? `${colors.warning}30` : colors.border }]}>
                       <View style={styles.scheduleItemInfo}>
                         <Text

@@ -52,16 +52,11 @@ import {
   updateNotificationPreferences,
 } from '../services/notificationsApi';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { formatHour } from '../utils/timeFormat';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NotificationPreferences'>;
 
 const SHOW_PREVIEW_KEY = '@thryftverse/notif_prefs_show_preview';
-
-function formatHour(hour: number): string {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-  return `${displayHour}:00 ${period}`;
-}
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 

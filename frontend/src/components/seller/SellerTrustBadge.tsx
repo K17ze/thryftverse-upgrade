@@ -108,10 +108,10 @@ function createStyles(colors: ThemeColors) {
       gap: 4,
       paddingHorizontal: Space.sm,
       paddingVertical: 4,
-      backgroundColor: `${colors.success}14`,
+      backgroundColor: colors.successSubtle,
       borderRadius: Radius.sm,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: `${colors.success}33`,
+      borderColor: colors.successBorder,
     },
     badgeText: {
       fontSize: Type.meta.size,

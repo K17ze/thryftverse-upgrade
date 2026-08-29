@@ -14,7 +14,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { FontFamily, IconGrammar } from '../../theme/designTokens';
+import { FontFamily, IconGrammar, Stroke} from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
 
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: RED_TINT_CONTENT_EDGE,
     borderStyle: 'dashed',
   },

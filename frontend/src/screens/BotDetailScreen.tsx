@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AgentIcon } from '../components/agents/AgentIcon';
@@ -7,6 +7,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { AppButton } from '../components/ui/AppButton';
 import { Caption } from '../components/ui/Text';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -53,6 +54,14 @@ export default function BotDetailScreen({ navigation, route }: Props) {
   const [playgroundMessage, setPlaygroundMessage] = useState('');
   const [playgroundTurns, setPlaygroundTurns] = useState<PlaygroundTurn[]>([]);
   const [playgroundError, setPlaygroundError] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const scrollRef = useRef<ScrollView>(null);
 
   const handleRunPlayground = async () => {
@@ -131,29 +140,26 @@ export default function BotDetailScreen({ navigation, route }: Props) {
   }, [botId, loadBotVersions]);
 
   const handleRollback = (versionId: string, versionNumber: number) => {
-    Alert.alert(
-      'Roll back agent?',
-      `This restores the agent to version ${versionNumber}. The current configuration will be replaced.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Roll back',
-          style: 'destructive',
-          onPress: async () => {
-            setRollingBackId(versionId);
-            try {
-              await rollbackBot(botId, versionId);
-              haptic.medium();
-              show(`Restored to version ${versionNumber}`, 'success');
-            } catch {
-              show('Could not roll back. Try again.', 'error');
-            } finally {
-              setRollingBackId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Roll back agent?',
+      message: `This restores the agent to version ${versionNumber}. The current configuration will be replaced.`,
+      confirmLabel: 'Roll back',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        setRollingBackId(versionId);
+        try {
+          await rollbackBot(botId, versionId);
+          haptic.medium();
+          show(`Restored to version ${versionNumber}`, 'success');
+        } catch {
+          show('Could not roll back. Try again.', 'error');
+        } finally {
+          setRollingBackId(null);
+        }
+      },
+    });
   };
 
   if (!bot) {
@@ -215,27 +221,28 @@ export default function BotDetailScreen({ navigation, route }: Props) {
 
   const remove = () => {
     if (!conversationId) return;
-    Alert.alert('Remove agent?', `${bot.name} will stop responding in this chat.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          setIsDeploying(true);
-          try {
-            await undeployBotFromConversationOnApi(conversationId, botId);
-            undeployBotFromConversation(conversationId, botId);
-            haptic.medium();
-            show(`${bot.name} removed`, 'info');
-            navigation.goBack();
-          } catch {
-            show('Failed to remove agent. Try again.', 'error');
-          } finally {
-            setIsDeploying(false);
-          }
-        },
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove agent?',
+      message: `${bot.name} will stop responding in this chat.`,
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        setIsDeploying(true);
+        try {
+          await undeployBotFromConversationOnApi(conversationId, botId);
+          undeployBotFromConversation(conversationId, botId);
+          haptic.medium();
+          show(`${bot.name} removed`, 'info');
+          navigation.goBack();
+        } catch {
+          show('Failed to remove agent. Try again.', 'error');
+        } finally {
+          setIsDeploying(false);
+        }
       },
-    ]);
+    });
   };
 
   return (
@@ -538,6 +545,15 @@ export default function BotDetailScreen({ navigation, route }: Props) {
           </View>
         ) : null}
       </ScrollView>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'danger'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { FlagshipEmptyGraphic } from '../flagship';
 
@@ -205,7 +205,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.lg,
     paddingVertical: Space.smMd,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   secondaryBtnText: {
     fontSize: Type.body.size,

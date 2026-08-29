@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AppButton } from '../ui/AppButton';
 
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
 export interface FlagshipDangerZoneProps {
   title: string;
   description: string;
@@ -51,7 +51,7 @@ export function FlagshipDangerZone({
 const styles = StyleSheet.create({
   root: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     padding: Space.md,
     marginHorizontal: Space.md,
     marginBottom: Space.lg,

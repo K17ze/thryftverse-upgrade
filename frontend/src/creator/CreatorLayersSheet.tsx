@@ -429,7 +429,7 @@ function LayerRow({
         accessibilityRole="button"
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
-        <Reanimated.View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type, colors)}20` }, layer.hidden && styles.thumbnailHidden, thumbAnimatedStyle]}>
+        <Reanimated.View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type, colors)}20` /* TODO: replace with subtle token once getLayerColor is resolved */ }, layer.hidden && styles.thumbnailHidden, thumbAnimatedStyle]}>
           {thumbSource ? (
             <ExpoImage source={thumbSource} style={styles.thumbnailImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={thumbSource.uri} enforceEarlyResizing />
           ) : (

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +22,7 @@ import {
 } from '../services/commerceApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 import { t } from '../i18n';
@@ -60,6 +60,15 @@ export default function SavedAddressesScreen({ navigation }: Props) {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const fetchAddresses = useCallback(
     async (isRefresh = false) => {
@@ -116,57 +125,54 @@ export default function SavedAddressesScreen({ navigation }: Props) {
 
   const handleDelete = useCallback(
     (address: CommerceAddress) => {
-      Alert.alert(
-        'Remove address?',
-        `The address for ${address.name} will be removed from your saved addresses.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: async () => {
-              const userId = currentUser?.id;
-              if (!userId || address.id === undefined) {
-                show('Unable to remove this address right now.', 'error');
-                return;
+      setConfirmSheet({
+        visible: true,
+        title: 'Remove address?',
+        message: `The address for ${address.name} will be removed from your saved addresses.`,
+        confirmLabel: 'Remove',
+        cancelLabel: 'Cancel',
+        onConfirm: async () => {
+          const userId = currentUser?.id;
+          if (!userId || address.id === undefined) {
+            show('Unable to remove this address right now.', 'error');
+            return;
+          }
+          setDeletingId(address.id);
+          try {
+            await deleteUserAddress(userId, address.id);
+            haptic.medium();
+            const remaining = addresses.filter((a) => a.id !== address.id);
+            setAddresses(remaining);
+            if (remaining.length === 0) {
+              clearSavedAddress();
+              setLoadState('empty');
+            } else if (savedAddress?.id === address.id) {
+              const newDefault = remaining.find((a) => a.isDefault) ?? remaining[0];
+              if (newDefault) {
+                saveAddress({
+                  id: newDefault.id,
+                  name: newDefault.name,
+                  streetAddress: newDefault.streetAddress,
+                  apartment: newDefault.apartment,
+                  city: newDefault.city,
+                  region: newDefault.region,
+                  postalCode: newDefault.postalCode,
+                  countryCode: newDefault.countryCode,
+                  country: newDefault.country,
+                  isDefault: newDefault.isDefault,
+                });
               }
-              setDeletingId(address.id);
-              try {
-                await deleteUserAddress(userId, address.id);
-                haptic.medium();
-                const remaining = addresses.filter((a) => a.id !== address.id);
-                setAddresses(remaining);
-                if (remaining.length === 0) {
-                  clearSavedAddress();
-                  setLoadState('empty');
-                } else if (savedAddress?.id === address.id) {
-                  const newDefault = remaining.find((a) => a.isDefault) ?? remaining[0];
-                  if (newDefault) {
-                    saveAddress({
-                      id: newDefault.id,
-                      name: newDefault.name,
-                      streetAddress: newDefault.streetAddress,
-                      apartment: newDefault.apartment,
-                      city: newDefault.city,
-                      region: newDefault.region,
-                      postalCode: newDefault.postalCode,
-                      countryCode: newDefault.countryCode,
-                      country: newDefault.country,
-                      isDefault: newDefault.isDefault,
-                    });
-                  }
-                }
-                show('Address removed', 'success');
-              } catch (error) {
-                const parsed = parseApiError(error, 'Could not remove address.');
-                show(parsed.message, 'error');
-              } finally {
-                setDeletingId(null);
-              }
-            },
-          },
-        ]
-      );
+            }
+            show('Address removed', 'success');
+          } catch (error) {
+            const parsed = parseApiError(error, 'Could not remove address.');
+            show(parsed.message, 'error');
+          } finally {
+            setDeletingId(null);
+          }
+        },
+        variant: 'danger',
+      });
     },
     [addresses, currentUser?.id, savedAddress?.id, clearSavedAddress, saveAddress, show, haptic]
   );
@@ -205,7 +211,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
           <View style={styles.addressCardHeader}>
             <View style={styles.addressCardHeaderLeft}>
               {isDefault ? (
-                <View style={[styles.defaultBadge, { backgroundColor: `${colors.brand}15` }]}>
+                <View style={[styles.defaultBadge, { backgroundColor: colors.brandSubtle }]}>
                   <Ionicons name="star" size={11} color={colors.brand} />
                   <Text style={[styles.defaultBadgeText, { color: colors.brand }]}>DEFAULT</Text>
                 </View>
@@ -343,6 +349,17 @@ export default function SavedAddressesScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }

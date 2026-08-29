@@ -199,7 +199,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
       >
         {/* ── Warning hero ── */}
         <View>
-          <View style={[styles.warningHero, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
+          <View style={[styles.warningHero, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
             <View style={styles.warningHeader}>
               <View style={[styles.warningIcon, { backgroundColor: colors.danger }]}>
                 <Ionicons name="warning" size={20} color={colors.surface} />
@@ -346,7 +346,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
 
           {/* Error state */}
           {deleteError ? (
-            <View style={[styles.errorRow, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
+            <View style={[styles.errorRow, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
               <Ionicons name="alert-circle" size={16} color={colors.danger} />
               <Text style={[styles.errorText, { color: colors.danger }]}>{deleteError}</Text>
             </View>

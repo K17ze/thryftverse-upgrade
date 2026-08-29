@@ -185,7 +185,7 @@ export function VoiceMessageBubble({
     return null;
   }, [waveformSamples]);
 
-  const barColor = isMe ? `${colors.textInverse}80` : colors.textSecondary;
+  const barColor = isMe ? colors.scrimTextTertiary : colors.textSecondary;
   const activeBarColor = isMe ? colors.textInverse : colors.brand;
 
   return (
@@ -291,7 +291,7 @@ const createStyles = (colors: ThemeColors, isMe: boolean) =>
       width: 32,
       height: 32,
       borderRadius: Radius.full,
-      backgroundColor: isMe ? `${colors.textInverse}20` : colors.surfaceElevated,
+      backgroundColor: isMe ? colors.scrimTextTertiary : colors.surfaceElevated,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -317,7 +317,7 @@ const createStyles = (colors: ThemeColors, isMe: boolean) =>
     progressLineTrack: {
       height: 3,
       borderRadius: Radius.full,
-      backgroundColor: isMe ? `${colors.textInverse}30` : `${colors.textSecondary}30`,
+      backgroundColor: isMe ? colors.scrimTextTertiary : `${colors.textSecondary}30`,
       overflow: 'hidden',
     },
     progressLine: {
@@ -332,14 +332,14 @@ const createStyles = (colors: ThemeColors, isMe: boolean) =>
     duration: {
       fontSize: Type.caption.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: isMe ? `${colors.textInverse}CC` : colors.textMuted,
+      color: isMe ? colors.scrimTextSecondary : colors.textMuted,
       fontVariant: ['tabular-nums'],
     },
     speedPill: {
       paddingHorizontal: Space.xs + 2,
       paddingVertical: 2,
       borderRadius: Radius.full,
-      backgroundColor: isMe ? `${colors.textInverse}18` : `${colors.textSecondary}15`,
+      backgroundColor: isMe ? colors.scrimTextTertiary : `${colors.textSecondary}15`,
     },
     speedText: {
       fontSize: Type.meta.size,

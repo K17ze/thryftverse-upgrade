@@ -17,7 +17,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
-import { Space, Radius, Type, Typography, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, IconGrammar, Stroke} from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 
 export interface FlagshipStateProps {
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     paddingVertical: Space.smMd,
     borderRadius: Radius.xl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   actionText: {
     fontSize: Type.body.size,

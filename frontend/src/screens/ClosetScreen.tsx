@@ -7,7 +7,6 @@ import {
   RefreshControl,
   ScrollView,
   Share,
-  Alert,
   Dimensions,
   Pressable,
 } from 'react-native';
@@ -43,6 +42,7 @@ import { MoodboardCollectionGrid } from '../components/profile/MoodboardCollecti
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout, AspectRatio } from '../theme/designTokens';
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
@@ -126,6 +126,14 @@ export default function ClosetScreen() {
   const [manageMode, setManageMode] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const scrollY = useSharedValue(0);
   const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -342,25 +350,21 @@ export default function ClosetScreen() {
 
   const handleDeleteCollection = useCallback((id: string, name: string) => {
     haptic.medium();
-    Alert.alert(
-      'Delete Collection?',
-      `"${name}" will be permanently removed.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            haptic.medium();
-            void deleteCollectionOnApi(id).catch(() => {
-              // Fallback to local delete if API fails
-              deleteCollection(id);
-            });
-          },
-        },
-      ]
-    );
-  }, [haptic, deleteCollection, deleteCollectionOnApi]);
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete Collection?',
+      message: `"${name}" will be permanently removed.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: () => {
+        haptic.medium();
+        void deleteCollectionOnApi(id).catch(() => {
+          // Fallback to local delete if API fails
+          deleteCollection(id);
+        });
+      },
+    });
+  }, [haptic, deleteCollection, deleteCollectionOnApi, setConfirmSheet]);
 
   const handleStartRename = useCallback((id: string, currentName: string) => {
     haptic.light();
@@ -593,21 +597,17 @@ export default function ClosetScreen() {
               backgroundColor={outfit.backgroundColor}
               onPress={() => navigation.navigate('OutfitBuilder')}
               onLongPress={() => {
-                Alert.alert(
-                  'Delete Outfit?',
-                  `"${outfit.name}" will be removed from your outfits.`,
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Delete',
-                      style: 'destructive',
-                      onPress: () => {
-                        haptic.medium();
-                        removeOutfit(outfit.id);
-                      },
-                    },
-                  ]
-                );
+                setConfirmSheet({
+                  visible: true,
+                  title: 'Delete Outfit?',
+                  message: `"${outfit.name}" will be removed from your outfits.`,
+                  confirmLabel: 'Delete',
+                  variant: 'danger',
+                  onConfirm: () => {
+                    haptic.medium();
+                    removeOutfit(outfit.id);
+                  },
+                });
               }}
               style={styles.outfitCard}
             />
@@ -898,6 +898,16 @@ export default function ClosetScreen() {
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </SafeAreaView>
   );
 }

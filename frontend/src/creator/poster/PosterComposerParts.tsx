@@ -13,7 +13,6 @@ import { Space, FontFamily, IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { PressScale } from '../CreatorAnimations';
-import { CreatorGlyph, type CreatorGlyphName } from '../controls/CreatorGlyph';
 import { useHaptic } from '../../hooks/useHaptic';
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -85,46 +84,6 @@ export const RailTool = React.memo(function RailTool({
     >
       <Ionicons name={icon} size={IconGrammar.hero} color="#fff" />
       <Text style={partStyles.railToolLabel} numberOfLines={1}>{label}</Text>
-    </PressScale>
-  );
-});
-
-// ── Overflow menu item ───────────────────────────────────────────────
-// White-on-dark row for the More menu (Layers, Preview, Safe Zone, etc).
-// Supports both Ionicons (icon) and CreatorGlyph (glyph) so creative
-// tools that use custom SVG glyphs in the rail also show their glyph
-// in the overflow menu — not a silently-dropped fallback.
-export const OverflowItem = React.memo(function OverflowItem({
-  icon,
-  glyph,
-  label,
-  onPress,
-  danger = false,
-  selected = false,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  glyph?: CreatorGlyphName;
-  label: string;
-  onPress: () => void;
-  danger?: boolean;
-  selected?: boolean;
-}) {
-  return (
-    <PressScale
-      onPress={onPress}
-      style={partStyles.overflowItem}
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={selected ? { selected: true } : undefined}
-      hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
-    >
-      {glyph ? (
-        <CreatorGlyph name={glyph} size={IconGrammar.standard} color={danger ? '#ff6b6b' : '#fff'} />
-      ) : (
-        <Ionicons name={icon} size={IconGrammar.standard} color={danger ? '#ff6b6b' : '#fff'} />
-      )}
-      <Text style={[partStyles.overflowItemText, danger && partStyles.overflowItemDanger]}>{label}</Text>
-      {selected && <Ionicons name="checkmark" size={IconGrammar.standard} color="#fff" />}
     </PressScale>
   );
 });
@@ -214,23 +173,6 @@ const partStyles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     color: 'rgba(255,255,255,0.7)',
     marginTop: 2,
-  },
-  // ── Overflow menu item ──
-  overflowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    minHeight: 48,
-    paddingHorizontal: Space.md,
-  },
-  overflowItemText: {
-    flex: 1,
-    fontFamily: FontFamily.medium,
-    fontSize: TypographyV2.body.size,
-    color: '#fff',
-  },
-  overflowItemDanger: {
-    color: '#ff6b6b',
   },
   // ── Opacity bar ──
   opacityBar: {

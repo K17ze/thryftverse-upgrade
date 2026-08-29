@@ -6,7 +6,6 @@ import {
   ScrollView,
   StatusBar,
   Linking,
-  Alert,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
@@ -67,6 +66,7 @@ import {
   resolveCapabilities,
   type OrderCapability,
 } from '../components/orders/orderCapabilities';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
 
@@ -103,16 +103,16 @@ export default function OrderDetailScreen() {
     counterpartyName: { color: colors.textPrimary },
     counterpartyBtn: { borderColor: colors.border },
     counterpartyBtnText: { color: colors.brand },
-    escrowBanner: { backgroundColor: `${colors.success}08`, borderColor: `${colors.success}25` },
+    escrowBanner: { backgroundColor: colors.successSubtle, borderColor: colors.successBorder },
     escrowTitle: { color: colors.textPrimary },
     escrowSub: { color: colors.textSecondary },
     escrowCountdown: { color: colors.textMuted },
-    etaBanner: { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}25` },
+    etaBanner: { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder },
     etaLabel: { color: colors.textMuted },
     etaValue: { color: colors.textPrimary },
     etaService: { color: colors.textSecondary },
     etaIconWrap: { backgroundColor: colors.brandSubtle },
-    staleBanner: { backgroundColor: `${colors.warning}08`, borderColor: `${colors.warning}25` },
+    staleBanner: { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder },
     staleText: { color: colors.warning },
     detailLabel: { color: colors.textSecondary },
     detailValue: { color: colors.textPrimary },
@@ -144,6 +144,15 @@ export default function OrderDetailScreen() {
   const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
   const [reviewPromptShown, setReviewPromptShown] = useState(false);
   const [issueSelectorVisible, setIssueSelectorVisible] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const scrollViewRef = useRef<ScrollView | null>(null);
   const timelineYRef = useRef(0);
@@ -570,14 +579,15 @@ export default function OrderDetailScreen() {
             label: t('orderDetail.action.confirmReceipt'),
             onPress: () => {
               haptics.heavyPress();
-              Alert.alert(
-                t('orderDetail.action.confirmReceiptTitle'),
-                t('orderDetail.action.confirmReceiptBody'),
-                [
-                  { text: t('orderDetail.action.notYet'), style: 'cancel' },
-                  { text: t('orderDetail.action.confirmReceipt'), style: 'default', onPress: handleDeliver },
-                ]
-              );
+              setConfirmSheet({
+                visible: true,
+                title: t('orderDetail.action.confirmReceiptTitle'),
+                message: t('orderDetail.action.confirmReceiptBody'),
+                confirmLabel: t('orderDetail.action.confirmReceipt'),
+                cancelLabel: t('orderDetail.action.notYet'),
+                onConfirm: handleDeliver,
+                variant: 'default',
+              });
             },
             variant: 'secondary',
             loading: orderMutation === 'deliver',
@@ -589,16 +599,17 @@ export default function OrderDetailScreen() {
             label: t('orderDetail.action.cancelOrder'),
             onPress: () => {
               haptics.heavyPress();
-              Alert.alert(
-                t('orderDetail.action.cancelOrderTitle'),
-                isBuyer
+              setConfirmSheet({
+                visible: true,
+                title: t('orderDetail.action.cancelOrderTitle'),
+                message: isBuyer
                   ? t('orderDetail.action.cancelOrderBodyBuyer')
                   : t('orderDetail.action.cancelOrderBodySeller'),
-                [
-                  { text: t('orderDetail.action.keepOrder'), style: 'cancel' },
-                  { text: t('orderDetail.action.cancelOrder'), style: 'destructive', onPress: handleCancel },
-                ]
-              );
+                confirmLabel: t('orderDetail.action.cancelOrder'),
+                cancelLabel: t('orderDetail.action.keepOrder'),
+                onConfirm: handleCancel,
+                variant: 'danger',
+              });
             },
             variant: 'destructive',
             loading: orderMutation === 'cancel',
@@ -892,6 +903,7 @@ export default function OrderDetailScreen() {
         <View style={styles.statusHeader}>
           <Text style={[styles.orderNumber, themed.orderNumber]}>ORDER #{shortOrderId}</Text>
           <View style={styles.statusBadgeRow}>
+            {/* TODO: replace `${statusColor}15` with statusColorSubtle token when available */}
             <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <Text style={[styles.statusBadgeText, { color: statusColor }]}>
@@ -980,14 +992,15 @@ export default function OrderDetailScreen() {
             inspectionDeadlineAt={(backendOrder as any)?.inspectionDeadlineAt ?? null}
             onConfirmReceipt={() => {
               haptics.heavyPress();
-              Alert.alert(
-                'Everything is OK?',
-                'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. This action cannot be undone.',
-                [
-                  { text: 'Not yet', style: 'cancel' },
-                  { text: 'Confirm receipt', style: 'default', onPress: handleDeliver },
-                ]
-              );
+              setConfirmSheet({
+                visible: true,
+                title: 'Everything is OK?',
+                message: 'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. This action cannot be undone.',
+                confirmLabel: 'Confirm receipt',
+                cancelLabel: 'Not yet',
+                onConfirm: handleDeliver,
+                variant: 'default',
+              });
             }}
             onReportIssue={() => {
               haptics.tap();
@@ -1164,6 +1177,17 @@ export default function OrderDetailScreen() {
           contextualIssues={contextualIssues}
         />
       ) : null}
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </SafeAreaView>
   );
 }

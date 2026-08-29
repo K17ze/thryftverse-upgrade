@@ -97,6 +97,7 @@ export function PaymentStateBanner({
       style={[
         paymentBannerStyles.container,
         {
+          // TODO: Replace runtime config.accentColor hex-alpha with theme token when color source is staticized
           backgroundColor: `${config.accentColor}0A`,
           borderColor: `${config.accentColor}20`,
         },

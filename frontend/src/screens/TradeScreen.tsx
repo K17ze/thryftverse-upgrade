@@ -37,7 +37,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, FontFamily, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, LetterSpacing, Numeric, Stroke} from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useHaptic } from '../hooks/useHaptic';
@@ -914,7 +914,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     marginBottom: Space.sm,
   },
   paperBannerText: {

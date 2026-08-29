@@ -24,6 +24,7 @@ import { PosterProgressSegments } from '../components/poster/PosterProgressSegme
 import { fetchPosterHighlightById, type PosterHighlight } from '../services/postersApi';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { isVideoUrl } from '../utils/posterPhysics';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
   runOnJS,
@@ -37,10 +38,6 @@ const DEFAULT_DURATION = 5000;
 const ERROR_ICON_SIZE = 40;
 const PAUSE_ICON_SIZE = 20;
 const SWIPE_THRESHOLD = 40;
-
-function isVideoUrl(url: string): boolean {
-  return /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
-}
 
 export default function PosterHighlightViewerScreen({ route, navigation }: Props) {
   const { colors, isDark } = useAppTheme();

@@ -14,7 +14,7 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, Stroke} from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { Motion } from '../theme/motionTokens';
@@ -393,7 +393,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 10,
     borderRadius: Radius.xxl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.scrimTextTertiary,
     backgroundColor: 'transparent',
   },

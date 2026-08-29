@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -14,6 +14,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { AppButton } from '../components/ui/AppButton';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { RootStackParamList } from '../navigation/types';
 
 type PreferencePickerMode = 'categories' | 'brands' | 'members' | null;
@@ -40,6 +41,14 @@ export default function PersonalisationScreen() {
   const brandsPref = personalisationPreferences.brandsPref;
   const membersPref = personalisationPreferences.membersPref;
   const [pickerMode, setPickerMode] = useState<PreferencePickerMode>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const { show } = useToast();
   const haptic = useHaptic();
   const fromOnboarding = route.params?.fromOnboarding === true;
@@ -126,26 +135,22 @@ export default function PersonalisationScreen() {
   };
 
   const handleReset = () => {
-    Alert.alert(
-      'Reset preferences',
-      'Reset all preferences to their default values?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          onPress: () => {
-            haptic.medium();
-            updatePersonalisationPreferences({
-              genderFilter: DEFAULT_GENDER_FILTER,
-              categoriesAndSizesPref: DEFAULT_CATEGORIES_PREF,
-              brandsPref: DEFAULT_BRANDS_PREF,
-              membersPref: DEFAULT_MEMBERS_PREF,
-            });
-            show('Preferences reset to defaults.', 'success');
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Reset preferences',
+      message: 'Reset all preferences to their default values?',
+      confirmLabel: 'Reset',
+      onConfirm: () => {
+        haptic.medium();
+        updatePersonalisationPreferences({
+          genderFilter: DEFAULT_GENDER_FILTER,
+          categoriesAndSizesPref: DEFAULT_CATEGORIES_PREF,
+          brandsPref: DEFAULT_BRANDS_PREF,
+          membersPref: DEFAULT_MEMBERS_PREF,
+        });
+        show('Preferences reset to defaults.', 'success');
+      },
+    });
   };
 
   return (
@@ -245,6 +250,16 @@ export default function PersonalisationScreen() {
         options={pickerOptions}
         selectedValue={selectedPickerValue}
         onSelect={handleSelectPreference}
+      />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
       />
     </FlagshipScreen>
   );

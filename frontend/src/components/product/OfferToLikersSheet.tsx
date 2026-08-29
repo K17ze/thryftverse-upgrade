@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView, TextInput, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -53,6 +53,14 @@ export function OfferToLikersSheet({
     brand: colors.brand,
     border: colors.border,
     borderSubtle: colors.borderSubtle,
+    brandSubtle: colors.brandSubtle,
+    dangerSubtle: colors.dangerSubtle,
+    successSubtle: colors.successSubtle,
+    warningSubtle: colors.warningSubtle,
+    brandBorder: colors.brandBorder,
+    dangerBorder: colors.dangerBorder,
+    successBorder: colors.successBorder,
+    warningBorder: colors.warningBorder,
     surface: colors.surface,
     surfaceAlt: colors.surfaceAlt,
     surfaceElevated: colors.surfaceElevated,
@@ -255,7 +263,7 @@ export function OfferToLikersSheet({
             {/* Free shipping toggle */}
             <View style={styles.toggleRow}>
               <View style={styles.toggleLeft}>
-                <View style={[styles.toggleIconWrap, { backgroundColor: includeFreeShipping ? `${themed.success}15` : themed.surfaceAlt }]}>
+                <View style={[styles.toggleIconWrap, { backgroundColor: includeFreeShipping ? themed.successSubtle : themed.surfaceAlt }]}>
                   <Ionicons
                     name="cube-outline"
                     size={16}
@@ -352,6 +360,8 @@ export function OfferToLikersSheet({
 const createStyles = (themed: {
   textPrimary: string; textSecondary: string; textMuted: string;
   brand: string; border: string; borderSubtle: string;
+  brandSubtle: string; dangerSubtle: string; successSubtle: string; warningSubtle: string;
+  brandBorder: string; dangerBorder: string; successBorder: string; warningBorder: string;
   surface: string; surfaceAlt: string; surfaceElevated: string;
   danger: string; success: string; warning: string;
   background: string; textInverse: string; overlay: string;
@@ -490,9 +500,9 @@ const createStyles = (themed: {
     justifyContent: 'center',
   },
   discountChipActive: {
-    backgroundColor: `${themed.brand}12`,
+    backgroundColor: themed.brandSubtle,
     borderColor: themed.brand,
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
   },
   discountChipText: {
     fontSize: Type.caption.size,
@@ -601,9 +611,9 @@ const createStyles = (themed: {
     justifyContent: 'center',
   },
   expiryChipActive: {
-    backgroundColor: `${themed.brand}12`,
+    backgroundColor: themed.brandSubtle,
     borderColor: themed.brand,
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
   },
   expiryChipText: {
     fontSize: Type.body.size,

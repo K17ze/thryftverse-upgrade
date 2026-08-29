@@ -190,7 +190,7 @@ function createStyles(colors: ThemeColors) {
       opacity: 0.7,
     },
     stripNeedsAction: {
-      backgroundColor: `${colors.brand}06`,
+      backgroundColor: colors.brandSubtle,
     },
     statusDot: {
       width: 8,

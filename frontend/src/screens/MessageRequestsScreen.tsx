@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +21,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { CachedImage } from '../components/CachedImage';
 import { Caption } from '../components/ui/Text';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { EmptyState } from '../components/EmptyState';
 import { ConversationListSkeleton } from '../components/skeletons/ConversationListSkeleton';
 import { useBackendData } from '../context/BackendDataContext';
@@ -51,6 +51,14 @@ export default function MessageRequestsScreen() {
 
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const requestConversations = useMemo(() => {
     return conversations.filter((c) => messageRequests.includes(c.id));
@@ -87,67 +95,61 @@ export default function MessageRequestsScreen() {
 
   const handleDelete = (id: string) => {
     if (pendingId) return;
-    Alert.alert(
-      'Delete request?',
-      'This removes the request. They can still send another message later.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setPendingId(id);
-            setPendingAction('delete');
-            try {
-              await deleteConversationOnApi(id, 'me');
-              declineMessageRequest(id);
-              show('Request deleted', 'info');
-            } catch {
-              show('Could not delete this request. Check your connection and try again.', 'error');
-            } finally {
-              setPendingId(null);
-              setPendingAction(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete request?',
+      message: 'This removes the request. They can still send another message later.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setPendingId(id);
+        setPendingAction('delete');
+        try {
+          await deleteConversationOnApi(id, 'me');
+          declineMessageRequest(id);
+          show('Request deleted', 'info');
+        } catch {
+          show('Could not delete this request. Check your connection and try again.', 'error');
+        } finally {
+          setPendingId(null);
+          setPendingAction(null);
+        }
+      },
+    });
   };
 
   const handleBlock = (id: string, name: string) => {
     if (pendingId) return;
-    Alert.alert(
-      `Block ${name}?`,
-      'They will not be able to message you or see your profile. The request will be removed.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Block',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setPendingId(id);
-            setPendingAction('block');
-            const counterpartyId = resolveCounterpartyId(id);
-            try {
-              if (counterpartyId) {
-                await blockUser(counterpartyId);
-                toggleBlockedUser(counterpartyId);
-              }
-              await deleteConversationOnApi(id, 'me');
-              declineMessageRequest(id);
-              show(`${name} blocked`, 'info');
-            } catch {
-              show('Could not block this account. Check your connection and try again.', 'error');
-            } finally {
-              setPendingId(null);
-              setPendingAction(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: `Block ${name}?`,
+      message: 'They will not be able to message you or see your profile. The request will be removed.',
+      confirmLabel: 'Block',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setPendingId(id);
+        setPendingAction('block');
+        const counterpartyId = resolveCounterpartyId(id);
+        try {
+          if (counterpartyId) {
+            await blockUser(counterpartyId);
+            toggleBlockedUser(counterpartyId);
+          }
+          await deleteConversationOnApi(id, 'me');
+          declineMessageRequest(id);
+          show(`${name} blocked`, 'info');
+        } catch {
+          show('Could not block this account. Check your connection and try again.', 'error');
+        } finally {
+          setPendingId(null);
+          setPendingAction(null);
+        }
+      },
+    });
   };
 
   const handleReport = (id: string, _name: string) => {
@@ -336,6 +338,15 @@ export default function MessageRequestsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'danger'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </SafeAreaView>
   );
 }

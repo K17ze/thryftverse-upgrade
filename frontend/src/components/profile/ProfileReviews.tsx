@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke, AvatarSize, ThumbSize } from '../../theme/designTokens';
 import type { SellerReviewItem, SellerReviewSummary } from '../../services/sellerReviewsApi';
 import { formatFullDate, formatShortDate } from '../../utils/dateFormat';
 
@@ -128,7 +128,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
           <CachedImage
             uri={item.reviewer.avatar}
             style={styles.reviewAvatar}
-            containerStyle={{ width: 36, height: 36, borderRadius: Radius.xxl }}
+            containerStyle={{ width: AvatarSize.md, height: AvatarSize.md, borderRadius: Radius.full }}
             contentFit="cover"
           />
         ) : (
@@ -176,7 +176,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
               <CachedImage
                 uri={uri}
                 style={styles.reviewPhoto}
-                containerStyle={{ width: 72, height: 72, borderRadius: Radius.md }}
+                containerStyle={{ width: ThumbSize.md, height: ThumbSize.md, borderRadius: Radius.md }}
                 contentFit="cover"
               />
               {photos.length > 4 && idx === 3 && (
@@ -282,7 +282,7 @@ function createStyles(colors: ThemeColors) {
   },
   // Full reviewer identity region — tappable as one unit
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm + 2, marginBottom: Space.sm },
-  reviewAvatar: { width: 40, height: 40, borderRadius: Radius.full },
+  reviewAvatar: { width: AvatarSize.md, height: AvatarSize.md, borderRadius: Radius.full },
   reviewAvatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   reviewAvatarInitials: { fontSize: Type.caption.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
   reviewIdentityCol: { flex: 1, gap: Space.xs / 2 },
@@ -294,7 +294,7 @@ function createStyles(colors: ThemeColors) {
   reviewDate: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginLeft: Space.xs + 2 },
   reviewComment: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textPrimary, lineHeight: Type.body.lineHeight, marginTop: Space.sm },
   photoRow: { flexDirection: 'row', gap: Space.sm, marginTop: Space.sm },
-  reviewPhoto: { width: 72, height: 72, borderRadius: Radius.md },
+  reviewPhoto: { width: ThumbSize.md, height: ThumbSize.md, borderRadius: Radius.md },
   photoOverflowOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
@@ -305,7 +305,7 @@ function createStyles(colors: ThemeColors) {
   },
   photoOverflowText: { fontSize: Type.body.size, fontFamily: Typography.family.bold, color: colors.scrimTextPrimary },
   sellerResponseBox: {
-    borderLeftWidth: 2,
+    borderLeftWidth: Stroke.emphasis,
     borderLeftColor: colors.border,
     paddingLeft: Space.sm + 2,
     marginTop: Space.sm,
@@ -323,7 +323,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}12`,
+    backgroundColor: colors.brandSubtle,
     alignSelf: 'flex-start',
   },
   respondBtnText: { fontSize: Type.caption.size, fontFamily: Typography.family.semibold, color: colors.brand },

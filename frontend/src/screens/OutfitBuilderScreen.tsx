@@ -13,7 +13,6 @@ import {
   ScrollView,
   StatusBar,
   Dimensions,
-  Alert,
   Platform,
   Share,
   ActivityIndicator,
@@ -40,6 +39,7 @@ import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { Typography, DockConstants, Radius, Type, Space, Stroke, LetterSpacing, Control, OutfitColors } from '../theme/designTokens';
 import {
   OutfitSlot,
@@ -288,6 +288,14 @@ export default function OutfitBuilderScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [activeSlot, setActiveSlot] = useState<OutfitSlot>('top');
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const [outfitItems, setOutfitItems] = useState<Record<OutfitSlot, StyleItem | undefined>>({
     top: undefined,
     bottom: undefined,
@@ -394,7 +402,13 @@ export default function OutfitBuilderScreen() {
 
   const handleSave = () => {
     if (filledCount < 2) {
-      Alert.alert('Need more items', 'Select at least 2 items to save an outfit.');
+      setConfirmSheet({
+        visible: true,
+        title: 'Need more items',
+        message: 'Select at least 2 items to save an outfit.',
+        confirmLabel: 'OK',
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -418,14 +432,24 @@ export default function OutfitBuilderScreen() {
     });
 
     haptics.success();
-    Alert.alert('Outfit Saved', `"${collectionName}" added to your outfits.`, [
-      { text: 'OK', onPress: () => navigation.goBack() },
-    ]);
+    setConfirmSheet({
+      visible: true,
+      title: 'Outfit Saved',
+      message: `"${collectionName}" added to your outfits.`,
+      confirmLabel: 'OK',
+      onConfirm: () => navigation.goBack(),
+    });
   };
 
   const handleShare = async () => {
     if (filledCount < 1) {
-      Alert.alert('No items', 'Add at least one item to share your outfit.');
+      setConfirmSheet({
+        visible: true,
+        title: 'No items',
+        message: 'Add at least one item to share your outfit.',
+        confirmLabel: 'OK',
+        onConfirm: () => {},
+      });
       return;
     }
     const outfit = createOutfit(outfitItems);
@@ -441,20 +465,20 @@ export default function OutfitBuilderScreen() {
   };
 
   const handleClear = () => {
-    Alert.alert('Clear Outfit?', 'This will remove all selected items.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: () => {
-          const cleared = { top: undefined, bottom: undefined, shoes: undefined, outerwear: undefined, accessory: undefined };
-          setOutfitItems(cleared);
-          setBackgroundColor(undefined);
-          pushHistory(cleared, undefined);
-          haptics.error();
-        },
+    setConfirmSheet({
+      visible: true,
+      title: 'Clear Outfit?',
+      message: 'This will remove all selected items.',
+      confirmLabel: 'Clear',
+      variant: 'danger',
+      onConfirm: () => {
+        const cleared = { top: undefined, bottom: undefined, shoes: undefined, outerwear: undefined, accessory: undefined };
+        setOutfitItems(cleared);
+        setBackgroundColor(undefined);
+        pushHistory(cleared, undefined);
+        haptics.error();
       },
-    ]);
+    });
   };
 
   const handleAiSuggest = () => {
@@ -730,6 +754,16 @@ export default function OutfitBuilderScreen() {
         </View>
       </View>
       )}
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </SafeAreaView>
   );
 }

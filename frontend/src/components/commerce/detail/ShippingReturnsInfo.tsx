@@ -145,7 +145,7 @@ export function ShippingReturnsInfo({
             muted={!commerce.shippingMethod}
           />
           {carbonNeutral ? (
-            <View style={[styles.badgeRow, { backgroundColor: `${colors.success}14` }]}>
+            <View style={[styles.badgeRow, { backgroundColor: colors.successSubtle }]}>
               <Ionicons name="leaf" size={14} color={colors.success} />
               <Text style={[styles.badgeText, { color: colors.success }]}>
                 Carbon-neutral shipping

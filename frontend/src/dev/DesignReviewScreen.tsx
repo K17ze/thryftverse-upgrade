@@ -2,7 +2,7 @@ import React from 'react';
 import { View, ScrollView, StyleSheet, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Stroke} from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
@@ -210,7 +210,7 @@ function createStyles(colors: ThemeColors) {
     card: {
       backgroundColor: colors.surface,
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       padding: Space.md,
       marginBottom: Space.sm,
@@ -220,7 +220,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       padding: Space.md,
       marginBottom: Space.sm,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
     },
     productRow: {

@@ -365,7 +365,7 @@ export function MakeOfferSheet({
           {offerDisplayFormatted}
         </Text>
         {discountPct ? (
-          <View style={[styles.discountChip, { backgroundColor: `${colors.success}1F` }]}>
+          <View style={[styles.discountChip, { backgroundColor: colors.successSubtle }]}>
             <Text style={[styles.discountChipText, { color: colors.success }]}>
               -{discountPct}%
             </Text>
@@ -483,7 +483,7 @@ export function MakeOfferSheet({
         <View
           style={[
             styles.smartSellBanner,
-            { backgroundColor: `${colors.success}14`, borderColor: `${colors.success}30` },
+            { backgroundColor: colors.successSubtle, borderColor: colors.successBorder },
           ]}
         >
           <Ionicons name="trending-up-outline" size={14} color={colors.success} />

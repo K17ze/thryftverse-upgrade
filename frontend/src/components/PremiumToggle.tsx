@@ -37,7 +37,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false, accessib
     backgroundColor: interpolateColor(
       progress.value,
       [0, 1],
-      [colors.surfaceAlt, `${colors.brand}40`]
+      [colors.surfaceAlt, colors.borderSubtle]
     ),
     transform: [{ scale: scale.value }],
   }));

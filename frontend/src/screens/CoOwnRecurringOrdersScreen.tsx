@@ -17,7 +17,6 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
-  Alert,
   Modal,
   TextInput,
 } from 'react-native';
@@ -31,6 +30,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import {
   fetchCoOwnRecurringOrders,
@@ -87,6 +87,15 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
   const [frequency, setFrequency] = React.useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
   const [maxPrice, setMaxPrice] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const load = React.useCallback(async () => {
     try {
@@ -106,27 +115,24 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
   }, [load]);
 
   const handleCancel = (order: CoOwnRecurringOrder) => {
-    Alert.alert(
-      'Cancel recurring order?',
-      `This will stop automatic purchases of ${order.unitsPerExecution} units ${FREQUENCY_LABELS[order.frequency]}.`,
-      [
-        { text: 'Keep', style: 'cancel' },
-        {
-          text: 'Cancel order',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await cancelCoOwnRecurringOrder(order.id);
-              haptic.success();
-              show('Recurring order cancelled', 'success');
-              await load();
-            } catch {
-              show('Failed to cancel order', 'error');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Cancel recurring order?',
+      message: `This will stop automatic purchases of ${order.unitsPerExecution} units ${FREQUENCY_LABELS[order.frequency]}.`,
+      confirmLabel: 'Cancel order',
+      cancelLabel: 'Keep',
+      onConfirm: async () => {
+        try {
+          await cancelCoOwnRecurringOrder(order.id);
+          haptic.success();
+          show('Recurring order cancelled', 'success');
+          await load();
+        } catch {
+          show('Failed to cancel order', 'error');
+        }
+      },
+      variant: 'danger',
+    });
   };
 
   const handleCreate = async () => {
@@ -415,6 +421,17 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           </View>
         </View>
       </Modal>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </>
   );
 }

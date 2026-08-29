@@ -150,8 +150,8 @@ export function BiometricGate({
           style={[
             styles.warningBanner,
             {
-              backgroundColor: `${colors.warning}14`,
-              borderColor: `${colors.warning}33`,
+              backgroundColor: colors.warningSubtle,
+              borderColor: colors.warningBorder,
             },
           ]}
         >

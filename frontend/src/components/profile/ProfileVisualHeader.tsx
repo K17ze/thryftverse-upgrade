@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -333,7 +333,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   actionBtnSecondary: {
     width: 48,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   actionBtnSecondaryText: {

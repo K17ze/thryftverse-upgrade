@@ -91,7 +91,7 @@ function FeatureFlagRow({ flagKey }: { flagKey: FeatureFlagKey }) {
       <View
         style={[
           flagStyles.statusPill,
-          { backgroundColor: enabled ? `${colors.success}22` : colors.surfaceAlt },
+          { backgroundColor: enabled ? colors.successSubtle : colors.surfaceAlt },
         ]}
       >
         <View

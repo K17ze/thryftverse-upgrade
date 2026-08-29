@@ -26,8 +26,12 @@ import { useRenderTrace } from '../performance/renderTrace';
 import { SustainabilityBadge } from './product/SustainabilityBadge';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 
-import { Space, Radius, Control, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Control, Type, Typography, AvatarSize } from '../theme/designTokens';
 import { synthesizeListingIdentity } from '../services/listingMapper';
+
+/** Shared text-shadow offset for glyph legibility on media surfaces.
+ *  Extracted so all on-media glyphs use the same offset geometry. */
+const GLYPH_TEXT_SHADOW_OFFSET = { width: 0, height: 1 } as const;
 // A URI is only usable when it is a non-blank string. Backend rows can surface
 // `''`, `null`, or whitespace-only strings; treat all of these as "no media"
 // so the premium placeholder renders instead of a broken image.
@@ -455,7 +459,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   // containment; they need legibility. Shadow replaces circular chrome.
   actionGlyph: {
     textShadowColor: colors.shadow,
-    textShadowOffset: { width: 0, height: 1 },
+    textShadowOffset: GLYPH_TEXT_SHADOW_OFFSET,
     textShadowRadius: 4,
   },
   actionButtonsRow: {
@@ -513,25 +517,25 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 32,
+    minHeight: Control.chromeCompact,
     marginTop: 2,
   },
   sellerIdentity: {
     flex: 1,
     minWidth: 0,
-    minHeight: 32,
+    minHeight: Control.chromeCompact,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
   sellerAvatar: {
-    width: 24,
-    height: 24,
+    width: AvatarSize.inline,
+    height: AvatarSize.inline,
     borderRadius: Radius.full,
   },
   sellerAvatarPlaceholder: {
-    width: 24,
-    height: 24,
+    width: AvatarSize.inline,
+    height: AvatarSize.inline,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
@@ -767,15 +771,15 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
-    width: 36,
-    height: 36,
+    width: Control.chrome,
+    height: Control.chrome,
     alignItems: 'center',
     justifyContent: 'center',
   },
   // textShadowColor is set inline from `colors.shadow` — the static style
   // sheet cannot reference theme tokens, so only the geometry lives here.
   saveGlyph: {
-    textShadowOffset: { width: 0, height: 1 },
+    textShadowOffset: GLYPH_TEXT_SHADOW_OFFSET,
     textShadowRadius: 3,
   },
   info: {

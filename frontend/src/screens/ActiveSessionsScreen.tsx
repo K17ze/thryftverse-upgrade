@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -8,6 +8,7 @@ import { Space, Radius, Type , Typography, Stroke  } from '../theme/designTokens
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { AppButton } from '../components/ui/AppButton';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
@@ -54,6 +55,14 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokingOthers, setRevokingOthers] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const loadSessions = useCallback(async () => {
     try {
@@ -79,30 +88,26 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
   }, [loadSessions]);
 
   const handleEndSession = useCallback((session: SessionInfo) => {
-    Alert.alert(
-      'End this session?',
-      `This will sign out "${session.deviceName}" immediately.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'End session',
-          style: 'destructive',
-          onPress: async () => {
-            setRevokingId(session.id);
-            try {
-              await revokeSession(session.id);
-              haptics.success();
-              show('Session ended', 'success');
-              setSessions((prev) => prev.filter((s) => s.id !== session.id));
-            } catch (err) {
-              show(err instanceof Error ? err.message : 'Failed to end session', 'error');
-            } finally {
-              setRevokingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'End this session?',
+      message: `This will sign out "${session.deviceName}" immediately.`,
+      confirmLabel: 'End session',
+      variant: 'danger',
+      onConfirm: async () => {
+        setRevokingId(session.id);
+        try {
+          await revokeSession(session.id);
+          haptics.success();
+          show('Session ended', 'success');
+          setSessions((prev) => prev.filter((s) => s.id !== session.id));
+        } catch (err) {
+          show(err instanceof Error ? err.message : 'Failed to end session', 'error');
+        } finally {
+          setRevokingId(null);
+        }
+      },
+    });
   }, [show]);
 
   const handleEndAllOthers = useCallback(() => {
@@ -111,30 +116,26 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
       show('No other sessions to end', 'info');
       return;
     }
-    Alert.alert(
-      'End all other sessions?',
-      `This will sign you out of ${otherCount} other device${otherCount > 1 ? 's' : ''}.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'End all others',
-          style: 'destructive',
-          onPress: async () => {
-            setRevokingOthers(true);
-            try {
-              const count = await revokeOtherSessions();
-              haptics.success();
-              show(`${count} session${count !== 1 ? 's' : ''} ended`, 'success');
-              await loadSessions();
-            } catch (err) {
-              show(err instanceof Error ? err.message : 'Failed to end sessions', 'error');
-            } finally {
-              setRevokingOthers(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'End all other sessions?',
+      message: `This will sign you out of ${otherCount} other device${otherCount > 1 ? 's' : ''}.`,
+      confirmLabel: 'End all others',
+      variant: 'danger',
+      onConfirm: async () => {
+        setRevokingOthers(true);
+        try {
+          const count = await revokeOtherSessions();
+          haptics.success();
+          show(`${count} session${count !== 1 ? 's' : ''} ended`, 'success');
+          await loadSessions();
+        } catch (err) {
+          show(err instanceof Error ? err.message : 'Failed to end sessions', 'error');
+        } finally {
+          setRevokingOthers(false);
+        }
+      },
+    });
   }, [sessions, show, loadSessions]);
 
   const currentSessions = sessions.filter((s) => s.isCurrent);
@@ -264,6 +265,16 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
           </>
         )}
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

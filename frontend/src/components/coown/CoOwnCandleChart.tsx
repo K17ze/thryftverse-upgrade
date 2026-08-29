@@ -288,7 +288,7 @@ function RangeChips({
             style={[
               styles.rangeChip,
               { borderColor: colors.border },
-              isActive && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
+              isActive && { backgroundColor: colors.brandSubtle, borderColor: colors.brand },
             ]}
             onPress={() => onRangeChange(r)}
             activeOpacity={0.8}

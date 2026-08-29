@@ -15,7 +15,6 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,6 +42,7 @@ import {
   type PublicationReceiptDTO,
 } from '../services/catalogImportApi';
 import type { RootStackParamList } from '../navigation/types';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'CatalogImportProgress'>;
 type ProgressRoute = RouteProp<RootStackParamList, 'CatalogImportProgress'>;
@@ -82,6 +82,14 @@ export default function CatalogImportProgressScreen() {
   const [receipt, setReceipt] = useState<PublicationReceiptDTO | null>(null);
   const [receiptError, setReceiptError] = useState<string | null>(null);
   const [actionInFlight, setActionInFlight] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const isMountedRef = useRef(true);
 
   React.useEffect(() => {
@@ -141,19 +149,15 @@ export default function CatalogImportProgressScreen() {
   }, [navigation]);
 
   const handleCancel = useCallback(() => {
-    Alert.alert(
-      'Cancel import?',
-      'The import will stop. Any items already prepared will be discarded.',
-      [
-        { text: 'Keep', style: 'cancel' },
-        {
-          text: 'Cancel import',
-          style: 'destructive',
-          onPress: () => { void cancel(); },
-        },
-      ],
-    );
-  }, [cancel]);
+    setConfirmSheet({
+      visible: true,
+      title: 'Cancel import?',
+      message: 'The import will stop. Any items already prepared will be discarded.',
+      confirmLabel: 'Cancel import',
+      variant: 'danger',
+      onConfirm: () => { void cancel(); },
+    });
+  }, [cancel, setConfirmSheet]);
 
   const enter = reducedMotion ? undefined : FadeIn.duration(300);
 
@@ -348,6 +352,16 @@ export default function CatalogImportProgressScreen() {
           </AnimatedPressable>
         ) : null}
       </View>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </View>
   );
 }

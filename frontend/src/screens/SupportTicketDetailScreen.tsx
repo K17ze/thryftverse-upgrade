@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons, type Ionicons as IoniconsType } from '@expo/vector-icons';
@@ -25,6 +24,7 @@ import { getListingCoverUri } from '../utils/media';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { getSupportCase } from '../services/supportConversationApi';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import type {
   SupportCase,
   SupportCaseEvent,
@@ -129,6 +129,14 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
   const [caseData, setCaseData] = useState<SupportCase | null>(null);
   const [caseEvents, setCaseEvents] = useState<SupportCaseEvent[]>([]);
   const [caseLoading, setCaseLoading] = useState(true);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const ticket = useMemo(
     () => supportTickets.find((t) => t.id === ticketId),
@@ -203,33 +211,25 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
   const handleClose = useCallback(() => {
     if (!ticket) return;
     haptic.heavy();
-    Alert.alert(
-      'Close this request?',
-      'This withdraws your request. You can reopen it later if the issue is not resolved.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Close',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await updateSupportTicketStatus(ticket.id, 'closed');
-              // If a case projection exists, refresh it so any server-side
-              // `customer_withdrew` event appears in the timeline. The
-              // backend projects the ticket status change into case events;
-              // the client does not fabricate events.
-              if (caseData) {
-                void refreshCase();
-              }
-              show('Request closed', 'info');
-            } catch {
-              show('Could not close the request. Check your connection and try again.', 'error');
-            }
-          },
-        },
-      ]
-    );
-  }, [ticket, haptic, updateSupportTicketStatus, caseData, refreshCase, show]);
+    setConfirmSheet({
+      visible: true,
+      title: 'Close this request?',
+      message: 'This withdraws your request. You can reopen it later if the issue is not resolved.',
+      confirmLabel: 'Close',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await updateSupportTicketStatus(ticket.id, 'closed');
+          if (caseData) {
+            void refreshCase();
+          }
+          show('Request closed', 'info');
+        } catch {
+          show('Could not close the request. Check your connection and try again.', 'error');
+        }
+      },
+    });
+  }, [ticket, haptic, updateSupportTicketStatus, caseData, refreshCase, show, setConfirmSheet]);
 
   const handleReopen = useCallback(async () => {
     if (!ticket) return;
@@ -506,6 +506,16 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </AnimatedPressable>
         </View>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

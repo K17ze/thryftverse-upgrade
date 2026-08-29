@@ -178,7 +178,7 @@ export function SustainabilityTags({
       {/* Sustainability impact summary */}
       {selectedDefs.length > 0 && (
         <View
-          style={[styles.summary, { backgroundColor: `${colors.success}12` }]}
+          style={[styles.summary, { backgroundColor: colors.successSubtle }]}
           accessibilityLabel={`Sustainability impact. ${selectedDefs.length} ${
             selectedDefs.length === 1 ? 'tag' : 'tags'
           } selected.`}

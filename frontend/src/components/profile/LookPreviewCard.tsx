@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -109,7 +109,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     overflow: 'hidden',
     marginBottom: Space.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   coverWrap: {

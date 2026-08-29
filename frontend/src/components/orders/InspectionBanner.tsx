@@ -34,9 +34,9 @@ export function InspectionBanner({
   const expired = daysLeft != null && daysLeft <= 0;
 
   return (
-    <View style={[styles.inspectionBanner, { borderColor: `${colors.brand}25`, backgroundColor: `${colors.brand}08` }]}>
+    <View style={[styles.inspectionBanner, { borderColor: colors.brandBorder, backgroundColor: colors.brandSubtle }]}>
       <View style={styles.inspectionHeader}>
-        <View style={[styles.inspectionIcon, { backgroundColor: `${colors.brand}15` }]}>
+        <View style={[styles.inspectionIcon, { backgroundColor: colors.brandSubtle }]}>
           <Ionicons name="checkmark-circle-outline" size={16} color={colors.brand} aria-hidden={true} />
         </View>
         <View style={styles.inspectionHeaderText}>

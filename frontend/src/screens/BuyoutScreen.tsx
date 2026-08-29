@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TextInput, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -17,6 +17,7 @@ import { Space, Radius, Type, Typography, DockConstants, Stroke } from '../theme
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import {
   CoOwnStateCanvas,
   CoOwnStickyActionDock,
@@ -48,6 +49,15 @@ export default function BuyoutScreen() {
   const [offerPrice, setOfferPrice] = React.useState('');
   const [targetUnits, setTargetUnits] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   React.useEffect(() => {
     if (!buyoutAssetId) { setIsLoading(false); setIsError(true); return; }
@@ -97,38 +107,35 @@ export default function BuyoutScreen() {
       return;
     }
 
-    Alert.alert(
-      'Submit buyout offer?',
-      `Offer ${currencySymbol}${priceNum.toFixed(2)}${unitsNum ? ` for ${unitsNum} units` : ' for remaining units'}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit offer',
-          style: 'default',
-          onPress: async () => {
-            setSubmitting(true);
-            try {
-              await createCoOwnBuyoutOffer(asset.id, {
-                bidderUserId: currentUser.id,
-                offerPriceGbp: priceNum,
-                targetUnits: unitsNum,
-              });
-              haptics.success();
-              show('Buyout offer submitted', 'success');
-              setOfferPrice('');
-              setTargetUnits('');
-              navigation.replace('AssetDetail', { assetId: asset.id });
-            } catch (err) {
-              const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
-              const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Failed to submit buyout offer');
-              show(parsed.message, 'error');
-            } finally {
-              setSubmitting(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Submit buyout offer?',
+      message: `Offer ${currencySymbol}${priceNum.toFixed(2)}${unitsNum ? ` for ${unitsNum} units` : ' for remaining units'}?`,
+      confirmLabel: 'Submit offer',
+      cancelLabel: 'Cancel',
+      onConfirm: async () => {
+        setSubmitting(true);
+        try {
+          await createCoOwnBuyoutOffer(asset.id, {
+            bidderUserId: currentUser.id,
+            offerPriceGbp: priceNum,
+            targetUnits: unitsNum,
+          });
+          haptics.success();
+          show('Buyout offer submitted', 'success');
+          setOfferPrice('');
+          setTargetUnits('');
+          navigation.replace('AssetDetail', { assetId: asset.id });
+        } catch (err) {
+          const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+          const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Failed to submit buyout offer');
+          show(parsed.message, 'error');
+        } finally {
+          setSubmitting(false);
+        }
+      },
+      variant: 'default',
+    });
   }, [asset, currentUser?.id, offerPrice, targetUnits, navigation, show]);
 
   if (isLoading) {
@@ -301,6 +308,17 @@ export default function BuyoutScreen() {
           </View>
         )}
       </CoOwnStickyActionDock>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }

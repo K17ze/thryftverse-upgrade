@@ -182,7 +182,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.danger}12`,
+    backgroundColor: colors.dangerSubtle,
     flexShrink: 0,
   },
   watchingText: {

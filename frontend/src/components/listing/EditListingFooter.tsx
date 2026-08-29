@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type, Stroke} from '../../theme/designTokens';
 
 type SaveStage =
   | 'idle'
@@ -150,7 +150,7 @@ function createStyles(colors: ThemeColors) {
     height: 48,
     borderRadius: Radius.xxl,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',

@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Typography, Type, Radius } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius, Stroke} from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 export type FilterClassification =
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Space.md + 2,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, IconGrammar, Control, ThumbSize } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, IconGrammar, Control, ThumbSize, Stroke} from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { getCategoryFocalPoint } from '../../utils/media';
@@ -119,7 +119,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     padding: Space.sm,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   imageWrap: {

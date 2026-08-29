@@ -882,10 +882,10 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.sm,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.smMd,
-    backgroundColor: `${colors.brand}08`,
+    backgroundColor: colors.brandSubtle,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.brand}30`,
+    borderColor: colors.brandBorder,
   },
   postcodeSuggestionText: {
     flex: 1,

@@ -18,6 +18,7 @@ import { Space, Radius, Type, Typography, Control } from '../theme/designTokens'
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
@@ -61,6 +62,14 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   const [searchError, setSearchError] = useState('');
   const [selectedToAdd, setSelectedToAdd] = useState<Set<string>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const conversation = useMemo(
@@ -200,138 +209,127 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   };
 
   const handleRemoveMember = (memberId: string, memberName: string) => {
-    Alert.alert(
-      'Remove member?',
-      `Remove ${memberName} from this group?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setRemovingId(memberId);
-            try {
-              const result = await removeConversationMemberOnApi(conversationId, memberId);
-              upsertConversation({
-                ...conversation!,
-                participantIds: result.participantIds,
-              });
-              show('Member removed', 'info');
-            } catch (err) {
-              show(parseApiError(err, 'Could not remove member. Try again.').message, 'error');
-            } finally {
-              setRemovingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove member?',
+      message: `Remove ${memberName} from this group?`,
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setRemovingId(memberId);
+        try {
+          const result = await removeConversationMemberOnApi(conversationId, memberId);
+          upsertConversation({
+            ...conversation!,
+            participantIds: result.participantIds,
+          });
+          show('Member removed', 'info');
+        } catch (err) {
+          show(parseApiError(err, 'Could not remove member. Try again.').message, 'error');
+        } finally {
+          setRemovingId(null);
+        }
+      },
+    });
   };
 
   const handlePromoteMember = (memberId: string, memberName: string) => {
-    Alert.alert(
-      'Promote to admin?',
-      `${memberName} will be able to manage members, edit group info, and remove others.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Promote',
-          onPress: async () => {
-            haptic.medium();
-            setRemovingId(memberId);
-            try {
-              const result = await promoteConversationMemberOnApi(conversationId, memberId);
-              upsertConversation({
-                ...conversation!,
-                memberRoles: Object.fromEntries(
-                  Object.entries(result.memberRoles).filter(
-                    (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
-                      entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
-                  ),
-                ) as Record<string, 'owner' | 'admin' | 'member'>,
-              });
-              show(`${memberName} is now an admin.`, 'success');
-            } catch (err) {
-              show(parseApiError(err, 'Could not promote member.').message, 'error');
-            } finally {
-              setRemovingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Promote to admin?',
+      message: `${memberName} will be able to manage members, edit group info, and remove others.`,
+      confirmLabel: 'Promote',
+      variant: 'default',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.medium();
+        setRemovingId(memberId);
+        try {
+          const result = await promoteConversationMemberOnApi(conversationId, memberId);
+          upsertConversation({
+            ...conversation!,
+            memberRoles: Object.fromEntries(
+              Object.entries(result.memberRoles).filter(
+                (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                  entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+              ),
+            ) as Record<string, 'owner' | 'admin' | 'member'>,
+          });
+          show(`${memberName} is now an admin.`, 'success');
+        } catch (err) {
+          show(parseApiError(err, 'Could not promote member.').message, 'error');
+        } finally {
+          setRemovingId(null);
+        }
+      },
+    });
   };
 
   const handleDemoteMember = (memberId: string, memberName: string) => {
-    Alert.alert(
-      'Demote admin?',
-      `${memberName} will no longer have admin privileges.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Demote',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.medium();
-            setRemovingId(memberId);
-            try {
-              const result = await demoteConversationMemberOnApi(conversationId, memberId);
-              upsertConversation({
-                ...conversation!,
-                memberRoles: Object.fromEntries(
-                  Object.entries(result.memberRoles).filter(
-                    (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
-                      entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
-                  ),
-                ) as Record<string, 'owner' | 'admin' | 'member'>,
-              });
-              show(`${memberName} is now a member.`, 'info');
-            } catch (err) {
-              show(parseApiError(err, 'Could not demote member.').message, 'error');
-            } finally {
-              setRemovingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Demote admin?',
+      message: `${memberName} will no longer have admin privileges.`,
+      confirmLabel: 'Demote',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.medium();
+        setRemovingId(memberId);
+        try {
+          const result = await demoteConversationMemberOnApi(conversationId, memberId);
+          upsertConversation({
+            ...conversation!,
+            memberRoles: Object.fromEntries(
+              Object.entries(result.memberRoles).filter(
+                (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                  entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+              ),
+            ) as Record<string, 'owner' | 'admin' | 'member'>,
+          });
+          show(`${memberName} is now a member.`, 'info');
+        } catch (err) {
+          show(parseApiError(err, 'Could not demote member.').message, 'error');
+        } finally {
+          setRemovingId(null);
+        }
+      },
+    });
   };
 
   const handleTransferOwnership = (memberId: string, memberName: string) => {
-    Alert.alert(
-      'Transfer ownership?',
-      `You will no longer be the owner. ${memberName} will become the new group owner and have full control.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Transfer',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setRemovingId(memberId);
-            try {
-              const result = await transferConversationOwnershipOnApi(conversationId, memberId);
-              upsertConversation({
-                ...conversation!,
-                ownerId: result.ownerId,
-                memberRoles: Object.fromEntries(
-                  Object.entries(result.memberRoles).filter(
-                    (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
-                      entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
-                  ),
-                ) as Record<string, 'owner' | 'admin' | 'member'>,
-              });
-              show(`Ownership transferred to ${memberName}.`, 'success');
-            } catch (err) {
-              show(parseApiError(err, 'Could not transfer ownership.').message, 'error');
-            } finally {
-              setRemovingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Transfer ownership?',
+      message: `You will no longer be the owner. ${memberName} will become the new group owner and have full control.`,
+      confirmLabel: 'Transfer',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setRemovingId(memberId);
+        try {
+          const result = await transferConversationOwnershipOnApi(conversationId, memberId);
+          upsertConversation({
+            ...conversation!,
+            ownerId: result.ownerId,
+            memberRoles: Object.fromEntries(
+              Object.entries(result.memberRoles).filter(
+                (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                  entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+              ),
+            ) as Record<string, 'owner' | 'admin' | 'member'>,
+          });
+          show(`Ownership transferred to ${memberName}.`, 'success');
+        } catch (err) {
+          show(parseApiError(err, 'Could not transfer ownership.').message, 'error');
+        } finally {
+          setRemovingId(null);
+        }
+      },
+    });
   };
 
   const handleMemberLongPress = (member: { id: string; name: string; role: MemberRole }) => {
@@ -376,31 +374,28 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   };
 
   const handleLeaveGroup = () => {
-    Alert.alert(
-      'Leave group?',
-      'You will be removed from this group on all devices. Other members will keep their copy.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Leave group',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setIsLeaving(true);
-            try {
-              await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
-              deleteConversation(conversationId);
-              show('You left the group', 'info');
-              navigation.navigate('MainTabs', { screen: 'Inbox' });
-            } catch (err) {
-              show(parseApiError(err, 'Could not leave group. Try again.').message, 'error');
-            } finally {
-              setIsLeaving(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Leave group?',
+      message: 'You will be removed from this group on all devices. Other members will keep their copy.',
+      confirmLabel: 'Leave group',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setIsLeaving(true);
+        try {
+          await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
+          deleteConversation(conversationId);
+          show('You left the group', 'info');
+          navigation.navigate('MainTabs', { screen: 'Inbox' });
+        } catch (err) {
+          show(parseApiError(err, 'Could not leave group. Try again.').message, 'error');
+        } finally {
+          setIsLeaving(false);
+        }
+      },
+    });
   };
 
   if (!conversation || conversation.type !== 'group') {
@@ -415,7 +410,8 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
 
   const roleBadge = (role: MemberRole) => {
     const roleColors = {
-      owner: { bg: `${colors.brand}15`, text: colors.brand },
+      owner: { bg: colors.brandSubtle, text: colors.brand },
+      // TODO: replace `${colors.textPrimary}15` with textPrimarySubtle token when available
       admin: { bg: `${colors.textPrimary}15`, text: colors.textPrimary },
       member: { bg: colors.surfaceAlt, text: colors.textMuted },
     };
@@ -451,7 +447,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
             accessibilityLabel="Add members"
             style={styles.addRow}
           >
-            <View style={[styles.addAvatar, { backgroundColor: `${colors.brand}15` }]}>
+            <View style={[styles.addAvatar, { backgroundColor: colors.brandSubtle }]}>
               <Ionicons name="person-add-outline" size={20} color={colors.brand} />
             </View>
             <BodyEmphasis style={{ color: colors.brand }}>Add members</BodyEmphasis>
@@ -637,6 +633,15 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
           </View>
         )}
       </ScrollView>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'danger'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

@@ -750,7 +750,7 @@ export default function WithdrawScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={{ alignItems: 'center', paddingHorizontal: Space.md }}>
-            <View style={[styles.successIconCircle, { backgroundColor: `${colors.success}22` }]}>
+            <View style={[styles.successIconCircle, { backgroundColor: colors.successSubtle }]}>
               <Ionicons name="checkmark-circle" size={40} color={colors.success} />
             </View>
             <Text style={[styles.successTitle, { color: colors.textPrimary }]}>
@@ -910,7 +910,7 @@ export default function WithdrawScreen() {
       }
     >
       {isOffline && (
-        <View style={[styles.offlineBanner, { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border }]}>
+        <View style={[styles.offlineBanner, { backgroundColor: colors.dangerSubtle, borderBottomColor: colors.border }]}>
           <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
           <Text style={[styles.offlineBannerText, { color: colors.textPrimary }]}>
             {COPY.offline}

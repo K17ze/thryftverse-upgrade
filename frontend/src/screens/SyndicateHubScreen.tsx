@@ -939,7 +939,7 @@ const styles = StyleSheet.create({
     height: 17,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.xs,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     justifyContent: 'center',
     alignItems: 'center',
   },

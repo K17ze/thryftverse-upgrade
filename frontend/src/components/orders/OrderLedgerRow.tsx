@@ -105,7 +105,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
       <View style={styles.content}>
         {/* Top row: status badge + order number */}
         <View style={styles.topRow}>
-          <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
+          <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` /* TODO: replace with subtle token once statusColor is resolved */ }]}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusText, { color: statusColor }]} numberOfLines={1}>
               {statusLabel}
@@ -136,10 +136,10 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
           <View style={[
             styles.deadlineBadge,
             shipByOverdue
-              ? { backgroundColor: `${colors.danger}12`, borderColor: `${colors.danger}30` }
+              ? { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }
               : shipByUrgent
-                ? { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}30` }
-                : { backgroundColor: `${colors.brand}08`, borderColor: colors.border },
+                ? { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }
+                : { backgroundColor: colors.brandSubtle, borderColor: colors.border },
           ]}>
             <Ionicons
               name={shipByOverdue ? 'alert-circle' : 'time-outline'}

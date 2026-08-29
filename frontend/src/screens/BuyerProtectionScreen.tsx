@@ -12,7 +12,6 @@ import {
   Text,
   StyleSheet,
   RefreshControl,
-  Alert,
   TextInput,
 } from 'react-native';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -32,6 +31,7 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { BuyerProtectionSkeleton } from '../components/skeletons/BuyerProtectionSkeleton';
 import { AppButton } from '../components/ui/AppButton';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import {
   fetchBuyerProtection,
   createBuyerProtectionClaim,
@@ -71,6 +71,15 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
   const [reason, setReason] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const loadProtection = React.useCallback(async () => {
     try {
@@ -105,35 +114,33 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
       return;
     }
 
-    Alert.alert(
-      'Submit claim?',
-      'This will create a support ticket with our team. We respond as quickly as we can.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit',
-          onPress: async () => {
-            setSubmitting(true);
-            try {
-              await createBuyerProtectionClaim(orderId, {
-                reason: reason.trim(),
-                description: description.trim(),
-              });
-              haptics.success();
-              show('Claim submitted. We respond as quickly as we can.', 'success');
-              setShowClaimForm(false);
-              setReason('');
-              setDescription('');
-              await loadProtection();
-            } catch (err) {
-              show(err instanceof Error ? err.message : 'Failed to submit claim', 'error');
-            } finally {
-              setSubmitting(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Submit claim?',
+      message: 'This will create a support ticket with our team. We respond as quickly as we can.',
+      confirmLabel: 'Submit',
+      cancelLabel: 'Cancel',
+      onConfirm: async () => {
+        setSubmitting(true);
+        try {
+          await createBuyerProtectionClaim(orderId, {
+            reason: reason.trim(),
+            description: description.trim(),
+          });
+          haptics.success();
+          show('Claim submitted. We respond as quickly as we can.', 'success');
+          setShowClaimForm(false);
+          setReason('');
+          setDescription('');
+          await loadProtection();
+        } catch (err) {
+          show(err instanceof Error ? err.message : 'Failed to submit claim', 'error');
+        } finally {
+          setSubmitting(false);
+        }
+      },
+      variant: 'default',
+    });
   };
 
   if (loading) {
@@ -282,6 +289,17 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 
         <View style={{ height: 40 }} />
       </KeyboardAwareScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }

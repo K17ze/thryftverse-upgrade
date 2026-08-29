@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +17,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CustomBots'>;
 
@@ -34,6 +34,14 @@ export default function CustomBotsScreen({ navigation }: Props) {
 
   const [isLoading, setIsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   useEffect(() => {
     let cancelled = false;
@@ -52,30 +60,25 @@ export default function CustomBotsScreen({ navigation }: Props) {
     conversations.filter((c) => c.botIds?.includes(botId)).length;
 
   const handleDelete = (bot: { id: string; name: string }) => {
-    Alert.alert(
-      'Delete agent?',
-      `${bot.name} will be permanently deleted and removed from all groups.`,
-
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setDeletingId(bot.id);
-            try {
-              await deleteCustomBot(bot.id);
-              show(`${bot.name} deleted`, 'info');
-            } catch {
-              show('Failed to delete agent', 'error');
-            } finally {
-              setDeletingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete agent?',
+      message: `${bot.name} will be permanently deleted and removed from all groups.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        haptic.heavy();
+        setDeletingId(bot.id);
+        try {
+          await deleteCustomBot(bot.id);
+          show(`${bot.name} deleted`, 'info');
+        } catch {
+          show('Failed to delete agent', 'error');
+        } finally {
+          setDeletingId(null);
+        }
+      },
+    });
   };
 
   return (
@@ -189,6 +192,16 @@ export default function CustomBotsScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

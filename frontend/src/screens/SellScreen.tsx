@@ -138,12 +138,12 @@ export default function SellScreen() {
     priceNoCompsHint: { color: colors.textMuted },
     charCountWarn: { color: colors.warning },
     fieldRequiredHint: { color: colors.textMuted },
-    autofillCard: { backgroundColor: `${colors.brand}08` },
+    autofillCard: { backgroundColor: colors.brandSubtle },
     autofillTitle: { color: colors.textPrimary },
     autofillChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     autofillChipLabel: { color: colors.textMuted },
     autofillChipValue: { color: colors.textPrimary },
-    autofillApplyBtn: { borderColor: `${colors.brand}30`, backgroundColor: `${colors.brand}08` },
+    autofillApplyBtn: { borderColor: colors.brandBorder, backgroundColor: colors.brandSubtle },
   }), [colors]);
 
   const updateSellDraft = useStore((s) => s.updateSellDraft);

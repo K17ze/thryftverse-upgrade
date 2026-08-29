@@ -1077,6 +1077,7 @@ export default function MyProfileScreen() {
                 </Text>
               </View>
               <AnimatedPressable
+                // TODO: replace `${colors.textMuted}14` with textMutedSubtle token when available
                 style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
                 onPress={() => { haptic.light(); setCompletionDismissed(true); }}
                 accessibilityRole="button"
@@ -1108,6 +1109,7 @@ export default function MyProfileScreen() {
             <View style={styles.growthHead}>
               <Text style={[styles.growthTitle, t.growthTitle]}>Grow on Thryftverse</Text>
               <AnimatedPressable
+                // TODO: replace `${colors.textMuted}14` with textMutedSubtle token when available
                 style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
                 onPress={() => { haptic.light(); setGrowthDismissed(true); }}
                 accessibilityRole="button"

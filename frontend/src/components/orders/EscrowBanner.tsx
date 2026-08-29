@@ -17,7 +17,7 @@ export function EscrowBanner({ order, normalisedStatus }: Props) {
   const { colors } = useAppTheme();
 
   const themed = useMemo(() => ({
-    escrowBanner: { backgroundColor: `${colors.success}08`, borderColor: `${colors.success}25` },
+    escrowBanner: { backgroundColor: colors.successSubtle, borderColor: colors.successBorder },
     escrowTitle: { color: colors.textPrimary },
     escrowSub: { color: colors.textSecondary },
     escrowCountdown: { color: colors.textMuted },

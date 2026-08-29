@@ -9,7 +9,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, AspectRatio } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, AspectRatio, Stroke} from '../../theme/designTokens';
 import type { RecommendationSection, RecommendationLook } from '../../platform/product';
 import { isRecommendationLook } from '../../platform/product';
 import { ProductAnalytics } from '../../platform/product';
@@ -276,7 +276,7 @@ function createStyles(colors: ThemeColors) {
       width: 160,
     },
     cardAccent: {
-      borderWidth: 1.5,
+      borderWidth: Stroke.standard,
       borderColor: colors.brand,
       borderRadius: Radius.xl,
       padding: 2,

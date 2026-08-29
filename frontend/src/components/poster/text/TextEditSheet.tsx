@@ -22,7 +22,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Radius, Space, Typography } from '../../../theme/designTokens';
+import { Radius, Space, Typography, Stroke} from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { AnimatedPressable } from '../../AnimatedPressable';
@@ -450,7 +450,7 @@ function createStyles(colors: ThemeColors) {
       width: 32,
       height: 32,
       borderRadius: Radius.full,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.borderSubtle,
       alignItems: 'center',
       justifyContent: 'center',
@@ -464,7 +464,7 @@ function createStyles(colors: ThemeColors) {
       width: 32,
       height: 32,
       borderRadius: Radius.full,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       alignItems: 'center',
       justifyContent: 'center',
     },

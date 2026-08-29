@@ -726,7 +726,7 @@ export default function AssetDetailScreen() {
           {/* Co-Own v2 beta badge — gated by the co_own_v2 feature flag.
               Additive indicator; absent when the flag is off (current behaviour). */}
           {coOwnV2Enabled ? (
-            <View style={[styles.coOwnV2Badge, { backgroundColor: `${colors.brand}14`, borderColor: `${colors.brand}40` }]}>
+            <View style={[styles.coOwnV2Badge, { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder }]}>
               <Ionicons name="sparkles" size={12} color={colors.brand} aria-hidden={true} />
               <Text style={[styles.coOwnV2BadgeText, { color: colors.brand }]} maxFontSizeMultiplier={1.3}>Co-Own v2</Text>
             </View>

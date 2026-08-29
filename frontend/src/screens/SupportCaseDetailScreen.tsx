@@ -3,10 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -28,6 +28,7 @@ import type {
   CaseResolutionDisposition,
 } from '../contracts/support';
 import { getSupportCase, sendSupportCaseMessage, appealSupportCase } from '../services/supportConversationApi';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupportCaseDetail'>;
 
@@ -287,6 +288,14 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [appealing, setAppealing] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const inputRef = useRef<React.ComponentRef<typeof AppInput>>(null);
 
   // ── Load case + events ──────────────────────────────────────────────────
@@ -357,31 +366,26 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
   const handleAppeal = useCallback(() => {
     if (!caseRecord || appealing) return;
     haptic.heavy();
-    Alert.alert(
-      'Appeal this decision?',
-      'Submitting an appeal asks the support team to review the decision on this case.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit Appeal',
-          style: 'destructive',
-          onPress: async () => {
-            if (!caseRecord) return;
-            setAppealing(true);
-            try {
-              const event = await appealSupportCase(caseRecord.id, 'Appeal requested by customer from case detail.');
-              setEvents((prev) => [...prev, event]);
-              show('Appeal submitted', 'success');
-            } catch {
-              show('Could not submit appeal. Try again later.', 'error');
-            } finally {
-              setAppealing(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [caseRecord, appealing, haptic, show]);
+    setConfirmSheet({
+      visible: true,
+      title: 'Appeal this decision?',
+      message: 'Submitting an appeal asks the support team to review the decision on this case.',
+      confirmLabel: 'Submit Appeal',
+      onConfirm: async () => {
+        if (!caseRecord) return;
+        setAppealing(true);
+        try {
+          const event = await appealSupportCase(caseRecord.id, 'Appeal requested by customer from case detail.');
+          setEvents((prev) => [...prev, event]);
+          show('Appeal submitted', 'success');
+        } catch {
+          show('Could not submit appeal. Try again later.', 'error');
+        } finally {
+          setAppealing(false);
+        }
+      },
+    });
+  }, [caseRecord, appealing, haptic, show, setConfirmSheet]);
 
   const handleContextLinkPress = useCallback(
     (link: ContextLink) => {
@@ -629,6 +633,16 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
           <Text style={styles.closedNoticeText}>This case is closed. Contact support to reopen it.</Text>
         </View>
       )}
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

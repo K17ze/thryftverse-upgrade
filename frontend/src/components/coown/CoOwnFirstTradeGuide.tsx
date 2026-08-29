@@ -127,7 +127,7 @@ export function CoOwnFirstTradeGuide({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <View style={[styles.headerIcon, { backgroundColor: `${colors.brand}15` }]}>
+              <View style={[styles.headerIcon, { backgroundColor: colors.brandSubtle }]}>
                 <Ionicons name="school-outline" size={18} color={colors.brand} />
               </View>
               <View>
@@ -178,7 +178,7 @@ export function CoOwnFirstTradeGuide({
               </Text>
 
               {step.keyTakeaway && (
-                <View style={[styles.takeawayBox, { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}25` }]}>
+                <View style={[styles.takeawayBox, { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder }]}>
                   <Ionicons name="bulb-outline" size={14} color={colors.brand} />
                   <Text style={[styles.takeawayText, { color: colors.textPrimary }]}>
                     {step.keyTakeaway}
@@ -188,7 +188,7 @@ export function CoOwnFirstTradeGuide({
 
               {/* Recap summary on the last step */}
               {isLastStep && (
-                <View style={[styles.recapBox, { backgroundColor: `${colors.brand}06`, borderColor: `${colors.brand}20` }]}>
+                <View style={[styles.recapBox, { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder }]}>
                   <Text style={[styles.recapTitle, { color: colors.textPrimary }]}>Quick recap</Text>
                   {GUIDE_STEPS.filter((s) => s.keyTakeaway).map((s, i) => (
                     <View key={i} style={styles.recapRow}>

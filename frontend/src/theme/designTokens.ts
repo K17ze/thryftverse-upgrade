@@ -359,6 +359,12 @@ export const ZIndex = {
 // ============================================================================
 // COMMON STYLE PRESETS
 // ============================================================================
+/**
+ * @deprecated CommonStyles has zero usages across the codebase as of the
+ * duplicate-primitive consolidation pass. It is retained here in case it
+ * is part of a public API consumed by external packages. New code should
+ * use StyleSheet.create at the call site or a dedicated component instead.
+ */
 export const CommonStyles = {
   /** Standard card container — flat (no shadow). Opt into elevatedCard for depth. */
   card: {

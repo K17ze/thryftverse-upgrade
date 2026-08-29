@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 export interface PaymentWarningCardProps {
@@ -30,7 +30,7 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
   if (dismissed) return null;
 
   return (
-    <View style={[styles.container, { backgroundColor: `${colors.danger}12`, borderColor: `${colors.danger}50` }, isMe && styles.containerMe]}>
+    <View style={[styles.container, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }, isMe && styles.containerMe]}>
       <Ionicons name="warning" size={20} color={colors.danger} />
       <View style={styles.textCol}>
         <Text style={[styles.title, { color: colors.danger }]}>
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md + 2,
     paddingVertical: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   containerMe: {
     marginHorizontal: 0,

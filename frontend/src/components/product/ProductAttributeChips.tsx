@@ -92,7 +92,7 @@ function createStyles(colors: ThemeColors) {
   },
   chipTappable: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.brand}30`,
+    borderColor: colors.borderSubtle,
   },
   chipPressed: {
     opacity: 0.7,
@@ -113,7 +113,7 @@ function createStyles(colors: ThemeColors) {
     width: 18,
     height: 18,
     borderRadius: Radius.lg,
-    backgroundColor: `${colors.brand}12`,
+    backgroundColor: colors.brandSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },

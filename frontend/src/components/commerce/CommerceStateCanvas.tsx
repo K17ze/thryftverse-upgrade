@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke, Control } from '../../theme/designTokens';
 
 export type CommerceStateType = 'loading' | 'error' | 'unavailable';
 
@@ -145,46 +145,46 @@ function CommerceDetailSkeleton({ family }: { family: 'direct' | 'auction' | 'co
 
       {/* Identity seam */}
       <View style={styles.skeletonIdentity}>
-        <View style={[styles.skeletonLine, { width: 90, height: 12, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: 90, height: Type.caption.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.xs }} />
-        <View style={[styles.skeletonLine, { width: '80%', height: 26, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '80%', height: Type.title.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.xs }} />
-        <View style={[styles.skeletonLine, { width: '45%', height: 22, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '45%', height: Type.bodyLarge.lineHeight, backgroundColor: colors.surfaceAlt }]} />
       </View>
 
       {/* Transaction surface */}
       <View style={[styles.skeletonSurface, { backgroundColor: colors.surface }]}>
-        <View style={[styles.skeletonLine, { width: '30%', height: 12, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '30%', height: Type.caption.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.xs }} />
-        <View style={[styles.skeletonLine, { width: '55%', height: 28, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '55%', height: Type.priceLarge.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.sm }} />
         <View style={styles.skeletonRow}>
-          <View style={[styles.skeletonLine, { flex: 1, height: 14, backgroundColor: colors.surfaceAlt }]} />
-          <View style={[styles.skeletonLine, { width: 80, height: 14, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { flex: 1, height: Type.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { width: 80, height: Type.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         </View>
       </View>
 
       {/* Section placeholder */}
       <View style={styles.skeletonSection}>
-        <View style={[styles.skeletonLine, { width: '40%', height: 14, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '40%', height: Type.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.sm }} />
-        <View style={[styles.skeletonLine, { width: '100%', height: 14, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '100%', height: Type.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.xs }} />
-        <View style={[styles.skeletonLine, { width: '85%', height: 14, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '85%', height: Type.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
       </View>
 
       {/* Section placeholder */}
       <View style={styles.skeletonSection}>
-        <View style={[styles.skeletonLine, { width: '35%', height: 14, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '35%', height: Type.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.sm }} />
         <View style={styles.skeletonRow}>
-          <View style={[styles.skeletonLine, { flex: 1, height: 14, backgroundColor: colors.surfaceAlt }]} />
-          <View style={[styles.skeletonLine, { width: 60, height: 14, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { flex: 1, height: Type.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { width: 60, height: Type.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         </View>
         <View style={{ height: Space.xs }} />
         <View style={styles.skeletonRow}>
-          <View style={[styles.skeletonLine, { flex: 1, height: 14, backgroundColor: colors.surfaceAlt }]} />
-          <View style={[styles.skeletonLine, { width: 60, height: 14, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { flex: 1, height: Type.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { width: 60, height: Type.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         </View>
       </View>
     </View>
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   title: {
-    fontSize: 18,
+    fontSize: Type.itemTitle.size,
     fontFamily: Typography.family.semibold,
     textAlign: 'center',
     marginBottom: Space.xs,
@@ -218,8 +218,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    minHeight: 44,
+    borderWidth: Stroke.standard,
+    minHeight: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   secondaryBtn: {
-    minHeight: 44,
+    minHeight: Control.hit,
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
     alignItems: 'center',

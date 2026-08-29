@@ -634,7 +634,7 @@ export function BidSheet({
               const wouldLead = bidGbp >= currentMinimum && bidGbp > 0;
               if (bidGbp <= 0) return null;
               return (
-                <View style={[styles.confidenceRow, { backgroundColor: wouldLead ? `${themed.success}10` : `${themed.danger}10` }]}>
+                <View style={[styles.confidenceRow, { backgroundColor: wouldLead ? `${themed.success}10` /* TODO: replace with successSubtle once themed is resolved */ : `${themed.danger}10` /* TODO: replace with dangerSubtle once themed is resolved */ }]}>
                   <Ionicons
                     name={wouldLead ? 'checkmark-circle-outline' : 'alert-circle-outline'}
                     size={14}

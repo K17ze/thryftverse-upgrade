@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
@@ -22,6 +21,7 @@ import { CachedImage } from '../components/CachedImage';
 import { updateMyProfile } from '../services/profileApi';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { queryKeys } from '../platform/server/queryKeys';
 
 export default function EditProfileScreen() {
@@ -48,6 +48,14 @@ export default function EditProfileScreen() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [websiteError, setWebsiteError] = useState('');
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const hasChanges =
     name !== initialName ||
@@ -115,14 +123,14 @@ export default function EditProfileScreen() {
       navigation.goBack();
       return;
     }
-    Alert.alert(
-      'Unsaved changes',
-      'You have unsaved changes. Are you sure you want to discard them?',
-      [
-        { text: 'Keep editing', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Unsaved changes',
+      message: 'You have unsaved changes. Are you sure you want to discard them?',
+      confirmLabel: 'Discard',
+      variant: 'danger',
+      onConfirm: () => navigation.goBack(),
+    });
   };
 
   if (!user) {
@@ -269,6 +277,16 @@ export default function EditProfileScreen() {
           />
         </View>
       </KeyboardAwareScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

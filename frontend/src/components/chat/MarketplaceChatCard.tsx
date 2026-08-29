@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
+import { Space, Radius, Type , Typography, Stroke} from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -302,7 +302,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: Space.xs + 1,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     padding: Space.md - 2,
     marginHorizontal: Space.md,
@@ -344,7 +344,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexShrink: 1,
   },
   offerDiscountBadge: {
-    backgroundColor: `${colors.success}15`,
+    backgroundColor: colors.successSubtle,
     borderRadius: Radius.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,

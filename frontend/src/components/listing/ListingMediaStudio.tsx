@@ -20,7 +20,7 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type, AspectRatio } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type, AspectRatio, Stroke} from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -638,7 +638,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   emptyDashed: {
     width: '100%',
     height: coverHeight,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     borderStyle: 'dashed',
     borderColor: colors.border,
     borderRadius: Radius.xxl,
@@ -689,7 +689,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     paddingVertical: 12,
     borderRadius: Radius.xxl,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   emptySecondaryText: {
@@ -860,7 +860,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   thumbContentFailed: {

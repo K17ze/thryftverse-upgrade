@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -7,6 +7,7 @@ import { CachedImage } from '../components/CachedImage';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
 import { Caption } from '../components/ui/Text';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
@@ -52,6 +53,14 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   );
 
   const [isTogglingMute, setIsTogglingMute] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   if (!conversation) {
     return (
@@ -149,28 +158,25 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   };
 
   const deleteForMe = () => {
-    Alert.alert(
-      'Remove from inbox?',
-      'This removes the conversation from your inbox on this device. The other participant keeps their copy.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            try {
-              await deleteConversationOnApi(conversationId, 'me');
-              deleteConversation(conversationId);
-              show('Conversation removed from your inbox', 'info');
-              navigation.navigate('MainTabs', { screen: 'Inbox' });
-            } catch {
-              show('Could not delete this conversation. Check your connection and try again.', 'error');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove from inbox?',
+      message: 'This removes the conversation from your inbox on this device. The other participant keeps their copy.',
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        try {
+          await deleteConversationOnApi(conversationId, 'me');
+          deleteConversation(conversationId);
+          show('Conversation removed from your inbox', 'info');
+          navigation.navigate('MainTabs', { screen: 'Inbox' });
+        } catch {
+          show('Could not delete this conversation. Check your connection and try again.', 'error');
+        }
+      },
+    });
   };
 
   return (
@@ -278,6 +284,15 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
           <ChatInfoRow icon="trash-outline" label="Remove from inbox" onPress={deleteForMe} danger />
         </ChatInfoSection>
       </ScrollView>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }

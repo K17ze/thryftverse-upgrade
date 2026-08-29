@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, Stroke} from '../theme/designTokens';
 
 export type SyncStatusTone = 'live' | 'syncing' | 'offline';
 
@@ -71,7 +71,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderRadius: Radius.full,
     paddingHorizontal: 10,
     paddingVertical: 5,

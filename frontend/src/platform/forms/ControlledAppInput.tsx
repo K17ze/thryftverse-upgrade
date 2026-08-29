@@ -2,7 +2,7 @@ import React from 'react';
 import { TextInput, TextInputProps, StyleSheet, View, Text } from 'react-native';
 import { Controller, Control, FieldError, RegisterOptions } from 'react-hook-form';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space, Stroke} from '../../theme/designTokens';
 
 export interface ControlledAppInputProps {
   name: string;
@@ -59,7 +59,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 6,
   },
   input: {
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     borderRadius: Radius.lg,
     paddingHorizontal: 14,

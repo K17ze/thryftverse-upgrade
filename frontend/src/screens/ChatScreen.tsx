@@ -297,13 +297,13 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 1,
       borderRadius: Radius.full,
-      backgroundColor: `${colors.brand}0D`,
+      backgroundColor: colors.brandSubtle,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: `${colors.brand}26`,
+      borderColor: colors.brandBorder,
     },
 
     agentChipPressed: {
-      backgroundColor: `${colors.brand}14`,
+      backgroundColor: colors.brandSubtle,
     },
 
     agentChipText: {
@@ -330,7 +330,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
-      backgroundColor: `${colors.brand}14`,
+      backgroundColor: colors.brandSubtle,
     },
 
     unreadDividerText: {
