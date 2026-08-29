@@ -7,6 +7,7 @@ interface FormatOptions {
   displayMode?: CurrencyDisplayMode;
   fiatFractionDigits?: number;
   izeFractionDigits?: number;
+  minimumFractionDigits?: number;
 }
 
 export function useFormattedPrice() {
@@ -19,7 +20,7 @@ export function useFormattedPrice() {
         displayMode: options.displayMode ?? displayMode,
         currencyCode,
         fxRates,
-        fiatFractionDigits: options.fiatFractionDigits,
+        fiatFractionDigits: options.minimumFractionDigits ?? options.fiatFractionDigits,
         izeFractionDigits: options.izeFractionDigits,
       });
     },

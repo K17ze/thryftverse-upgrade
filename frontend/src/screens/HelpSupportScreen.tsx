@@ -58,10 +58,10 @@ interface CategoryShortcut {
 }
 
 const CATEGORY_SHORTCUTS: CategoryShortcut[] = [
-  { label: 'Buying', context: { kind: 'general' } },
-  { label: 'Selling', context: { kind: 'general' } },
-  { label: 'Payments', context: { kind: 'general' } },
-  { label: 'Safety', context: { kind: 'general' } },
+  { label: 'Buying', context: { kind: 'listing' } },
+  { label: 'Selling', context: { kind: 'order' } },
+  { label: 'Payments', context: { kind: 'payout' } },
+  { label: 'Safety', context: { kind: 'report' } },
   { label: 'Account', context: { kind: 'general' } },
 ];
 
@@ -77,6 +77,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
   const [searchResults, setSearchResults] = useState<SupportKnowledgeSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Bootstrap state ──
@@ -126,6 +127,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
       setSearchResults([]);
       setSearchLoading(false);
       setSearchError(null);
+      setExpandedArticleId(null);
       return;
     }
     setSearchLoading(true);
@@ -161,6 +163,13 @@ export default function HelpSupportScreen({ navigation }: Props) {
 
   const handleClearSearch = useCallback(() => {
     setQuery('');
+    setExpandedArticleId(null);
+  }, []);
+
+  const handleSearchResultPress = useCallback((result: SupportKnowledgeSearchResult) => {
+    // Show the article content inline rather than starting a chat.
+    // Tapping a result expands it to reveal the full snippet.
+    setExpandedArticleId((prev) => (prev === result.articleId ? null : result.articleId));
   }, []);
 
   const handleStartConversation = useCallback(
@@ -338,24 +347,51 @@ export default function HelpSupportScreen({ navigation }: Props) {
                 <Text style={styles.searchEmptyHint}>Try different words, or talk to a person.</Text>
               </View>
             ) : (
-              searchResults.map((result, idx) => (
-                <View key={result.articleId} style={[styles.articleRow, idx < searchResults.length - 1 && styles.rowBorder]}>
-                  <AnimatedPressable
-                    onPress={() => void handleStartConversation({ kind: 'general' })}
-                    hapticFeedback="light"
-                    scaleValue={PressScale.tap}
-                    accessibilityRole="button"
-                    accessibilityLabel={result.title}
-                  >
-                    <Text style={styles.articleTitle} numberOfLines={2}>
-                      {result.title}
-                    </Text>
-                    <Text style={styles.articleSnippet} numberOfLines={3}>
-                      {result.snippet}
-                    </Text>
-                  </AnimatedPressable>
-                </View>
-              ))
+              searchResults.map((result, idx) => {
+                const isExpanded = expandedArticleId === result.articleId;
+                return (
+                  <View key={result.articleId} style={[styles.articleRow, idx < searchResults.length - 1 && styles.rowBorder]}>
+                    <AnimatedPressable
+                      onPress={() => handleSearchResultPress(result)}
+                      hapticFeedback="light"
+                      scaleValue={PressScale.tap}
+                      accessibilityRole="button"
+                      accessibilityLabel={result.title}
+                      accessibilityHint={isExpanded ? 'Collapse article' : 'Expand to read article snippet'}
+                    >
+                      <View style={styles.articleTitleRow}>
+                        <Text style={styles.articleTitle} numberOfLines={isExpanded ? undefined : 2}>
+                          {result.title}
+                        </Text>
+                        <Ionicons
+                          name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                          size={16}
+                          color={colors.textMuted}
+                        />
+                      </View>
+                      <Text style={styles.articleSnippet} numberOfLines={isExpanded ? undefined : 3}>
+                        {result.snippet}
+                      </Text>
+                      {isExpanded && (
+                        <View style={styles.articleExpandedFooter}>
+                          <Text style={styles.articleMeta}>
+                            Article ID: {result.articleId.slice(-8).toUpperCase()}
+                          </Text>
+                          <AnimatedPressable
+                            onPress={() => void handleStartConversation({ kind: 'general' })}
+                            hapticFeedback="light"
+                            scaleValue={PressScale.tap}
+                            accessibilityRole="button"
+                            accessibilityLabel="Still need help? Contact support"
+                          >
+                            <Text style={styles.articleContactLink}>Still need help? Contact support</Text>
+                          </AnimatedPressable>
+                        </View>
+                      )}
+                    </AnimatedPressable>
+                  </View>
+                );
+              })
             )}
           </View>
         ) : (
@@ -577,11 +613,17 @@ function createStyles(colors: ThemeColors) {
       borderBottomColor: colors.border,
     },
     articleTitle: {
+      flex: 1,
       fontSize: Type.bodyEmphasis.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
       lineHeight: Type.bodyEmphasis.lineHeight,
       letterSpacing: Type.bodyEmphasis.letterSpacing,
+    },
+    articleTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.xs,
     },
     articleSnippet: {
       fontSize: Type.caption.size,
@@ -590,6 +632,25 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.lineHeight,
       letterSpacing: Type.caption.letterSpacing,
       marginTop: Space.xs,
+    },
+    articleExpandedFooter: {
+      marginTop: Space.sm,
+      gap: Space.xs,
+      paddingTop: Space.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    articleMeta: {
+      fontSize: Type.meta.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      letterSpacing: Type.meta.letterSpacing,
+    },
+    articleContactLink: {
+      fontSize: Type.body.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.brand,
+      letterSpacing: Type.body.letterSpacing,
     },
     // ── Category shortcuts ──
     categoryRow: {

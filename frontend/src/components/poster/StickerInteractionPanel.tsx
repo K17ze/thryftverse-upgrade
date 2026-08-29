@@ -67,6 +67,7 @@ export function StickerInteractionPanel({
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
+  const styles = React.useMemo(() => createStickerPanelStyles(colors), [colors]);
 
   // Entrance animation — slide up + fade in
   const panelY = useSharedValue(reducedMotion ? 0 : 30);
@@ -103,7 +104,7 @@ export function StickerInteractionPanel({
   const options = sticker.payload.options ?? [];
 
   return (
-    <View style={stickerPanelStyles.backdrop}>
+    <View style={styles.backdrop}>
       {/* Tap-to-dismiss backdrop */}
       <Pressable
         style={StyleSheet.absoluteFill}
@@ -113,17 +114,17 @@ export function StickerInteractionPanel({
       />
       <Reanimated.View
         style={[
-          stickerPanelStyles.panel,
+          styles.panel,
           { paddingBottom: insets.bottom + Space.sm },
           panelStyle,
         ]}
       >
         {/* Header row — sticker type label + close */}
-        <View style={stickerPanelStyles.headerRow}>
-          <Text style={stickerPanelStyles.typeLabel}>{stickerTypeLabel}</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.typeLabel}>{stickerTypeLabel}</Text>
           <AnimatedPressable
             onPress={() => { haptic.light(); onDismiss(); }}
-            style={stickerPanelStyles.closeBtn}
+            style={styles.closeBtn}
             scaleValue={0.97}
             activeOpacity={0.85}
             hapticFeedback="light"
@@ -131,18 +132,18 @@ export function StickerInteractionPanel({
             accessibilityRole="button"
             hitSlop={8}
           >
-            <Ionicons name="close" size={20} color="#fff" />
+            <Ionicons name="close" size={20} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
 
         {/* Question */}
-        <Text style={stickerPanelStyles.questionText}>
+        <Text style={styles.questionText}>
           {sticker.payload.question}
         </Text>
 
         {/* Poll / Quiz / Style Vote options */}
         {(sticker.type === 'poll' || sticker.type === 'quiz' || sticker.type === 'style_vote') && (
-          <View style={stickerPanelStyles.optionsList}>
+          <View style={styles.optionsList}>
             {options.map((opt) => {
               const result = pollResult ?? quizResult;
               const optionResult = result?.options.find((o) => o.id === opt.id);
@@ -156,10 +157,10 @@ export function StickerInteractionPanel({
                   onPress={() => handleVote(opt.id)}
                   disabled={hasVoted || isSubmitting}
                   style={({ pressed }) => [
-                    stickerPanelStyles.optionRow,
-                    isSelected && stickerPanelStyles.optionSelected,
-                    isCorrectQuiz && stickerPanelStyles.optionCorrect,
-                    pressed && !hasVoted && stickerPanelStyles.optionPressed,
+                    styles.optionRow,
+                    isSelected && styles.optionSelected,
+                    isCorrectQuiz && styles.optionCorrect,
+                    pressed && !hasVoted && styles.optionPressed,
                   ]}
                   accessibilityLabel={`${opt.label}${percentage > 0 ? `, ${percentage}%` : ''}`}
                   accessibilityRole="button"
@@ -169,22 +170,22 @@ export function StickerInteractionPanel({
                   {hasVoted && percentage > 0 && (
                     <View
                       style={[
-                        stickerPanelStyles.optionFill,
+                        styles.optionFill,
                         { width: `${percentage}%` },
                       ]}
                     />
                   )}
-                  <Text style={stickerPanelStyles.optionLabel}>{opt.label}</Text>
+                  <Text style={styles.optionLabel}>{opt.label}</Text>
                   {hasVoted && (
-                    <Text style={stickerPanelStyles.optionPercentage}>
+                    <Text style={styles.optionPercentage}>
                       {percentage}%
                     </Text>
                   )}
                   {isCorrectQuiz && (
-                    <Ionicons name="checkmark-circle" size={16} color="#4CD964" style={stickerPanelStyles.optionIcon} />
+                    <Ionicons name="checkmark-circle" size={16} color={colors.success} style={styles.optionIcon} />
                   )}
                   {isSelected && !isCorrectQuiz && sticker.type === 'quiz' && (
-                    <Ionicons name="close-circle" size={16} color="#FF3B30" style={stickerPanelStyles.optionIcon} />
+                    <Ionicons name="close-circle" size={16} color={colors.danger} style={styles.optionIcon} />
                   )}
                 </Pressable>
               );
@@ -195,8 +196,8 @@ export function StickerInteractionPanel({
         {/* Quiz result summary */}
         {sticker.type === 'quiz' && quizResult && (
           <Text style={[
-            stickerPanelStyles.resultSummary,
-            { color: quizResult.isCorrect ? '#4CD964' : '#FF3B30' },
+            styles.resultSummary,
+            { color: quizResult.isCorrect ? colors.success : colors.danger },
           ]}>
             {quizResult.isCorrect ? 'Correct!' : 'Incorrect'} • {quizResult.totalVotes} votes
           </Text>
@@ -204,25 +205,25 @@ export function StickerInteractionPanel({
 
         {/* Poll result summary */}
         {sticker.type === 'poll' && pollResult && (
-          <Text style={stickerPanelStyles.resultSummary}>
+          <Text style={styles.resultSummary}>
             {pollResult.totalVotes} votes
           </Text>
         )}
 
         {/* Question sticker — text input */}
         {sticker.type === 'question' && (
-          <View style={stickerPanelStyles.questionInputArea}>
+          <View style={styles.questionInputArea}>
             {questionAnswerSent ? (
-              <View style={stickerPanelStyles.answerSentWrap}>
-                <Ionicons name="checkmark-circle" size={20} color="#4CD964" />
-                <Text style={stickerPanelStyles.answerSentText}>Answer sent</Text>
+              <View style={styles.answerSentWrap}>
+                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                <Text style={styles.answerSentText}>Answer sent</Text>
               </View>
             ) : (
-              <View style={stickerPanelStyles.questionInputRow}>
+              <View style={styles.questionInputRow}>
                 <TextInput
-                  style={stickerPanelStyles.questionInput}
+                  style={styles.questionInput}
                   placeholder="Type your answer..."
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   value={questionAnswer}
                   onChangeText={onQuestionAnswerChange}
                   maxLength={200}
@@ -236,8 +237,8 @@ export function StickerInteractionPanel({
                   onPress={onQuestionSubmit}
                   disabled={!questionAnswer.trim() || isSubmitting}
                   style={[
-                    stickerPanelStyles.questionSendBtn,
-                    (!questionAnswer.trim() || isSubmitting) && stickerPanelStyles.questionSendBtnDisabled,
+                    styles.questionSendBtn,
+                    (!questionAnswer.trim() || isSubmitting) && styles.questionSendBtnDisabled,
                   ]}
                   scaleValue={0.97}
                   activeOpacity={0.85}
@@ -246,9 +247,9 @@ export function StickerInteractionPanel({
                   accessibilityRole="button"
                 >
                   {isSubmitting ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={colors.textPrimary} />
                   ) : (
-                    <Ionicons name="send" size={18} color="#fff" />
+                    <Ionicons name="send" size={18} color={colors.textPrimary} />
                   )}
                 </AnimatedPressable>
               </View>
@@ -260,21 +261,22 @@ export function StickerInteractionPanel({
   );
 }
 
-const stickerPanelStyles = StyleSheet.create({
+function createStickerPanelStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
+  return StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
     zIndex: 50,
   },
   panel: {
-    backgroundColor: 'rgba(20,20,20,0.95)',
+    backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     // Deliberate elevation to separate the panel from the story content
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
@@ -287,7 +289,7 @@ const stickerPanelStyles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   typeLabel: {
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textMuted,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.5,
@@ -301,7 +303,7 @@ const stickerPanelStyles = StyleSheet.create({
     alignItems: 'center',
   },
   questionText: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
     lineHeight: Type.subtitle.lineHeight,
@@ -315,39 +317,39 @@ const stickerPanelStyles = StyleSheet.create({
     alignItems: 'center',
     height: Control.hit + 4,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.brandSubtle,
     paddingHorizontal: Space.md,
     overflow: 'hidden',
     position: 'relative',
   },
   optionSelected: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.brandSubtle,
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.border,
   },
   optionCorrect: {
     borderWidth: Stroke.standard,
-    borderColor: '#4CD964',
+    borderColor: colors.success,
   },
   optionPressed: {
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: colors.rowPressed,
   },
   optionFill: {
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.brandSubtle,
   },
   optionLabel: {
     flex: 1,
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     zIndex: 1,
   },
   optionPercentage: {
-    color: 'rgba(255,255,255,0.8)',
+    color: colors.textSecondary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
@@ -358,7 +360,7 @@ const stickerPanelStyles = StyleSheet.create({
     zIndex: 1,
   },
   resultSummary: {
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textSecondary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     marginTop: Space.sm,
@@ -377,8 +379,8 @@ const stickerPanelStyles = StyleSheet.create({
     flex: 1,
     height: Control.hit,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    color: '#fff',
+    backgroundColor: colors.input,
+    color: colors.inputText,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     paddingHorizontal: Space.md,
@@ -387,7 +389,7 @@ const stickerPanelStyles = StyleSheet.create({
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.brandSubtle,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -401,8 +403,9 @@ const stickerPanelStyles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   answerSentText: {
-    color: '#4CD964',
+    color: colors.success,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
-});
+  });
+}

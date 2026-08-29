@@ -3,11 +3,10 @@ import { View, Text, StyleSheet, useWindowDimensions, ViewStyle, ActivityIndicat
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type, IconGrammar, Control, Stroke, AvatarSize } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, IconGrammar, Control, Stroke, AvatarSize, ProfileLayout } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
-import { ActiveTheme } from '../../constants/colors';
 import { FACE_FOCAL_POINT } from '../../utils/media';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Video, ResizeMode } from '../compat/Video';
@@ -42,12 +41,12 @@ export function FlagshipProfileMedia({
   style,
   cacheBuster,
   coverOnly = false,
-  coverHeight = 220,
+  coverHeight = ProfileLayout.coverHeight,
   coverError = null,
   onRetryCover,
   onRevertCover,
 }: FlagshipProfileMediaProps) {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
   const effectiveCover = coverVideoUri || coverUri;
@@ -173,9 +172,9 @@ export function FlagshipProfileMedia({
             ) : (
               <View style={[styles.avatarImage, styles.avatarFallback]} accessibilityElementsHidden>
                 <LinearGradient
-                  colors={ActiveTheme === 'light'
-                    ? ['#F0EBE6', '#E2DDD6']
-                    : ['#1F1F1F', '#161616']}
+                  colors={isDark
+                    ? ['#1F1F1F', '#161616']
+                    : ['#F0EBE6', '#E2DDD6']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFill}
@@ -183,7 +182,7 @@ export function FlagshipProfileMedia({
                 <Ionicons
                   name="person"
                   size={IconGrammar.hero}
-                  color={ActiveTheme === 'light' ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.22)'}
+                  color={isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.22)'}
                 />
               </View>
             )}
@@ -214,8 +213,8 @@ export function FlagshipProfileMedia({
   );
 }
 
-const DEFAULT_COVER_H = 220;
-const AVATAR_SIZE = 104;
+const DEFAULT_COVER_H = ProfileLayout.coverHeight;
+const AVATAR_SIZE = AvatarSize.xl;
 
 const createStyles = (colors: any) => StyleSheet.create({
   root: {
@@ -310,8 +309,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     position: 'relative',
   },
   avatarImage: {
-    width: AVATAR_SIZE - 8,
-    height: AVATAR_SIZE - 8,
+    width: AVATAR_SIZE - Stroke.emphasis * 2 * 2,
+    height: AVATAR_SIZE - Stroke.emphasis * 2 * 2,
     borderRadius: Radius.full,
   },
   avatarFallback: {

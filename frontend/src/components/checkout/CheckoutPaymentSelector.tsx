@@ -59,9 +59,9 @@ export function CheckoutPaymentSelector({
               <View style={styles.rowLeft}>
                 <View style={[styles.cardIconWrap, isSelected && styles.cardIconWrapSelected]}>
                   {method.type === 'apple_pay' ? (
-                    <Text style={styles.walletIconText}>Pay</Text>
+                    <Text style={styles.walletIconText}>Apple Pay</Text>
                   ) : method.type === 'google_pay' ? (
-                    <Text style={styles.walletIconText}>G</Text>
+                    <Text style={styles.walletIconText}>Google Pay</Text>
                   ) : method.type === 'bank_account' ? (
                     <Ionicons
                       name="business"
@@ -175,7 +175,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: `${colors.brand}15`,
   },
   walletIconText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.meta.size,
     fontWeight: '700',
     color: colors.textPrimary,
   },
@@ -205,7 +205,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingVertical: 1,
   },
   defaultBadgeText: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
     textTransform: 'uppercase',

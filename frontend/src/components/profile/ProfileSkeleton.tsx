@@ -6,7 +6,7 @@ import { SkeletonLoader } from '../SkeletonLoader';
 
 const GRID_GAP = Space.sm;
 const CARD_ASPECT = 1.25;
-const LOOK_COLS = 3;
+const LOOK_COLS = 2;
 const LOOK_GAP = Space.xxs;
 
 type SkeletonDestination = 'Shop' | 'Looks' | 'Reviews';
@@ -25,7 +25,7 @@ interface ProfileSkeletonProps {
  *
  * Destination-specific content skeletons:
  *   Shop: four 4:5 tiles
- *   Looks: nine three-column portrait tiles
+ *   Looks: six two-column portrait tiles
  *   Reviews: reputation summary + three review rows
  *
  * No layout shift when data resolves.
@@ -109,7 +109,7 @@ export function ProfileSkeleton({
             </View>
           ) : destination === 'Looks' ? (
             <View style={styles.skeletonLookGrid}>
-              {Array.from({ length: 9 }).map((_, i) => (
+              {Array.from({ length: 6 }).map((_, i) => (
                 <SkeletonLoader key={i} width={lookW} height={lookH} borderRadius={Radius.sm} />
               ))}
             </View>
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   skeletonTabRail: { height: 44, marginBottom: Space.md, overflow: 'hidden' },
   // Shop grid — 4:5 tiles
   skeletonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP },
-  // Looks grid — 3-column portrait
+  // Looks grid — 2-column portrait
   skeletonLookGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: LOOK_GAP },
   // Reviews
   skeletonReviews: { gap: Space.sm },

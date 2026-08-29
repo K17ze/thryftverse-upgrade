@@ -250,7 +250,6 @@ export function CoOwnPositionCard({
                   >
                     {premiumLastNavPct > 0 ? '+' : ''}{premiumLastNavPct.toFixed(1)}%
                   </Text>
-                  <Text style={[styles.premiumNote, { color: colors.textMuted }]}>← information</Text>
                 </View>
               )}
             </View>
@@ -615,12 +614,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
-  },
-  premiumNote: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
   },
   // ── Phase 3: distribution row ──
   distributionRow: {

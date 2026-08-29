@@ -29,6 +29,10 @@ export interface Message {
   voiceContainer?: 'm4a' | 'ogg' | 'webm' | 'mp4';
   voiceCodec?: 'aac' | 'opus' | 'mp3';
   voiceModerationState?: 'pending' | 'allowed' | 'limited' | 'blocked';
+  /** ID of the bot/agent that authored this message (agent conversations). */
+  botId?: string;
+  /** True when the message was generated in demo mode (clearly labelled). */
+  isDemo?: boolean;
   commerceState?: {
     stateType: 'order_placed' | 'payment_confirmed' | 'order_shipped' | 'order_in_transit' | 'order_delivered' | 'order_cancelled' | 'order_refunded';
     orderId: string;

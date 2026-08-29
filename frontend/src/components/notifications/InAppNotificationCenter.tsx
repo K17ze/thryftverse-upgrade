@@ -36,15 +36,6 @@ export function InAppNotificationCenter() {
     dismissNotification(id);
   }, []);
 
-  // Action handling is delegated to the host screen via navigation. The
-  // InAppNotificationCenter itself does not navigate — it only dismisses after
-  // the action is invoked. Concrete navigation wiring lives in the caller that
-  // triggered the notification (preserves existing navigation ownership).
-  const handleAction = useCallback((_notification: InAppNotification) => {
-    // No-op here — action targets are resolved by the triggering screen.
-    // The banner auto-dismisses after onAction fires.
-  }, []);
-
   if (notifications.length === 0) return null;
 
   return (
@@ -57,7 +48,6 @@ export function InAppNotificationCenter() {
           key={notification.id}
           notification={notification}
           onDismiss={handleDismiss}
-          onAction={handleAction}
           index={index}
         />
       ))}

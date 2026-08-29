@@ -33,10 +33,10 @@ import type {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupportTicketDetail'>;
 
-const STATUS_CONFIG: Record<string, { label: string; tone: 'pending' | 'success' | 'error' | 'shipped' | 'paid' | 'delivered' }> = {
+const STATUS_CONFIG: Record<string, { label: string; tone: 'pending' | 'success' | 'neutral' | 'shipped' | 'paid' | 'delivered' }> = {
   open: { label: 'Open', tone: 'pending' },
   resolved: { label: 'Resolved', tone: 'success' },
-  closed: { label: 'Closed', tone: 'error' },
+  closed: { label: 'Closed', tone: 'neutral' },
 };
 
 const DISPOSITION_LABELS: Record<CaseResolutionDisposition, string> = {

@@ -82,7 +82,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
   } = useSettingsPreferences();
 
   // Local-only toggles — persisted to AsyncStorage so they survive restarts.
-  const [liveShopping, setLiveShopping] = React.useState(true);
   const [showPreview, setShowPreview] = React.useState(true);
   const [editingQuietTime, setEditingQuietTime] = React.useState<'start' | 'end' | null>(null);
   const [syncingKeys, setSyncingKeys] = React.useState<Set<string>>(new Set());
@@ -139,11 +138,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
   }, [haptic]);
 
   const masterOn = enabledCount > 0;
-
-  const handleLiveShoppingChange = (v: boolean) => {
-    haptic.selection();
-    setLiveShopping(v);
-  };
 
   const handleMasterToggle = async (v: boolean) => {
     haptic.selection();
@@ -300,14 +294,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             onToggle={() => void toggleCategory('auctionAlerts')}
             disabled={!masterOn}
             syncing={syncingKeys.has('auctionAlerts')}
-          />
-          <SettingsRow
-            icon="videocam-outline"
-            title="Live shopping notifications"
-            subtitle="When sellers you follow go live"
-            toggleValue={liveShopping}
-            onToggle={handleLiveShoppingChange}
-            disabled={!masterOn}
           />
           <SettingsRow
             icon="pricetag-outline"

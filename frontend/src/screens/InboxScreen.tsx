@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { View, Text, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
-import { FlashList, type FlashListProps } from '@shopify/flash-list';
+import { FlashList, type FlashListProps, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -37,6 +37,8 @@ import { useVisuallyComplete } from '../performance/visuallyComplete';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type ConvoItem = Conversation;
 type InboxSegment = MessagingSegment | 'unread' | 'archived' | 'groups';
+
+const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<FlashListProps<Conversation>>;
 
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
   const { colors } = useAppTheme();
@@ -199,48 +201,30 @@ export default function InboxScreen() {
     }
     setRefreshing(false);
   };
-  const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<FlashListProps<Conversation>>;
-  const listRef = useRef<any>(null);
+  const listRef = useRef<FlashListRef<Conversation>>(null);
   useScrollToTop(listRef);
   const t = useMemo(() => ({
     screenRoot: { backgroundColor: colors.background },
     headerTitle: { color: colors.textPrimary },
-    headerSubtitle: { color: colors.textMuted },
     iconBtn: { backgroundColor: 'transparent' },
     newMessageBtn: { backgroundColor: colors.textPrimary },
     newMessageBtnText: { color: colors.textInverse },
     searchWrap: { backgroundColor: colors.surfaceAlt },
-    filterChip: { backgroundColor: 'transparent', borderColor: colors.border },
-    filterChipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
-    filterChipText: { color: colors.textSecondary },
-    filterChipTextActive: { color: colors.textInverse },
     rowSeparator: { backgroundColor: colors.border },
     groupAvatar: { backgroundColor: colors.surfaceAlt },
     groupAvatarText: { color: colors.textPrimary },
     botIndicator: { backgroundColor: colors.surface, borderColor: colors.border },
     nameText: { color: colors.textPrimary },
-    memberCount: { color: colors.textMuted },
     snippet: { color: colors.textSecondary },
-    snippetUnread: { color: colors.textPrimary },
     unreadPill: { backgroundColor: colors.textPrimary },
     unreadPillText: { color: colors.textInverse },
-    contextThumb: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
-    draftBadge: { backgroundColor: `${colors.brand}1A` },
-    draftBadgeText: { color: colors.brand },
-    swipeDelete: { backgroundColor: `${colors.danger}1F` },
-    swipePin: { backgroundColor: `${colors.brand}14` },
-    swipeArchive: { backgroundColor: `${colors.brand}14` },
-    swipeMute: { backgroundColor: `${colors.textMuted}1F` },
-    requestRowSurface: { backgroundColor: colors.surface },
     requestRowAccent: { borderLeftColor: colors.brand, backgroundColor: `${colors.brand}06` },
     requestBtnDecline: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     requestBtnDeclineText: { color: colors.textPrimary },
     requestBtnAccept: { backgroundColor: colors.brand },
     requestsAvatar: { backgroundColor: `${colors.brand}12` },
-    requestsBannerInner: { backgroundColor: colors.surface },
     requestsBadge: { backgroundColor: colors.textPrimary },
     requestsBadgeText: { color: colors.textInverse },
-    requestsIconWrap: { backgroundColor: colors.surfaceAlt },
     requestsBannerText: { color: colors.textPrimary },
     requestsBannerSub: { color: colors.textMuted },
     requestBtnAcceptText: { color: colors.textInverse },
@@ -248,8 +232,6 @@ export default function InboxScreen() {
     errorBannerTitle: { color: colors.danger },
     errorBannerSub: { color: colors.textMuted },
     errorBannerRetry: { color: colors.brand },
-    needsActionChip: { backgroundColor: `${colors.brand}0F`, borderColor: `${colors.brand}30` },
-    needsActionText: { color: colors.brand },
     filterChipSecondary: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     filterChipSecondaryActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
     filterChipSecondaryText: { color: colors.textSecondary },
@@ -795,7 +777,7 @@ export default function InboxScreen() {
               </View>
             )}
             <AnimatedFlashList
-              ref={listRef}
+              ref={listRef as unknown as React.Ref<React.Component<FlashListProps<Conversation>>>}
               data={visibleConversations}
               keyExtractor={(c: Conversation) => c.id}
               showsVerticalScrollIndicator={false}
@@ -924,19 +906,11 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     gap: Space.sm,
   },
-  headerTitleBlock: {
-    gap: Space.xs / 2,
-    marginBottom: Space.xs,
-  },
   headerTitle: {
     fontSize: TypographyV2.screenTitle.size,
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.screenTitle.letterSpacing,
     lineHeight: TypographyV2.screenTitle.lineHeight,
-  },
-  headerSubtitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
   },
   headerActions: {
     flexDirection: 'row',
@@ -987,13 +961,8 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  filterChipActive: {
-  },
   filterChipText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
-  filterChipTextActive: {
     fontFamily: FontFamily.semibold,
   },
   listContent: {
@@ -1001,19 +970,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingTop: Space.xs + 2,
   },
-  rowInner: {
-    flexDirection: 'row',
-    gap: Space.md - 4,
-    alignItems: 'flex-start',
-    paddingVertical: Space.md - 2,
-    paddingHorizontal: Space.md,
-  },
   rowSeparator: {
     height: StyleSheet.hairlineWidth,
     marginLeft: Space.md + 40 + Space.sm + 2,
     marginRight: Space.md,
   },
-  avatarWrap: { position: 'relative' },
   groupAvatar: {
     width: 40,
     height: 40,
@@ -1044,11 +1005,6 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
     alignItems: 'center',
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
   nameText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.semibold,
@@ -1057,26 +1013,11 @@ const styles = StyleSheet.create({
   nameUnread: {
     fontFamily: FontFamily.bold,
   },
-  pinIcon: {
-    marginLeft: Space.xs / 2,
-  },
-  snippetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  memberCount: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
   snippet: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
     lineHeight: TypographyV2.body.lineHeight,
     flex: 1,
-  },
-  snippetUnread: {
-    fontFamily: FontFamily.semibold,
   },
   unreadPill: {
     borderRadius: RadiusRoleValue.compactControl,
@@ -1087,18 +1028,6 @@ const styles = StyleSheet.create({
   unreadPillText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-  },
-  rowMeta: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: Space.xs,
-    minWidth: Space.xxl,
-    paddingLeft: Space.xs,
-  },
-  rowMetaBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
   },
   contextThumb: {
     width: Space.lg + Space.xs,
@@ -1113,21 +1042,6 @@ const styles = StyleSheet.create({
     width: Space.lg + Space.xs,
     height: Space.lg + Space.xs,
   },
-  snippetWithBadge: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  draftBadge: {
-    paddingHorizontal: Space.sm - 2,
-    paddingVertical: Space.xs / 2,
-    borderRadius: RadiusRoleValue.compactControl,
-  },
-  draftBadgeText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
   requestListingContext: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1136,49 +1050,6 @@ const styles = StyleSheet.create({
   },
   requestListingText: {
     fontFamily: FontFamily.semibold,
-  },
-  swipeRightGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  swipeLeftGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  swipeDelete: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: Space.xxl + Space.lg,
-    borderRadius: RadiusRoleValue.compactControl,
-    flex: 1,
-  },
-  swipePin: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: Space.xxl + Space.lg,
-    borderRadius: RadiusRoleValue.compactControl,
-    flex: 1,
-  },
-  swipeArchive: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: Space.xxl + Space.lg,
-    borderRadius: RadiusRoleValue.compactControl,
-    flex: 1,
-  },
-  swipeMute: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: Space.xxl + Space.lg,
-    borderRadius: RadiusRoleValue.compactControl,
-    flex: 1,
-  },
-  requestRowSurface: {
-    borderRadius: RadiusRoleValue.sheetDialog,
-    marginHorizontal: Space.md,
-    marginVertical: Space.xs,
   },
   requestRowAccent: {
     borderLeftWidth: 3,
@@ -1230,23 +1101,12 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
   },
-  requestsAvatarStack: {
-    flexDirection: 'row',
-  },
   requestsAvatar: {
     width: Control.chrome,
     height: Control.chrome,
     borderRadius: RadiusRoleValue.pillAvatar,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  requestsBannerInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + Space.xs,
-    paddingHorizontal: Space.md,
-    borderRadius: RadiusRoleValue.sheetDialog,
   },
   requestsBadge: {
     width: Space.lg,
@@ -1258,13 +1118,6 @@ const styles = StyleSheet.create({
   requestsBadgeText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.bold,
-  },
-  requestsIconWrap: {
-    width: Space.xxl,
-    height: Space.xxl,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   requestsBannerText: {
     fontSize: TypographyV2.body.size,

@@ -27,9 +27,7 @@ import Reanimated, {
   withTiming,
   interpolate,
   Extrapolation,
-  runOnJS,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -160,15 +158,10 @@ interface CollageCellProps {
   cellStyle: ViewStyle;
   cellRadius: number;
   selectedIndex: number | null;
-  isDragging: boolean;
-  dragSlotIndex: number | null;
   reducedMotion: boolean;
   onPickPhoto: (slotIndex: number) => void;
   onLongPressCell: (slotIndex: number) => void;
   onPressCell: (slotIndex: number) => void;
-  onDragStart: (slotIndex: number) => void;
-  onDragEnd: (slotIndex: number) => void;
-  onDragTo: (slotIndex: number) => void;
   springEntrance: { damping: number; stiffness: number; mass: number };
   springTap: { damping: number; stiffness: number; mass: number };
   springPress: { damping: number; stiffness: number; mass: number };
@@ -183,15 +176,10 @@ const CollageCell = memo(function CollageCell({
   cellStyle,
   cellRadius,
   selectedIndex,
-  isDragging,
-  dragSlotIndex,
   reducedMotion,
   onPickPhoto,
   onLongPressCell,
   onPressCell,
-  onDragStart,
-  onDragEnd,
-  onDragTo,
   springEntrance,
   springTap,
   springPress,
@@ -251,21 +239,6 @@ const CollageCell = memo(function CollageCell({
       borderWidth: Stroke.emphasis,
     };
   });
-
-  // Drag gesture for reordering
-  const dragGesture = React.useMemo(() => {
-    if (!uri) return null;
-    return Gesture.LongPress()
-      .onStart((e) => {
-        'worklet';
-        runOnJS(haptic.medium)();
-        runOnJS(onDragStart)(slotIndex);
-      })
-      .onEnd(() => {
-        'worklet';
-        runOnJS(onDragEnd)(slotIndex);
-      });
-  }, [uri, slotIndex, haptic, onDragStart, onDragEnd]);
 
   const handlePress = useCallback(() => {
     if (uri) {
@@ -328,22 +301,6 @@ const CollageCell = memo(function CollageCell({
     </Reanimated.View>
   );
 
-  if (dragGesture && uri) {
-    return (
-      <GestureDetector gesture={dragGesture}>
-        <Pressable
-          onPress={handlePress}
-          onLongPress={handleLongPress}
-          delayLongPress={400}
-          accessibilityLabel={`Photo in slot ${slotIndex + 1}. Long press for options.`}
-          accessibilityRole="button"
-        >
-          {content}
-        </Pressable>
-      </GestureDetector>
-    );
-  }
-
   return (
     <Pressable
       onPress={handlePress}
@@ -372,7 +329,6 @@ export default function MultiPhotoCollage({
 
   const [actionSheetSlot, setActionSheetSlot] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [dragSlotIndex, setDragSlotIndex] = useState<number | null>(null);
 
   const handlePickPhoto = useCallback(
     async (slotIndex: number) => {
@@ -402,10 +358,6 @@ export default function MultiPhotoCollage({
   const handleCellAction = useCallback(
     (action: CellAction['id'], slotIndex: number) => {
       if (action === 'remove') {
-        const newPhotos = [...photos];
-        newPhotos[slotIndex] = '';
-        onPhotosChange(newPhotos.filter((_, i) => i !== slotIndex).length ? newPhotos : newPhotos);
-        // Actually just clear the slot
         const cleared = [...photos];
         cleared[slotIndex] = '';
         onPhotosChange(cleared);
@@ -431,36 +383,6 @@ export default function MultiPhotoCollage({
     [],
   );
 
-  const handleDragStart = useCallback(
-    (slotIndex: number) => {
-      haptic.medium();
-      setDragSlotIndex(slotIndex);
-    },
-    [haptic],
-  );
-
-  const handleDragEnd = useCallback(
-    (slotIndex: number) => {
-      haptic.light();
-      setDragSlotIndex(null);
-    },
-    [haptic],
-  );
-
-  const handleDragTo = useCallback(
-    (targetSlot: number) => {
-      if (dragSlotIndex === null || dragSlotIndex === targetSlot) return;
-      const newPhotos = [...photos];
-      const temp = newPhotos[dragSlotIndex];
-      newPhotos[dragSlotIndex] = newPhotos[targetSlot];
-      newPhotos[targetSlot] = temp;
-      onPhotosChange(newPhotos);
-      haptic.selection();
-      setDragSlotIndex(targetSlot);
-    },
-    [dragSlotIndex, photos, onPhotosChange, haptic],
-  );
-
   const renderSlot = useCallback(
     (slotIndex: number, slotStyle: ViewStyle, cellRadius: number = Radius.sm) => {
       const uri = photos[slotIndex];
@@ -472,15 +394,10 @@ export default function MultiPhotoCollage({
           cellStyle={slotStyle}
           cellRadius={cellRadius}
           selectedIndex={selectedIndex}
-          isDragging={dragSlotIndex === slotIndex}
-          dragSlotIndex={dragSlotIndex}
           reducedMotion={reducedMotion}
           onPickPhoto={handlePickPhoto}
           onLongPressCell={handleLongPressCell}
           onPressCell={handlePressCell}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragTo={handleDragTo}
           springEntrance={spring.entrance}
           springTap={spring.tap}
           springPress={spring.press}
@@ -490,14 +407,10 @@ export default function MultiPhotoCollage({
     [
       photos,
       selectedIndex,
-      dragSlotIndex,
       reducedMotion,
       handlePickPhoto,
       handleLongPressCell,
       handlePressCell,
-      handleDragStart,
-      handleDragEnd,
-      handleDragTo,
       spring.entrance,
       spring.tap,
       spring.press,

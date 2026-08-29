@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
+import { Space, Type, FontFamily, Scrim } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
@@ -45,8 +45,8 @@ export function FlagshipHeroSection({
 
       {/* Authored scrim — bottom-weighted for text legibility */}
       <LinearGradient
-        colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.65)']}
-        locations={[0.3, 0.6, 1.0]}
+        colors={Scrim.bottom.colors}
+        locations={Scrim.bottom.locations}
         style={[StyleSheet.absoluteFill, { width, height }]}
         accessibilityElementsHidden
       />
@@ -74,7 +74,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     position: 'relative',
     overflow: 'hidden',
-    borderRadius: Radius.none,
   },
   imageFallback: {
     backgroundColor: colors.surfaceAlt,
@@ -89,7 +88,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   title: {
     fontSize: Type.display.size,
-    lineHeight: 38,
+    lineHeight: Type.display.lineHeight,
     fontFamily: FontFamily.bold,
     color: colors.scrimTextPrimary,
     letterSpacing: -0.5,
@@ -97,7 +96,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   subtitle: {
     marginTop: Space.xs,
     fontSize: Type.body.size,
-    lineHeight: 22,
+    lineHeight: Type.body.lineHeight,
     fontFamily: FontFamily.regular,
     color: colors.scrimTextSecondary,
   },

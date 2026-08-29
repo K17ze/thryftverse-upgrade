@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, ActiveTheme } from '../constants/colors';
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Typography, Space, Type } from '../theme/designTokens';
 
 interface Props {
   query?: string;
@@ -10,15 +10,16 @@ interface Props {
 }
 
 export function SearchEmptyGraphic({ query, suggestion }: Props) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
-      <View style={styles.iconRing}>
-        <Ionicons
-          name="search-outline"
-          size={28}
-          color={ActiveTheme === 'light' ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.25)'}
-        />
-      </View>
+      <Ionicons
+        name="search-outline"
+        size={28}
+        color={colors.textMuted}
+      />
       <Text style={styles.title}>
         {query ? `No results for "${query}"` : 'Search'}
       </Text>
@@ -31,36 +32,26 @@ export function SearchEmptyGraphic({ query, suggestion }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    gap: 12,
-  },
-  iconRing: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor:
-      ActiveTheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor:
-      ActiveTheme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
-  },
-  title: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    color: Colors.textPrimary,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    maxWidth: 220,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 60,
+      gap: 12,
+    },
+    title: {
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.bodyStrong.size,
+      color: colors.textPrimary,
+      textAlign: 'center',
+    },
+    subtitle: {
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
+      color: colors.textMuted,
+      textAlign: 'center',
+      maxWidth: 220,
+    },
+  });
+}

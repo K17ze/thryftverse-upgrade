@@ -142,10 +142,10 @@ export const LIGHT_COLORS = {
   dangerSubtle: 'rgba(155,2,2,0.08)',
   success: '#215634',
   successSubtle: 'rgba(33,86,52,0.08)',
-  warning: '#B8742E',
-  warningSubtle: 'rgba(184,116,46,0.10)',
+  warning: '#C47A2E',
+  warningSubtle: 'rgba(196,122,46,0.10)',
   brandBorder: 'rgba(17,17,17,0.16)',
-  warningBorder: 'rgba(184,116,46,0.20)',
+  warningBorder: 'rgba(196,122,46,0.20)',
   dangerBorder: 'rgba(155,2,2,0.16)',
   successBorder: 'rgba(33,86,52,0.16)',
   coownUpBorder: 'rgba(28,86,49,0.16)',
@@ -241,10 +241,14 @@ function buildColors(mode: ThemeMode): CompatThemeColors {
 
 export let ActiveTheme: ThemeMode = resolveActiveTheme();
 export let Colors: CompatThemeColors = buildColors(ActiveTheme);
+Object.freeze(ActiveTheme);
+Object.freeze(Colors);
 
 export function refreshThemeFromRuntime(): ThemeMode {
   ActiveTheme = resolveActiveTheme();
   Colors = buildColors(ActiveTheme);
+  Object.freeze(ActiveTheme);
+  Object.freeze(Colors);
   return ActiveTheme;
 }
 

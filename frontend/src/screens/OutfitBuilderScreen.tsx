@@ -40,7 +40,7 @@ import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
-import { Typography, DockConstants, Radius, Type, Space, Stroke, LetterSpacing, Control } from '../theme/designTokens';
+import { Typography, DockConstants, Radius, Type, Space, Stroke, LetterSpacing, Control, OutfitColors } from '../theme/designTokens';
 import {
   OutfitSlot,
   StyleItem,
@@ -58,7 +58,8 @@ const SLOT_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * 4) / 5;
 
 const SLOTS: OutfitSlot[] = ['top', 'bottom', 'shoes', 'outerwear', 'accessory'];
 
-const BG_COLORS = ['#F5F5F0', '#E8E4DF', '#D4C9BE', '#C9D9E8', '#D9D0E1', '#E8D4D4', '#D4E8D6', '#1A1A1A'];
+/** Background swatches for the outfit preview — pastels + dark from the design token system. */
+const BG_COLORS = [...OutfitColors.pastels, OutfitColors.dark];
 
 // ── Helper Components ──
 

@@ -104,7 +104,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     overflow: 'hidden',
     marginTop: Space.xs + 2,

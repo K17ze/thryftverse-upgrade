@@ -4,7 +4,7 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   Pressable,
 } from 'react-native';
 import Reanimated, {
@@ -17,8 +17,6 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-
-const { height } = Dimensions.get('window');
 
 interface AttachmentReviewSheetProps {
   visible: boolean;
@@ -36,6 +34,7 @@ export function AttachmentReviewSheet({
   onSend,
 }: AttachmentReviewSheetProps) {
   const { colors } = useAppTheme();
+  const { height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const [caption, setCaption] = useState('');
   const [shouldRender, setShouldRender] = useState(visible);
@@ -68,7 +67,7 @@ export function AttachmentReviewSheet({
       <Reanimated.View style={[styles.overlay, { backgroundColor: colors.overlay }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Reanimated.View>
-      <Reanimated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetStyle]}>
+      <Reanimated.View style={[styles.sheet, { backgroundColor: colors.surface, maxHeight: height * 0.85 }, sheetStyle]}>
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
@@ -135,7 +134,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingBottom: Space.xxl + Space.sm,
-    maxHeight: height * 0.85,
   },
   handle: {
     width: 36,

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ViewStyle, AccessibilityInfo, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, AccessibilityInfo, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -672,13 +672,16 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
       return (
         <View style={styles.listingWrap}>
           {sticker.payload.snapshotImageUrl ? (
-            <Text style={styles.listingTitle}>{sticker.payload.snapshotTitle ?? 'View listing'}</Text>
-          ) : (
-            <View style={styles.listingRow}>
-              <Ionicons name="pricetag" size={14} color="#fff" />
-              <Text style={styles.listingTitle}>{sticker.payload.snapshotTitle ?? 'Listing'}</Text>
-            </View>
-          )}
+            <Image
+              source={{ uri: sticker.payload.snapshotImageUrl }}
+              style={styles.listingImage}
+              resizeMode="cover"
+            />
+          ) : null}
+          <View style={styles.listingRow}>
+            <Ionicons name="pricetag" size={14} color="#fff" />
+            <Text style={styles.listingTitle}>{sticker.payload.snapshotTitle ?? 'Listing'}</Text>
+          </View>
           {sticker.payload.snapshotPriceGbp !== undefined && (
             <Text style={styles.listingPrice}>{currencySymbol}{sticker.payload.snapshotPriceGbp.toFixed(0)}</Text>
           )}
@@ -772,7 +775,7 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
   }
 }
 
-function createStyles(colors: any) {
+function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
   stickerBase: {
     position: 'absolute',
@@ -789,10 +792,10 @@ function createStyles(colors: any) {
     shadowRadius: 6,
     elevation: 4,
   },
-  // Bounding box — 1pt blue dashed border (enhanced selection visual)
+  // Bounding box — 1pt dashed border (enhanced selection visual)
   selectedWrap: {
     borderWidth: Stroke.standard,
-    borderColor: '#3B82F6',
+    borderColor: colors.brand,
     borderRadius: Radius.sm,
     borderStyle: 'dashed',
   },
@@ -825,12 +828,12 @@ function createStyles(colors: any) {
     bottom: -8,
     right: -8,
   },
-  // Corner dots — 8pt blue accent circles
+  // Corner dots — 8pt accent circles
   cornerDot: {
     width: 8,
     height: 8,
     borderRadius: Radius.full,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.brand,
     borderWidth: Stroke.standard,
     borderColor: '#FFFFFF',
   },
@@ -845,13 +848,13 @@ function createStyles(colors: any) {
   rotationConnectLine: {
     width: Stroke.standard,
     height: 12,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.brand,
   },
   rotationHandleDot: {
     width: 24,
     height: 24,
     borderRadius: Radius.full,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: Stroke.standard,
@@ -916,6 +919,12 @@ function createStyles(colors: any) {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.sm,
     gap: 2,
+  },
+  listingImage: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.sm,
+    marginBottom: 2,
   },
   listingRow: {
     flexDirection: 'row',

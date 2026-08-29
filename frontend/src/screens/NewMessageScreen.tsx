@@ -12,7 +12,6 @@ import { createDmConversationOnApi, joinGroupByInviteOnApi } from '../services/c
 import { parseApiError } from '../lib/apiClient';
 import { getAvailableAgents, deployAgent, type ChatAgent } from '../services/chatAgentsApi';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
 import { Space, Radius, Type, TypeStyles, Typography, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -223,12 +222,11 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       messages: [{
         id: `agent_intro_${Date.now()}`,
         senderId: agent.id,
-        text: `Hi! I'm ${agent.name}, your AI ${agent.type.replace('_', ' ')}. I'm running in demo mode — I can suggest replies and help with ${agent.capabilities.join(', ').toLowerCase()}. What can I help you with?`,
+        text: `Hi! I'm ${agent.name}, your AI assistant.`,
         timestamp: now,
-        isRead: true,
         botId: agent.id,
         isDemo: true,
-      } as any],
+      }],
     });
     navigation.navigate('Chat', { conversationId, partnerUserId: agent.id });
     setAgentPickerVisible(false);
@@ -582,7 +580,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       >
         <KeyboardAvoidingView
           behavior={Platform.select({ ios: 'padding', android: undefined })}
-          style={joinStyles.overlay}
+          style={[joinStyles.overlay, { backgroundColor: colors.overlay }]}
         >
           <View style={[joinStyles.sheet, { backgroundColor: colors.surface }]}>
             <Text style={[joinStyles.title, { color: colors.textPrimary }]}>
@@ -631,7 +629,6 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 const joinStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: Colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Space.lg,

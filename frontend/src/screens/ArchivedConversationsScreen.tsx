@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -12,6 +13,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { ConversationListSkeleton } from '../components/SkeletonLoader';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
+import type { Conversation } from '../domain';
 import { deleteConversationOnApi, unarchiveConversationOnApi } from '../services/chatApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -135,11 +137,12 @@ export default function ArchivedConversationsScreen() {
           onCtaPress={() => navigation.goBack()}
         />
       ) : (
-        <View style={styles.list}>
-          {archivedConversations.map((convo, index) => {
+        <FlashList
+          data={archivedConversations}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item: convo, index }) => {
             return (
               <ConversationManagementRow
-                key={convo.id}
                 conversation={convo}
                 currentUserId={currentUser?.id}
                 onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
@@ -166,8 +169,10 @@ export default function ArchivedConversationsScreen() {
                 isLast={index === archivedConversations.length - 1}
               />
             );
-          })}
-        </View>
+          }}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
       )}
     </FlagshipScreen>
   );
@@ -178,7 +183,7 @@ function createStyles(colors: ThemeColors) {
     skeletonWrap: {
       paddingTop: Space.sm,
     },
-    list: {
+    listContent: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,

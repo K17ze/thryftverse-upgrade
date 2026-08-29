@@ -104,8 +104,14 @@ export function PosterProgressSegments({
         // Frame advanced — trigger completion pulse + haptic
         completedStepSV.value = prevIndexRef.current;
         if (isEnabled) {
-          stepScaleSV.value = withSpring(1.4, spring.success as SpringConfig);
-          stepScaleSV.value = withSpring(1, Motion.spring.settle as SpringConfig);
+          // Chain the pulse: scale up to 1.4, then settle back to 1.
+          // Sequential withSpring assignments overwrite each other (the
+          // second cancels the first), so withSequence is required to
+          // chain them into a single continuous animation.
+          stepScaleSV.value = withSequence(
+            withSpring(1.4, spring.success as SpringConfig),
+            withSpring(1, Motion.spring.settle as SpringConfig),
+          );
         }
         haptic.medium();
       }

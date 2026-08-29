@@ -97,9 +97,9 @@ export default function SellerHubScreen() {
 
   const formatMoney = useCallback((value: number): string => {
     if (value >= 1000) {
-      return `${formatFromFiat(value, currencyCode, { displayMode: 'fiat', izeFractionDigits: 1 })}k`;
+      return `${formatFromFiat(value, currencyCode, { displayMode: 'fiat', minimumFractionDigits: 1 })}k`;
     }
-    return formatFromFiat(value, currencyCode, { displayMode: 'fiat', izeFractionDigits: 0 });
+    return formatFromFiat(value, currencyCode, { displayMode: 'fiat', minimumFractionDigits: 0 });
   }, [formatFromFiat, currencyCode]);
 
   const [overview, setOverview] = useState<SellerHubOverview | null>(null);

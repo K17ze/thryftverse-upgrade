@@ -9,7 +9,7 @@ import {
   ScrollView,
   StatusBar,
   Platform,
-  Dimensions,
+  useWindowDimensions,
   Pressable,
   TextInput,
 } from 'react-native';
@@ -43,10 +43,6 @@ import { isSustainableGrade } from '../utils/sustainabilityScore';
 import { useFeatureFlag } from '../analytics';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useTaxonomy } from '../context/TaxonomyContext';
-
-const { height, width } = Dimensions.get('window');
-const SNAP_HALF = height * 0.5;
-const SNAP_FULL = height * 0.1;
 
 type SortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
 type ConditionOption = 'Any' | string;
@@ -108,7 +104,10 @@ export default function FilterScreen() {
   const { colors } = useAppTheme();
   const { formatFromFiat, currencySymbol, currencyCode } = useFormattedPrice();
   const reducedMotion = useReducedMotion();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { height, width } = useWindowDimensions();
+  const SNAP_HALF = height * 0.5;
+  const SNAP_FULL = height * 0.1;
+  const styles = useMemo(() => createStyles(colors, width, height), [colors, width, height]);
   const { conditions } = useTaxonomy();
   const conditionOptions = useMemo(() => [
     { value: 'Any' as const, label: 'Any', accessibilityLabel: 'Any condition' },
@@ -166,7 +165,7 @@ export default function FilterScreen() {
 
   useEffect(() => {
     translateY.value = withTiming(SNAP_HALF, { duration: reducedMotion ? 0 : 200 });
-  }, [reducedMotion]);
+  }, [reducedMotion, SNAP_HALF]);
 
   const closeBottomSheet = () => {
     translateY.value = withTiming(height, { duration: reducedMotion ? 0 : 180 }, () => {
@@ -719,7 +718,7 @@ export default function FilterScreen() {
                                 );
                               }}
                               delayLongPress={400}
-                            accessibilityRole="switch" accessibilityLabel="Rate"
+                            accessibilityRole="switch" accessibilityLabel="Toggle size filter"
                             >
                               <AppButton
                                 title={s}
@@ -995,7 +994,7 @@ export default function FilterScreen() {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, width: number, height: number) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },
   sheet: {

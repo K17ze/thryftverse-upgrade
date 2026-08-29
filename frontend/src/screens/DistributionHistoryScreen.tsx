@@ -23,7 +23,7 @@ import {
 } from '../components/coown';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
-import { fetchCoOwnDistributions, fetchDripEnrollments, updateDripEnrollment, type CoOwnDistribution } from '../services/marketApi';
+import { fetchCoOwnDistributions, fetchDripEnrollments, updateDripEnrollment, fetchCoOwnAssetById, type CoOwnDistribution } from '../services/marketApi';
 import { formatCoOwnIze } from '../utils/currency';
 import { useToast } from '../context/ToastContext';
 import { Switch } from 'react-native';
@@ -63,6 +63,7 @@ export default function DistributionHistoryScreen() {
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [assetTitles, setAssetTitles] = React.useState<Record<string, string>>({});
 
   // DRIP enrollment state
   const { show: showToast } = useToast();
@@ -80,6 +81,24 @@ export default function DistributionHistoryScreen() {
       const dripMap: Record<string, boolean> = {};
       dripResult.forEach((e) => { dripMap[e.assetId] = e.enrolled; });
       setDripEnrollments(dripMap);
+
+      // Fetch asset titles for all unique assetIds so we never expose raw IDs.
+      const uniqueAssetIds = new Set<string>();
+      result.items.forEach((d) => uniqueAssetIds.add(d.assetId));
+      dripResult.forEach((e) => uniqueAssetIds.add(e.assetId));
+      const titleEntries = await Promise.all(
+        Array.from(uniqueAssetIds).map(async (id) => {
+          try {
+            const asset = await fetchCoOwnAssetById(id);
+            return [id, asset.title] as const;
+          } catch {
+            return [id, ''] as const;
+          }
+        })
+      );
+      const titleMap: Record<string, string> = {};
+      titleEntries.forEach(([id, title]) => { if (title) titleMap[id] = title; });
+      setAssetTitles(titleMap);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load distributions');
     } finally {
@@ -197,7 +216,7 @@ export default function DistributionHistoryScreen() {
                     <View style={styles.dripAssetInfo}>
                       <View style={[styles.dripAssetDot, { backgroundColor: enrolled ? colors.success : colors.textMuted }]} />
                       <Text style={[styles.dripAssetName, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {assetId.slice(0, 20)}…
+                        {assetTitles[assetId] ?? 'Asset'}
                       </Text>
                       {enrolled && (
                         <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.successSubtle }]}>
@@ -212,7 +231,7 @@ export default function DistributionHistoryScreen() {
                       trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
                       thumbColor={colors.surfaceElevated}
                       accessibilityRole="switch"
-                      accessibilityLabel={`DRIP for ${assetId}`}
+                      accessibilityLabel={`DRIP for ${assetTitles[assetId] ?? 'asset'}`}
                     />
                   </View>
                 ))}

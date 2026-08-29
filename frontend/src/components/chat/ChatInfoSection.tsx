@@ -21,7 +21,7 @@ export function ChatInfoSection({
   return (
     <View style={styles.section}>
       <Meta color={danger ? colors.danger : colors.textMuted} style={styles.sectionLabel}>
-        {title.toUpperCase()}
+        {title}
       </Meta>
       <View>
         {rows.map((child, index) =>

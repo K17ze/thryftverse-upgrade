@@ -2,7 +2,7 @@ import React, { useCallback, useEffect } from 'react';
 import {
   View,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   Pressable,
   BackHandler,
 } from 'react-native';
@@ -23,8 +23,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { LiquidGlassBackdrop } from './LiquidGlassBackdrop';
 
-import { Elevation, Radius, Space } from '../theme/designTokens';
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { Elevation, Radius, ShadowConfig, Space } from '../theme/designTokens';
 
 /**
  * BottomSheet variants — semantic material grammar.
@@ -50,7 +49,7 @@ interface SheetVariantConfig {
   /** Top corner radius (px). */
   topRadius: number;
   /** Shadow config (height is negated so the shadow casts upward). */
-  shadow: typeof Elevation.modal;
+  shadow: ShadowConfig;
   /** Max backdrop opacity (0-1). Lower keeps underlying content visible. */
   backdropMaxOpacity: number;
   /** When true, uses LiquidGlassBackdrop instead of a plain overlay. */
@@ -136,6 +135,7 @@ export function BottomSheet({
   const haptic = useHaptic();
   const { spring, isEnabled } = useMotionConfig();
   const { colors, isDark } = useAppTheme();
+  const { height: screenHeight } = useWindowDimensions();
   const baseConfig = VARIANT_CONFIGS[variant];
   const variantConfig: SheetVariantConfig = {
     ...baseConfig,
@@ -145,7 +145,7 @@ export function BottomSheet({
     () => createStyles(colors, variantConfig),
     [colors, variantConfig],
   );
-  const sheetHeight = SCREEN_HEIGHT * snapPoint;
+  const sheetHeight = screenHeight * snapPoint;
   const translateY = useSharedValue(sheetHeight);
   const backdropOpacity = useSharedValue(0);
   const contextY = useSharedValue(0);
@@ -262,7 +262,7 @@ export function BottomSheet({
       <GestureDetector gesture={panGesture}>
         <Reanimated.View
           ref={contentRef}
-          accessibilityRole="alert"
+          accessibilityRole="none"
           style={[
             styles.sheet,
             {
@@ -336,6 +336,6 @@ const createStyles = (
     },
     contentWrap: {
       flex: 1,
-      paddingHorizontal: 20,
+      paddingHorizontal: Space.md,
     },
   });

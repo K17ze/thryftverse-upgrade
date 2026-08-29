@@ -97,6 +97,7 @@ export default function PosterViewerScreen() {
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const [stories, setStories] = React.useState<PosterStory[]>([]);
   const [storyIndex, setStoryIndex] = React.useState(0);
@@ -119,6 +120,9 @@ export default function PosterViewerScreen() {
   // style_vote) and cached vote/answer results so the user sees feedback
   // after interacting. Follows Instagram's tap-sticker-to-interact pattern.
   const [activeInteractionSticker, setActiveInteractionSticker] = React.useState<ApiPosterSticker | null>(null);
+  // Ref mirror of activeInteractionSticker.id so vote/answer closures always
+  // read the current value instead of a stale render-time capture.
+  const activeStickerIdRef = React.useRef<string | null>(null);
   const [pollResult, setPollResult] = React.useState<PollVoteResult | null>(null);
   const [quizResult, setQuizResult] = React.useState<QuizVoteResult | null>(null);
   const [questionAnswer, setQuestionAnswer] = React.useState('');
@@ -511,6 +515,7 @@ export default function PosterViewerScreen() {
   // Reset sticker interaction state when the frame or active sticker changes.
   React.useEffect(() => {
     setActiveInteractionSticker(null);
+    activeStickerIdRef.current = null;
     setPollResult(null);
     setQuizResult(null);
     setQuestionAnswer('');
@@ -593,6 +598,7 @@ export default function PosterViewerScreen() {
 
   const handleStickerTap = React.useCallback((sticker: ApiPosterSticker) => {
     haptic.light();
+    activeStickerIdRef.current = sticker.id;
     setActiveInteractionSticker(sticker);
     setPollResult(null);
     setQuizResult(null);
@@ -783,7 +789,7 @@ export default function PosterViewerScreen() {
 
       {mediaError && (
         <View style={styles.mediaErrorOverlay}>
-          <Ionicons name="alert-circle-outline" size={48} color="#fff" />
+          <Ionicons name="alert-circle-outline" size={48} color={colors.scrimTextPrimary} />
           <Text style={styles.mediaErrorText}>Unable to load media</Text>
           <AnimatedPressable
             onPress={handleRetryMedia}
@@ -794,7 +800,7 @@ export default function PosterViewerScreen() {
             accessibilityLabel="Retry loading media"
             accessibilityHint="Reloads the story media"
           >
-            <Ionicons name="refresh-outline" size={18} color="#fff" />
+            <Ionicons name="refresh-outline" size={18} color={colors.scrimTextPrimary} />
             <Text style={styles.retryBtnText}>Retry</Text>
           </AnimatedPressable>
         </View>
@@ -805,7 +811,7 @@ export default function PosterViewerScreen() {
           to a soft pill so it reads as a status, not a loading spinner. */}
       {isPaused && !mediaError && (
         <View style={styles.pauseIndicator} pointerEvents="none">
-          <Ionicons name="pause" size={16} color="rgba(255,255,255,0.85)" />
+          <Ionicons name="pause" size={16} color={colors.scrimTextSecondary} />
           <Text style={styles.pauseIndicatorText}>Paused</Text>
         </View>
       )}
@@ -814,7 +820,7 @@ export default function PosterViewerScreen() {
           Progress bar pauses, subtle spinner shows. */}
       {isBuffering && !mediaError && !isPaused && (
         <View style={styles.bufferingIndicator} pointerEvents="none">
-          <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" />
+          <ActivityIndicator size="small" color={colors.scrimTextSecondary} />
         </View>
       )}
 
@@ -910,7 +916,7 @@ export default function PosterViewerScreen() {
               accessibilityRole="button"
               accessibilityHint="Toggles audio playback for video frames"
             >
-              <Ionicons name={isMuted ? 'volume-mute-outline' : 'volume-high-outline'} size={20} color="#fff" />
+              <Ionicons name={isMuted ? 'volume-mute-outline' : 'volume-high-outline'} size={20} color={colors.scrimTextPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.topIconBtn}
@@ -922,7 +928,7 @@ export default function PosterViewerScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens story options: copy link, archive, delete"
             >
-              <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.scrimTextPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.topIconBtn}
@@ -934,7 +940,7 @@ export default function PosterViewerScreen() {
               accessibilityRole="button"
               accessibilityHint="Closes the story viewer and returns to the previous screen"
             >
-              <Ionicons name="close" size={22} color="#fff" />
+              <Ionicons name="close" size={22} color={colors.scrimTextPrimary} />
             </AnimatedPressable>
           </View>
         </View>
@@ -1134,11 +1140,26 @@ export default function PosterViewerScreen() {
             questionAnswerSent={questionAnswerSent}
             isSubmitting={isStickerSubmitting}
             onQuestionAnswerChange={setQuestionAnswer}
-            onPollVote={(optionId) => handlePollVote(activeInteractionSticker.id, optionId)}
-            onQuizVote={(optionId) => handleQuizVote(activeInteractionSticker.id, optionId)}
-            onQuestionSubmit={() => handleQuestionSubmit(activeInteractionSticker.id)}
-            onStyleVote={(optionId) => handleStyleVote(activeInteractionSticker.id, optionId)}
-            onDismiss={() => setActiveInteractionSticker(null)}
+            onPollVote={(optionId) => {
+              const id = activeStickerIdRef.current;
+              if (id) handlePollVote(id, optionId);
+            }}
+            onQuizVote={(optionId) => {
+              const id = activeStickerIdRef.current;
+              if (id) handleQuizVote(id, optionId);
+            }}
+            onQuestionSubmit={() => {
+              const id = activeStickerIdRef.current;
+              if (id) handleQuestionSubmit(id);
+            }}
+            onStyleVote={(optionId) => {
+              const id = activeStickerIdRef.current;
+              if (id) handleStyleVote(id, optionId);
+            }}
+            onDismiss={() => {
+              activeStickerIdRef.current = null;
+              setActiveInteractionSticker(null);
+            }}
             colors={colors}
           />
         )}
@@ -1175,20 +1196,21 @@ function handleTagPress(
   }
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     gap: Space.md,
   },
   emptyText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
   },
@@ -1198,10 +1220,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     // Near-transparent chrome. Legibility
     // comes from the top scrim + text shadows, not an opaque pill fill.
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.glassBorder,
   },
   closeBtnText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
   },
@@ -1219,7 +1241,7 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
     textAlign: 'center',
     paddingHorizontal: Space.xl,
-    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
   },
@@ -1228,7 +1250,7 @@ const styles = StyleSheet.create({
   },
   backdropOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: colors.overlay,
   },
   // Top gradient scrim — ensures chrome legibility over any media content
   topScrim: {
@@ -1279,7 +1301,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs + 2,
     // Near-transparent chrome. The author
     // name + posted time carry text shadows for legibility over media.
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: colors.glassBg,
     gap: Space.sm,
   },
   authorAvatar: {
@@ -1290,26 +1312,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   authorAvatarPlaceholder: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.scrimTextTertiary,
   },
   authorAvatarText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.bold,
     fontSize: Type.caption.size,
   },
   authorName: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
   postedTime: {
-    color: 'rgba(255,255,255,0.78)',
+    color: colors.scrimTextSecondary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
@@ -1326,7 +1348,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     // Near-transparent chrome. Icons rely
     // on the top scrim for legibility rather than an opaque dark disc.
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: colors.glassBg,
   },
   viewerFooter: {
     position: 'absolute',
@@ -1342,11 +1364,11 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   captionText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
   },
@@ -1355,16 +1377,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   captionMore: {
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.scrimTextSecondary,
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
   },
   footerExpiry: {
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.scrimTextTertiary,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     paddingBottom: Space.xs,
-    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
@@ -1379,14 +1401,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     gap: Space.smMd,
     zIndex: 25,
   },
   mediaErrorText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
   retryBtn: {
     flexDirection: 'row',
@@ -1395,10 +1417,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.glassBorder,
   },
   retryBtnText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
   },
@@ -1410,7 +1432,7 @@ const styles = StyleSheet.create({
     marginTop: -22,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
@@ -1419,7 +1441,7 @@ const styles = StyleSheet.create({
     zIndex: 15,
   },
   pauseIndicatorText: {
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.scrimTextSecondary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.wide,
@@ -1469,7 +1491,7 @@ const styles = StyleSheet.create({
     width: Space.lg,
     height: Space.lg,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
+    backgroundColor: colors.scrimTextPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     ...Elevation.floating,
@@ -1488,13 +1510,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs - 1,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     maxWidth: 140,
   },
   tagLabelText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.wide,
   },
-});
+  });
+}

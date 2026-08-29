@@ -177,7 +177,7 @@ interface CreateGroupConversationInput {
   creatorId?: string;
 }
 
-type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
+export type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
 type BrowseConditionOption = 'Any' | ListingCondition;
 
 interface BrowseFilterState {

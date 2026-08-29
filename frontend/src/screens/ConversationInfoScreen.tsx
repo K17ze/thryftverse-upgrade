@@ -224,7 +224,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
           />
         </View>
 
-        <ChatInfoSection title="Shared in this chat">
+        <ChatInfoSection title="SHARED IN THIS CHAT">
           <ChatInfoRow
             icon="images-outline"
             label="Photos and videos"
@@ -241,7 +241,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
         </ChatInfoSection>
 
         {conversation.itemId ? (
-          <ChatInfoSection title="Marketplace">
+          <ChatInfoSection title="MARKETPLACE">
             <ChatInfoRow
               icon="bag-handle-outline"
               label={linkedListing?.title || 'Linked listing'}
@@ -253,7 +253,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
           </ChatInfoSection>
         ) : null}
 
-        <ChatInfoSection title="Conversation">
+        <ChatInfoSection title="CONVERSATION">
           <ChatInfoRow
             icon="archive-outline"
             label="Archive conversation"
@@ -262,7 +262,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
           />
         </ChatInfoSection>
 
-        <ChatInfoSection title="Privacy and safety" danger>
+        <ChatInfoSection title="PRIVACY AND SAFETY" danger>
           <ChatInfoRow
             icon={isBlocked ? 'person-add-outline' : 'person-remove-outline'}
             label={isBlocked ? 'Unblock user' : 'Block user'}

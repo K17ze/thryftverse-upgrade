@@ -6,9 +6,9 @@ import Reanimated, {
   withSpring,
   type EntryExitAnimationFunction,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, TypeStyles, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Typography, Stroke, AspectRatio } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { CachedImage } from '../CachedImage';
 import { VoiceMessageBubble } from './VoiceMessageBubble';
@@ -382,7 +382,7 @@ function MessageBubbleBase({
 
 export const MessageBubble = React.memo(MessageBubbleBase);
 
-const createStyles = (colors: any) => StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -479,7 +479,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: `${colors.surfaceAlt}80`,
     borderWidth: 1,
     borderColor: `${colors.border}80`,
-    borderStyle: 'dashed',
   },
   draftBadge: {
     flexDirection: 'row',
@@ -558,7 +557,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     width: '100%',
     minWidth: 200,
     maxWidth: 280,
-    aspectRatio: 1.1,
+    aspectRatio: AspectRatio.portrait,
   },
   videoBadge: {
     position: 'absolute',

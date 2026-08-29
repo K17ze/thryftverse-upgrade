@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -57,10 +58,11 @@ export default function MutedConversationsScreen() {
           subtitle="You haven't muted any chats. Muted conversations will appear here."
         />
       ) : (
-        <View style={styles.list}>
-          {mutedConversations.map((convo, index) => (
+        <FlashList
+          data={mutedConversations}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item: convo, index }) => (
             <ConversationManagementRow
-              key={convo.id}
               conversation={convo}
               currentUserId={currentUser?.id}
               onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
@@ -69,8 +71,10 @@ export default function MutedConversationsScreen() {
               onAction={() => handleUnmute(convo.id)}
               isLast={index === mutedConversations.length - 1}
             />
-          ))}
-        </View>
+          )}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
       )}
     </FlagshipScreen>
   );
@@ -81,7 +85,7 @@ function createStyles(colors: ThemeColors) {
     skeletonWrap: {
       paddingTop: Space.sm,
     },
-    list: {
+    listContent: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,

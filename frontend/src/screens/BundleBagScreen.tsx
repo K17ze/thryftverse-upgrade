@@ -20,25 +20,6 @@ import { useToast } from '../context/ToastContext';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'BundleBag'>;
 
-interface BundleTier {
-  itemCount: number;
-  discountPercent: number;
-  label: string;
-}
-
-const BUNDLE_TIERS: BundleTier[] = [
-  { itemCount: 2, discountPercent: 10, label: '2 items: 10% off' },
-  { itemCount: 3, discountPercent: 15, label: '3 items: 15% off' },
-  { itemCount: 5, discountPercent: 20, label: '5+ items: 20% off' },
-];
-
-function getBundleDiscount(selectedCount: number): number {
-  if (selectedCount >= 5) return 20;
-  if (selectedCount >= 3) return 15;
-  if (selectedCount >= 2) return 10;
-  return 0;
-}
-
 export default function BundleBagScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -46,7 +27,7 @@ export default function BundleBagScreen() {
   const route = useRoute<RouteT>();
   const { sellerId, sellerName } = route.params ?? { sellerId: '', sellerName: '' };
   const { listings, isSyncing, refreshListings } = useBackendData();
-  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
   const { show } = useToast();
 
@@ -65,10 +46,10 @@ export default function BundleBagScreen() {
     return selectedItems.reduce((sum, l) => sum + l.price, 0);
   }, [selectedItems]);
 
-  const discountPercent = getBundleDiscount(selectedItems.length);
-  const discountAmount = (subtotal * discountPercent) / 100;
-  const combinedShipping = selectedItems.length > 0 ? 3.99 : 0;
-  const total = subtotal - discountAmount + combinedShipping;
+  // Shipping is not available from the backend for bundle orders — do not
+  // fabricate a number. Show "Calculated at checkout" in the summary instead.
+  // Bundle discounts are not supported by the backend — do not fabricate tiers.
+  const total = subtotal;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -91,11 +72,12 @@ export default function BundleBagScreen() {
 
   const handleCheckout = () => {
     if (selectedItems.length < 2) {
-      show('Select at least 2 items to get bundle savings.', 'info');
+      show('Select at least 2 items to create a bundle.', 'info');
       return;
     }
-    show(`Bundle checkout for ${selectedItems.length} items — ${currencySymbol}${total.toFixed(2)} total. Proceeding to checkout.`, 'success');
-    // Navigate to the first item's checkout — in production this would be a multi-item checkout
+    // Bundle checkout (multi-item) is not supported by the backend. Be honest
+    // with the user instead of silently checking out only the first item.
+    show('Checkout each item individually. Starting with the first selected item.', 'info');
     navigation.navigate('Checkout', { itemId: selectedItems[0].id });
   };
 
@@ -166,34 +148,7 @@ export default function BundleBagScreen() {
                   {sellerListings.length} items from {sellerName ?? 'this seller'}
                 </Text>
               </View>
-              {discountPercent > 0 && (
-                <View style={[styles.heroBadge, { backgroundColor: colors.brandSubtle }]}>
-                  <Text style={[styles.heroBadgeText, { color: colors.brand }]}>{discountPercent}% off</Text>
-                </View>
-              )}
             </View>
-          </View>
-
-          {/* Bundle tier hints */}
-          <View style={styles.tiersRow}>
-            {BUNDLE_TIERS.map((tier) => {
-              const achieved = selectedItems.length >= tier.itemCount;
-              return (
-                <View
-                  key={tier.itemCount}
-                  style={[styles.tierChip, achieved && styles.tierChipActive]}
-                >
-                  <Ionicons
-                    name={achieved ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={12}
-                    color={achieved ? colors.brand : colors.textMuted}
-                  />
-                  <Text style={[styles.tierChipText, achieved && styles.tierChipTextActive]}>
-                    {tier.label}
-                  </Text>
-                </View>
-              );
-            })}
           </View>
 
           <FlashList
@@ -213,22 +168,16 @@ export default function BundleBagScreen() {
                 <Text style={styles.summaryLabel}>Subtotal ({selectedItems.length} items)</Text>
                 <Text style={styles.summaryValue}>{formatFromFiat(subtotal, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
-              {discountAmount > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: colors.brand }]}>Bundle discount ({discountPercent}%)</Text>
-                  <Text style={[styles.summaryValue, { color: colors.brand }]}>-{formatFromFiat(discountAmount, currencyCode, { displayMode: 'fiat' })}</Text>
-                </View>
-              )}
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Combined shipping</Text>
-                <Text style={styles.summaryValue}>{formatFromFiat(combinedShipping, currencyCode, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.summaryLabel}>Shipping</Text>
+                <Text style={styles.summaryValue}>Calculated at checkout</Text>
               </View>
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total</Text>
                 <Text style={styles.totalValue}>{formatFromFiat(total, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
               <AppButton
-                title={selectedItems.length < 2 ? 'Select 2+ for bundle savings' : `Checkout bundle · ${formatFromFiat(total, currencyCode, { displayMode: 'fiat' })}`}
+                title={selectedItems.length < 2 ? 'Select 2+ items' : `Checkout · ${formatFromFiat(total, currencyCode, { displayMode: 'fiat' })}`}
                 variant="primary"
                 size="lg"
                 style={styles.checkoutBtn}
@@ -268,15 +217,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     marginTop: Space.xs / 2,
   },
-  heroBadge: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-  },
-  heroBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
-  },
   loadingBody: {
     flex: 1,
     justifyContent: 'center',
@@ -284,37 +224,6 @@ function createStyles(colors: ThemeColors) {
   },
   body: {
     flex: 1,
-  },
-  tiersRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  tierChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 1,
-    borderRadius: Radius.xl,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  tierChipActive: {
-    borderColor: colors.brand,
-    backgroundColor: `${colors.brand}10`,
-  },
-  tierChipText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
-  tierChipTextActive: {
-    color: colors.brand,
-    fontFamily: Typography.family.semibold,
   },
   list: {
     paddingHorizontal: Space.md,

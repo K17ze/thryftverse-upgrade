@@ -383,7 +383,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       },
       alertsEnabled: false,
     });
-    show('Search saved (alerts off — visual alerts coming soon)', 'success');
+    show('Search saved (alerts off)', 'success');
   }, [imageUri, saveSearchLabel, brand, selectedCategory, minPrice, maxPrice, addSavedSearch, show, haptic]);
 
   const hasActiveFilters =

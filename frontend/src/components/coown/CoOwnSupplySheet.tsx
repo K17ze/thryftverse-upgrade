@@ -85,9 +85,6 @@ export function CoOwnSupplySheet({
             showsVerticalScrollIndicator={false}
           >
             <CoOwnOwnershipPanel {...panelProps} />
-            <Text style={[styles.note, { color: colors.textMuted }]}>
-              Sponsor locked is not exposed by the backend. Missing and zero are different.
-            </Text>
           </ScrollView>
         </View>
       </View>
@@ -139,12 +136,5 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.lg,
-  },
-  note: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    marginTop: Space.md,
-    fontStyle: 'italic',
   },
 });

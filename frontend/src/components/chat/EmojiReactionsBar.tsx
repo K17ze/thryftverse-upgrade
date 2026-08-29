@@ -190,7 +190,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'flex-start',
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
@@ -208,11 +208,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   summaryEmoji: {
-    fontSize: 10,
+    fontSize: Type.caption.size,
   },
   summaryCount: {
     marginLeft: Space.xs + 2,

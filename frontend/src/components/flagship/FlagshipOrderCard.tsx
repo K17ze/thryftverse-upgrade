@@ -109,8 +109,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     padding: Space.sm,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
   },
   imageWrap: {
     width: IMAGE_SIZE,
@@ -131,7 +131,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     marginLeft: Space.sm,
     justifyContent: 'center',
-    gap: Space.xs / 2,
+    gap: Space.xxs,
   },
   topRow: {
     flexDirection: 'row',
@@ -167,7 +167,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: FontFamily.regular,
     color: colors.textMuted,
-    marginTop: Space.xs / 2,
+    marginTop: Space.xxs,
   },
   chevron: {
     marginLeft: Space.xs,

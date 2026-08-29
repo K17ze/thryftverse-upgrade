@@ -92,6 +92,11 @@ function useAutocompleteSuggestions(
         setIsDemo(result.isDemo);
         setError(result.error ?? null);
         setIsLoading(false);
+      }).catch(() => {
+        if (cancelled) return;
+        setSuggestions([]);
+        setIsLoading(false);
+        setError('Failed to load suggestions');
       });
     }, AUTOCOMPLETE_DEBOUNCE_MS);
 
@@ -241,7 +246,7 @@ export function SearchAutocomplete({
             accessibilityLabel={`Search trending: ${item.term}`}
             accessibilityHint="Fills the search box and searches"
           >
-            <Ionicons name="trending-up" size={18} color={colors.danger} style={styles.rowIcon} />
+            <Ionicons name="trending-up" size={18} color={colors.success} style={styles.rowIcon} />
             <Text style={styles.rowText} numberOfLines={1}>
               {item.term}
             </Text>

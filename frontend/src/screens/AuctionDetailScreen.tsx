@@ -999,7 +999,7 @@ export default function AuctionDetailScreen() {
                 title: rel.title,
                 imageUrl: rel.imageUrl,
                 priceText: formatFromFiat(relPrice, currencyCode),
-                izeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, currencyCode, fxRates), 2) : undefined,
+                sizeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, currencyCode, fxRates), 2) : undefined,
                 badgeText: relStateLabel,
                 mode: 'auction' as const,
                 stateText: relStateLabel,

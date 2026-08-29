@@ -286,7 +286,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
 
         <Text style={styles.description}>{bot.description}</Text>
 
-        <ChatInfoSection title="How it joins">
+        <ChatInfoSection title="HOW IT JOINS">
           <ChatInfoRow
             icon={bot.agentConfig?.triggerMode === 'mention' ? 'at' : 'terminal-outline'}
             label={invocation}
@@ -299,7 +299,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         </ChatInfoSection>
 
         {bot.agentConfig ? (
-          <ChatInfoSection title="Voice & quality">
+          <ChatInfoSection title="VOICE & QUALITY">
             <ChatInfoRow icon="server-outline" label="Model" detail={bot.agentConfig.model} />
             <ChatInfoRow icon="chatbox-outline" label="Voice" detail={bot.agentConfig.tone} />
             <ChatInfoRow
@@ -317,7 +317,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
           </ChatInfoSection>
         ) : null}
 
-        <ChatInfoSection title="Access">
+        <ChatInfoSection title="ACCESS">
           {bot.permissions.length > 0 ? (
             bot.permissions.map((permission) => (
               <ChatInfoRow
@@ -341,7 +341,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         </ChatInfoSection>
 
         {connectedGroups.length > 0 ? (
-          <ChatInfoSection title="Connected chats">
+          <ChatInfoSection title="CONNECTED CHATS">
             {connectedGroups.map((group) => (
               <ChatInfoRow
                 key={group.id}

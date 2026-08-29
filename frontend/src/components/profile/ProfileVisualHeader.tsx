@@ -3,18 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors, ActiveTheme } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useHaptic } from '../../hooks/useHaptic';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 interface StatItem {
   label: string;
@@ -63,6 +60,8 @@ export function ProfileVisualHeader({
   hideCover = false,
 }: ProfileVisualHeaderProps) {
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.root}>
       {/* Cover with gradient scrim */}
@@ -107,7 +106,7 @@ export function ProfileVisualHeader({
           )}
           {verified && (
             <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={18} color={Colors.brand} />
+              <Ionicons name="checkmark-circle" size={18} color={colors.brand} />
             </View>
           )}
         </View>
@@ -124,13 +123,13 @@ export function ProfileVisualHeader({
       <View style={styles.contextRow}>
         {userLocation ? (
           <View style={styles.contextPill}>
-            <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
+            <Ionicons name="location-outline" size={12} color={colors.textMuted} />
             <Text style={styles.contextPillText}>{userLocation}</Text>
           </View>
         ) : null}
         {memberSince ? (
           <View style={styles.contextPill}>
-            <Ionicons name="calendar-outline" size={12} color={Colors.textMuted} />
+            <Ionicons name="calendar-outline" size={12} color={colors.textMuted} />
             <Text style={styles.contextPillText}>{memberSince}</Text>
           </View>
         ) : null}
@@ -156,7 +155,7 @@ export function ProfileVisualHeader({
               <Text style={styles.actionBtnPrimaryText}>Edit Profile</Text>
             </AnimatedPressable>
             <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); onShare?.(); }} {...PressPresets.iconButton}>
-              <Ionicons name="share-outline" size={16} color={Colors.textPrimary} />
+              <Ionicons name="share-outline" size={16} color={colors.textPrimary} />
             </AnimatedPressable>
           </>
         ) : (
@@ -169,10 +168,10 @@ export function ProfileVisualHeader({
               <Text style={styles.actionBtnPrimaryText}>Message</Text>
             </AnimatedPressable>
             <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); onShare?.(); }} {...PressPresets.iconButton}>
-              <Ionicons name="share-outline" size={16} color={Colors.textPrimary} />
+              <Ionicons name="share-outline" size={16} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); /* more actions */ }} {...PressPresets.iconButton}>
-              <Ionicons name="ellipsis-horizontal" size={16} color={Colors.textPrimary} />
+              <Ionicons name="ellipsis-horizontal" size={16} color={colors.textPrimary} />
             </AnimatedPressable>
           </>
         )}
@@ -184,11 +183,9 @@ export function ProfileVisualHeader({
 const AVATAR_SIZE = 96;
 const COVER_H = 180;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
-    backgroundColor: Colors.surface,
-    borderBottomLeftRadius: Radius.lg,
-    borderBottomRightRadius: Radius.lg,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     marginBottom: Space.md,
   },
@@ -197,7 +194,7 @@ const styles = StyleSheet.create({
     height: COVER_H,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   coverImage: {
     width: '100%',
@@ -232,8 +229,8 @@ const styles = StyleSheet.create({
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     borderWidth: 4,
-    borderColor: Colors.surface,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -252,13 +249,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.surface,
+    borderColor: colors.surface,
   },
   verifiedBadge: {
     position: 'absolute',
     top: -2,
     right: -2,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
   },
   nameBlock: {
@@ -269,20 +266,20 @@ const styles = StyleSheet.create({
   displayName: {
     fontFamily: Typography.family.bold,
     fontSize: Type.priceList.size,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.4,
     lineHeight: Type.priceList.lineHeight,
   },
   handle: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: Space.xs / 2,
   },
   bio: {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: Space.xs,
     lineHeight: Type.caption.lineHeight,
   },
@@ -293,7 +290,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginTop: Space.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   statCell: {
     alignItems: 'center',
@@ -302,14 +299,13 @@ const styles = StyleSheet.create({
   statValue: {
     fontFamily: Typography.family.bold,
     fontSize: Type.body.size,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   statLabel: {
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
+    color: colors.textMuted,
     letterSpacing: 0.5,
   },
   actionDock: {
@@ -322,28 +318,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 40,
+    height: 44,
     borderRadius: Radius.md,
   },
   actionBtnPrimary: {
     flex: 1,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   actionBtnPrimaryText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
-    color: Colors.background,
+    color: colors.background,
   },
   actionBtnSecondary: {
     width: 48,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   actionBtnSecondaryText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   contextRow: {
     flexDirection: 'row',
@@ -356,7 +352,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
@@ -364,6 +360,6 @@ const styles = StyleSheet.create({
   contextPillText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 });

@@ -1,0 +1,17 @@
+P0 flagship fixes: theme system, fabricated data, dev annotations, broken functionality, hardcoded colors, search/browse, commerce/look/profile, poster, messaging, flagship primitives
+
+9 parallel batches addressing 60+ P0 defects:
+- Theme: freeze Colors/ActiveTheme, split CommonStyles.card/elevatedCard, derive gradients from theme, fix TypeStyles divergence
+- Truthful UI: remove fabricated bundle tiers, "3x more likely" claim, fake liveShopping toggle, fake brand marks, "coming soon" promises
+- Remove leaked dev annotations (CoOwnPositionCard, DistributionHistoryScreen, CoOwnSupplySheet)
+- Fix broken functionality: formatMoney typo, ScrollView to FlashList, ChatCard variant no-op, dead VoiceMessagePlayer, duplicate TypingIndicator, InboxScreen dead styles
+- Theme migration: ProfileVisualHeader, PosterViewerScreen, StickerInteractionPanel, PosterStickerLayer, SearchEmptyGraphic, OnezeCoinIcon, OutfitBuilderScreen
+- Search/browse: CategoryTreeScreen Women fallback, empty subs, autocomplete overlay, Recommended sort labeling, PulseTab price-drop sort, EditTab fabricated quiz pills
+- Commerce/look/profile: izeText typo, LookMediaCarousel fullscreen wiring, LookMediaComposer hint, MyProfileIdentityHero dead props, ProfileSkeleton column mismatch
+- Poster: MultiPhotoCollage double onPhotosChange, dead drag-to-reorder, PosterProgressSegments pulse animation, sticker vote stale closure, listing snapshotImageUrl rendering
+- Messaging: ArchivedConversations/MutedConversations FlashList, SharedConversationMedia dead loading state, NewMessageScreen as any removal, ChatInfoSection toUpperCase push-down
+- Flagship primitives: FlagshipDangerZone AppButton, FlagshipProductCard AnimatedPressable, FlagshipHeroSection Scrim tokens, FlagshipProfileMedia isDark, BottomSheet useWindowDimensions
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

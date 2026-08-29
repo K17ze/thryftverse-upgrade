@@ -77,7 +77,6 @@ export interface InAppNotificationBannerProps {
 export function InAppNotificationBanner({
   notification,
   onDismiss,
-  onAction,
   index = 0,
 }: InAppNotificationBannerProps) {
   const { colors } = useAppTheme();
@@ -187,12 +186,6 @@ export function InAppNotificationBanner({
     handleDismiss();
   };
 
-  const handleActionPress = () => {
-    triggerHaptic(HapticType.LIGHT);
-    onAction?.(notification);
-    handleDismiss();
-  };
-
   return (
     <GestureDetector gesture={panGesture}>
       <Reanimated.View
@@ -243,20 +236,6 @@ export function InAppNotificationBanner({
           </View>
 
           <View style={styles.actionsColumn}>
-            {notification.actionLabel ? (
-              <AnimatedPressable
-                onPress={handleActionPress}
-                style={[styles.actionButton, { borderColor: accentColor }]}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                accessibilityRole="button"
-                accessibilityLabel={notification.actionLabel}
-                accessibilityHint={`Performs the action: ${notification.actionLabel}`}
-              >
-                <Text style={[styles.actionLabel, { color: accentColor }]}>
-                  {notification.actionLabel}
-                </Text>
-              </AnimatedPressable>
-            ) : null}
             <AnimatedPressable
               onPress={handleTapDismiss}
               style={styles.dismissBtn}
@@ -332,17 +311,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
     paddingTop: Space.xs,
-  },
-  actionButton: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
-  },
-  actionLabel: {
-    fontFamily: FontFamily.semibold,
-    fontSize: FontSize.caption,
-    letterSpacing: LetterSpacing.wide,
   },
   dismissBtn: {
     padding: Space.xs,

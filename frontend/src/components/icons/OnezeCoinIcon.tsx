@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Stroke, CoinGradient } from '../../theme/designTokens';
 
 interface OnezeCoinIconProps {
   size?: number;
@@ -15,7 +16,7 @@ export function OnezeCoinIcon({ size = 18 }: OnezeCoinIconProps) {
 
   return (
     <LinearGradient
-      colors={['#f4d27b', '#c68a2d']}
+      colors={[CoinGradient.start, CoinGradient.end]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.coin, { width: size, height: size, borderRadius: ringRadius }]}
@@ -29,13 +30,13 @@ export function OnezeCoinIcon({ size = 18 }: OnezeCoinIconProps) {
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   coin: {
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.bronze,
     alignItems: 'center',
     justifyContent: 'center',
   },
   inner: {
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.bronzeSubtle,
     backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
@@ -44,6 +45,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   mark: {
     color: colors.bronze,
     fontWeight: '700',
+    // Slightly tight tracking for the compact "1z" ligature at small sizes.
+    // No matching LetterSpacing token (-0.2 falls between tight=-0.42 and normal=0).
     letterSpacing: -0.2,
   },
 });

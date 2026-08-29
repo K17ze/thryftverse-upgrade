@@ -393,9 +393,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             {quickOfferPercentages.map((pct) => {
               const gbpAmount = price * pct;
               const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, fxRates);
-              const label = Number.isFinite(displayAmount)
-                ? `${Math.round(pct * 100)}%`
-                : `${Math.round(pct * 100)}%`;
+              const label = `${Math.round(pct * 100)}%`;
               const sublabel = Number.isFinite(displayAmount)
                 ? `${currencySymbol}${displayAmount.toFixed(0)}`
                 : '';
@@ -548,16 +546,6 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           </Text>
         </View>
 
-        {/* ── Tip ──
-            Subtle inline tip, not a card with icon box. Per Design.md:
-            quality comes from hierarchy, not decoration. */}
-        <Text style={[styles.tipText, { color: colors.textMuted }]}>
-          Offers within 10% of the listing price are{' '}
-          <Text style={{ fontFamily: Typography.family.semibold, color: colors.textSecondary }}>
-            3x
-          </Text>
-          {' '}more likely to be accepted.
-        </Text>
         </View>
 
         {!!errorMsg && !showReview && (
@@ -1015,13 +1003,6 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
-  },
-  // ── Tip ──
-  tipText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 4,
-    fontFamily: Typography.family.regular,
-    paddingTop: Space.md,
   },
   // ── Error ──
   errorText: {

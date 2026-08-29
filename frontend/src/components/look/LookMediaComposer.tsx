@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   Pressable,
   ActivityIndicator,
   GestureResponderEvent,
@@ -38,8 +38,6 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { REDUCED_SPRING } from '../../theme/motionTokens';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export interface OutfitTag {
   id: string;
@@ -90,7 +88,8 @@ export function LookMediaComposer({
   maxItems = DEFAULT_MAX_ITEMS,
 }: LookMediaComposerProps) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const haptic = useHaptic();
   const { show } = useToast();
   const reducedMotion = useReducedMotion();
@@ -387,7 +386,7 @@ export function LookMediaComposer({
               {isActive && editable && (
                 <View style={styles.tagEditor}>
                   <Text style={styles.tagEditorLabel}>Label</Text>
-                  <Text style={styles.tagEditorHint}>Tap the dot to set label</Text>
+                  <Text style={styles.tagEditorHint}>Tap to toggle</Text>
                   <Pressable
                     style={styles.tagRemoveBtn}
                     hitSlop={8}
@@ -477,7 +476,8 @@ function ThumbnailStrip({
   onAdd,
 }: ThumbnailStripProps) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const [reorderIndex, setReorderIndex] = useState<number | null>(null);
 
   const moveItem = useCallback(
@@ -562,7 +562,8 @@ function ThumbItem({
 }: ThumbItemProps) {
   const { colors } = useAppTheme();
   const { spring } = useMotionConfig();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isDragging = useSharedValue(false);
   const translateX = useSharedValue(0);
   const lift = useSharedValue(0);
@@ -705,12 +706,12 @@ function ThumbItem({
   );
 }
 
-const IMAGE_HEIGHT = SCREEN_W * 1.25;
-
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, screenWidth: number) => {
+  const imageHeight = screenWidth * 1.25;
+  return StyleSheet.create({
   placeholderWrap: {
-    width: SCREEN_W,
-    height: IMAGE_HEIGHT,
+    width: screenWidth,
+    height: imageHeight,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
@@ -753,8 +754,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary,
   },
   imageWrap: {
-    width: SCREEN_W,
-    height: IMAGE_HEIGHT,
+    width: screenWidth,
+    height: imageHeight,
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
@@ -860,7 +861,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   // ── Thumbnail strip ──
   stripWrap: {
-    width: SCREEN_W,
+    width: screenWidth,
     paddingVertical: Space.sm,
   },
   stripContent: {
@@ -940,4 +941,5 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+  });
+};

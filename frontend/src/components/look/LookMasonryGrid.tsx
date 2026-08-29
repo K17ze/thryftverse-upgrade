@@ -60,7 +60,7 @@ export function LookMasonryGrid({
   const renderItem = useCallback(
     ({ item, index }: { item: LookApiItem; index: number }) => {
       const template = useTemplates
-        ? resolveLookTemplate(item, index, numColumns === 3 ? 2 : 2)
+        ? resolveLookTemplate(item, index, 2)
         : null;
       const tileAspect = template?.aspect ?? aspectRatio ?? 4 / 5;
 
@@ -86,7 +86,7 @@ export function LookMasonryGrid({
       index: number,
     ) => {
       if (!useTemplates) return;
-      const template = resolveLookTemplate(item, index, numColumns === 3 ? 2 : 2);
+      const template = resolveLookTemplate(item, index, 2);
       if (template.span > 1) {
         layout.span = template.span;
       }

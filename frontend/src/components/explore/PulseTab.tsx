@@ -225,7 +225,10 @@ export default function PulseTab() {
       items.push({ id: `drop_${l.id}`, type: 'fresh_drop', title: l.title ?? 'New Listing', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: formatPrice(l.price), routeId: l.id });
     });
 
-    listings.filter((l) => l.originalPrice && l.originalPrice > l.price).slice(0, 6).forEach((l) => {
+    listings.filter((l) => l.originalPrice && l.originalPrice > l.price)
+      .sort((a, b) => (b.originalPrice! - b.price) / b.originalPrice! - (a.originalPrice! - a.price) / a.originalPrice!)
+      .slice(0, 6)
+      .forEach((l) => {
       const dropPct = Math.round(((l.originalPrice! - l.price) / l.originalPrice!) * 100);
       items.push({ id: `drop_${l.id}_price`, type: 'price_drop', title: l.title ?? 'Item', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: `Down ${dropPct}% · Now ${formatPrice(l.price)}`, metaAccent: true, actionLabel: 'View', routeId: l.id });
     });
@@ -401,88 +404,6 @@ function createStyles(colors: ThemeColors) {
     color: colors.warning,
     fontVariant: ['tabular-nums'],
     marginTop: Space.xs,
-  },
-
-  /* Trending */
-  trendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-  },
-  trendBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.full,
-    gap: 6,
-  },
-  trendLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heatDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.sm,
-  },
-
-  /* Hot Sellers */
-  sellerScroll: {
-    paddingHorizontal: Space.md,
-    marginHorizontal: -Space.md,
-    gap: Space.sm,
-  },
-  sellerCard: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: Space.sm,
-    width: 110,
-  },
-  sellerAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
-  sellerName: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    marginTop: Space.sm,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  sellerMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-    marginTop: 2,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-  sellerLiveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-    backgroundColor: colors.successSubtle,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-  },
-  sellerLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.success,
-  },
-  sellerLiveText: {
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
-    color: colors.success,
   },
 
   /* Activity */

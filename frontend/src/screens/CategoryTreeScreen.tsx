@@ -34,13 +34,45 @@ export default function CategoryTreeScreen() {
     const map: Record<string, { title: string; subs: string[] }[]> = {};
     for (const top of topLevel) {
       const children = categories.filter((c) => c.parentId === top.id);
-      map[top.name] = children.map((child) => ({ title: child.name, subs: [] }));
+      map[top.name] = children.map((child) => ({
+        title: child.name,
+        subs: categories
+          .filter((c) => c.parentId === child.id)
+          .map((c) => c.name),
+      }));
     }
     return map;
   }, [categories]);
 
-  const resolvedPrefix = tree[categoryPrefix] ? categoryPrefix : 'Women';
-  const sections = tree[resolvedPrefix] ?? [];
+  const hasPrefix = Boolean(tree[categoryPrefix]);
+  const sections = tree[categoryPrefix] ?? [];
+
+  if (!hasPrefix) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <View style={styles.editorialHeader}>
+          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <Text style={styles.editorialTitle}>Category unavailable</Text>
+        </View>
+        <View style={styles.errorWrap}>
+          <Text style={styles.errorText}>
+            This category may have moved. Browse the current marketplace categories instead.
+          </Text>
+          <AnimatedPressable
+            style={styles.errorCta}
+            onPress={() => navigation.replace('Browse', { categoryId: 'all', title: 'Browse' })}
+            activeOpacity={0.92}
+          >
+            <Text style={styles.errorCtaText}>Browse marketplace</Text>
+            <Ionicons name="arrow-forward" size={20} color={colors.background} />
+          </AnimatedPressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -52,17 +84,17 @@ export default function CategoryTreeScreen() {
           <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
-          <Text style={styles.editorialTitle}>{resolvedPrefix}</Text>
+          <Text style={styles.editorialTitle}>{categoryPrefix}</Text>
         </View>
 
         {/* Premium full-width View All */}
         <View>
           <AnimatedPressable
             style={styles.viewAllRow}
-            onPress={() => navigation.navigate('Browse', { categoryId: resolvedPrefix.toLowerCase(), title: `All ${resolvedPrefix}` })}
+            onPress={() => navigation.navigate('Browse', { categoryId: categoryPrefix.toLowerCase(), title: `All ${categoryPrefix}` })}
             activeOpacity={0.92}
           >
-            <Text style={styles.viewAllText}>View All {resolvedPrefix}</Text>
+            <Text style={styles.viewAllText}>View All {categoryPrefix}</Text>
             <Ionicons name="arrow-forward" size={20} color={colors.background} />
           </AnimatedPressable>
         </View>
@@ -76,8 +108,8 @@ export default function CategoryTreeScreen() {
                 title={section.title}
                 subtitle={`${section.subs.length} subcategories`}
                 onPress={() => navigation.navigate('Browse', {
-                  categoryId: resolvedPrefix.toLowerCase(),
-                  title: `${resolvedPrefix} ${section.title}`
+                  categoryId: categoryPrefix.toLowerCase(),
+                  title: `${categoryPrefix} ${section.title}`
                 })}
                 size="medium"
               />
@@ -95,26 +127,28 @@ export default function CategoryTreeScreen() {
               title={section.title}
               actionLabel="Explore"
               onAction={() => navigation.navigate('Browse', {
-                categoryId: resolvedPrefix.toLowerCase(),
-                title: `${resolvedPrefix} ${section.title}`
+                categoryId: categoryPrefix.toLowerCase(),
+                title: `${categoryPrefix} ${section.title}`
               })}
             />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subsScroll}>
-              {section.subs.map(sub => (
-                <AnimatedPressable
-                  key={sub}
-                  style={styles.subPill}
-                  activeOpacity={0.85}
-                  onPress={() => navigation.navigate('Browse', {
-                    categoryId: resolvedPrefix.toLowerCase(),
-                    subcategoryId: sub.toLowerCase(),
-                    title: sub
-                  })}
-                >
-                  <Text style={styles.subPillText}>{sub}</Text>
-                </AnimatedPressable>
-              ))}
-            </ScrollView>
+            {section.subs.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subsScroll}>
+                {section.subs.map(sub => (
+                  <AnimatedPressable
+                    key={sub}
+                    style={styles.subPill}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('Browse', {
+                      categoryId: categoryPrefix.toLowerCase(),
+                      subcategoryId: sub.toLowerCase(),
+                      title: sub
+                    })}
+                  >
+                    <Text style={styles.subPillText}>{sub}</Text>
+                  </AnimatedPressable>
+                ))}
+              </ScrollView>
+            )}
           </View>
         ))}
 
@@ -198,6 +232,36 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
       fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
+    },
+    errorWrap: {
+      flex: 1,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.xl,
+      alignItems: 'center',
+    },
+    errorText: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: Type.body.lineHeight + 4,
+      marginBottom: Space.lg,
+    },
+    errorCta: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: Space.lg,
+      paddingHorizontal: Space.lg,
+      backgroundColor: colors.brand,
+      borderRadius: Radius.xl,
+      minWidth: 220,
+    },
+    errorCtaText: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.bold,
+      color: colors.background,
+      letterSpacing: LetterSpacing.wide + 0.18,
     },
   });
 }

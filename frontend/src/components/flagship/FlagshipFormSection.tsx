@@ -50,6 +50,12 @@ export function FlagshipFormSection({
 }: FlagshipFormSectionProps) {
   const { colors } = useAppTheme();
 
+  if (noCard !== undefined) {
+    console.warn(
+      '[FlagshipFormSection] `noCard` is deprecated and has no effect. Use variant="flat" instead.'
+    );
+  }
+
   // Resolve variant: explicit variant wins; default is 'flat' (no card).
   const resolvedVariant: FlagshipFormSectionVariant =
     variant ?? 'flat';

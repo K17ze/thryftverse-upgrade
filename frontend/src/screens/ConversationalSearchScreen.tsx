@@ -35,7 +35,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { Typography, Radius, Type, Space, Control, Stroke } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { TypingIndicator } from '../components/TypingIndicator';
+import { TypingIndicator } from '../components/chat/TypingIndicator';
 import { AITrustSignal, type AIConfidence } from '../components/ai/AITrustSignal';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';

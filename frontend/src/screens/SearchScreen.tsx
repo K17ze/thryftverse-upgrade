@@ -70,6 +70,7 @@ export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [searchRowHeight, setSearchRowHeight] = useState(0);
   const searchInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -158,7 +159,7 @@ export default function SearchScreen() {
   },
   autocompleteOverlay: {
     position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
+    left: 0, right: 0, bottom: 0,
     backgroundColor: colors.background,
     zIndex: 10,
   },
@@ -243,14 +244,17 @@ export default function SearchScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* -- Search Bar (real inline input with autocomplete) -- */}
-      <View style={styles.searchRow}>
+      <View
+        style={styles.searchRow}
+        onLayout={(e) => setSearchRowHeight(e.nativeEvent.layout.height)}
+      >
         <Pressable
           style={[styles.searchBar, isSearchFocused && styles.searchBarFocused]}
           onPress={() => searchInputRef.current?.focus()}
           accessibilityRole="button"
           accessibilityLabel="Search"
         >
-          <Ionicons name="search" size={19} color={colors.textMuted} />
+          <Ionicons name="search" size={20} color={colors.textMuted} />
           <TextInput
             ref={searchInputRef}
             style={styles.searchInput}
@@ -271,7 +275,7 @@ export default function SearchScreen() {
               accessibilityRole="button"
               accessibilityLabel="Clear search"
             >
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
             </Pressable>
           )}
         </Pressable>
@@ -287,7 +291,7 @@ export default function SearchScreen() {
 
       {/* Autocomplete overlay — covers scene content while the search is focused. */}
       {isSearchFocused && (
-        <View style={styles.autocompleteOverlay}>
+        <View style={[styles.autocompleteOverlay, { top: searchRowHeight }]}>
           <View style={styles.autocompleteDropdown}>
             <SearchAutocomplete
               query={searchQuery}

@@ -15,6 +15,7 @@ interface FormatOptions {
   displayMode?: CurrencyDisplayMode;
   fiatFractionDigits?: number;
   izeFractionDigits?: number;
+  minimumFractionDigits?: number;
 }
 
 type FormatFromFiat = (

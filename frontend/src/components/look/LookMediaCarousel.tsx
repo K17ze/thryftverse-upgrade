@@ -63,6 +63,9 @@ interface LookMediaCarouselProps {
   aspectRatio?: number;
   /** Called when the active page changes. */
   onActiveIndexChange?: (index: number) => void;
+  /** Called when the user single-taps a media page, requesting fullscreen
+   *  viewing. The parent owns the FullscreenMediaViewer modal lifecycle. */
+  onFullscreenRequest?: (index: number) => void;
   /** Accessibility label for the carousel. */
   accessibilityLabel?: string;
 }
@@ -578,7 +581,7 @@ const VideoPage = React.memo(function VideoPage({
                 <Pressable
                   style={videoControlStyles.scrubTrack}
                   onPress={(e) => {
-                    const trackWidth = width - 180;
+                    const trackWidth = width - VIDEO_CONTROL_BAR_SIDE_WIDTH;
                     const x = e.nativeEvent.locationX;
                     handleScrub((x / trackWidth) * duration);
                   }}
@@ -707,6 +710,12 @@ interface PaginationDotProps {
   inactiveColor: string;
 }
 
+/** Approximate horizontal space (px) occupied by the control bar's
+ *  non-track elements: play/pause button, two time labels, mute button,
+ *  and fullscreen button, plus the bar's horizontal padding and gaps.
+ *  Used to derive the usable scrub-track width for tap-to-seek. */
+const VIDEO_CONTROL_BAR_SIDE_WIDTH = 180;
+
 const DOT_INACTIVE_WIDTH = 6;
 const DOT_ACTIVE_WIDTH = 16;
 const DOT_HEIGHT = 5;
@@ -751,6 +760,7 @@ function LookMediaCarouselImpl({
   pages,
   aspectRatio = 0.8,
   onActiveIndexChange,
+  onFullscreenRequest,
   accessibilityLabel = 'Look media carousel',
 }: LookMediaCarouselProps) {
   const { colors } = useAppTheme();
@@ -825,10 +835,9 @@ function LookMediaCarouselImpl({
   };
 
   const handleSingleTap = useCallback(() => {
-    // Fullscreen viewer is not yet wired — dismiss the swipe hint as the
-    // only side effect so it doesn't linger over a future overlay.
     dismissSwipeHint();
-  }, [dismissSwipeHint]);
+    onFullscreenRequest?.(activeIndex);
+  }, [dismissSwipeHint, onFullscreenRequest, activeIndex]);
 
   const handleZoomStart = useCallback(() => {
     dismissSwipeHint();

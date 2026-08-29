@@ -21,18 +21,17 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Space, Typography, Type, Control, Stroke, Radius } from '../theme/designTokens';
-import { useStore } from '../store/useStore';
+import { useStore, type BrowseSortOption } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
 
 const normalize = (value?: string) =>
   (value ?? '').trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-');
 
-const SORT_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'Recommended', label: 'Recommended' },
+const SORT_OPTIONS: Array<{ value: BrowseSortOption; label: string }> = [
+  { value: 'Most liked', label: 'Most liked' },
   { value: 'Newest', label: 'Newest' },
   { value: 'Price: Low to High', label: 'Price: Low to High' },
   { value: 'Price: High to Low', label: 'Price: High to Low' },
-  { value: 'Most liked', label: 'Most liked' },
 ];
 
 export default function CategoryDetailScreen() {
@@ -48,8 +47,8 @@ export default function CategoryDetailScreen() {
   const { categories } = useTaxonomy();
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
 
-  const handleSortSelect = useCallback((sortValue: string) => {
-    updateBrowseFilters({ sort: sortValue as any });
+  const handleSortSelect = useCallback((sortValue: BrowseSortOption) => {
+    updateBrowseFilters({ sort: sortValue });
     setSortMenuOpen(false);
   }, [updateBrowseFilters]);
 
@@ -130,8 +129,6 @@ export default function CategoryDetailScreen() {
         });
         break;
       case 'Most liked':
-        sorted.sort((a, b) => b.likes - a.likes);
-        break;
       case 'Recommended':
       default:
         sorted.sort((a, b) => b.likes - a.likes);
@@ -288,6 +285,9 @@ export default function CategoryDetailScreen() {
   }
 
   const listingCountText = `${gridData.length} ${gridData.length === 1 ? 'listing' : 'listings'}`;
+  // "Recommended" is the store default but sorts by likes — display it as
+  // "Most liked" so the label is truthful (no recommendation engine exists).
+  const displaySort: string = browseFilters.sort === 'Recommended' ? 'Most liked' : browseFilters.sort;
 
   return (
     <FlagshipScreen
@@ -363,12 +363,12 @@ export default function CategoryDetailScreen() {
               onPress={() => setSortMenuOpen((v) => !v)}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel={`Sort by ${browseFilters.sort}`}
+              accessibilityLabel={`Sort by ${displaySort}`}
               accessibilityState={{ expanded: sortMenuOpen }}
             >
               <Ionicons name="swap-vertical" size={14} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} />
               <Text style={[styles.filterPillText, browseFilters.sort !== 'Recommended' && styles.filterPillTextActive]}>
-                {browseFilters.sort}
+                {displaySort}
               </Text>
               <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} />
             </AnimatedPressable>
@@ -402,7 +402,8 @@ export default function CategoryDetailScreen() {
         {sortMenuOpen ? (
           <View style={styles.sortMenu}>
             {SORT_OPTIONS.map((opt, idx) => {
-              const isActive = browseFilters.sort === opt.value;
+              const isActive = browseFilters.sort === opt.value ||
+                (browseFilters.sort === 'Recommended' && opt.value === 'Most liked');
               return (
                 <Pressable
                   key={opt.value}

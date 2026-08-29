@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, Linking } from 'react-native';
+import { Pressable, StyleSheet, Text, View, Linking, type StyleProp, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
@@ -16,7 +16,7 @@ import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
 const BIO_LINK_PATTERN = /((?:https?:\/\/)?[\w-]+(?:\.[\w-]+)+[^\s]*|(?:^|\s)[@#][\w]+)/gi;
 const BIO_TRUNCATE_CHARS = 125;
 
-function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: any; linkStyle: any; seeMoreStyle: any }) {
+function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: StyleProp<TextStyle>; linkStyle: StyleProp<TextStyle>; seeMoreStyle: StyleProp<TextStyle> }) {
   const [expanded, setExpanded] = React.useState(false);
   const shouldTruncate = bio.length > BIO_TRUNCATE_CHARS;
   const displayBio = shouldTruncate && !expanded
@@ -111,8 +111,6 @@ interface MyProfileIdentityHeroProps {
   onEditAvatar: () => void;
   onEditProfile: () => void;
   onShare: () => void;
-  onPressListings?: () => void;
-  onPressLooks?: () => void;
   onPressSold?: () => void;
   onPressFollowers?: () => void;
   onPressFollowing?: () => void;

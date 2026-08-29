@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Radius, Elevation, Stroke } from '../../theme/designTokens';
+import { Radius, Elevation, Stroke, Space } from '../../theme/designTokens';
 
 export type ChatCardVariant = 'surface' | 'elevated' | 'tint';
 
@@ -16,13 +16,14 @@ function resolveChatCardStyle(variant: ChatCardVariant, colors: ThemeColors) {
   switch (variant) {
     case 'tint':
       return {
-        backgroundColor: colors.surfaceAlt,
-        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        borderColor: colors.brand,
       };
     case 'elevated':
       return {
-        backgroundColor: colors.surfaceAlt,
+        backgroundColor: colors.surfaceElevated,
         borderColor: colors.border,
+        ...Elevation.card,
       };
     case 'surface':
     default:
@@ -42,17 +43,13 @@ export function ChatCard({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const tone = resolveChatCardStyle(variant, colors);
-  const isElevated = variant === 'elevated';
 
   return (
     <View
       style={[
         styles.base,
-        {
-          backgroundColor: tone.backgroundColor,
-          borderColor: noBorder ? 'transparent' : tone.borderColor,
-        },
-        isElevated && styles.elevated,
+        tone,
+        noBorder && { borderColor: 'transparent' },
         style,
       ]}
     >
@@ -65,14 +62,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   base: {
     borderRadius: Radius.lg,
     borderWidth: Stroke.hairline,
-    paddingHorizontal: Radius.lg,
-    paddingVertical: Radius.md,
-  },
-  elevated: {
-    shadowColor: Elevation.subtle.shadowColor,
-    shadowOffset: Elevation.subtle.shadowOffset,
-    shadowOpacity: Elevation.subtle.shadowOpacity,
-    shadowRadius: Elevation.subtle.shadowRadius,
-    elevation: Elevation.subtle.elevation,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
   },
 });

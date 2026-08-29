@@ -13,7 +13,6 @@ export interface RelatedItem {
   title: string;
   imageUrl?: string | null;
   priceText: string;
-  izeText?: string;
   badgeText?: string;
   badgeColor?: string;
   metaText?: string;
@@ -88,8 +87,8 @@ export function CommerceRelatedRail({
 
                 <Text style={[styles.cardPrice, { color: colors.textPrimary }]}>{item.priceText}</Text>
 
-                {item.izeText ? (
-                  <Text style={[styles.cardIze, { color: colors.textMuted }]}>{item.izeText}</Text>
+                {item.sizeText && mode !== 'standard' ? (
+                  <Text style={[styles.cardSize, { color: colors.textMuted }]}>{item.sizeText}</Text>
                 ) : null}
 
                 {mode === 'auction' ? (
@@ -202,7 +201,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
-  cardIze: {
+  cardSize: {
     marginTop: 1,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,

@@ -17,6 +17,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList, type FlashListProps } from '@shopify/flash-list';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -67,6 +68,10 @@ const SORT_OPTIONS: { key: SortOption; label: string }[] = [
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+const InventoryFlashList = FlashList as unknown as React.ComponentType<
+  FlashListProps<ListingApiItem> & { estimatedItemSize: number }
+>;
 
 export default function InventoryManagementScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
@@ -765,34 +770,36 @@ function InventoryList({
   onRefresh: () => void;
   selectionBarHeight: number;
 }) {
+  const renderItem = useCallback(({ item, index }: { item: ListingApiItem; index: number }) => (
+    <InventoryRow
+      item={item}
+      isLast={index === listings.length - 1}
+      colors={colors}
+      styles={styles}
+      selectionMode={selectionMode}
+      isSelected={selectedIds.has(item.id)}
+      isPendingAction={pendingActionIds.has(item.id)}
+      onLongPress={() => onLongPress(item.id)}
+      onPress={() => onPressRow(item)}
+      onEdit={() => onEdit(item)}
+      onTogglePause={() => onTogglePause(item)}
+      onRelist={() => onRelist(item)}
+      onDelete={() => onDelete(item)}
+      onToggleSelect={() => onToggleSelect(item.id)}
+    />
+  ), [listings, colors, styles, selectionMode, selectedIds, pendingActionIds, onLongPress, onPressRow, onEdit, onTogglePause, onRelist, onDelete, onToggleSelect]);
+
   return (
-    <ScrollView
-      style={styles.listScroll}
+    <InventoryFlashList
+      data={listings}
+      renderItem={renderItem}
+      estimatedItemSize={72}
+      keyExtractor={(item) => item.id}
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
-    >
-      {listings.map((item, index) => (
-        <InventoryRow
-          key={item.id}
-          item={item}
-          isLast={index === listings.length - 1}
-          colors={colors}
-          styles={styles}
-          selectionMode={selectionMode}
-          isSelected={selectedIds.has(item.id)}
-          isPendingAction={pendingActionIds.has(item.id)}
-          onLongPress={() => onLongPress(item.id)}
-          onPress={() => onPressRow(item)}
-          onEdit={() => onEdit(item)}
-          onTogglePause={() => onTogglePause(item)}
-          onRelist={() => onRelist(item)}
-          onDelete={() => onDelete(item)}
-          onToggleSelect={() => onToggleSelect(item.id)}
-        />
-      ))}
-      <View style={{ height: selectionBarHeight || Space.xl }} />
-    </ScrollView>
+      ListFooterComponent={<View style={{ height: selectionBarHeight || Space.xl }} />}
+    />
   );
 }
 

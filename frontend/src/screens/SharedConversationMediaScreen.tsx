@@ -15,7 +15,6 @@ import { Space, Radius, Type, TypeStyles, Control, Stroke } from '../theme/desig
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { SkeletonLoader } from '../components/SkeletonLoader';
 import { isVideoUri } from '../utils/media';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
@@ -53,7 +52,6 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
     [conversations, conversationId]
   );
 
-  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -143,23 +141,6 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       ? `${photos.length} photo${photos.length === 1 ? '' : 's'} · ${videos.length} video${videos.length === 1 ? '' : 's'}`
       : undefined;
 
-  const renderSkeleton = () => {
-    const count = COLS * 4;
-    return (
-      <View style={styles.grid}>
-        {Array.from({ length: count }).map((_, i) => (
-          <SkeletonLoader
-            key={i}
-            width={thumbSize}
-            height={thumbSize}
-            borderRadius={Radius.sm}
-            style={styles.skeletonTile}
-          />
-        ))}
-      </View>
-    );
-  };
-
   const renderItem = ({ item }: { item: MediaItem }) => {
     const selected = selectedIds.has(item.id);
     return (
@@ -193,7 +174,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       >
         {item.isVideo ? (
           <View style={[styles.thumb, styles.videoTile, { width: thumbSize, height: thumbSize }]}>
-            <Ionicons name="videocam" size={24} color={colors.textSecondary} />
+            <Ionicons name="play" size={28} color={colors.scrimTextPrimary} />
           </View>
         ) : (
           <CachedImage
@@ -273,7 +254,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       }
       scrollEnabled={false}
     >
-      {showFilter && !loading && !selectionMode && (
+      {showFilter && !selectionMode && (
         <View style={styles.filterRow}>
           {(['all', 'photos', 'videos'] as Filter[]).map((f) => {
             const active = filter === f;
@@ -303,9 +284,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         </View>
       )}
 
-      {loading ? (
-        renderSkeleton()
-      ) : filteredMedia.length === 0 ? (
+      {filteredMedia.length === 0 ? (
         <EmptyState
           icon="images-outline"
           title="No shared media yet"
@@ -334,17 +313,6 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
       paddingBottom: Space.xxl,
-    },
-    grid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-      gap: GAP,
-    },
-    skeletonTile: {
-      marginRight: GAP,
-      marginBottom: GAP,
     },
     filterRow: {
       flexDirection: 'row',

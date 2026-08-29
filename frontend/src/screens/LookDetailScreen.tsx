@@ -46,6 +46,7 @@ import {
 } from '../services/looksApi';
 import { resolveLookTemplate } from '../utils/lookTemplates';
 import { LookMediaCarousel, type LookMediaCarouselPage } from '../components/look/LookMediaCarousel';
+import { FullscreenMediaViewer } from '../components/product';
 import {
   fetchPublicProfileAggregate,
   followUser,
@@ -122,6 +123,10 @@ export default function LookDetailScreen() {
 
   // Repost — lightweight re-publish with attribution to the original creator.
   const [repostBusy, setRepostBusy] = useState(false);
+
+  // Fullscreen media viewer — opened when the user single-taps a carousel page.
+  const [fullscreenVisible, setFullscreenVisible] = useState(false);
+  const [fullscreenIndex, setFullscreenIndex] = useState(0);
 
   const isOwner = look?.creatorId === currentUser?.id;
 
@@ -533,6 +538,10 @@ export default function LookDetailScreen() {
               pages={mediaPages}
               aspectRatio={resolvedHeroAspectRatio}
               accessibilityLabel={`Look media, ${mediaPages.length} image${mediaPages.length === 1 ? '' : 's'}`}
+              onFullscreenRequest={(index) => {
+                setFullscreenIndex(index);
+                setFullscreenVisible(true);
+              }}
             />
           )}
 
@@ -1067,6 +1076,16 @@ export default function LookDetailScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Fullscreen media viewer — opened on single-tap of a carousel page */}
+      <FullscreenMediaViewer
+        images={mediaPages.map((p) => p.uri)}
+        videoUris={mediaPages.filter((p) => p.isVideo).map((p) => p.uri)}
+        initialIndex={fullscreenIndex}
+        visible={fullscreenVisible}
+        onActiveIndexChange={setFullscreenIndex}
+        onClose={() => setFullscreenVisible(false)}
+      />
     </SafeAreaView>
   );
 }

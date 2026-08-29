@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { AnimatedPressable } from '../AnimatedPressable';
+import { AppButton } from '../ui/AppButton';
 
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 export interface FlagshipDangerZoneProps {
@@ -29,34 +29,21 @@ export function FlagshipDangerZone({
         styles.root,
         {
           backgroundColor: colors.dangerSubtle,
-          borderColor: `${colors.danger}30`,
+          borderColor: colors.dangerBorder,
         },
         style,
       ]}
     >
       <Text style={[styles.title, { color: colors.danger }]}>{title}</Text>
       <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text>
-      <AnimatedPressable
+      <AppButton
+        title={actionLabel}
+        variant={destructive ? 'danger' : 'secondary'}
         onPress={onAction}
-        scaleValue={0.97}
+        size="sm"
         hapticFeedback="heavy"
-        style={[
-          styles.actionBtn,
-          {
-            backgroundColor: destructive ? colors.danger : colors.surfaceAlt,
-            borderColor: destructive ? colors.danger : colors.border,
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.actionText,
-            { color: destructive ? colors.textInverse : colors.danger },
-          ]}
-        >
-          {actionLabel}
-        </Text>
-      </AnimatedPressable>
+        titleStyle={destructive ? undefined : { color: colors.danger }}
+      />
     </View>
   );
 }
@@ -82,17 +69,5 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
     marginBottom: Space.md,
-  },
-  actionBtn: {
-    borderRadius: Radius.xl,
-    paddingVertical: Space.smMd,
-    paddingHorizontal: Space.lg,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  actionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
   },
 });

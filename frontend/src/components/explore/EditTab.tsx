@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,8 +22,6 @@ import { fetchTrendingListings, type TrendingListing } from '../../services/mark
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { HorizontalRail } from '../HorizontalRail';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -210,13 +207,6 @@ export default function EditTab() {
           <View style={styles.quizContent}>
             <Text style={styles.quizTitle}>Discover your style</Text>
             <Text style={styles.quizSub}>Take a short quiz to tailor your Explore feed to your preferences.</Text>
-            <View style={styles.quizPills}>
-              {['Minimal', 'Streetwear', 'Vintage', 'Gorpcore'].map((pill) => (
-                <View key={pill} style={styles.quizPill}>
-                  <Text style={styles.quizPillText}>{pill}</Text>
-                </View>
-              ))}
-            </View>
           </View>
           <View style={styles.quizIconWrap}>
             <Ionicons name="color-palette-outline" size={28} color={colors.brand} />
@@ -330,24 +320,6 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: 18,
-  },
-  quizPills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: Space.xs,
-  },
-  quizPill: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: Space.xs,
-  },
-  quizPillText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-    letterSpacing: Type.meta.letterSpacing,
   },
   quizIconWrap: {
     width: 48,

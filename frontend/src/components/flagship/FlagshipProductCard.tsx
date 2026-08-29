@@ -6,6 +6,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, FontFamily, Control, AspectRatio, IconGrammar } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
+import { AnimatedPressable } from '../AnimatedPressable';
 import { isVideoUri, getCategoryFocalPoint } from '../../utils/media';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -54,7 +55,7 @@ export function FlagshipProductCard({
     : `${title}, ${price}`;
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       style={[styles.root, { width: cardW }, style]}
       accessibilityRole="button"
@@ -76,8 +77,7 @@ export function FlagshipProductCard({
         {/* Top-right save button — 44pt hit area, transparent by default */}
         {onToggleSave && (
           <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
+            onPress={() => {
               onToggleSave();
             }}
             style={styles.saveBtn}
@@ -134,7 +134,7 @@ export function FlagshipProductCard({
           </Reanimated.Text>
         </View>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -170,17 +170,17 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   metaRow: {
     marginTop: Space.xs,
-    gap: Space.xs / 2,
+    gap: Space.xxs,
   },
   titleText: {
     fontSize: Type.body.size,
-    lineHeight: 18,
+    lineHeight: Type.body.lineHeight,
     fontFamily: FontFamily.medium,
     color: colors.textPrimary,
   },
   priceText: {
     fontSize: Type.bodyStrong.size,
-    lineHeight: 20,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: FontFamily.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
@@ -190,14 +190,14 @@ const createStyles = (colors: any) => StyleSheet.create({
     lineHeight: 14,
     fontFamily: FontFamily.medium,
     color: colors.textSecondary,
-    marginTop: Space.xs / 2,
+    marginTop: Space.xxs,
   },
   conditionPill: {
     alignSelf: 'flex-start',
     marginTop: Space.xs,
     backgroundColor: colors.surfaceAlt,
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs / 2,
+    paddingVertical: Space.xxs,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,

@@ -130,6 +130,22 @@ export function TypingIndicator({
   );
 }
 
+export function CompactTypingIndicator({
+  dotColor,
+  dotSize = 6,
+  style,
+}: Omit<TypingIndicatorProps, 'dotSize'> & { dotSize?: number }) {
+  const { colors } = useAppTheme();
+  const resolvedColor = dotColor ?? colors.surfaceElevated;
+  return (
+    <TypingIndicator
+      dotColor={resolvedColor}
+      dotSize={dotSize}
+      style={StyleSheet.flatten([styles.compactContainer, style])}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
@@ -137,5 +153,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     height: 20,
     paddingHorizontal: Space.sm,
+  },
+  compactContainer: {
+    height: 16,
+    paddingHorizontal: Space.xs,
   },
 });

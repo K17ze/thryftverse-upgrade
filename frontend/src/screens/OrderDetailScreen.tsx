@@ -283,6 +283,10 @@ export default function OrderDetailScreen() {
     if (!backendOrder) return [];
     return buildTimelineEntries(normalisedStatus, backendOrder, parcelEvents, {
       hasOpenResolution: Boolean(openTicket),
+      // TODO: The backend does not currently expose a per-order review state
+      // (hasReview / review field on CommerceOrder). When it does, wire this
+      // to the actual value. Until then, the timeline does not claim a review
+      // exists when it may not.
       hasReview: false,
       deliveredAt: backendOrder.deliveredAt,
     });
@@ -487,7 +491,9 @@ export default function OrderDetailScreen() {
       status: backendOrder.status,
       role: isBuyer ? 'buyer' : 'seller',
       hasOpenResolution: Boolean(openTicket),
-      hasReview: false, // review state surfaced separately via reviewPrompt
+      // TODO: Wire to actual review state when the backend exposes a per-order
+      // hasReview/review field on CommerceOrder. Until then, do not fabricate.
+      hasReview: false,
       hasTracking: Boolean(backendOrder.trackingNumber || parcelEvents.length > 0),
       fulfilmentSnapshot: backendOrder.fulfilmentSnapshot ?? null,
       isSubmitting: orderMutation !== null,

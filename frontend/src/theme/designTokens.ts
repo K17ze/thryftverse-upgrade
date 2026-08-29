@@ -119,7 +119,7 @@ export const LetterSpacing = {
 // One weight delta is normally enough to express hierarchy.
 // Prices and financial quantities use tabular figures (see Numeric below).
 // ============================================================================
-export const Type: Record<string, TypeStyle> = {
+export const Type = {
   // ── Display / campaign ──
   /** 32/38/700 — Auth hero, empty state titles, rare campaign statement */
   display: { size: 32, lineHeight: 38, weight: '700', letterSpacing: -0.5 },
@@ -173,7 +173,7 @@ export const Type: Record<string, TypeStyle> = {
   // ── Numeric metadata ──
   /** 13/18/600 — Bids, quantities, P&L (tabular figures via Numeric.numericMeta) */
   numericMeta: { size: 13, lineHeight: 18, weight: '600', letterSpacing: 0 },
-} as const;
+} as const satisfies Record<string, TypeStyle>;
 
 // REMOVED (to reduce visual chaos):
 // - captionEmphasis (merged into caption or price)
@@ -205,22 +205,10 @@ export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
     lineHeight: Type.display.lineHeight,
   },
   hero: {
-    fontFamily: FontFamily.extrabold,
+    fontFamily: FontFamily.bold,
     fontSize: Type.display.size,
     letterSpacing: Type.display.letterSpacing,
     lineHeight: Type.display.lineHeight,
-  },
-  heroDisplay: {
-    fontFamily: FontFamily.extrabold,
-    fontSize: Type.display.size,
-    letterSpacing: -1.0,
-    lineHeight: Type.display.lineHeight,
-  },
-  giantDisplay: {
-    fontFamily: FontFamily.extrabold,
-    fontSize: 48,
-    letterSpacing: -1.2,
-    lineHeight: 52,
   },
   heading: {
     fontFamily: FontFamily.bold,
@@ -229,7 +217,7 @@ export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
     lineHeight: Type.title.lineHeight,
   },
   title: {
-    fontFamily: FontFamily.semibold,
+    fontFamily: FontFamily.bold,
     fontSize: Type.title.size,
     letterSpacing: Type.title.letterSpacing,
     lineHeight: Type.title.lineHeight,
@@ -274,7 +262,7 @@ export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
   button: {
     fontFamily: FontFamily.semibold,
     fontSize: Type.bodyEmphasis.size,
-    letterSpacing: 0.12,
+    letterSpacing: 0,
     lineHeight: Type.bodyEmphasis.lineHeight,
   },
 };
@@ -284,7 +272,7 @@ export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
 // Use depth only to clarify hierarchy, touchability, or modal separation.
 // Avoid shadows on every card, cards inside cards, and decorative badges.
 // ============================================================================
-interface ShadowConfig {
+export interface ShadowConfig {
   shadowColor: string;
   shadowOffset: { width: number; height: number };
   shadowOpacity: number;
@@ -292,7 +280,7 @@ interface ShadowConfig {
   elevation: number;
 }
 
-export const Elevation: Record<string, ShadowConfig> = {
+export const Elevation = {
   /** No shadow — flat elements, default utility structure */
   none: {
     shadowColor: 'transparent',
@@ -334,7 +322,7 @@ export const Elevation: Record<string, ShadowConfig> = {
     shadowRadius: 22,
     elevation: 12,
   },
-} as const;
+} as const satisfies Record<string, ShadowConfig>;
 
 // ============================================================================
 // LAYOUT CONSTANTS
@@ -372,8 +360,13 @@ export const ZIndex = {
 // COMMON STYLE PRESETS
 // ============================================================================
 export const CommonStyles = {
-  /** Standard card container */
+  /** Standard card container — flat (no shadow). Opt into elevatedCard for depth. */
   card: {
+    padding: Space.md,
+    borderRadius: Radius.lg,
+  },
+  /** Elevated card container — includes deliberate shadow for hierarchy. */
+  elevatedCard: {
     padding: Space.md,
     borderRadius: Radius.lg,
     ...Elevation.card,
@@ -852,4 +845,24 @@ export const Scrim = {
     colors: ['rgba(0,0,0,0.30)', 'transparent'],
     locations: [0, 1],
   },
+} as const;
+
+// ============================================================================
+// OUTFIT BUILDER COLOURS — pastel background swatches for outfit slots
+// Used by OutfitBuilderScreen background picker. The pastels are warm-neutral
+// editorial tones; the dark entry provides a high-contrast backdrop option.
+// ============================================================================
+export const OutfitColors = {
+  pastels: ['#F5F5F0', '#E8E4DF', '#D4C9BE', '#C9D9E8', '#D9D0E1', '#E8D4D4', '#D4E8D6'],
+  dark: '#1A1A1A',
+} as const;
+
+// ============================================================================
+// COIN GRADIENT — 1ZE coin icon gradient
+// The signature gold gradient for the OnezeCoinIcon component. Replaces
+// hardcoded inline hex values with a single source of truth.
+// ============================================================================
+export const CoinGradient = {
+  start: '#f4d27b',
+  end: '#c68a2d',
 } as const;
