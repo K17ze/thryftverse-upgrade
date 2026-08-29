@@ -62,6 +62,8 @@ import { AttachmentReviewSheet } from "../components/chat/AttachmentReviewSheet"
 
 import { MessageContextMenu } from "../components/chat/MessageContextMenu";
 
+import { ConfirmationSheet } from "../components/ConfirmationSheet";
+
 import { EmojiReactionsBar } from "../components/chat/EmojiReactionsBar";
 
 import { ReplyQuote } from "../components/chat/ReplyQuote";
@@ -609,6 +611,8 @@ export default function ChatScreen({ navigation, route }: Props) {
     handleUndoDelete,
     handleBulkDelete: hookBulkDelete,
     handleDeleteMessage,
+    confirmation: conversationConfirmation,
+    clearConfirmation: clearConversationConfirmation,
     dateSeparatorIndices,
     unreadDividerIndex,
     handleMessageListScroll: hookHandleMessageListScroll,
@@ -1920,6 +1924,30 @@ export default function ChatScreen({ navigation, route }: Props) {
             selectedMessage?.status === "failed" ||
             selectedMessage?.uploadStatus === "failed"
           }
+        />
+
+        <ConfirmationSheet
+          visible={!!conversationConfirmation}
+          onDismiss={clearConversationConfirmation}
+          title={conversationConfirmation?.title ?? ""}
+          message={conversationConfirmation?.message}
+          confirmLabel={conversationConfirmation?.confirmLabel}
+          cancelLabel={conversationConfirmation?.cancelLabel}
+          onConfirm={() => {
+            const req = conversationConfirmation;
+            clearConversationConfirmation();
+            if (req) void req.onConfirm();
+          }}
+          onCancel={
+            conversationConfirmation?.onCancel
+              ? () => {
+                  const req = conversationConfirmation;
+                  clearConversationConfirmation();
+                  if (req?.onCancel) void req.onCancel();
+                }
+              : undefined
+          }
+          variant={conversationConfirmation?.variant ?? "danger"}
         />
       </View>
     </SafeAreaView>

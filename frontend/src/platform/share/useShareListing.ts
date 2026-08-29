@@ -22,9 +22,9 @@
  */
 
 import { useCallback, useRef } from 'react';
-import { Alert } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import { shareToInstagramStory } from './SocialShare';
+import { useToast } from '../../context/ToastContext';
 import type { ListingShareData, ShareSheetParams } from './types';
 import type { SkImage, SkFont } from '@shopify/react-native-skia';
 
@@ -450,6 +450,7 @@ export function useShareListing(): {
   const imageCache = useRef<Map<string, { bg: string; sticker: string }>>(
     new Map(),
   );
+  const { show } = useToast();
 
   /**
    * Composes a 1080x1920 background image and a 640x480 sticker image for
@@ -510,11 +511,7 @@ export function useShareListing(): {
         });
       } catch {
         // Fallback to system sheet if composition fails
-        Alert.alert(
-          'Could not compose share image',
-          'Sharing via the system sheet instead.',
-          [{ text: 'OK' }],
-        );
+        show('Could not compose share image — sharing via the system sheet instead.', 'info');
         const { shareToSystemSheet } = await import('./SocialShare');
         await shareToSystemSheet({
           message: `Check out "${data.title}" — \u00A3${data.priceGbp.toFixed(2)} on Thryftverse\n${data.deepLink}`,
@@ -523,7 +520,7 @@ export function useShareListing(): {
         });
       }
     },
-    [],
+    [show],
   );
 
   /**

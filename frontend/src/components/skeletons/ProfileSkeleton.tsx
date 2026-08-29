@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   heroBlock: {
     paddingHorizontal: Space.md,
     alignItems: 'center',
-    marginTop: -AVATAR_SIZE / 2 - 8,
+    marginTop: -AVATAR_SIZE / 2 - Space.sm,
     gap: Space.xs },
   avatar: {
     marginBottom: Space.xs },

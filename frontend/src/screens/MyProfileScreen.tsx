@@ -543,7 +543,7 @@ export default function MyProfileScreen() {
     ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
     : undefined;
 
-  const GRID_GAP = 4;
+  const GRID_GAP = Space.xs;
   const GRID_COLS = 3;
   const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
   const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait grid
@@ -1378,7 +1378,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: RadiusRoleValue.compactControl },
   heroPriceOverlay: {
     position: 'absolute',
-    bottom: 8,
+    bottom: Space.sm,
     left: 10,
     right: 10 },
   heroPriceText: {

@@ -1,5 +1,4 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import { useToast } from '../context/ToastContext';
 import { useSignupWall } from '../hooks/useSignupWall';
 import { parseApiError } from '../lib/apiClient';
@@ -36,6 +35,20 @@ import { createStableId } from '../utils/createStableId';
 export interface UseAuctionDetailOptions {
   openBidSheet?: boolean;
   initialBidAmount?: number;
+}
+
+/**
+ * A confirmation request emitted by the hook for the calling screen to
+ * render via `<ConfirmationSheet>`. Hooks cannot render UI, so they expose
+ * a request object and the screen binds it to the sheet.
+ */
+export interface AuctionConfirmationRequest {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  variant: 'default' | 'danger';
+  onConfirm: () => void | Promise<void>;
 }
 
 export interface UseAuctionDetailResult {
@@ -90,6 +103,8 @@ export interface UseAuctionDetailResult {
   handleAcceptSecondChance: () => Promise<void>;
   handleDeclineSecondChance: () => Promise<void>;
   handleCancelAuction: () => void;
+  cancelAuctionConfirmation: AuctionConfirmationRequest | null;
+  dismissCancelAuctionConfirmation: () => void;
   refreshDetailForTransaction: () => Promise<AuctionDetailResponse | null>;
 }
 
@@ -123,6 +138,8 @@ export function useAuctionDetail(
   const [relatedLoading, setRelatedLoading] = React.useState(false);
   const [lastFetchAt, setLastFetchAt] = React.useState<number | null>(null);
   const [isCancelLoading, setIsCancelLoading] = React.useState(false);
+  const [cancelAuctionConfirmation, setCancelAuctionConfirmation] =
+    React.useState<AuctionConfirmationRequest | null>(null);
   const [isPayLoading, setIsPayLoading] = React.useState(false);
   // Stable idempotency keys for payment / second-chance operations.
   // Generated once per logical operation and reused across retries so the
@@ -497,33 +514,37 @@ export function useAuctionDetail(
     }
   };
 
+  const performCancelAuction = async () => {
+    if (!auction || isCancelLoading) return;
+    setIsCancelLoading(true);
+    try {
+      await cancelAuction(auction.id);
+      await fetchDetail();
+      show('Auction cancelled', 'info');
+    } catch (err) {
+      const parsed = parseApiError(err, 'Failed to cancel auction');
+      show(parsed.message, 'error');
+    } finally {
+      setIsCancelLoading(false);
+    }
+  };
+
   const handleCancelAuction = () => {
     if (!auction || isCancelLoading) return;
-    Alert.alert(
-      'Cancel auction',
-      'This will cancel the auction and notify all bidders. This cannot be undone.',
-      [
-        { text: 'Keep auction', style: 'cancel' },
-        {
-          text: 'Cancel auction',
-          style: 'destructive',
-          onPress: async () => {
-            setIsCancelLoading(true);
-            try {
-              await cancelAuction(auction.id);
-              await fetchDetail();
-              show('Auction cancelled', 'info');
-            } catch (err) {
-              const parsed = parseApiError(err, 'Failed to cancel auction');
-              show(parsed.message, 'error');
-            } finally {
-              setIsCancelLoading(false);
-            }
-          },
-        },
-      ],
-    );
+    setCancelAuctionConfirmation({
+      title: 'Cancel auction',
+      message:
+        'This will cancel the auction and notify all bidders. This cannot be undone.',
+      confirmLabel: 'Cancel auction',
+      cancelLabel: 'Keep auction',
+      variant: 'danger',
+      onConfirm: performCancelAuction,
+    });
   };
+
+  const dismissCancelAuctionConfirmation = React.useCallback(() => {
+    setCancelAuctionConfirmation(null);
+  }, []);
 
   return {
     auction,
@@ -570,6 +591,8 @@ export function useAuctionDetail(
     handleAcceptSecondChance,
     handleDeclineSecondChance,
     handleCancelAuction,
+    cancelAuctionConfirmation,
+    dismissCancelAuctionConfirmation,
     refreshDetailForTransaction,
   };
 }

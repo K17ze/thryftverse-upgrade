@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Control } from '../../theme/designTokens';
+import { Space, Radius, Typography, Control, AvatarSize } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -20,17 +21,17 @@ export function LookDetailSkeleton() {
       {/* Info section — matches infoSection padding/gap */}
       <View style={styles.infoSection}>
         {/* Eyebrow */}
-        <SkeletonLoader width={48} height={11} borderRadius={Radius.sm} />
+        <SkeletonLoader width={48} height={TypographyV2.meta.size} borderRadius={Radius.sm} />
         {/* Caption — 2 lines */}
         <SkeletonLoader width="92%" height={26} borderRadius={Radius.sm} />
         <SkeletonLoader width="68%" height={26} borderRadius={Radius.sm} />
 
         {/* Creator row */}
         <View style={styles.creatorRow}>
-          <SkeletonLoader width={40} height={40} borderRadius={Radius.full} />
+          <SkeletonLoader width={AvatarSize.md} height={AvatarSize.md} borderRadius={Radius.full} />
           <View style={styles.creatorInfo}>
-            <SkeletonLoader width={120} height={14} borderRadius={Radius.sm} />
-            <SkeletonLoader width={80} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
+            <SkeletonLoader width={120} height={TypographyV2.body.size} borderRadius={Radius.sm} />
+            <SkeletonLoader width={80} height={TypographyV2.meta.size} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
           </View>
         </View>
       </View>
@@ -47,7 +48,7 @@ export function LookDetailSkeleton() {
       {/* Tray section — "Shop the look" rail */}
       <View style={styles.traySection}>
         <View style={styles.trayHeader}>
-          <SkeletonLoader width={140} height={18} borderRadius={Radius.sm} />
+          <SkeletonLoader width={140} height={TypographyV2.itemTitle.size} borderRadius={Radius.sm} />
           <SkeletonLoader width={60} height={12} borderRadius={Radius.sm} />
         </View>
         <View style={styles.trayScroll}>
@@ -55,7 +56,7 @@ export function LookDetailSkeleton() {
             <View key={i} style={styles.trayCard}>
               <SkeletonLoader width={148} height={184} borderRadius={Radius.lg} />
               <SkeletonLoader width="80%" height={12} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
-              <SkeletonLoader width={50} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
+              <SkeletonLoader width={50} height={TypographyV2.meta.size} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
             </View>
           ))}
         </View>

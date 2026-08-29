@@ -1,11 +1,25 @@
-Phase 2B: TypographyV2 migration complete — 521 files migrated from legacy Type tokens to TypographyV2 roles
+Phase 2C+3B+3C: Alert.alert elimination, magic numbers to tokens, PosterComposerScreen fix
 
-- Mapped Type.hero -> TypographyV2.display, Type.heading -> TypographyV2.sectionTitle
-- All other Type.XXX tokens mapped via LEGACY_TO_V2_MAP
-- Typography.family.X replaced with TypographyV2.ZZZ.fontFamily where context allows
-- Imports updated: TypographyV2 import added, Type removed from designTokens import
-- Typography removed from designTokens import where no longer used
-- TypeScript compiles cleanly with zero errors
+Phase 2C — Alert.alert elimination (all 7 remaining calls):
+- useAuctionDetail.ts: cancel auction confirmation → ConfirmationSheet via component
+- AuctionDetailScreen.tsx: render ConfirmationSheet for cancel auction
+- useConversationMessages.ts: bulk delete + single delete → ConfirmationSheet via component
+- ChatScreen.tsx + GroupChatScreen.tsx: render ConfirmationSheet for delete confirmations
+- useShareListing.ts: error alert → useToast info toast
+- instagramStory.ts: error alerts → typed InstagramShareError thrown to caller
+- Zero Alert.alert calls remain in the codebase
+
+Phase 3B — Magic numbers to tokens:
+- MyProfileScreen.tsx: GRID_GAP 4→Space.xs, bottom 8→Space.sm
+- SellerAnalyticsScreen.tsx: gap 4→Space.xs
+- GalleriaScreen.tsx: already fully tokenized
+
+Phase 3C — Magic numbers to tokens (skeletons + discovery card):
+- 10 skeleton files: placeholder heights → TypographyV2 roles, avatar sizes → AvatarSize tokens
+- CoOwnDiscoveryCard.tsx: spacing/border tokens
+- ChatTopBar.tsx: already fully tokenized
+
+Fix: PosterComposerScreen.tsx missing closing brace for createStyles function
 
 Generated with [Devin](https://devin.ai)
 

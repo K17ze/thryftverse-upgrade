@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, AvatarSize } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 // Mirrors ConnectedAccountsScreen layout: hero summary card (icon + title + subtitle),
 // intro text line, list of account cards (provider badge + name/email + unlink button).
@@ -14,7 +15,7 @@ export function ConnectedAccountsSkeleton() {
       {/* Hero summary card */}
       <View style={[styles.heroCard, { backgroundColor: colors.surface }]}>
         <View style={styles.heroIconRow}>
-          <SkeletonLoader width={40} height={40} borderRadius={Radius.full} />
+          <SkeletonLoader width={AvatarSize.md} height={AvatarSize.md} borderRadius={Radius.full} />
           <View style={styles.heroText}>
             <SkeletonLoader width={130} height={16} borderRadius={Radius.sm} />
             <SkeletonLoader width={160} height={12} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
@@ -33,9 +34,9 @@ export function ConnectedAccountsSkeleton() {
             <View style={styles.accountHeader}>
               <SkeletonLoader width={48} height={48} borderRadius={Radius.full} />
               <View style={styles.accountInfo}>
-                <SkeletonLoader width={100} height={15} borderRadius={Radius.sm} />
+                <SkeletonLoader width={100} height={TypographyV2.bodyStrong.size} borderRadius={Radius.sm} />
                 <SkeletonLoader width={160} height={12} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
-                <SkeletonLoader width={90} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
+                <SkeletonLoader width={90} height={TypographyV2.meta.size} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
               </View>
             </View>
           </View>

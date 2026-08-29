@@ -36,6 +36,7 @@ import { FullscreenMediaViewer } from '../components/product/FullscreenMediaView
 import { RecommendationRail, ProductDetailSkeleton } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommerceMediaStage } from '../components/commerce';
 import {
   CommerceDetailHeader,
@@ -171,6 +172,8 @@ export default function AuctionDetailScreen() {
     handleAcceptSecondChance,
     handleDeclineSecondChance,
     handleCancelAuction,
+    cancelAuctionConfirmation,
+    dismissCancelAuctionConfirmation,
     refreshDetailForTransaction,
   } = useAuctionDetail(auctionId, {
     openBidSheet: shouldOpenBidSheet,
@@ -1476,6 +1479,21 @@ export default function AuctionDetailScreen() {
         onDismiss={social.closeShare}
         url={`https://thryftverse.com/auction/${auction.id}`}
         title={auction.title}
+      />
+
+      <ConfirmationSheet
+        visible={!!cancelAuctionConfirmation}
+        onDismiss={dismissCancelAuctionConfirmation}
+        title={cancelAuctionConfirmation?.title ?? ''}
+        message={cancelAuctionConfirmation?.message}
+        confirmLabel={cancelAuctionConfirmation?.confirmLabel}
+        cancelLabel={cancelAuctionConfirmation?.cancelLabel}
+        onConfirm={() => {
+          const req = cancelAuctionConfirmation;
+          dismissCancelAuctionConfirmation();
+          if (req) void req.onConfirm();
+        }}
+        variant={cancelAuctionConfirmation?.variant ?? 'danger'}
       />
     </Reanimated.View>
   );

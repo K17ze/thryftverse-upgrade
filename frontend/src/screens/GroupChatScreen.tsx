@@ -45,6 +45,7 @@ import { SkeletonChatLoader } from '../components/chat/SkeletonChatLoader';
 import { MessageContextMenu, type MessageAction } from '../components/chat/MessageContextMenu';
 import { EmojiReactionsBar, type EmojiReaction } from '../components/chat/EmojiReactionsBar';
 import { ReplyQuote } from '../components/chat/ReplyQuote';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import * as Clipboard from 'expo-clipboard';
 
 import {
@@ -162,6 +163,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     handleSendVoice,
     handleDeleteMessage,
     handleUndoDelete,
+    confirmation: conversationConfirmation,
+    clearConfirmation: clearConversationConfirmation,
     dateSeparatorIndices,
     handleMessageListScroll: hookHandleMessageListScroll,
     syncMessagesFromApi } = useConversationMessages({
@@ -560,6 +563,30 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           onAction={handleContextAction}
           messageText={selectedMessage?.text}
           isOwnMessage={selectedMessage?.sender === 'me'}
+        />
+
+        <ConfirmationSheet
+          visible={!!conversationConfirmation}
+          onDismiss={clearConversationConfirmation}
+          title={conversationConfirmation?.title ?? ''}
+          message={conversationConfirmation?.message}
+          confirmLabel={conversationConfirmation?.confirmLabel}
+          cancelLabel={conversationConfirmation?.cancelLabel}
+          onConfirm={() => {
+            const req = conversationConfirmation;
+            clearConversationConfirmation();
+            if (req) void req.onConfirm();
+          }}
+          onCancel={
+            conversationConfirmation?.onCancel
+              ? () => {
+                  const req = conversationConfirmation;
+                  clearConversationConfirmation();
+                  if (req?.onCancel) void req.onCancel();
+                }
+              : undefined
+          }
+          variant={conversationConfirmation?.variant ?? 'danger'}
         />
       </View>
     </SafeAreaView>

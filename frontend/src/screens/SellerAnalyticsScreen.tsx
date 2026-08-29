@@ -513,7 +513,7 @@ export default function SellerAnalyticsScreen() {
           {[0, 1, 2].map((i) => (
             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
               <View style={{ backgroundColor: colors.surfaceAlt, width: 48, height: 48, borderRadius: Radius.sm }} />
-              <View style={{ flex: 1, gap: 4 }}>
+              <View style={{ flex: 1, gap: Space.xs }}>
                 <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: '60%', borderRadius: Radius.sm }} />
                 <View style={{ backgroundColor: colors.surfaceAlt, height: 11, width: '35%', borderRadius: Radius.sm }} />
               </View>

@@ -99,17 +99,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   statusDot: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: Space.sm,
+    right: Space.sm,
     width: 10,
     height: 10,
     borderRadius: Radius.sm,
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.surface,
   },
   content: {
     padding: Space.sm,
-    gap: 4,
+    gap: Space.xs,
   },
   title: {
     fontSize: TypographyV2.body.size,
@@ -136,8 +136,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   allocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 2,
+    gap: Space.sm,
+    marginTop: Space.xxs,
   },
   allocationBarBg: {
     flex: 1,

@@ -21,7 +21,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import NetInfo from "@react-native-community/netinfo";
 import { AppState } from "react-native";
-import { Alert } from "react-native";
 
 import { type FlashListRef } from "@shopify/flash-list";
 
@@ -104,6 +103,25 @@ interface UseConversationMessagesOptions {
   ) => void;
 }
 
+/**
+ * A confirmation request emitted by the hook for the calling screen to
+ * render via `<ConfirmationSheet>`. Hooks cannot render UI, so they expose
+ * a request object and the screen binds it to the sheet.
+ *
+ * `onCancel` is optional: when present it is invoked by the sheet's cancel
+ * button (used for the "delete for me" secondary action in the
+ * delete-for-everyone flow); backdrop dismiss always aborts without action.
+ */
+export interface ConversationConfirmationRequest {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  variant: 'default' | 'danger';
+  onConfirm: () => void | Promise<void>;
+  onCancel?: () => void | Promise<void>;
+}
+
 export function useConversationMessages({
   conversationId,
   routeOfferPayload,
@@ -136,6 +154,8 @@ export function useConversationMessages({
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
+  const [confirmation, setConfirmation] = useState<ConversationConfirmationRequest | null>(null);
+  const clearConfirmation = useCallback(() => setConfirmation(null), []);
   const [composerSending, setComposerSending] = useState(false);
 
   // Ref mirror of the local message list so async callbacks (e.g.
@@ -1024,35 +1044,31 @@ export function useConversationMessages({
         exitSelectionMode();
         return;
       }
-      Alert.alert(
-        "Delete messages?",
-        `This will remove ${toDelete.length} message${toDelete.length === 1 ? "" : "s"}.`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: async () => {
-              haptic.medium();
-              deleteApiStatusRef.current = "pending";
-              setRecentlyDeleted(toDelete);
-              setMessages((prev) => prev.filter((m) => !idsToDelete.has(m.id)));
-              exitSelectionMode();
-              scheduleUndoClear();
-              try {
-                if (!conversationId) throw new Error("No conversation");
-                await Promise.all(
-                  toDelete.map((m) => deleteConversationMessageOnApi(conversationId, m.id, 'me')),
-                );
-                deleteApiStatusRef.current = "success";
-              } catch {
-                deleteApiStatusRef.current = "error";
-                show("Some messages may not have been deleted on the server.", "error");
-              }
-            },
-          },
-        ],
-      );
+      setConfirmation({
+        title: "Delete messages?",
+        message: `This will remove ${toDelete.length} message${toDelete.length === 1 ? "" : "s"}.`,
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+        variant: "danger",
+        onConfirm: async () => {
+          haptic.medium();
+          deleteApiStatusRef.current = "pending";
+          setRecentlyDeleted(toDelete);
+          setMessages((prev) => prev.filter((m) => !idsToDelete.has(m.id)));
+          exitSelectionMode();
+          scheduleUndoClear();
+          try {
+            if (!conversationId) throw new Error("No conversation");
+            await Promise.all(
+              toDelete.map((m) => deleteConversationMessageOnApi(conversationId, m.id, 'me')),
+            );
+            deleteApiStatusRef.current = "success";
+          } catch {
+            deleteApiStatusRef.current = "error";
+            show("Some messages may not have been deleted on the server.", "error");
+          }
+        },
+      });
     },
     [messages, conversationId, haptic, show, scheduleUndoClear],
   );
@@ -1083,27 +1099,29 @@ export function useConversationMessages({
       };
 
       if (canDeleteForEveryone) {
-        Alert.alert("Delete message?", "Choose how to delete this message.", [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete for me",
-            onPress: () => performDelete('me'),
-          },
-          {
-            text: "Delete for everyone",
-            style: "destructive",
-            onPress: () => performDelete('everyone'),
-          },
-        ]);
+        // Two real actions (delete for everyone / delete for me) plus an
+        // implicit abort via backdrop dismiss. The destructive option is
+        // the confirm button; the less-destructive option is the cancel
+        // button. Labels make both actions explicit so neither reads as a
+        // plain "cancel".
+        setConfirmation({
+          title: "Delete message?",
+          message: "Choose how to delete this message.",
+          confirmLabel: "Delete for everyone",
+          cancelLabel: "Delete for me",
+          variant: "danger",
+          onConfirm: () => performDelete('everyone'),
+          onCancel: () => performDelete('me'),
+        });
       } else {
-        Alert.alert("Delete message?", "This message will be removed for you.", [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: () => performDelete('me'),
-          },
-        ]);
+        setConfirmation({
+          title: "Delete message?",
+          message: "This message will be removed for you.",
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          variant: "danger",
+          onConfirm: () => performDelete('me'),
+        });
       }
     },
     [conversationId, haptic, show, scheduleUndoClear],
@@ -1227,6 +1245,8 @@ export function useConversationMessages({
     handleUndoDelete,
     handleBulkDelete,
     handleDeleteMessage,
+    confirmation,
+    clearConfirmation,
     dateSeparatorIndices,
     unreadDividerIndex,
     handleMessageListScroll,
