@@ -724,7 +724,7 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     padding: Space.xl,
   },
   placeholderTitle: {
-    fontSize: 18,
+    fontSize: Type.heading.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },

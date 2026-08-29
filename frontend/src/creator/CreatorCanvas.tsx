@@ -2902,7 +2902,7 @@ function createProductStyles(colors: ThemeColors) {
   soldBadgeText: {
     color: '#fff',
     fontFamily: Typography.family.bold,
-    fontSize: 9,
+    fontSize: Type.meta.size,
   },
   hotspotContainer: {
     flexDirection: 'row',
@@ -3054,7 +3054,7 @@ const quizStyles = StyleSheet.create({
     gap: 6,
   },
   emoji: {
-    fontSize: 18,
+    fontSize: Type.heading.size,
   },
   question: {
     color: '#fff',
@@ -3161,7 +3161,7 @@ const sliderStyles = StyleSheet.create({
     gap: 10,
   },
   emoji: {
-    fontSize: 26,
+    fontSize: Type.display.size,
   },
   track: {
     flex: 1,

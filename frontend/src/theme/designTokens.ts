@@ -121,16 +121,20 @@ export const LetterSpacing = {
 // ============================================================================
 export const Type = {
   // ── Display / campaign ──
-  /** 32/38/700 — Auth hero, empty state titles, rare campaign statement */
-  display: { size: 32, lineHeight: 38, weight: '700', letterSpacing: -0.5 },
+  /** 24/30/700 — Auth hero, empty state titles, rare campaign statement */
+  display: { size: 24, lineHeight: 30, weight: '700', letterSpacing: -0.5 },
+  /** 28/34/700 — Hero campaign statements, splash headlines */
+  hero: { size: 28, lineHeight: 34, weight: '700', letterSpacing: -0.5 },
 
   // ── Screen identity ──
-  /** 24/32/700 — Hero titles, screen headers, profile names */
-  title: { size: 24, lineHeight: 32, weight: '700', letterSpacing: -0.6 },
-  /** 24/32/700 — Semantic alias: screen identity (maps to title) */
-  screenTitle: { size: 24, lineHeight: 32, weight: '700', letterSpacing: -0.6 },
+  /** 20/26/700 — Hero titles, screen headers, profile names */
+  title: { size: 20, lineHeight: 26, weight: '700', letterSpacing: -0.6 },
+  /** 20/26/700 — Semantic alias: screen identity (maps to title) */
+  screenTitle: { size: 20, lineHeight: 26, weight: '700', letterSpacing: -0.6 },
 
   // ── Section / item titles ──
+  /** 17/22/600 — Section titles, card headers, product names, feed item titles */
+  heading: { size: 17, lineHeight: 22, weight: '600', letterSpacing: -0.4 },
   /** 17/24/600 — Section titles, card headers, product names */
   subtitle: { size: 17, lineHeight: 24, weight: '600', letterSpacing: -0.4 },
   /** 17/24/600 — Semantic alias: major section (maps to subtitle) */
@@ -206,15 +210,15 @@ export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
   },
   hero: {
     fontFamily: FontFamily.bold,
-    fontSize: Type.display.size,
-    letterSpacing: Type.display.letterSpacing,
-    lineHeight: Type.display.lineHeight,
+    fontSize: Type.hero.size,
+    letterSpacing: Type.hero.letterSpacing,
+    lineHeight: Type.hero.lineHeight,
   },
   heading: {
     fontFamily: FontFamily.bold,
-    fontSize: Type.title.size,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
+    fontSize: Type.heading.size,
+    letterSpacing: Type.heading.letterSpacing,
+    lineHeight: Type.heading.lineHeight,
   },
   title: {
     fontFamily: FontFamily.bold,
@@ -357,50 +361,6 @@ export const ZIndex = {
 } as const;
 
 // ============================================================================
-// COMMON STYLE PRESETS
-// ============================================================================
-/**
- * @deprecated CommonStyles has zero usages across the codebase as of the
- * duplicate-primitive consolidation pass. It is retained here in case it
- * is part of a public API consumed by external packages. New code should
- * use StyleSheet.create at the call site or a dedicated component instead.
- */
-export const CommonStyles = {
-  /** Standard card container — flat (no shadow). Opt into elevatedCard for depth. */
-  card: {
-    padding: Space.md,
-    borderRadius: Radius.lg,
-  },
-  /** Elevated card container — includes deliberate shadow for hierarchy. */
-  elevatedCard: {
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    ...Elevation.card,
-  },
-  /** Standard screen container */
-  screen: {
-    flex: 1,
-    paddingHorizontal: Space.md,
-  },
-  /** Row with items centered */
-  rowCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  /** Row with items spread apart */
-  rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  /** Center content both directions */
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-} as const;
-
-// ============================================================================
 // STICKY DOCK GEOMETRY
 // ============================================================================
 // CoOwnStickyActionDock and CommerceStickyDock both have minHeight: 72.
@@ -463,7 +423,7 @@ export const Numeric = {
     ...Type.priceLarge,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  // Hero portfolio / wallet value (32/38/700)
+  // Hero portfolio / wallet value (24/30/700)
   display: {
     ...Type.display,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],

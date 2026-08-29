@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
   },
   heroText: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   accountsList: {
     gap: Space.sm,

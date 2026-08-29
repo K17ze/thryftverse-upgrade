@@ -70,7 +70,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 22,
+    fontSize: Type.title.size,
     color: colors.textPrimary,
     letterSpacing: -0.4,
   },

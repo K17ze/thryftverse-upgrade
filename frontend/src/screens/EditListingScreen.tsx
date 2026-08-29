@@ -6,7 +6,6 @@ import {
   TextInput,
   Pressable,
   Dimensions,
-  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,6 +34,7 @@ import { EditListingFooter } from '../components/listing/EditListingFooter';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SkeletonLoader } from '../components/SkeletonLoader';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useBackendData } from '../context/BackendDataContext';
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -144,6 +144,16 @@ export default function EditListingScreen() {
   const [saveStage, setSaveStage] = useState<SaveStage>('idle');
   const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(false);
   const [qualityTipsExpanded, setQualityTipsExpanded] = useState(false);
+
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   // Media state — stable-ID based
   const [mediaItems, setMediaItems] = useState<ListingMediaDraftItem[]>([]);
@@ -592,14 +602,15 @@ export default function EditListingScreen() {
   /* ── discard confirmation ── */
   const handleCancel = useCallback(() => {
     if (hasChanges) {
-      Alert.alert(
-        'Discard changes?',
-        'You have unsaved changes that will be lost.',
-        [
-          { text: 'Keep editing', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-        ]
-      );
+      setConfirmSheet({
+        visible: true,
+        title: 'Discard changes?',
+        message: 'You have unsaved changes that will be lost.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        variant: 'danger',
+        onConfirm: () => navigation.goBack(),
+      });
     } else {
       navigation.goBack();
     }
@@ -1271,6 +1282,17 @@ export default function EditListingScreen() {
         selectedValue={getPickerSelected()}
         onSelect={handlePickerSelect}
         searchable={pickerMode === 'Brand'}
+      />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
       />
     </FlagshipScreen>
   );

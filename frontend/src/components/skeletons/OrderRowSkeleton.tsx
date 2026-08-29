@@ -32,8 +32,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: Space.smMd,
+    gap: Space.smMd,
   },
   textCol: {
     flex: 1,

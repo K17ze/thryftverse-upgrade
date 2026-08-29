@@ -11,6 +11,7 @@ import Reanimated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { Radius } from '../../theme/designTokens';
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
 
@@ -24,7 +25,7 @@ interface Props {
 export function PremiumSkeletonTile({
   width = '100%',
   height = '100%',
-  borderRadius = 8,
+  borderRadius = Radius.md,
   style,
 }: Props) {
   const { colors } = useAppTheme();

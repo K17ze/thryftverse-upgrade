@@ -21,7 +21,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Canvas, Rect, Line, Text as SkiaText, useFont } from '@shopify/react-native-skia';
 import { FrameProfiler, TARGET_FRAME_MS, type FrameMetrics } from './FrameProfiler';
-import { Radius } from '../../../theme/designTokens';
+import { Radius, Type } from '../../../theme/designTokens';
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     color: '#FFFFFF60',
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontWeight: '500',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   },
   threadLabel: {
     color: '#FFFFFF50',
-    fontSize: 8,
+    fontSize: Type.meta.size,
     fontVariant: ['tabular-nums'],
   },
   toggleBtn: {
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
   },
   toggleBtnText: {
     color: '#FFFFFF',
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontWeight: '700',
     letterSpacing: 0.5,
   },

@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   Dimensions,
-  Alert,
   Keyboard,
   useWindowDimensions,
   LayoutChangeEvent,
@@ -66,6 +65,7 @@ import { LookAutoLayoutBar } from './LookAutoLayoutBar';
 import { autoLayout, type LayoutStyle } from './LookAutoLayout';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
+import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 import { fetchLookByIdFromApi } from '../../services/looksApi';
 import { lookToDocument } from '../viewerAdapters';
 import type { CreatorTemplate } from '../templates';
@@ -208,6 +208,14 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const [autoLayoutId, setAutoLayoutId] = useState<LayoutStyle | null>(null);
   const [showA11yMove, setShowA11yMove] = useState(false);
   const [showA11yZOrder, setShowA11yZOrder] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   // ── Multi-select mode ──────────────────────────────────────────────
   // Long-press enters multi-select mode. In multi-select, tapping a layer
@@ -331,25 +339,28 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       navigation.goBack();
       return;
     }
-    Alert.alert(
-      'Save draft?',
-      'Your changes haven\'t been published yet.',
-      [
-        {
-          text: 'Save draft',
-          onPress: async () => {
-            try {
-              await saveDraft();
-              navigation.goBack();
-            } catch {
-              Alert.alert('Could not save draft', 'Try again.');
-            }
-          },
-        },
-        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-        { text: 'Keep editing', style: 'cancel' },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Save draft?',
+      message: 'Your changes haven\'t been published yet.',
+      confirmLabel: 'Save draft',
+      variant: 'default',
+      onConfirm: async () => {
+        try {
+          await saveDraft();
+          navigation.goBack();
+        } catch {
+          setConfirmSheet({
+            visible: true,
+            title: 'Could not save draft',
+            message: 'Try again.',
+            confirmLabel: 'OK',
+            variant: 'default',
+            onConfirm: () => {},
+          });
+        }
+      },
+    });
   }, [isDirty, navigation, saveDraft]);
 
   // ── Multi-select: exit helper ──────────────────────────────────────
@@ -1838,6 +1849,15 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
             addLayer(layer);
           }
         }}
+      />
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
       />
     </View>
   );

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   Pressable,
   ScrollView,
 } from 'react-native';
@@ -21,6 +20,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { BodyEmphasis, Caption } from '../components/ui/Text';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageCollectionItems'>;
@@ -63,40 +63,47 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
 
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
+
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleRemove = useCallback((itemId: string, itemTitle: string) => {
     haptic.medium();
-    Alert.alert(
-      'Remove item?',
-      `Remove "${itemTitle}" from this collection?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setRemovingIds((prev) => new Set(prev).add(itemId));
-            // Optimistic removal
-            removeFromCollection(collectionId, itemId);
-            try {
-              await removeFromCollectionOnApi(collectionId, itemId);
-              show('Item removed', 'info');
-            } catch {
-              // Rollback: re-add the item since API call failed
-              addToCollection(collectionId, itemId);
-              show('Failed to remove item. Try again.', 'error');
-            } finally {
-              setRemovingIds((prev) => {
-                const next = new Set(prev);
-                next.delete(itemId);
-                return next;
-              });
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove item?',
+      message: `Remove "${itemTitle}" from this collection?`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        setRemovingIds((prev) => new Set(prev).add(itemId));
+        // Optimistic removal
+        removeFromCollection(collectionId, itemId);
+        try {
+          await removeFromCollectionOnApi(collectionId, itemId);
+          show('Item removed', 'info');
+        } catch {
+          // Rollback: re-add the item since API call failed
+          addToCollection(collectionId, itemId);
+          show('Failed to remove item. Try again.', 'error');
+        } finally {
+          setRemovingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(itemId);
+            return next;
+          });
+        }
+      },
+    });
   }, [collectionId, haptic, addToCollection, removeFromCollection, removeFromCollectionOnApi, show]);
 
   const handleAdd = useCallback(async (itemId: string) => {
@@ -274,6 +281,17 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           </View>
         )}
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }

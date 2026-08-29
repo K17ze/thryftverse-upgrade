@@ -303,11 +303,11 @@ function createStyles(colors: ThemeColors) {
     textTransform: 'uppercase',
   },
   cardTitle: {
-    fontSize: 19,
+    fontSize: Type.heading.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
-    lineHeight: 23,
+    lineHeight: Type.heading.lineHeight,
   },
   cardSubtitle: {
     fontSize: Type.caption.size,

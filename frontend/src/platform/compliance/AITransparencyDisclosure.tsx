@@ -30,7 +30,7 @@ import {
 } from 'react-native';
 import { appStorage } from '../../storage/mmkv';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space } from '../../theme/designTokens';
+import { Space, Type } from '../../theme/designTokens';
 
 const DISMISSED_KEY = '@thryftverse/ai_disclosure_dismissed';
 const DISMISSED_TIMESTAMP_KEY = '@thryftverse/ai_disclosure_dismissed_at';
@@ -279,7 +279,7 @@ export function AITransparencyDisclosure({
       flex: 1,
     },
     controlChevron: {
-      fontSize: 18,
+      fontSize: Type.heading.size,
       color: colors.textMuted,
     },
     contactSection: {
@@ -302,7 +302,7 @@ export function AITransparencyDisclosure({
       flex: 1,
       backgroundColor: colors.brand,
       paddingVertical: Space.md,
-      borderRadius: 14,
+      borderRadius: 16,
       alignItems: 'center',
     },
     primaryButtonText: {

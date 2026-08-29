@@ -486,9 +486,9 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.textPrimary,
     },
     fontPreviewText: {
-      fontSize: 22,
+      fontSize: Type.title.size,
       color: colors.textSecondary,
-      lineHeight: 26,
+      lineHeight: Type.title.lineHeight,
     },
     fontPreviewTextActive: {
       color: colors.textPrimary,

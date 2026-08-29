@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography, Control } from '../../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -37,11 +37,11 @@ export function LookDetailSkeleton() {
 
       {/* Social actions row — matches LookSocialActions layout */}
       <View style={styles.socialRow}>
-        <SkeletonLoader width={44} height={44} borderRadius={Radius.full} />
-        <SkeletonLoader width={44} height={44} borderRadius={Radius.full} />
-        <SkeletonLoader width={44} height={44} borderRadius={Radius.full} />
+        <SkeletonLoader width={Control.hit} height={Control.hit} borderRadius={Radius.full} />
+        <SkeletonLoader width={Control.hit} height={Control.hit} borderRadius={Radius.full} />
+        <SkeletonLoader width={Control.hit} height={Control.hit} borderRadius={Radius.full} />
         <View style={{ flex: 1 }} />
-        <SkeletonLoader width={44} height={44} borderRadius={Radius.full} />
+        <SkeletonLoader width={Control.hit} height={Control.hit} borderRadius={Radius.full} />
       </View>
 
       {/* Tray section — "Shop the look" rail */}
@@ -77,10 +77,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: 2,
+    marginTop: Space.xxs,
   },
   creatorInfo: {
-    gap: 2,
+    gap: Space.xxs,
   },
   socialRow: {
     flexDirection: 'row',

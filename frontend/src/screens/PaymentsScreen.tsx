@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -188,17 +187,27 @@ export default function PaymentsScreen({ navigation }: Props) {
   };
 
   const handlePaymentMethodPress = (method: CommercePaymentMethod) => {
-    Alert.alert(
-      method.label,
-      method.details ?? t('payments.label.savedPaymentMethod'),
-      [
-        ...(method.isDefault
-          ? []
-          : [{ text: t('payments.alert.setAsDefault'), onPress: () => void handleSetDefault(method) }]),
-        { text: t('payments.alert.remove'), style: 'destructive', onPress: () => handleRemovePaymentMethod(method) },
-        { text: t('payments.alert.cancel'), style: 'cancel' },
-      ]
-    );
+    if (method.isDefault) {
+      setConfirmSheet({
+        visible: true,
+        title: method.label,
+        message: method.details ?? t('payments.label.savedPaymentMethod'),
+        confirmLabel: t('payments.alert.remove'),
+        cancelLabel: t('payments.alert.cancel'),
+        variant: 'danger',
+        onConfirm: () => handleRemovePaymentMethod(method),
+      });
+    } else {
+      setConfirmSheet({
+        visible: true,
+        title: method.label,
+        message: method.details ?? t('payments.label.savedPaymentMethod'),
+        confirmLabel: t('payments.alert.setAsDefault'),
+        cancelLabel: t('payments.alert.cancel'),
+        variant: 'default',
+        onConfirm: () => void handleSetDefault(method),
+      });
+    }
   };
 
   const renderPaymentMethodRows = (

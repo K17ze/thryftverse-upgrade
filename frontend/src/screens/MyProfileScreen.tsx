@@ -1284,7 +1284,7 @@ const styles = StyleSheet.create({
   },
   portfolioHoldingInfo: {
     flexShrink: 1,
-    gap: 2,
+    gap: Space.xxs,
   },
   portfolioHoldingTitle: {
     fontSize: TypographyV2.meta.size,
@@ -1399,7 +1399,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    gap: 4,
+    gap: Space.xs,
   },
   gridCard: {
     marginBottom: Space.sm,
@@ -1495,7 +1495,7 @@ const styles = StyleSheet.create({
   },
   listingsEmptyCta: {
     marginTop: Space.xs + 2,
-    minHeight: 44,
+    minHeight: Control.hit,
     paddingHorizontal: Space.md + 2,
     justifyContent: 'center',
     borderRadius: RadiusRoleValue.sheetDialog,
@@ -1669,7 +1669,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    minHeight: 44,
+    minHeight: Control.hit,
     borderRadius: RadiusRoleValue.mediaThumbnail,
     paddingHorizontal: Space.md,
   },

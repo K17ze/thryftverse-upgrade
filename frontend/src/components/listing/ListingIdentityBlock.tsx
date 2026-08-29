@@ -55,10 +55,10 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   title: {
-    fontSize: 22,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    lineHeight: 28,
+    lineHeight: Type.title.lineHeight,
     letterSpacing: -0.4,
     marginBottom: Space.sm,
   },

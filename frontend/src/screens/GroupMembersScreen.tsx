@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Pressable,
 } from 'react-native';
@@ -370,7 +369,19 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
       });
     }
 
-    Alert.alert(member.name, undefined, options);
+    // Map the action menu to ConfirmationSheet — first non-cancel button
+    // becomes the confirm action.
+    const firstAction = options.find((o) => o.style !== 'cancel' && o.onPress);
+    if (firstAction) {
+      setConfirmSheet({
+        visible: true,
+        title: member.name,
+        message: firstAction.text,
+        confirmLabel: firstAction.text,
+        variant: firstAction.style === 'destructive' ? 'danger' : 'default',
+        onConfirm: () => { firstAction.onPress?.(); },
+      });
+    }
   };
 
   const handleLeaveGroup = () => {

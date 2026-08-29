@@ -1772,7 +1772,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 14,
   },
   peekTitle: {
-    fontSize: 19,
+    fontSize: Type.heading.size,
     fontFamily: FontFamily.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,

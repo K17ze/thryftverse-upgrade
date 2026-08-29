@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
@@ -250,7 +250,7 @@ const chartStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     height: '100%',
-    gap: 2,
+    gap: Space.xxs,
   },
   barColumn: {
     flex: 1,
@@ -263,8 +263,8 @@ const chartStyles = StyleSheet.create({
   },
   bar: {
     width: '100%',
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
+    borderTopLeftRadius: Radius.sm,
+    borderTopRightRadius: Radius.sm,
     minHeight: 2,
   },
   labelsRow: {
@@ -277,7 +277,7 @@ const chartStyles = StyleSheet.create({
   labelsTrack: {
     flex: 1,
     flexDirection: 'row',
-    gap: 2,
+    gap: Space.xxs,
   },
   labelColumn: {
     flex: 1,
@@ -577,7 +577,7 @@ export default function SellerAnalyticsScreen() {
       ) : null}
       {partialError ? (
         <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt }}>
-          <Text style={{ fontSize: 13, color: colors.textMuted, lineHeight: 18 }}>
+          <Text style={{ fontSize: Type.captionElevated.size, color: colors.textMuted, lineHeight: Type.captionElevated.lineHeight }}>
             Analytics details couldn't be loaded — showing listing data only. Pull to retry.
           </Text>
         </View>
@@ -853,7 +853,7 @@ function createStyles(colors: ThemeColors) {
       marginVertical: Space.sm,
       backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.md,
-      padding: 2,
+      padding: Space.xxs,
     },
     periodSegment: {
       flex: 1,
@@ -861,7 +861,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.sm,
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: 36,
+      minHeight: Control.chrome,
     },
     periodSegmentText: {
       fontSize: Type.caption.size,

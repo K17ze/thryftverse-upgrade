@@ -261,7 +261,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   badgeText: {
     fontFamily: Typography.family.bold,
-    fontSize: 9,
+    fontSize: Type.meta.size,
     color: colors.textInverse,
     fontVariant: ['tabular-nums'],
   },

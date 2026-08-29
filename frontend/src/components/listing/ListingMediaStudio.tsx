@@ -109,7 +109,7 @@ function StatusLabel({ status, color }: { status: ItemStatus; color: string }) {
 
 const statusLabelStyles = StyleSheet.create({
   statusLabelText: {
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
 });
@@ -649,7 +649,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     width: 72,
     height: 72,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}0D`,
+    backgroundColor: colors.brandSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
@@ -902,7 +902,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   },
   thumbCoverText: {
     color: colors.background,
-    fontSize: 8,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.3,
   },
@@ -966,7 +966,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     gap: 4,
   },
   thumbRetryText: {
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.scrimTextPrimary,
   },
@@ -996,7 +996,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     gap: 2,
   },
   thumbCancelledText: {
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.scrimTextPrimary,
   },
@@ -1029,7 +1029,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   thumbSetCoverText: {
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.scrimTextPrimary,
     letterSpacing: 0.3,

@@ -7,7 +7,7 @@ import Reanimated, {
   withSpring,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { Typography, Radius, Space } from '../../theme/designTokens';
+import { Typography, Radius, Space, Type } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';

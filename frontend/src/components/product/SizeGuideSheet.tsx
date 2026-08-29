@@ -208,7 +208,7 @@ export function SizeGuideSheet({
                           styles.tableRow,
                           { borderBottomColor: colors.borderSubtle },
                           rowIdx % 2 === 1 && !isCurrentRow && { backgroundColor: colors.surface },
-                          isCurrentRow && { backgroundColor: `${colors.brand}12` },
+                          isCurrentRow && { backgroundColor: colors.brandSubtle },
                           isLastRow && { borderBottomWidth: 0 },
                         ]}
                       >

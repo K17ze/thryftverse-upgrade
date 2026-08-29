@@ -60,6 +60,7 @@ function computeGradients(colors: GradientColorSource) {
 function computeGlass(colors: GradientColorSource) {
   // In dark mode, glass uses white tints; in light mode, black tints.
   // isDark is passed explicitly (audit M10) — no hex-value sniffing.
+  // NOTE: hex-alpha required for gradient stops — token substitution not applicable
   const isDark = resolveIsDark(colors);
   if (isDark) {
     return {
@@ -80,6 +81,7 @@ function computeGlass(colors: GradientColorSource) {
 }
 
 function computeGlow(colors: GradientColorSource) {
+  // NOTE: hex-alpha required for gradient stops — token substitution not applicable
   return {
     brand: `${colors.brand}26`,
     danger: `${DARK_COLORS.danger}33`,

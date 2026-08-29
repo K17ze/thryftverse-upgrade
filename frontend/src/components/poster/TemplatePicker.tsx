@@ -382,7 +382,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.glassBorder,
     },
     title: {
-      fontSize: 18,
+      fontSize: Type.heading.size,
       fontFamily: Typography.family.bold,
       color: colors.scrimTextPrimary,
       textAlign: 'center',

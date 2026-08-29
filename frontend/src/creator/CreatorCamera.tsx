@@ -1897,7 +1897,7 @@ const styles = StyleSheet.create({
   },
   stagingOrderText: {
     color: '#fff',
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
   // Remove glyph — top-right, signals the tap-to-drop action.

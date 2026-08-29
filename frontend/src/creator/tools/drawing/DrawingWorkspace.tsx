@@ -19,7 +19,6 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   PanResponder,
   Pressable,
@@ -58,6 +57,7 @@ import { IconGrammar } from '../../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../../theme/motionTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { ConfirmationSheet } from '../../../components/ConfirmationSheet';
 import { PressScale } from '../../CreatorAnimations';
 import {
   CreatorSlider,
@@ -413,6 +413,14 @@ export function DrawingWorkspace({
   const [brushSize, setBrushSize] = useState<number>(8);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [redoStack, setRedoStack] = useState<Stroke[]>([]);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   // ── Emoji brush state ──
   const [emojiBrush, setEmojiBrush] = useState<EmojiBrushConfig>({
@@ -623,21 +631,17 @@ export function DrawingWorkspace({
 
   const handleClear = useCallback(() => {
     if (strokes.length === 0) return;
-    Alert.alert(
-      'Clear canvas',
-      'Remove every stroke from the canvas? This can be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: () => {
-            setRedoStack((r) => [...r, ...strokes].slice(-MAX_UNDO_LEVELS));
-            setStrokes([]);
-          },
-        },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Clear canvas',
+      message: 'Remove every stroke from the canvas? This can be undone.',
+      confirmLabel: 'Clear',
+      variant: 'danger',
+      onConfirm: () => {
+        setRedoStack((r) => [...r, ...strokes].slice(-MAX_UNDO_LEVELS));
+        setStrokes([]);
+      },
+    });
   }, [strokes]);
 
   const handleDone = useCallback(() => {
@@ -946,6 +950,15 @@ export function DrawingWorkspace({
           )}
         </Reanimated.View>
       </View>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
     </GestureHandlerRootView>
   );
 }

@@ -317,6 +317,7 @@ const createStyles = (colors: ThemeColors, isMe: boolean) =>
     progressLineTrack: {
       height: 3,
       borderRadius: Radius.full,
+      // TODO: no textSecondarySubtle token available
       backgroundColor: isMe ? colors.scrimTextTertiary : `${colors.textSecondary}30`,
       overflow: 'hidden',
     },
@@ -339,6 +340,7 @@ const createStyles = (colors: ThemeColors, isMe: boolean) =>
       paddingHorizontal: Space.xs + 2,
       paddingVertical: 2,
       borderRadius: Radius.full,
+      // TODO: no textSecondarySubtle token available
       backgroundColor: isMe ? colors.scrimTextTertiary : `${colors.textSecondary}15`,
     },
     speedText: {

@@ -1137,6 +1137,7 @@ export default function ItemDetailScreen() {
                     Visual signal that there's more content below. */}
                 {!descriptionExpanded && item.description.length > 120 && (
                   <LinearGradient
+                    // NOTE: hex-alpha required for gradient stops — token substitution not applicable
                     colors={[`${colors.background}00`, colors.background]}
                     style={styles.descriptionFade}
                     pointerEvents="none"

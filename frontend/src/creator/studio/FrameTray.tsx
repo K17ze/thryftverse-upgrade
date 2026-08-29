@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, FontFamily, Stroke} from '../../theme/designTokens';
+import { Space, FontFamily, Stroke, Type} from '../../theme/designTokens';
 import { IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   },
   durationText: {
     color: '#fff',
-    fontSize: 8,
+    fontSize: Type.meta.size,
     fontFamily: FontFamily.medium,
   },
   videoInfoLabel: {
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
   },
   thumbLabel: {
     color: 'rgba(255,255,255,0.5)',
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: FontFamily.medium,
   },
   thumbLabelActive: {

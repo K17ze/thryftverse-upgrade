@@ -576,8 +576,8 @@ function createStyles(colors: ThemeColors) {
     },
     // 26pt emoji — within Instagram's 24-28pt band, evenly spaced.
     reactionGlyph: {
-      fontSize: 26,
-      lineHeight: 30,
+      fontSize: Type.display.size,
+      lineHeight: Type.display.lineHeight,
       textAlign: 'center',
     },
     // ── Quick reply chips ─────────────────────────────────────────────

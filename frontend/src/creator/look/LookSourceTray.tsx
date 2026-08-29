@@ -8,7 +8,6 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -30,6 +29,7 @@ import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useStore } from '../../store/useStore';
 import { useBackendData } from '../../context/BackendDataContext';
 import { searchListingsFromApi, type Listing, type ListingSearchResult } from '../../services/listingsApi';
+import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Look Source Tray — commerce peek drawer for the Look Composer.
@@ -243,6 +243,14 @@ export function LookSourceTray({
   const [searchResults, setSearchResults] = useState<ListingSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [draggingItem, setDraggingItem] = useState<TrayItem | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   // ── Discover: a curated selection of recent listings from all sellers,
   //    sorted by recency (most recent first). Acts as a generic discovery
@@ -383,26 +391,23 @@ export function LookSourceTray({
     const isDuplicate = onCanvasListingIds?.has(item.id) ?? false;
     if (isDuplicate) {
       haptic.light();
-      Alert.alert(
-        'Already on canvas',
-        `"${item.title}" is already in your look. Add it again?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Add Again',
-            onPress: () => {
-              haptic.selection();
-              onAddItem({
-                listingId: item.id,
-                snapshotTitle: item.title,
-                snapshotImageUrl: item.imageUrl ?? undefined,
-                snapshotPriceGbp: item.priceGbp,
-              });
-              if (expandedRef.current) onToggle();
-            },
-          },
-        ],
-      );
+      setConfirmSheet({
+        visible: true,
+        title: 'Already on canvas',
+        message: `"${item.title}" is already in your look. Add it again?`,
+        confirmLabel: 'Add Again',
+        variant: 'default',
+        onConfirm: () => {
+          haptic.selection();
+          onAddItem({
+            listingId: item.id,
+            snapshotTitle: item.title,
+            snapshotImageUrl: item.imageUrl ?? undefined,
+            snapshotPriceGbp: item.priceGbp,
+          });
+          if (expandedRef.current) onToggle();
+        },
+      });
       return;
     }
     haptic.selection();
@@ -700,6 +705,15 @@ export function LookSourceTray({
           </Text>
         )}
       </Reanimated.View>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
     </View>
   );
 }

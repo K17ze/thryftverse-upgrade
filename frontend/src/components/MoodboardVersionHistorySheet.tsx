@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FormSheet } from './sheets/FormSheet';
 import { AnimatedPressable } from './AnimatedPressable';
@@ -13,6 +13,7 @@ import {
   type MoodboardVersion,
 } from '../services/moodboardApi';
 import { formatShortDateTime } from '../utils/dateFormat';
+import { ConfirmationSheet } from './ConfirmationSheet';
 
 export interface MoodboardVersionHistorySheetProps {
   visible: boolean;
@@ -33,6 +34,14 @@ export function MoodboardVersionHistorySheet({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -71,7 +80,14 @@ export function MoodboardVersionHistorySheet({
         prev.map((v) => (v.id === version.id ? { ...v, isPinned: !v.isPinned } : v)),
       );
     } catch {
-      Alert.alert('Could not update pin.', undefined, [{ text: 'OK' }]);
+      setConfirmSheet({
+        visible: true,
+        title: 'Could not update pin.',
+        message: '',
+        confirmLabel: 'OK',
+        variant: 'default',
+        onConfirm: () => {},
+      });
     } finally {
       setBusyId(null);
     }
@@ -79,29 +95,25 @@ export function MoodboardVersionHistorySheet({
 
   const handleRestore = useCallback((version: MoodboardVersion) => {
     haptic.medium();
-    Alert.alert(
-      'Restore version',
-      `This will replace the current canvas with revision ${version.revision}. A new version is created from the current state first.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          style: 'default',
-          onPress: async () => {
-            setBusyId(version.id);
-            try {
-              await restoreMoodboardVersion(moodboardId, version.id);
-              await load();
-              onRestored();
-            } catch {
-              setError('Restore failed. Try again.');
-            } finally {
-              setBusyId(null);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Restore version',
+      message: `This will replace the current canvas with revision ${version.revision}. A new version is created from the current state first.`,
+      confirmLabel: 'Restore',
+      variant: 'default',
+      onConfirm: async () => {
+        setBusyId(version.id);
+        try {
+          await restoreMoodboardVersion(moodboardId, version.id);
+          await load();
+          onRestored();
+        } catch {
+          setError('Restore failed. Try again.');
+        } finally {
+          setBusyId(null);
+        }
+      },
+    });
   }, [haptic, moodboardId, load, onRestored]);
 
   const renderRow = (version: MoodboardVersion, index: number) => {
@@ -184,14 +196,25 @@ export function MoodboardVersionHistorySheet({
   }
 
   return (
-    <FormSheet
-      visible={visible}
-      onDismiss={onDismiss}
-      title="Version history"
-      snapPoint={0.7}
-    >
-      {content}
-    </FormSheet>
+    <>
+      <FormSheet
+        visible={visible}
+        onDismiss={onDismiss}
+        title="Version history"
+        snapPoint={0.7}
+      >
+        {content}
+      </FormSheet>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
+    </>
   );
 }
 

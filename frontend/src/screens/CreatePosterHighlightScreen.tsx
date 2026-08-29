@@ -650,7 +650,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     coverThumbText: {
-      fontSize: 9,
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
       textAlign: 'center',

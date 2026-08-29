@@ -337,7 +337,7 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.danger,
     },
     priceDropText: {
-      fontSize: 9,
+      fontSize: Type.meta.size,
       fontFamily: Typography.family.bold,
       color: colors.scrimTextPrimary,
       letterSpacing: 0.2,

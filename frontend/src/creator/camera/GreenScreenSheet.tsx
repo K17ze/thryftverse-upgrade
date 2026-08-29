@@ -15,7 +15,6 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,6 +24,7 @@ import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
+import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 
 // ── Settings type ────────────────────────────────────────────────────
 
@@ -85,6 +85,14 @@ export function GreenScreenSheet({
     initialSettings?.feather ?? DEFAULT_FEATHER,
   );
   const [isPickingBackground, setIsPickingBackground] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   if (!visible) return null;
 
@@ -101,19 +109,16 @@ export function GreenScreenSheet({
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert(
-          'Photo access needed',
-          'Allow photo library access to pick a background image.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Open Settings',
-              onPress: () => {
-                void ImagePicker.requestMediaLibraryPermissionsAsync();
-              },
-            },
-          ],
-        );
+        setConfirmSheet({
+          visible: true,
+          title: 'Photo access needed',
+          message: 'Allow photo library access to pick a background image.',
+          confirmLabel: 'Open Settings',
+          variant: 'default',
+          onConfirm: () => {
+            void ImagePicker.requestMediaLibraryPermissionsAsync();
+          },
+        });
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -126,7 +131,14 @@ export function GreenScreenSheet({
         setBackgroundUri(result.assets[0].uri);
       }
     } catch {
-      Alert.alert('Could not open photo library', 'Please try again.');
+      setConfirmSheet({
+        visible: true,
+        title: 'Could not open photo library',
+        message: 'Please try again.',
+        confirmLabel: 'OK',
+        variant: 'default',
+        onConfirm: () => {},
+      });
     } finally {
       setIsPickingBackground(false);
     }
@@ -362,6 +374,15 @@ export function GreenScreenSheet({
           </PressScale>
         </View>
       </View>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
     </View>
   );
 }

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  Alert,
   Dimensions,
   Share,
   Pressable,
@@ -248,24 +247,25 @@ export default function ManageListingScreen() {
   const isPaused = status === 'paused';
 
   const handleMarkSold = () => {
-    Alert.alert('Mark as Sold', 'This item will no longer be available for purchase.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Mark Sold',
-        style: 'default',
-        onPress: async () => {
-          try {
-            await patchListingOnApi(itemId, { status: 'sold' });
-            setItem((prev: any) => ({ ...prev, status: 'sold' }));
-            show('Listing marked as sold.', 'success');
-            void refreshListings();
-            void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
-          } catch {
-            show('Failed to update listing', 'error');
-          }
-        },
+    setConfirmSheet({
+      visible: true,
+      title: 'Mark as Sold',
+      message: 'This item will no longer be available for purchase.',
+      confirmLabel: 'Mark Sold',
+      cancelLabel: 'Cancel',
+      variant: 'default',
+      onConfirm: async () => {
+        try {
+          await patchListingOnApi(itemId, { status: 'sold' });
+          setItem((prev: any) => ({ ...prev, status: 'sold' }));
+          show('Listing marked as sold.', 'success');
+          void refreshListings();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
+        } catch {
+          show('Failed to update listing', 'error');
+        }
       },
-    ]);
+    });
   };
 
   const handlePause = async () => {
@@ -293,23 +293,24 @@ export default function ManageListingScreen() {
   };
 
   const handleOverflowMenu = () => {
-    Alert.alert('More actions', undefined, [
-      ...(status === 'active'
-        ? [
-            { text: 'Pause listing', onPress: handlePause },
-            { text: 'Mark as sold', onPress: handleMarkSold },
-          ]
+    const firstAction =
+      status === 'active'
+        ? { label: 'Pause listing', action: handlePause }
         : status === 'paused'
-          ? [
-              { text: 'Reactivate listing', onPress: handleReactivate },
-              { text: 'Mark as sold', onPress: handleMarkSold },
-            ]
+          ? { label: 'Reactivate listing', action: handleReactivate }
           : status === 'sold'
-            ? [{ text: 'Reactivate listing', onPress: handleReactivate }]
-            : []),
-      { text: 'Delete listing', style: 'destructive' as const, onPress: handleDeleteListing },
-      { text: 'Cancel', style: 'cancel' as const },
-    ]);
+            ? { label: 'Reactivate listing', action: handleReactivate }
+            : null;
+    if (!firstAction) return;
+    setConfirmSheet({
+      visible: true,
+      title: 'More actions',
+      message: '',
+      confirmLabel: firstAction.label,
+      cancelLabel: 'Cancel',
+      variant: 'default',
+      onConfirm: firstAction.action,
+    });
   };
 
   // Status metadata for the flat identity block.
@@ -587,6 +588,17 @@ export default function ManageListingScreen() {
           />
         </View>
       </Reanimated.ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
+      />
     </View>
   );
 }

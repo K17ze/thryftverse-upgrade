@@ -244,7 +244,7 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.sm,
   },
   displayName: {
-    fontSize: 19,
+    fontSize: Type.heading.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.3,

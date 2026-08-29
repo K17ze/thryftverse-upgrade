@@ -365,7 +365,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   permissionTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: 18,
+    fontSize: Type.heading.size,
     color: colors.scrimTextPrimary,
     marginTop: Space.sm,
   },

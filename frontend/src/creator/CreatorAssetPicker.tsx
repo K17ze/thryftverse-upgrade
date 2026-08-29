@@ -4828,12 +4828,12 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   effectChip: { width: 56, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
   effectChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
   effectChipSample: { fontFamily: Typography.family.bold, fontSize: Type.priceList.size, lineHeight: 24 },
-  effectChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary },
+  effectChipLabel: { fontFamily: Typography.family.medium, fontSize: Type.meta.size, color: colors.textSecondary },
   effectChipLabelActive: { color: colors.brand },
   // ── Text animation chips (visual preview) ──
   animChip: { width: 48, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
   animChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
-  animChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
+  animChipLabel: { fontFamily: Typography.family.medium, fontSize: Type.meta.size, color: colors.textSecondary, textAlign: 'center' },
   animChipLabelActive: { color: colors.brand },
   // ── Draw brush chips (premium tool selection) ──
   brushChipScroll: { gap: Space.sm, paddingVertical: Space.xs },
@@ -4859,7 +4859,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   // ── Quiz preview ──
   quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },
   quizPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
-  quizPreviewEmoji: { fontSize: 22 },
+  quizPreviewEmoji: { fontSize: Type.title.size },
   quizPreviewQuestion: { flex: 1, fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary },
   quizPreviewOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: Space.sm, paddingHorizontal: Space.md, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   quizPreviewOptionCorrect: { borderColor: colors.success, backgroundColor: withAlpha(colors.success, 0.08) },

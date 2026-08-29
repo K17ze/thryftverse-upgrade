@@ -8,7 +8,6 @@ import {
   Dimensions,
   AppState,
   Image,
-  Alert,
   ActivityIndicator,
   AccessibilityInfo,
   BackHandler,
@@ -78,6 +77,7 @@ import { safeValidateDocument, type CreatorDocument } from '../creator/compositi
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 import * as Clipboard from 'expo-clipboard';
 import { Sentry } from '../platform/monitoring';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TICK_MS = 50;
@@ -128,6 +128,14 @@ export default function PosterViewerScreen() {
   const [questionAnswer, setQuestionAnswer] = React.useState('');
   const [questionAnswerSent, setQuestionAnswerSent] = React.useState(false);
   const [isStickerSubmitting, setIsStickerSubmitting] = React.useState(false);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const storyId = route.params?.storyId;
   const startFrameIndex = route.params?.startFrameIndex ?? 0;
@@ -303,26 +311,22 @@ export default function PosterViewerScreen() {
   const handleDelete = async () => {
     if (!activeStory || !isOwner) return;
     haptic.medium();
-    Alert.alert(
-      'Delete story?',
-      'This will permanently remove your poster story.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deletePosterStory(activeStory.id);
-              show('Story deleted', 'info');
-              navigation.goBack();
-            } catch {
-              show('Failed to delete story', 'error');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete story?',
+      message: 'This will permanently remove your poster story.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deletePosterStory(activeStory.id);
+          show('Story deleted', 'info');
+          navigation.goBack();
+        } catch {
+          show('Failed to delete story', 'error');
+        }
+      },
+    });
   };
 
   const handleArchive = async () => {
@@ -646,7 +650,19 @@ export default function PosterViewerScreen() {
       });
     }
     options.push({ text: 'Cancel', style: 'cancel' });
-    Alert.alert('Story options', undefined, options);
+    // Map the action menu to ConfirmationSheet — first non-cancel button
+    // becomes the confirm action.
+    const firstAction = options.find((o) => o.style !== 'cancel' && o.onPress);
+    if (firstAction) {
+      setConfirmSheet({
+        visible: true,
+        title: 'Story options',
+        message: firstAction.text,
+        confirmLabel: firstAction.text,
+        variant: firstAction.style === 'destructive' ? 'danger' : 'default',
+        onConfirm: () => { firstAction.onPress?.(); },
+      });
+    }
   };
 
   const handleRetryMedia = () => {
@@ -1171,6 +1187,15 @@ export default function PosterViewerScreen() {
         url={`https://thryftverse.com/story/${activeStory.id}`}
         title={`@${creatorName}'s story`}
         imageUri={activeFrame.mediaUrl || activeStory.creator.avatar || undefined}
+      />
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
       />
         </Reanimated.View>
       </GestureDetector>

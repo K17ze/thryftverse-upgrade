@@ -19,9 +19,9 @@ interface Props {
 }
 
 const SIZE_MAP = {
-  large: { width: SCREEN_W - Space.md * 2, height: 180, titleSize: 24, radius: Radius.xl },
-  medium: { width: (SCREEN_W - Space.md * 2 - Space.sm) / 2, height: 140, titleSize: 18, radius: Radius.lg },
-  small: { width: (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3, height: 110, titleSize: 14, radius: Radius.md },
+  large: { width: SCREEN_W - Space.md * 2, height: 180, titleSize: Type.title.size, radius: Radius.xl },
+  medium: { width: (SCREEN_W - Space.md * 2 - Space.sm) / 2, height: 140, titleSize: Type.itemTitle.size, radius: Radius.lg },
+  small: { width: (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3, height: 110, titleSize: Type.body.size, radius: Radius.md },
 };
 
 export function VisualCategoryTile({
@@ -106,7 +106,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
     color: colors.scrimTextSecondary,
-    marginTop: 2,
+    marginTop: Space.xxs,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -114,7 +114,7 @@ function createStyles(colors: ThemeColors) {
   countRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     marginTop: 6,
   },
   countText: {

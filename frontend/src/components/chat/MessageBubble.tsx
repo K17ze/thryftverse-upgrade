@@ -476,6 +476,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.dangerBorder,
   },
   bubbleDraft: {
+    // TODO: no surfaceAltSubtle token available
     backgroundColor: `${colors.surfaceAlt}80`,
     borderWidth: Stroke.standard,
     borderColor: colors.borderSubtle,

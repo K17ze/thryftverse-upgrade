@@ -14,7 +14,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { FontFamily, IconGrammar, Stroke} from '../../theme/designTokens';
+import { FontFamily, IconGrammar, Stroke, Type} from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
 
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   },
   labelText: {
     fontFamily: FontFamily.medium,
-    fontSize: 9,
+    fontSize: Type.meta.size,
     color: RED_TINT_LABEL,
     letterSpacing: 0.3,
   },

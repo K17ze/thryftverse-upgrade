@@ -244,7 +244,7 @@ function createStyles(colors: ThemeColors) {
   },
   itemRowSelected: {
     borderColor: colors.brand,
-    backgroundColor: `${colors.brand}08`,
+    backgroundColor: colors.brandSubtle,
   },
   checkbox: {
     width: Space.lg,

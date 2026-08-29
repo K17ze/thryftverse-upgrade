@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Alert,
   Keyboard,
   useWindowDimensions,
   ActivityIndicator,
@@ -17,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke} from '../../theme/designTokens';
+import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke, Type} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -45,6 +44,7 @@ import { CreatorEntryScreen } from '../CreatorEntryScreen';
 import { CreatorEntryEditorCrossfade, type CreatorContentTransform } from '../CreatorEntryEditorCrossfade';
 import { PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
+import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 import type { CaptureViewport } from '../capture/CaptureViewport';
 import type { CreatorTemplate } from '../templates';
 import { FrameTray } from '../studio/FrameTray';
@@ -241,6 +241,14 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // recognition-over-recall pattern: the user doesn't need to remember
   // what the original looked like; they hold to see it.
   const [compareOriginal, setCompareOriginal] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const page = document.pages[activePageIndex];
   const pageCount = document.pages.length;
@@ -289,25 +297,28 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       navigation.goBack();
       return;
     }
-    Alert.alert(
-      'Save draft?',
-      'Your changes haven\'t been published yet.',
-      [
-        {
-          text: 'Save draft',
-          onPress: async () => {
-            try {
-              await saveDraft();
-              navigation.goBack();
-            } catch {
-              Alert.alert('Could not save draft', 'Try again.');
-            }
-          },
-        },
-        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-        { text: 'Keep editing', style: 'cancel' },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Save draft?',
+      message: 'Your changes haven\'t been published yet.',
+      confirmLabel: 'Save draft',
+      variant: 'default',
+      onConfirm: async () => {
+        try {
+          await saveDraft();
+          navigation.goBack();
+        } catch {
+          setConfirmSheet({
+            visible: true,
+            title: 'Could not save draft',
+            message: 'Try again.',
+            confirmLabel: 'OK',
+            variant: 'default',
+            onConfirm: () => {},
+          });
+        }
+      },
+    });
   }, [isDirty, navigation, saveDraft]);
 
   // ── Keyboard shortcuts (web/tablet only) ───────────────────────────
@@ -2782,6 +2793,15 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           </View>
         </View>
       )}
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
     </View>
   );
 
@@ -3120,7 +3140,7 @@ const styles = StyleSheet.create({
   },
   safeZoneLabelText: {
     fontFamily: FontFamily.medium,
-    fontSize: 9,
+    fontSize: Type.meta.size,
     letterSpacing: 0.3,
   },
   // ── Bottom gradient scrim ──

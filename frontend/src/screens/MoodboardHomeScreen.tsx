@@ -841,11 +841,12 @@ function useStyles() {
           paddingHorizontal: Space.xs,
           paddingVertical: 1,
           borderRadius: Radius.sm,
+          // TODO: no textInverseSubtle token available
           backgroundColor: `${colors.textInverse}24`,
         },
         betaBadgeText: {
-          fontSize: 9,
-          lineHeight: 12,
+          fontSize: Type.meta.size,
+          lineHeight: Type.meta.lineHeight,
           fontFamily: Typography.family.bold,
           color: colors.textInverse,
           letterSpacing: 0.3,

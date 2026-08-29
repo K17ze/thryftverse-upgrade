@@ -21,7 +21,6 @@ import {
   ScrollView,
   Pressable,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -93,6 +92,14 @@ export default function AgentLedgerScreen({ navigation }: Props) {
   const [cancellingId, setCancellingId] = React.useState<string | null>(null);
   const [approvingId, setApprovingId] = React.useState<string | null>(null);
   const [rejectingId, setRejectingId] = React.useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const botNameById = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -130,32 +137,32 @@ export default function AgentLedgerScreen({ navigation }: Props) {
 
   const handleCancel = (run: AgentRunInfo) => {
     haptic.medium();
-    Alert.alert(
-      'Cancel agent run',
-      `Cancel the run for ${botNameById.get(run.botId) ?? run.botId}?`,
-      [
-        { text: 'Keep running', style: 'cancel' },
-        {
-          text: 'Cancel run',
-          style: 'destructive',
-          onPress: async () => {
-            setCancellingId(run.id);
-            try {
-              await cancelAgentRun(run.id);
-              haptic.selection();
-            } catch (e) {
-              haptic.heavy();
-              Alert.alert(
-                'Could not cancel',
-                e instanceof Error ? e.message : 'The run could not be cancelled.'
-              );
-            } finally {
-              setCancellingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Cancel agent run',
+      message: `Cancel the run for ${botNameById.get(run.botId) ?? run.botId}?`,
+      confirmLabel: 'Cancel run',
+      variant: 'danger',
+      onConfirm: async () => {
+        setCancellingId(run.id);
+        try {
+          await cancelAgentRun(run.id);
+          haptic.selection();
+        } catch (e) {
+          haptic.heavy();
+          setConfirmSheet({
+            visible: true,
+            title: 'Could not cancel',
+            message: e instanceof Error ? e.message : 'The run could not be cancelled.',
+            confirmLabel: 'OK',
+            variant: 'default',
+            onConfirm: () => {},
+          });
+        } finally {
+          setCancellingId(null);
+        }
+      },
+    });
   };
 
   const handleApprove = (approval: ApprovalRequestInfo) => {
@@ -165,10 +172,14 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       .then(() => haptic.selection())
       .catch((e: unknown) => {
         haptic.heavy();
-        Alert.alert(
-          'Could not approve',
-          e instanceof Error ? e.message : 'The request could not be approved.'
-        );
+        setConfirmSheet({
+          visible: true,
+          title: 'Could not approve',
+          message: e instanceof Error ? e.message : 'The request could not be approved.',
+          confirmLabel: 'OK',
+          variant: 'default',
+          onConfirm: () => {},
+        });
       })
       .finally(() => setApprovingId(null));
   };
@@ -180,10 +191,14 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       .then(() => haptic.selection())
       .catch((e: unknown) => {
         haptic.heavy();
-        Alert.alert(
-          'Could not reject',
-          e instanceof Error ? e.message : 'The request could not be rejected.'
-        );
+        setConfirmSheet({
+          visible: true,
+          title: 'Could not reject',
+          message: e instanceof Error ? e.message : 'The request could not be rejected.',
+          confirmLabel: 'OK',
+          variant: 'default',
+          onConfirm: () => {},
+        });
       })
       .finally(() => setRejectingId(null));
   };
@@ -563,6 +578,15 @@ export default function AgentLedgerScreen({ navigation }: Props) {
           </Text>
         </View>
       </ScrollView>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
     </FlagshipScreen>
   );
 }

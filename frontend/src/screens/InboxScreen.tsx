@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { View, Text, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { ActionSheet } from '../components/sheets';
 import { FlashList, type FlashListProps, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
@@ -107,6 +108,12 @@ export default function InboxScreen() {
     onConfirm: () => void;
     variant?: 'default' | 'danger';
   }>({ visible: false, title: '', message: '', onConfirm: () => {} });
+  const [actionSheet, setActionSheet] = useState<{
+    visible: boolean;
+    conversationId: string;
+    isMuted: boolean;
+    isPinned: boolean;
+  }>({ visible: false, conversationId: '', isMuted: false, isPinned: false });
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -390,35 +397,16 @@ export default function InboxScreen() {
     showInfo(willMarkUnread ? 'Marked unread' : 'Marked read', willMarkUnread ? 'Conversation marked as unread' : 'Conversation marked as read');
   }, [conversations, toggleConversationUnread, showInfo, haptic]);
 
-  // Long-press quick actions: a native alert sheet exposing mute, pin, and
+  // Long-press quick actions: an ActionSheet exposing mute, pin, and
   // delete. Preserves the capabilities previously surfaced via the old
   // multi-button swipe panels (AGENTS.md §8: preserve working functionality).
   const handleQuickActions = useCallback((id: string) => {
     const convo = conversations.find((c) => c.id === id);
     const isMuted = mutedIds.includes(id);
     const isPinned = !!convo?.isPinned;
-    Alert.alert(
-      'Conversation',
-      undefined,
-      [
-        {
-          text: isMuted ? 'Unmute' : 'Mute',
-          onPress: () => handleMute(id),
-        },
-        {
-          text: isPinned ? 'Unpin' : 'Pin',
-          onPress: () => handlePin(id),
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => handleDelete(id),
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-      { cancelable: true }
-    );
-  }, [conversations, mutedIds, handleMute, handlePin, handleDelete]);
+    haptic.medium();
+    setActionSheet({ visible: true, conversationId: id, isMuted, isPinned });
+  }, [conversations, mutedIds, haptic]);
 
   // FlashList v2 performance: memoized renderItem prevents full re-render of
   // all visible conversation rows on every parent state change.
@@ -705,7 +693,7 @@ export default function InboxScreen() {
                     {chip.label}
                   </Text>
                   {(chip.badge ?? 0) > 1 ? (
-                    <View style={[styles.unreadPill, t.unreadPill, isActive && { backgroundColor: `${colors.textInverse}30` }]}>
+                    <View style={[styles.unreadPill, t.unreadPill, isActive && { backgroundColor: `${colors.textInverse}30` /* TODO: no textInverseSubtle token available */ }]}>
                       <Text style={[styles.unreadPillText, t.unreadPillText, isActive && { color: colors.textInverse }]}>
                         {chip.badge! > 99 ? '99+' : chip.badge}
                       </Text>
@@ -899,6 +887,94 @@ export default function InboxScreen() {
         variant={confirmSheet.variant ?? 'default'}
         onConfirm={confirmSheet.onConfirm}
       />
+      <ActionSheet
+        visible={actionSheet.visible}
+        onDismiss={() => setActionSheet((s) => ({ ...s, visible: false }))}
+        snapPoint={0.36}
+      >
+        <View style={styles.actionSheetBody}>
+          <Text style={[styles.actionSheetTitle, { color: colors.textPrimary }]}>
+            Conversation
+          </Text>
+          <View style={styles.actionSheetList}>
+            <AnimatedPressable
+              style={[styles.actionSheetRow, { backgroundColor: colors.surfaceAlt }]}
+              onPress={() => {
+                const id = actionSheet.conversationId;
+                setActionSheet((s) => ({ ...s, visible: false }));
+                handleMute(id);
+              }}
+              activeOpacity={0.7}
+              scaleValue={0.98}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={actionSheet.isMuted ? 'Unmute conversation' : 'Mute conversation'}
+            >
+              <Ionicons
+                name={actionSheet.isMuted ? 'notifications-outline' : 'notifications-off-outline'}
+                size={22}
+                color={colors.brand}
+              />
+              <Text style={[styles.actionSheetRowLabel, { color: colors.textPrimary }]}>
+                {actionSheet.isMuted ? 'Unmute' : 'Mute'}
+              </Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.actionSheetRow, { backgroundColor: colors.surfaceAlt }]}
+              onPress={() => {
+                const id = actionSheet.conversationId;
+                setActionSheet((s) => ({ ...s, visible: false }));
+                handlePin(id);
+              }}
+              activeOpacity={0.7}
+              scaleValue={0.98}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={actionSheet.isPinned ? 'Unpin conversation' : 'Pin conversation'}
+            >
+              <Ionicons
+                name={actionSheet.isPinned ? 'pin-outline' : 'pin'}
+                size={22}
+                color={colors.brand}
+              />
+              <Text style={[styles.actionSheetRowLabel, { color: colors.textPrimary }]}>
+                {actionSheet.isPinned ? 'Unpin' : 'Pin'}
+              </Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.actionSheetRow, { backgroundColor: colors.surfaceAlt }]}
+              onPress={() => {
+                const id = actionSheet.conversationId;
+                setActionSheet((s) => ({ ...s, visible: false }));
+                handleDelete(id);
+              }}
+              activeOpacity={0.7}
+              scaleValue={0.98}
+              hapticFeedback="medium"
+              accessibilityRole="button"
+              accessibilityLabel="Delete conversation"
+            >
+              <Ionicons name="trash-outline" size={22} color={colors.danger} />
+              <Text style={[styles.actionSheetRowLabel, { color: colors.danger }]}>
+                Delete
+              </Text>
+            </AnimatedPressable>
+          </View>
+          <AnimatedPressable
+            style={[styles.actionSheetCancelBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+            onPress={() => setActionSheet((s) => ({ ...s, visible: false }))}
+            activeOpacity={0.7}
+            scaleValue={0.98}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+          >
+            <Text style={[styles.actionSheetCancelText, { color: colors.textPrimary }]}>
+              Cancel
+            </Text>
+          </AnimatedPressable>
+        </View>
+      </ActionSheet>
     </SafeAreaView>
     );
 }
@@ -1189,5 +1265,42 @@ const styles = StyleSheet.create({
   skeletonText: {
     flex: 1,
     gap: Space.xs + 2,
+  },
+  actionSheetBody: {
+    gap: Space.md,
+    paddingBottom: Space.lg,
+  },
+  actionSheetTitle: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.body.letterSpacing,
+  },
+  actionSheetList: {
+    gap: Space.sm,
+  },
+  actionSheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.smMd,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: RadiusRoleValue.compactControl,
+  },
+  actionSheetRowLabel: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+  },
+  actionSheetCancelBtn: {
+    borderRadius: RadiusRoleValue.compactControl,
+    paddingVertical: Space.md,
+    alignItems: 'center',
+    marginTop: Space.xs,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  actionSheetCancelText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
   },
 });

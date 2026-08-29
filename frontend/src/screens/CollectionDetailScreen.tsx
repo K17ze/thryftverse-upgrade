@@ -5,7 +5,6 @@ import {
   StyleSheet,
   StatusBar,
   RefreshControl,
-  Alert,
   Dimensions,
   ScrollView,
 } from 'react-native';
@@ -40,6 +39,7 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { Type, Space, Radius, DockConstants, Typography, Stroke, Control } from '../theme/designTokens';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 220;
@@ -78,6 +78,15 @@ export default function CollectionDetailScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
   const scrollY = useSharedValue(0);
 
   const collectionId = route.params?.collectionId;
@@ -125,28 +134,25 @@ export default function CollectionDetailScreen() {
 
   const handleDelete = useCallback(async () => {
     haptic.heavy();
-    Alert.alert(
-      'Delete Collection',
-      `Are you sure you want to delete "${collection?.name}"? Items will remain in your Saved.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (collectionId) {
-              try {
-                await deleteCollectionOnApi(collectionId);
-                show('Collection deleted', 'info');
-                handleGoBack();
-              } catch {
-                show('Unable to delete collection. Try again.', 'error');
-              }
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete Collection',
+      message: `Are you sure you want to delete "${collection?.name}"? Items will remain in your Saved.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        if (collectionId) {
+          try {
+            await deleteCollectionOnApi(collectionId);
+            show('Collection deleted', 'info');
+            handleGoBack();
+          } catch {
+            show('Unable to delete collection. Try again.', 'error');
+          }
+        }
+      },
+    });
   }, [collection, collectionId, deleteCollectionOnApi, haptic, show, handleGoBack]);
 
   const handleShare = useCallback(() => {
@@ -410,6 +416,17 @@ export default function CollectionDetailScreen() {
         url={`https://thryftverse.app/collection/${collectionId}`}
         title={collection.name}
         imageUri={coverImage ?? undefined}
+      />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
       />
 
     </SafeAreaView>

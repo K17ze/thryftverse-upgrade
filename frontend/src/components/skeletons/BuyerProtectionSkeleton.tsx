@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   },
   coverageHeaderText: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   coverageDetails: {
     marginTop: Space.md,

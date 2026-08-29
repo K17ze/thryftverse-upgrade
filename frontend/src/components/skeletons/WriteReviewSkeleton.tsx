@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
 
 // Mirrors WriteReviewScreen layout: order context card (thumbnail + title + meta),
 // star rating row, text input area, photo upload section, submit button.
@@ -25,7 +25,7 @@ export function WriteReviewSkeleton() {
         <SkeletonLoader width="70%" height={18} borderRadius={Radius.sm} />
         <View style={styles.starsRow}>
           {Array.from({ length: 5 }).map((_, i) => (
-            <SkeletonLoader key={i} width={44} height={44} borderRadius={Radius.full} />
+            <SkeletonLoader key={i} width={Control.hit} height={Control.hit} borderRadius={Radius.full} />
           ))}
         </View>
       </View>
@@ -44,7 +44,7 @@ export function WriteReviewSkeleton() {
       <View style={styles.section}>
         <SkeletonLoader width={140} height={11} borderRadius={Radius.sm} />
         <View style={[styles.photoAddBtn, { backgroundColor: colors.surface }]}>
-          <SkeletonLoader width={22} height={22} borderRadius={Radius.full} />
+          <SkeletonLoader width={Control.icon} height={Control.icon} borderRadius={Radius.full} />
           <SkeletonLoader width={100} height={13} borderRadius={Radius.sm} />
         </View>
       </View>
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   },
   orderInfo: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   section: {
     gap: Space.sm,
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Space.md,
     minHeight: 120,
-    gap: 2,
+    gap: Space.xxs,
   },
   photoAddBtn: {
     flexDirection: 'row',

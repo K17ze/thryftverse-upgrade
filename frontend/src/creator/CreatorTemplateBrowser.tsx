@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   FlatList,
-  Alert,
   useWindowDimensions,
   ViewStyle,
   TextInput,
@@ -28,6 +27,7 @@ import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { withAlpha } from '../components/poster/shared/colorUtils';
 import { useStore } from '../store/useStore';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 
@@ -127,6 +127,14 @@ export function CreatorTemplateBrowser({
   const [activeCategory, setActiveCategory] = useState<TemplateCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<TextInput>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const templates = useMemo(
     () => getTemplatesByCategory(documentType, activeCategory),
@@ -188,22 +196,18 @@ export function CreatorTemplateBrowser({
     (template: CreatorTemplate) => {
       haptic.medium();
       if (hasExistingWork) {
-        Alert.alert(
-          'Replace current work?',
-          `Applying "${template.name}" will replace your current canvas. This cannot be undone.`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Replace',
-              style: 'destructive',
-              onPress: () => {
-                haptic.warning();
-                onApply(template);
-                onClose();
-              },
-            },
-          ],
-        );
+        setConfirmSheet({
+          visible: true,
+          title: 'Replace current work?',
+          message: `Applying "${template.name}" will replace your current canvas. This cannot be undone.`,
+          confirmLabel: 'Replace',
+          variant: 'danger',
+          onConfirm: () => {
+            haptic.warning();
+            onApply(template);
+            onClose();
+          },
+        });
       } else {
         onApply(template);
         onClose();
@@ -384,6 +388,15 @@ export function CreatorTemplateBrowser({
             </Text>
           </View>
         }
+      />
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
       />
     </SheetContainer>
   );

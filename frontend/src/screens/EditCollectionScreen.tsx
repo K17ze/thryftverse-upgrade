@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,6 +17,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { EmptyState } from '../components/EmptyState';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useHaptic } from '../hooks/useHaptic';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useBackendData } from '../context/BackendDataContext';
@@ -53,6 +53,16 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
   const [isPrivate, setIsPrivate] = useState(collection?.isPrivate ?? false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
+
   const hasChanges =
     name.trim() !== (collection?.name ?? '').trim() ||
     description.trim() !== (collection?.description ?? '').trim() ||
@@ -82,28 +92,25 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
 
   const handleDelete = useCallback(() => {
     haptic.heavy();
-    Alert.alert(
-      'Delete Collection?',
-      `This will permanently delete "${collection?.name}". Items in your Saved will not be affected.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (collectionId) {
-              try {
-                await deleteCollectionOnApi(collectionId);
-                show('Collection deleted', 'info');
-                navigation.navigate('Closet');
-              } catch {
-                show('Unable to delete collection. Try again.', 'error');
-              }
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete Collection?',
+      message: `This will permanently delete "${collection?.name}". Items in your Saved will not be affected.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        if (collectionId) {
+          try {
+            await deleteCollectionOnApi(collectionId);
+            show('Collection deleted', 'info');
+            navigation.navigate('Closet');
+          } catch {
+            show('Unable to delete collection. Try again.', 'error');
+          }
+        }
+      },
+    });
   }, [collection, collectionId, deleteCollectionOnApi, haptic, show, navigation]);
 
   if (!collection) {
@@ -255,6 +262,17 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             </Text>
           </View>
       </KeyboardAwareScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }

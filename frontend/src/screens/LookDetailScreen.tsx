@@ -7,7 +7,6 @@ import {
   Dimensions,
   Pressable,
   Share,
-  Alert,
   Modal,
   ActivityIndicator,
 } from 'react-native';
@@ -47,6 +46,7 @@ import {
 import { resolveLookTemplate } from '../utils/lookTemplates';
 import { LookMediaCarousel, type LookMediaCarouselPage } from '../components/look/LookMediaCarousel';
 import { FullscreenMediaViewer } from '../components/product';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import {
   fetchPublicProfileAggregate,
   followUser,
@@ -103,6 +103,14 @@ export default function LookDetailScreen() {
   const [overflowVisible, setOverflowVisible] = useState(false);
   const [inspectTag, setInspectTag] = useState<HydratedLookTag | null>(null);
   const [heroAspectRatio] = useState<number>(AspectRatio.marketplace);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   // Creator relationship — fetched so the Follow button reflects server truth.
   const [creatorProfile, setCreatorProfile] = useState<PublicProfileAggregate | null>(null);
@@ -349,26 +357,22 @@ export default function LookDetailScreen() {
   const handleDelete = useCallback(() => {
     if (!look || !isOwner) return;
     setOverflowVisible(false);
-    Alert.alert(
-      'Delete look',
-      'This look will be permanently removed. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteLookOnApi(look.id);
-              show('Look deleted', 'success');
-              navigation.goBack();
-            } catch {
-              show('Unable to delete look', 'error');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete look',
+      message: 'This look will be permanently removed. This action cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteLookOnApi(look.id);
+          show('Look deleted', 'success');
+          navigation.goBack();
+        } catch {
+          show('Unable to delete look', 'error');
+        }
+      },
+    });
   }, [look, isOwner, show, navigation]);
 
   const handleFollow = useCallback(async () => {
@@ -1085,6 +1089,15 @@ export default function LookDetailScreen() {
         visible={fullscreenVisible}
         onActiveIndexChange={setFullscreenIndex}
         onClose={() => setFullscreenVisible(false)}
+      />
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
       />
     </SafeAreaView>
   );

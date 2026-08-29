@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  Alert,
   Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +26,7 @@ import {
 import { lookupUKPostcode, isUKPostcode } from '../utils/postcodeLookup';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { t } from '../i18n';
 
 
@@ -189,6 +189,17 @@ export default function AddressFormScreen({ navigation, route }: Props) {
   const regionRef = useRef<TextInput>(null);
   const postalRef = useRef<TextInput>(null);
   const allowNavigationRef = useRef(false);
+  const pendingNavActionRef = useRef<any>(null);
+
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const updateField = useCallback(
     <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -277,21 +288,21 @@ export default function AddressFormScreen({ navigation, route }: Props) {
 
       event.preventDefault();
 
-      Alert.alert(
-        'Discard changes?',
-        'Your address changes have not been saved.',
-        [
-          {
-            text: 'Keep editing',
-            style: 'cancel',
-          },
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: () => proceedWithNavigation(event.data.action),
-          },
-        ]
-      );
+      pendingNavActionRef.current = event.data.action;
+      setConfirmSheet({
+        visible: true,
+        title: 'Discard changes?',
+        message: 'Your address changes have not been saved.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        variant: 'danger',
+        onConfirm: () => {
+          const action = pendingNavActionRef.current;
+          if (action) {
+            proceedWithNavigation(action);
+          }
+        },
+      });
     });
 
     return unsubscribe;
@@ -401,43 +412,40 @@ export default function AddressFormScreen({ navigation, route }: Props) {
   }, [form, savedAddress, isEditing, saveAddress, show, haptic, navigation, currentUser?.id]);
 
   const handleRemove = useCallback(() => {
-    Alert.alert(
-      'Remove delivery address?',
-      'You\'ll need to add an address again before using it at checkout.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            const userId = currentUser?.id;
-            if (!userId) {
-              clearSavedAddress();
-              show('Delivery address removed', 'success');
-              allowNavigationRef.current = true;
-              navigation.goBack();
-              return;
-            }
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove delivery address?',
+      message: 'You\'ll need to add an address again before using it at checkout.',
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        const userId = currentUser?.id;
+        if (!userId) {
+          clearSavedAddress();
+          show('Delivery address removed', 'success');
+          allowNavigationRef.current = true;
+          navigation.goBack();
+          return;
+        }
 
-            if (savedAddress?.id !== undefined) {
-              try {
-                await deleteUserAddress(userId, savedAddress.id);
-              } catch {
-                setSaveError('Address could not be removed. Check your connection and try again.');
-                haptic.light();
-                return;
-              }
-            }
+        if (savedAddress?.id !== undefined) {
+          try {
+            await deleteUserAddress(userId, savedAddress.id);
+          } catch {
+            setSaveError('Address could not be removed. Check your connection and try again.');
+            haptic.light();
+            return;
+          }
+        }
 
-            haptic.medium();
-            clearSavedAddress();
-            show('Delivery address removed', 'success');
-            allowNavigationRef.current = true;
-            navigation.goBack();
-          },
-        },
-      ]
-    );
+        haptic.medium();
+        clearSavedAddress();
+        show('Delivery address removed', 'success');
+        allowNavigationRef.current = true;
+        navigation.goBack();
+      },
+    });
   }, [clearSavedAddress, show, haptic, navigation, currentUser?.id, savedAddress?.id]);
 
   if (!currentUser) {
@@ -773,6 +781,17 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         options={COUNTRY_NAMES}
         selectedValue={form.country ? `${COUNTRY_OPTIONS.find((c) => c.name === form.country)?.flag ?? ''}  ${form.country}` : undefined}
         onSelect={handleCountrySelect}
+      />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
       />
     </FlagshipScreen>
   );

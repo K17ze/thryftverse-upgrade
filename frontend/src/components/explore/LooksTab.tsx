@@ -568,7 +568,7 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     errorTitle: {
-      fontSize: 18,
+      fontSize: Type.heading.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
     },

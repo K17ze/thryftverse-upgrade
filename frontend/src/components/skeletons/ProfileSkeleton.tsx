@@ -3,15 +3,15 @@ import { View, Dimensions, StyleSheet } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
 
-import { Radius, Space, Type } from '../../theme/designTokens';
+import { Radius, Space, Type, AvatarSize } from '../../theme/designTokens';
 
 const { width: W } = Dimensions.get('window');
 
 // ── Geometry constants — mirror MyProfileScreen exact final layout ──
 const COVER_HEIGHT = 152;
-const AVATAR_SIZE = 84;
+const AVATAR_SIZE = AvatarSize.identity;
 const GRID_COLS = 3;
-const GRID_GAP = 4;
+const GRID_GAP = Space.xs;
 const CARD_WIDTH = (W - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
 const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait
 
@@ -90,7 +90,7 @@ export function ProfileSkeleton() {
                 width={56}
                 height={Type.meta.size}
                 borderRadius={Radius.sm}
-                style={{ marginTop: 4 }}
+                style={{ marginTop: Space.xs }}
               />
             </View>
           ))}
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   skeletonUsername: {
-    marginTop: 2,
+    marginTop: Space.xxs,
   },
   skeletonBio: {
     marginTop: Space.sm,

@@ -267,7 +267,7 @@ const createStyles = (themed: {
   title: {
     color: themed.textPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: 22,
+    fontSize: Type.title.size,
     letterSpacing: -0.35,
     marginBottom: Space.sm,
     textAlign: 'center',

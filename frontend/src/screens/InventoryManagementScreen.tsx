@@ -11,7 +11,6 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Alert,
   type StyleProp,
   type ImageStyle,
   type ViewStyle,
@@ -26,6 +25,7 @@ import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/fla
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { CachedImage } from '../components/CachedImage';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -97,6 +97,16 @@ export default function InventoryManagementScreen({ navigation }: Props) {
 
   // Action-in-flight tracking (per-row optimistic status updates)
   const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(new Set());
+
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const load = useCallback(async (silent = false) => {
     if (!currentUser?.id) {
@@ -230,37 +240,34 @@ export default function InventoryManagementScreen({ navigation }: Props) {
 
   const handleDelete = useCallback((item: ListingApiItem) => {
     haptic.heavy();
-    Alert.alert(
-      'Delete listing',
-      `Delete "${item.title}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (pendingActionIds.has(item.id)) return;
-            setPendingActionIds((prev) => new Set(prev).add(item.id));
-            setListings((prev) => prev.filter((l) => l.id !== item.id));
-            try {
-              await deleteListingOnApi(item.id);
-              show('Listing deleted', 'success');
-            } catch (err) {
-              // Re-fetch to restore on failure
-              void load(true);
-              const parsed = parseApiError(err);
-              show(parsed.message, 'error');
-            } finally {
-              setPendingActionIds((prev) => {
-                const next = new Set(prev);
-                next.delete(item.id);
-                return next;
-              });
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete listing',
+      message: `Delete "${item.title}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        if (pendingActionIds.has(item.id)) return;
+        setPendingActionIds((prev) => new Set(prev).add(item.id));
+        setListings((prev) => prev.filter((l) => l.id !== item.id));
+        try {
+          await deleteListingOnApi(item.id);
+          show('Listing deleted', 'success');
+        } catch (err) {
+          // Re-fetch to restore on failure
+          void load(true);
+          const parsed = parseApiError(err);
+          show(parsed.message, 'error');
+        } finally {
+          setPendingActionIds((prev) => {
+            const next = new Set(prev);
+            next.delete(item.id);
+            return next;
+          });
+        }
+      },
+    });
   }, [pendingActionIds, haptic, show, load]);
 
   // ── Bulk selection ──
@@ -377,77 +384,74 @@ export default function InventoryManagementScreen({ navigation }: Props) {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     haptic.heavy();
-    Alert.alert(
-      `Delete ${ids.length} listing${ids.length === 1 ? '' : 's'}`,
-      'This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setPendingActionIds((prev) => {
-              const next = new Set(prev);
-              ids.forEach((id) => next.add(id));
-              return next;
-            });
-            const snapshot = [...listings];
-            // Optimistic: remove all selected from the list
-            setListings((prev) => prev.filter((l) => !selectedIds.has(l.id)));
-            try {
-              const idempotencyKey = `bulk-delete-${ids.slice().sort().join('-')}`;
-              const response = await submitSellerHubBatchCommand(
-                'delete',
-                ids.map((id) => ({ listingId: id })),
-                idempotencyKey,
-              );
-              // Apply per-item receipts truthfully
-              const applied: string[] = [];
-              const rejected: string[] = [];
-              const unknown: string[] = [];
-              for (const result of response.results) {
-                if (result.state === 'applied') applied.push(result.listingId);
-                else if (result.state === 'rejected') rejected.push(result.listingId);
-                else unknown.push(result.listingId);
-              }
-              // Restore rejected items to the list
-              if (rejected.length > 0 || unknown.length > 0) {
-                const itemsToRestore = snapshot.filter(
-                  (l) => rejected.includes(l.id) || unknown.includes(l.id),
-                );
-                setListings((prev) => [...prev, ...itemsToRestore]);
-                // Re-fetch to reconcile unknown items
-                if (unknown.length > 0) {
-                  void load(true);
-                }
-              }
-              if (response.state === 'complete') {
-                show(`${ids.length} listing${ids.length === 1 ? '' : 's'} deleted`, 'success');
-                exitSelectionMode();
-              } else {
-                const parts: string[] = [];
-                if (applied.length > 0) parts.push(`${applied.length} deleted`);
-                if (rejected.length > 0) parts.push(`${rejected.length} failed`);
-                if (unknown.length > 0) parts.push(`${unknown.length} checking`);
-                show(parts.join(' · '), applied.length > 0 ? 'success' : 'error');
-                if (applied.length === ids.length) exitSelectionMode();
-              }
-            } catch (err) {
-              // Network/transport error — restore all items
-              setListings(snapshot);
-              const parsed = parseApiError(err);
-              show(parsed.message, 'error');
-            } finally {
-              setPendingActionIds((prev) => {
-                const next = new Set(prev);
-                ids.forEach((id) => next.delete(id));
-                return next;
-              });
+    setConfirmSheet({
+      visible: true,
+      title: `Delete ${ids.length} listing${ids.length === 1 ? '' : 's'}`,
+      message: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        setPendingActionIds((prev) => {
+          const next = new Set(prev);
+          ids.forEach((id) => next.add(id));
+          return next;
+        });
+        const snapshot = [...listings];
+        // Optimistic: remove all selected from the list
+        setListings((prev) => prev.filter((l) => !selectedIds.has(l.id)));
+        try {
+          const idempotencyKey = `bulk-delete-${ids.slice().sort().join('-')}`;
+          const response = await submitSellerHubBatchCommand(
+            'delete',
+            ids.map((id) => ({ listingId: id })),
+            idempotencyKey,
+          );
+          // Apply per-item receipts truthfully
+          const applied: string[] = [];
+          const rejected: string[] = [];
+          const unknown: string[] = [];
+          for (const result of response.results) {
+            if (result.state === 'applied') applied.push(result.listingId);
+            else if (result.state === 'rejected') rejected.push(result.listingId);
+            else unknown.push(result.listingId);
+          }
+          // Restore rejected items to the list
+          if (rejected.length > 0 || unknown.length > 0) {
+            const itemsToRestore = snapshot.filter(
+              (l) => rejected.includes(l.id) || unknown.includes(l.id),
+            );
+            setListings((prev) => [...prev, ...itemsToRestore]);
+            // Re-fetch to reconcile unknown items
+            if (unknown.length > 0) {
+              void load(true);
             }
-          },
-        },
-      ]
-    );
+          }
+          if (response.state === 'complete') {
+            show(`${ids.length} listing${ids.length === 1 ? '' : 's'} deleted`, 'success');
+            exitSelectionMode();
+          } else {
+            const parts: string[] = [];
+            if (applied.length > 0) parts.push(`${applied.length} deleted`);
+            if (rejected.length > 0) parts.push(`${rejected.length} failed`);
+            if (unknown.length > 0) parts.push(`${unknown.length} checking`);
+            show(parts.join(' · '), applied.length > 0 ? 'success' : 'error');
+            if (applied.length === ids.length) exitSelectionMode();
+          }
+        } catch (err) {
+          // Network/transport error — restore all items
+          setListings(snapshot);
+          const parsed = parseApiError(err);
+          show(parsed.message, 'error');
+        } finally {
+          setPendingActionIds((prev) => {
+            const next = new Set(prev);
+            ids.forEach((id) => next.delete(id));
+            return next;
+          });
+        }
+      },
+    });
   }, [selectedIds, listings, haptic, show, exitSelectionMode, load]);
 
   // ── States ──
@@ -706,6 +710,17 @@ export default function InventoryManagementScreen({ navigation }: Props) {
           </View>
         </View>
       ) : null}
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }

@@ -97,7 +97,7 @@ function createStyles(colors: ThemeColors) {
   brandLetter: {
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: 27,
+    fontSize: Type.hero.size,
     letterSpacing: 0.42,
   },
   tagline: {

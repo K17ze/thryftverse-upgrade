@@ -131,7 +131,7 @@ export function CheckoutPaymentSelector({
 
 const createStyles = (colors: any) => StyleSheet.create({
   title: {
-    fontSize: 18,
+    fontSize: Type.heading.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     textAlign: 'center',

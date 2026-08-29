@@ -12,7 +12,7 @@ import Reanimated, {
   Extrapolation,
 } from 'react-native-reanimated';
 
-import { Typography, Radius, Space, Stroke } from '../../../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Type } from '../../../theme/designTokens';
 import { AnimatedPressable } from '../../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -377,7 +377,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.borderSubtle,
     },
     title: {
-      fontSize: 18,
+      fontSize: Type.heading.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       textAlign: 'center',

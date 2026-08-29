@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
   },
   progressSegments: {
     flexDirection: 'row',
-    gap: 4,
+    gap: Space.xs,
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
   },
