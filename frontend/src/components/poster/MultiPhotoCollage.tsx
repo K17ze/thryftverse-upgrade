@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   Pressable,
-  Dimensions,
   Modal,
   Text,
   ScrollView,
@@ -27,8 +26,6 @@ import Reanimated, {
   withTiming,
   interpolate,
   Extrapolation } from 'react-native-reanimated';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 const ReanimatedImage = Reanimated.createAnimatedComponent(
   require('expo-image').Image as typeof import('expo-image').Image,

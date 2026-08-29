@@ -65,7 +65,6 @@ function CheckoutSelectionRowBase({
             </View>
           )}
           <View style={styles.textCol}>
-            <Text style={styles.label}>{label}</Text>
             <Text style={[styles.title, !isFilled && styles.titleEmpty]}>{title}</Text>
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
             {warningText ? (
@@ -129,12 +128,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   textCol: {
     flex: 1,
     gap: 2 },
-  label: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8 },
   title: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,

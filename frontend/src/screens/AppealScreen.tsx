@@ -26,6 +26,7 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { uploadMedia } from '../services/mediaUpload';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type EvidenceState = 'uploading' | 'attached' | 'submitted';
 
@@ -37,11 +38,11 @@ interface EvidenceItem {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Appeal'>;
 
-const DECISION_LABELS: Record<string, string> = {
-  no_violation: 'No violation',
-  restrict: 'Content restricted',
-  escalate: 'Escalated',
-  emergency_hold: 'Emergency hold' };
+const DECISION_LABEL_KEYS: Record<string, string> = {
+  no_violation: 'decision.noViolation',
+  restrict: 'decision.restrict',
+  escalate: 'decision.escalate',
+  emergency_hold: 'decision.emergencyHold' };
 
 function formatDecisionDate(iso: string): string {
   try {
@@ -60,6 +61,7 @@ export default function AppealScreen({ navigation, route }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { decisionId } = route.params;
   const { isOffline } = useConnectivity();
+  const { t } = useAppTranslation('appeal');
 
   const [decision, setDecision] = useState<DecisionSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -244,7 +246,7 @@ export default function AppealScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Appeal submitted"
+            title={t('submitted.title')}
             onBack={() => navigation.goBack()}
           />
         }
@@ -255,16 +257,16 @@ export default function AppealScreen({ navigation, route }: Props) {
             size={28}
             color={colors.textPrimary}
           />
-          <Text style={styles.completeTitle}>Appeal submitted</Text>
+          <Text style={styles.completeTitle}>{t('submitted.title')}</Text>
           {appealId ? (
-            <Text style={styles.appealIdText}>Appeal #{appealId}</Text>
+            <Text style={styles.appealIdText}>{t('submitted.appealId', { appealId })}</Text>
           ) : null}
           <Text style={styles.completeBody}>
-            We'll review and let you know the outcome.
+            {t('submitted.body')}
           </Text>
           {submittedAt ? (
             <Text style={styles.submittedAtText}>
-              Submitted at {submittedAt}
+              {t('submitted.submittedAt', { time: submittedAt })}
             </Text>
           ) : null}
           {evidenceItems.length > 0 ? (
@@ -285,7 +287,7 @@ export default function AppealScreen({ navigation, route }: Props) {
           ) : null}
           {appealId ? (
             <Text style={styles.appealIdNote}>
-              Reference this number in future support contact.
+              {t('submitted.referenceNote')}
             </Text>
           ) : null}
           <AnimatedPressable
@@ -296,7 +298,7 @@ export default function AppealScreen({ navigation, route }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Done"
           >
-            <Text style={styles.doneActionText}>Done</Text>
+            <Text style={styles.doneActionText}>{t('submitted.done')}</Text>
           </AnimatedPressable>
         </View>
       </FlagshipScreen>
@@ -309,15 +311,15 @@ export default function AppealScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Appeal decision"
+            title={t('header.title')}
             onBack={() => navigation.goBack()}
           />
         }
       >
         <FlagshipState
           variant="loading"
-          title="Loading decision"
-          subtitle="One moment while we retrieve the details."
+          title={t('loading.title')}
+          subtitle={t('loading.subtitle')}
         />
       </FlagshipScreen>
     );
@@ -329,21 +331,21 @@ export default function AppealScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Appeal decision"
+            title={t('header.title')}
             onBack={() => navigation.goBack()}
           />
         }
       >
         <FlagshipState
           variant="error"
-          title="Couldn't load decision"
-          subtitle="We could not retrieve the decision details. Tap below to try again."
-          actionLabel="Try again"
+          title={t('error.title')}
+          subtitle={t('error.subtitle')}
+          actionLabel={t('error.tryAgain')}
           onAction={() => {
             setLoadError(false);
             setIsLoading(true);
           }}
-          secondaryActionLabel="Go back"
+          secondaryActionLabel={t('error.goBack')}
           onSecondaryAction={() => navigation.goBack()}
         />
       </FlagshipScreen>
@@ -356,7 +358,7 @@ export default function AppealScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Appeal decision"
+            title={t('header.title')}
             onBack={() => navigation.goBack()}
           />
         }
@@ -367,10 +369,9 @@ export default function AppealScreen({ navigation, route }: Props) {
             size={28}
             color={colors.textMuted}
           />
-          <Text style={styles.completeTitle}>Appeal window closed</Text>
+          <Text style={styles.completeTitle}>{t('windowClosed.title')}</Text>
           <Text style={styles.completeBody}>
-            Decisions can be appealed within 6 months. This decision was
-            communicated on {formatDecisionDate(decision.decidedAt)}.
+            {t('windowClosed.body', { date: formatDecisionDate(decision.decidedAt) })}
           </Text>
           <AnimatedPressable
             style={styles.secondaryDoneAction}
@@ -380,7 +381,7 @@ export default function AppealScreen({ navigation, route }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Text style={styles.secondaryDoneText}>Go back</Text>
+            <Text style={styles.secondaryDoneText}>{t('windowClosed.goBack')}</Text>
           </AnimatedPressable>
         </View>
       </FlagshipScreen>
@@ -393,35 +394,37 @@ export default function AppealScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Appeal decision"
+            title={t('header.title')}
             onBack={() => navigation.goBack()}
           />
         }
       >
         <FlagshipState
           variant="offline"
-          title="You are offline"
-          subtitle="Check your connection and try again."
-          actionLabel="Try again"
+          title={t('offline.title')}
+          subtitle={t('offline.subtitle')}
+          actionLabel={t('offline.tryAgain')}
           onAction={() => {
             // Re-trigger a no-op state change to re-render
             setLoadError(false);
           }}
-          secondaryActionLabel="Go back"
+          secondaryActionLabel={t('offline.goBack')}
           onSecondaryAction={() => navigation.goBack()}
         />
       </FlagshipScreen>
     );
   }
 
-  const decisionLabel =
-    DECISION_LABELS[decision.decision] ?? decision.decision;
+  const decisionLabelKey = DECISION_LABEL_KEYS[decision.decision];
+  const decisionLabel = decisionLabelKey
+    ? t(decisionLabelKey)
+    : decision.decision;
 
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Appeal decision"
+          title={t('header.title')}
           onBack={() => navigation.goBack()}
         />
       }
@@ -439,7 +442,7 @@ export default function AppealScreen({ navigation, route }: Props) {
           {isSubmitting ? (
             <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
-            <Text style={styles.submitText}>Submit appeal</Text>
+            <Text style={styles.submitText}>{t('submit.label')}</Text>
           )}
         </AnimatedPressable>
       }
@@ -469,23 +472,23 @@ export default function AppealScreen({ navigation, route }: Props) {
         ) : null}
         {decision.durationKind === 'temporary' && decision.durationUntil ? (
           <Text style={styles.decisionDuration}>
-            Until {formatDecisionDate(decision.durationUntil)}
+            {t('duration.until', { date: formatDecisionDate(decision.durationUntil) })}
           </Text>
         ) : decision.durationKind === 'permanent' ? (
-          <Text style={styles.decisionDuration}>Permanent</Text>
+          <Text style={styles.decisionDuration}>{t('duration.permanent')}</Text>
         ) : null}
       </View>
 
       {/* ── Grounds — the dominant input ── */}
       <View style={styles.grounds}>
         <Text style={styles.groundsLabel}>
-          Why do you think this decision was wrong?
+          {t('grounds.label')}
         </Text>
         <TextInput
           style={styles.groundsInput}
           value={grounds}
           onChangeText={setGrounds}
-          placeholder="Explain why the decision should be reconsidered"
+          placeholder={t('grounds.placeholder')}
           placeholderTextColor={colors.textMuted}
           multiline
           maxLength={2000}

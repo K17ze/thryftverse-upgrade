@@ -105,7 +105,7 @@ export default function SellerVerificationScreen() {
     }
   }, [navigation, haptic]);
 
-  const renderDemand = useCallback((demand: SellerVerificationDemand) => {
+  const renderDemand = useCallback((demand: SellerVerificationDemand, isLast: boolean) => {
     const statusIcon = STATUS_ICONS[demand.status] ?? STATUS_ICONS.withdrawn;
     const statusColor = getStatusColor(demand.status, colors);
     const deadline = new Date(demand.deadline);
@@ -114,11 +114,10 @@ export default function SellerVerificationScreen() {
     const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
     return (
-      <View key={demand.id}>
+      <View key={demand.id} style={!isLast && styles.demandSeparator}>
         <Pressable
           style={({ pressed }) => [
             styles.demandCard,
-            { backgroundColor: colors.surface, borderColor: colors.borderSubtle },
             pressed && { opacity: 0.7 },
           ]}
           onPress={() => handleDemandPress(demand)}
@@ -301,7 +300,7 @@ export default function SellerVerificationScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
                   Action required
                 </Text>
-                {pendingDemands.map((d) => renderDemand(d))}
+                {pendingDemands.map((d, i) => renderDemand(d, i === pendingDemands.length - 1))}
               </View>
             )}
 
@@ -311,7 +310,7 @@ export default function SellerVerificationScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
                   History
                 </Text>
-                {otherDemands.map((d) => renderDemand(d))}
+                {otherDemands.map((d, i) => renderDemand(d, i === otherDemands.length - 1))}
               </View>
             )}
           </>
@@ -361,11 +360,11 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.sm,
       marginLeft: Space.xs - 2 },
     demandCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
       paddingVertical: Space.md,
-      paddingHorizontal: Space.md,
-      marginBottom: Space.sm },
+      paddingHorizontal: Space.md },
+    demandSeparator: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle },
     demandHeader: {
       flexDirection: 'row',
       alignItems: 'center',

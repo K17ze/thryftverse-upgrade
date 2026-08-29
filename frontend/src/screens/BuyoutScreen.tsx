@@ -10,7 +10,7 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { parseApiError } from '../lib/apiClient';
-import { fetchCoOwnAssetById, fetchCoOwnHoldings, createCoOwnBuyoutOffer } from '../services/marketApi';
+import { fetchCoOwnAssetById, fetchCoOwnHoldings, createCoOwnBuyoutOffer, MarketCoOwnAsset } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
 import { Space, Radius, DockConstants, Stroke } from '../theme/designTokens';
@@ -40,7 +40,7 @@ export default function BuyoutScreen() {
 
   const buyoutAssetId = route.params?.assetId;
 
-  const [asset, setAsset] = React.useState<any>(null);
+  const [asset, setAsset] = React.useState<MarketCoOwnAsset | null>(null);
   const [sharesOwned, setSharesOwned] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);

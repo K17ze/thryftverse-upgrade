@@ -5,7 +5,7 @@ import {
   Text,
   TextInput,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,9 +30,6 @@ import { Motion } from '../../theme/motionTokens';
 
 /** Spring config shape returned by useMotionConfig().spring.* */
 type SpringConfig = { damping: number; stiffness: number; mass: number };
-
-const { height: SCREEN_H } = Dimensions.get('window');
-const DRAWER_HEIGHT = SCREEN_H * 0.55;
 
 interface DetailsDrawerProps {
   visible: boolean;
@@ -68,10 +65,12 @@ export default function DetailsDrawer({
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const { spring, isEnabled } = useMotionConfig();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { height: SCREEN_H } = useWindowDimensions();
+  const drawerHeight = SCREEN_H * 0.55;
+  const styles = React.useMemo(() => createStyles(colors, drawerHeight), [colors, drawerHeight]);
 
   // Reanimated shared values for spring slide-up + backdrop fade
-  const translateYSV = useSharedValue(DRAWER_HEIGHT);
+  const translateYSV = useSharedValue(drawerHeight);
   const backdropOpacitySV = useSharedValue(0);
   const closeBtnScaleSV = useSharedValue(1);
   const closeBtnOpacitySV = useSharedValue(0);
@@ -93,7 +92,7 @@ export default function DetailsDrawer({
       );
     } else {
       // Spring slide-down exit
-      translateYSV.value = withSpring(DRAWER_HEIGHT, spring.entrance as SpringConfig);
+      translateYSV.value = withSpring(drawerHeight, spring.entrance as SpringConfig);
       backdropOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
       closeBtnOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
     }
@@ -320,7 +319,7 @@ export default function DetailsDrawer({
   );
 }
 
-function createStyles(colors: any) {
+function createStyles(colors: any, drawerHeight: number) {
   return StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill },
@@ -329,7 +328,7 @@ function createStyles(colors: any) {
     bottom: 0,
     left: 0,
     right: 0,
-    height: DRAWER_HEIGHT,
+    height: drawerHeight,
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,

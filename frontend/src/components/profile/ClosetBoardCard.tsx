@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
@@ -9,10 +9,6 @@ import { Typography, Space, Radius, AspectRatio, PressScale } from '../../theme/
 import { TypographyV2 } from '../../theme/typography.v2';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_W = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
-// 3:4 portrait cover — media-first, matches the closet mosaic geometry
-const COVER_H = CARD_W / AspectRatio.portrait;
 const COLLAGE_GAP = 2;
 
 interface ClosetBoardCardProps {
@@ -56,7 +52,11 @@ export function ClosetBoardCard({
   onPress,
   index = 0 }: ClosetBoardCardProps) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const cardW = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
+  // 3:4 portrait cover — media-first, matches the closet mosaic geometry
+  const coverH = cardW / AspectRatio.portrait;
+  const styles = React.useMemo(() => createStyles(colors, cardW, coverH), [colors, cardW, coverH]);
   const hasCovers = covers.length > 0;
 
   return (
@@ -76,7 +76,7 @@ export function ClosetBoardCard({
                 uri={covers[0]}
                 style={styles.coverImg}
                 contentFit="cover"
-                downscaleWidth={CARD_W}
+                downscaleWidth={cardW}
                 emptyLabel={title}
                 emptyIcon="image-outline"
               />
@@ -97,7 +97,7 @@ export function ClosetBoardCard({
                         uri={uri}
                         style={styles.coverImg}
                         contentFit="cover"
-                        downscaleWidth={CARD_W / 2}
+                        downscaleWidth={cardW / 2}
                         emptyIcon="image-outline"
                       />
                     </View>
@@ -145,11 +145,11 @@ export function ClosetBoardCard({
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, cardW: number, coverH: number) {
   return StyleSheet.create({
   card: {
-    width: CARD_W,
-    height: COVER_H + 8,
+    width: cardW,
+    height: coverH + 8,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,

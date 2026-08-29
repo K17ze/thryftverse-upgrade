@@ -17,7 +17,7 @@
  *  - haptic feedback + reduced-motion fallback
  */
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, Dimensions, Text } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -38,13 +38,9 @@ import {
   Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
-const { width: SCREEN_W } = Dimensions.get('window');
 const NUM_COLUMNS = 3;
 const GRID_GAP = Space.sm;
 const GRID_PADDING = Space.md;
-const TILE_W =
-  (SCREEN_W - GRID_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
-const TILE_H = TILE_W / AspectRatio.portrait;
 
 interface ClosetMediaMosaicProps {
   items: Listing[];
@@ -61,6 +57,10 @@ export function ClosetMediaMosaic({
   showSaveButton = false,
   showWishlistButton = false }: ClosetMediaMosaicProps) {
   const { colors } = useAppTheme();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const tileW =
+    (SCREEN_W - GRID_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
+  const tileH = tileW / AspectRatio.portrait;
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Distribute items across columns using a shortest-height assignment so
@@ -81,8 +81,8 @@ export function ClosetMediaMosaic({
               key={item.id}
               item={item}
               index={colIdx + idx * NUM_COLUMNS}
-              tileWidth={TILE_W}
-              tileHeight={TILE_H}
+              tileWidth={tileW}
+              tileHeight={tileH}
               onPress={() => onPressItem(item)}
               showSaveButton={showSaveButton}
               showWishlistButton={showWishlistButton}

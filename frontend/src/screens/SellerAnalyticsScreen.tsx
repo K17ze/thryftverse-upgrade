@@ -646,7 +646,6 @@ export default function SellerAnalyticsScreen() {
         {sellerAnalyticsV2Enabled ? (
           <View style={styles.v2Section}>
             <View style={styles.v2Header}>
-              <Ionicons name="sparkles" size={14} color={colors.brand} />
               <Text style={[styles.v2HeaderTitle, { color: colors.textPrimary }]}>Engagement insights</Text>
             </View>
             <View style={styles.kpiList}>
@@ -867,9 +866,6 @@ function createStyles(colors: ThemeColors) {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border },
     v2Header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
       marginBottom: Space.xs },
     v2HeaderTitle: {
       fontSize: TypographyV2.bodyStrong.size,

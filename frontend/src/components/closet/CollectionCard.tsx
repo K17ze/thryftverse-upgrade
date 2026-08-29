@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -9,9 +9,6 @@ import type { Listing } from '../../domain';
 import { useBackendData } from '../../context/BackendDataContext';
 import { Space, Radius, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_W = SCREEN_W - Space.md * 2;
-const COVER_SIZE = (CARD_W - 8) / 3; // 3-up collage with 4px gaps
 
 interface Props {
   collection: Collection;
@@ -20,7 +17,10 @@ interface Props {
 
 export function CollectionCard({ collection, onPress }: Props) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const cardW = SCREEN_W - Space.md * 2;
+  const coverSize = (cardW - 8) / 3; // 3-up collage with 4px gaps
+  const styles = React.useMemo(() => createStyles(colors, coverSize), [colors, coverSize]);
   const { listings } = useBackendData();
   const count = collection.itemIds?.length ?? 0;
 
@@ -95,7 +95,7 @@ export function CollectionCard({ collection, onPress }: Props) {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, coverSize: number) => StyleSheet.create({
   // Flattened — no bordered card wrapper. Media is the colour; the info
   // row sits on the flat canvas with a hairline top separator. This removes
   // the card-on-card composition (AGENTS.md §4) where rounded media surfaces
@@ -109,9 +109,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     padding: Space.xs,
-    height: COVER_SIZE * 2 + 4 },
+    height: coverSize * 2 + 4 },
   mainCover: {
-    width: COVER_SIZE * 2,
+    width: coverSize * 2,
     height: '100%',
     borderRadius: Radius.md,
     overflow: 'hidden',

@@ -643,7 +643,7 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
           <Text
             style={[
               styles.textSticker,
-              { color: sticker.payload.textColor ?? '#ffffff' },
+              { color: sticker.payload.textColor ?? colors.scrimTextPrimary },
               sticker.payload.textStyle === 'editorial' && { fontFamily: TypographyV2.screenTitle.fontFamily, fontSize: TypographyV2.screenTitle.size },
               sticker.payload.textStyle === 'minimal' && { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size },
               sticker.payload.textStyle === 'label' && { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, letterSpacing: 0.5 },
@@ -673,7 +673,7 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
             />
           ) : null}
           <View style={styles.listingRow}>
-            <Ionicons name="pricetag" size={14} color="#fff" />
+            <Ionicons name="pricetag" size={14} color={colors.scrimTextPrimary} />
             <Text style={styles.listingTitle}>{sticker.payload.snapshotTitle ?? 'Listing'}</Text>
           </View>
           {sticker.payload.snapshotPriceGbp !== undefined && (
@@ -685,7 +685,7 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
     case 'look':
       return (
         <View style={styles.lookWrap}>
-          <Ionicons name="shirt-outline" size={14} color="#fff" />
+          <Ionicons name="shirt-outline" size={14} color={colors.scrimTextPrimary} />
           <Text style={styles.lookText}>{sticker.payload.snapshotCaption ?? 'View look'}</Text>
         </View>
       );
@@ -789,7 +789,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   // Die-cut white border — 2pt white stroke around sticker
   dieCutBorder: {
     borderWidth: Stroke.emphasis,
-    borderColor: '#FFFFFF',
+    borderColor: colors.scrimTextPrimary,
     borderRadius: Radius.sm },
   selectionHandle: {
     position: 'absolute',
@@ -816,7 +816,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
     borderWidth: Stroke.standard,
-    borderColor: '#FFFFFF' },
+    borderColor: colors.scrimTextPrimary },
   // Rotation handle above top-center (24pt with connecting line)
   rotationHandleWrap: {
     position: 'absolute',
@@ -836,7 +836,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: Stroke.standard,
-    borderColor: '#FFFFFF',
+    borderColor: colors.scrimTextPrimary,
     ...Elevation.modal },
   // Delete handle below bottom-center (24pt trash icon)
   deleteHandle: {
@@ -860,7 +860,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     paddingVertical: Space.xs,
     borderRadius: Radius.sm },
   textSticker: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
@@ -869,16 +869,16 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3 },
   mentionWrap: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs },
   mentionText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.body.size },
   listingWrap: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.md,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.sm,
@@ -893,7 +893,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     alignItems: 'center',
     gap: 4 },
   listingTitle: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.meta.size },
   listingPrice: {
@@ -904,39 +904,39 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs },
   lookText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.medium,
     fontSize: TypographyV2.meta.size },
   voteWrap: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     gap: 6,
     minWidth: 160 },
   voteQuestion: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.body.size,
     textAlign: 'center' },
   voteOption: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.glassBorder,
     borderRadius: Radius.full,
     paddingVertical: 6,
     paddingHorizontal: Space.sm,
     alignItems: 'center' },
   voteOptionText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.medium,
     fontSize: TypographyV2.meta.size },
   // Poll sticker — tokenized padding/radius/typography per flagship spec
   pollWrap: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -944,13 +944,13 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     minWidth: 160,
     ...Elevation.modal },
   pollQuestion: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.body.size,
     textAlign: 'center' },
   // Quiz sticker — tokenized padding/radius/typography per flagship spec
   quizWrap: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -958,27 +958,27 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     minWidth: 160,
     ...Elevation.modal },
   quizQuestion: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.body.size,
     textAlign: 'center' },
   // Question sticker — tokenized padding/typography per flagship spec
   questionWrap: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     alignItems: 'center',
     ...Elevation.modal },
   questionText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
     textAlign: 'center' },
   // Countdown sticker — tokenized padding/typography per flagship spec
   countdownWrap: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -986,12 +986,12 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     gap: 4,
     ...Elevation.modal },
   countdownLabel: {
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.scrimTextSecondary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.body.size,
     textAlign: 'center' },
   countdownTime: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.bold,
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight } });

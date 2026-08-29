@@ -1,12 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Typography, Radius, Space, Stroke} from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 interface Props {
   label?: string;

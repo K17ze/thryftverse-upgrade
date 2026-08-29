@@ -18,6 +18,7 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { uploadMedia } from '../services/mediaUpload';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type EvidenceState = 'uploading' | 'attached' | 'submitted';
 
@@ -33,67 +34,93 @@ const REPORT_REASONS: Array<{
   key: ReportReason;
   label: string;
   description: string;
+  labelKey: string;
+  descKey: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
 }> = [
   {
     key: 'spam',
     label: 'Spam',
     description: 'Unwanted promotion, scams or repetitive messages',
+    labelKey: 'reasons.spam',
+    descKey: 'reasons.spamDesc',
     icon: 'mail-unread-outline' },
   {
     key: 'harassment',
     label: 'Harassment',
     description: 'Threatening, abusive or targeted unwanted contact',
+    labelKey: 'reasons.harassment',
+    descKey: 'reasons.harassmentDesc',
     icon: 'warning-outline' },
   {
     key: 'hate_speech',
     label: 'Hate speech',
     description: 'Slurs, dehumanizing language, or attacks on protected groups',
+    labelKey: 'reasons.hateSpeech',
+    descKey: 'reasons.hateSpeechDesc',
     icon: 'megaphone-outline' },
   {
     key: 'counterfeit',
     label: 'Fake item',
     description: 'Counterfeit goods or misleading authenticity claims',
+    labelKey: 'reasons.counterfeit',
+    descKey: 'reasons.counterfeitDesc',
     icon: 'pricetag-outline' },
   {
     key: 'prohibited',
     label: 'Prohibited item',
     description: 'Weapons, drugs, wildlife, or other prohibited categories',
+    labelKey: 'reasons.prohibited',
+    descKey: 'reasons.prohibitedDesc',
     icon: 'ban-outline' },
   {
     key: 'off_platform',
     label: 'Off-platform request',
     description: 'Asked to transact outside Thryftverse, against policy',
+    labelKey: 'reasons.offPlatform',
+    descKey: 'reasons.offPlatformDesc',
     icon: 'exit-outline' },
   {
     key: 'scam',
     label: 'Scam or fraud',
     description: 'Attempted financial fraud, phishing, or impersonation',
+    labelKey: 'reasons.scam',
+    descKey: 'reasons.scamDesc',
     icon: 'cash-outline' },
   {
     key: 'misinformation',
     label: 'Misleading content',
     description: 'False or misleading claims about an item',
+    labelKey: 'reasons.misinformation',
+    descKey: 'reasons.misinformationDesc',
     icon: 'information-circle-outline' },
   {
     key: 'privacy',
     label: 'Privacy violation',
     description: 'Shared private information without consent',
+    labelKey: 'reasons.privacy',
+    descKey: 'reasons.privacyDesc',
     icon: 'lock-closed-outline' },
   {
     key: 'impersonation',
     label: 'Impersonation',
     description: 'Pretending to be someone else',
+    labelKey: 'reasons.impersonation',
+    descKey: 'reasons.impersonationDesc',
     icon: 'person-outline' },
   {
     key: 'minor_safety',
     label: 'Minor safety',
     description: 'Content or behavior endangering minors',
+    labelKey: 'reasons.minorSafety',
+    descKey: 'reasons.minorSafetyDesc',
     icon: 'shield-outline' },
   {
     key: 'other',
     label: 'Something else',
     description: 'Tell the moderation team what happened',
+    labelKey: 'reasons.other',
+    descKey: 'reasons.otherDesc',
     icon: 'help-circle-outline' },
 ];
 
@@ -107,6 +134,7 @@ export default function ReportScreen({ navigation, route }: Props) {
     targetId ? s.blockedUsers.includes(targetId) : false
   );
   const { isOffline } = useConnectivity();
+  const { t } = useAppTranslation('report');
   const [selectedReason, setSelectedReason] =
     useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
@@ -292,7 +320,7 @@ export default function ReportScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Report received"
+            title={t('received.title')}
             onBack={() => navigation.goBack()}
           />
         }
@@ -303,18 +331,18 @@ export default function ReportScreen({ navigation, route }: Props) {
             size={28}
             color={colors.textPrimary}
           />
-          <Text style={styles.completeTitle}>Report received</Text>
+          <Text style={styles.completeTitle}>{t('received.title')}</Text>
           {reportId ? (
             <Text style={styles.reportIdText}>
-              Report #{reportId}
+              {t('received.reportId', { reportId })}
             </Text>
           ) : null}
           <Text style={styles.completeBody}>
-            We'll review and let you know the outcome.
+            {t('received.body')}
           </Text>
           {submittedAt ? (
             <Text style={styles.submittedAtText}>
-              Received at {submittedAt}
+              {t('received.receivedAt', { time: submittedAt })}
             </Text>
           ) : null}
           {evidenceItems.length > 0 ? (
@@ -335,7 +363,7 @@ export default function ReportScreen({ navigation, route }: Props) {
           ) : null}
           {reportId ? (
             <Text style={styles.reportIdNote}>
-              Reference this number in future support contact.
+              {t('received.referenceNote')}
             </Text>
           ) : null}
           {showBlockButton ? (
@@ -358,7 +386,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                     size={16}
                     color={colors.textInverse}
                   />
-                  <Text style={styles.blockActionText}>Block this user</Text>
+                  <Text style={styles.blockActionText}>{t('received.blockUser')}</Text>
                 </>
               )}
             </AnimatedPressable>
@@ -371,7 +399,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                 color={colors.success}
               />
               <Text style={styles.blockedNoteText}>
-                This account is blocked and cannot contact you.
+                {t('received.blockedNote')}
               </Text>
             </View>
           ) : null}
@@ -383,7 +411,7 @@ export default function ReportScreen({ navigation, route }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Done"
           >
-            <Text style={styles.doneActionText}>Done</Text>
+            <Text style={styles.doneActionText}>{t('received.done')}</Text>
           </AnimatedPressable>
         </View>
       </FlagshipScreen>
@@ -395,7 +423,7 @@ export default function ReportScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Report"
+            title={t('header.title')}
             onBack={() => navigation.goBack()}
           />
         }
@@ -406,10 +434,9 @@ export default function ReportScreen({ navigation, route }: Props) {
             size={28}
             color={colors.textMuted}
           />
-          <Text style={styles.completeTitle}>Report target unavailable</Text>
+          <Text style={styles.completeTitle}>{t('unavailable.title')}</Text>
           <Text style={styles.completeBody}>
-            This report was opened without a valid reference. Nothing
-            has been submitted.
+            {t('unavailable.body')}
           </Text>
           <AnimatedPressable
             style={styles.secondaryDoneAction}
@@ -419,7 +446,7 @@ export default function ReportScreen({ navigation, route }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Text style={styles.secondaryDoneText}>Go back</Text>
+            <Text style={styles.secondaryDoneText}>{t('unavailable.goBack')}</Text>
           </AnimatedPressable>
         </View>
       </FlagshipScreen>
@@ -427,16 +454,16 @@ export default function ReportScreen({ navigation, route }: Props) {
   }
 
   const reportTitle =
-    type === 'user' ? 'Report account'
-      : type === 'group' ? 'Report group'
-      : 'Report listing';
+    type === 'user' ? t('header.reportAccount')
+      : type === 'group' ? t('header.reportGroup')
+      : t('header.reportListing');
 
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
           title={reportTitle}
-          subtitle="Reports are confidential"
+          subtitle={t('header.subtitle')}
           onBack={() => navigation.goBack()}
         />
       }
@@ -454,17 +481,16 @@ export default function ReportScreen({ navigation, route }: Props) {
           {isSubmitting ? (
             <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
-            <Text style={styles.submitText}>Send report</Text>
+            <Text style={styles.submitText}>{t('submit.label')}</Text>
           )}
         </AnimatedPressable>
       }
       footerInsetHeight={96}
     >
       <View style={styles.intro}>
-        <Text style={styles.introTitle}>What happened?</Text>
+        <Text style={styles.introTitle}>{t('intro.title')}</Text>
         <Text style={styles.introBody}>
-          Choose the reason that best describes the issue. Do not include
-          passwords, payment details or other sensitive information.
+          {t('intro.body')}
         </Text>
       </View>
 
@@ -495,9 +521,9 @@ export default function ReportScreen({ navigation, route }: Props) {
                 />
               </View>
               <View style={styles.reasonCopy}>
-                <Text style={styles.reasonLabel}>{reason.label}</Text>
+                <Text style={styles.reasonLabel}>{t(reason.labelKey)}</Text>
                 <Text style={styles.reasonDescription}>
-                  {reason.description}
+                  {t(reason.descKey)}
                 </Text>
               </View>
               <View style={[styles.radio, selected && styles.radioSelected]}>
@@ -510,12 +536,12 @@ export default function ReportScreen({ navigation, route }: Props) {
 
       {selectedReason ? (
         <View style={styles.details}>
-          <Text style={styles.detailsLabel}>Additional details (optional)</Text>
+          <Text style={styles.detailsLabel}>{t('details.label')}</Text>
           <TextInput
             style={styles.detailsInput}
             value={details}
             onChangeText={setDetails}
-            placeholder="Describe what happened"
+            placeholder={t('details.placeholder')}
             placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}
@@ -525,7 +551,7 @@ export default function ReportScreen({ navigation, route }: Props) {
           <Text style={styles.characterCount}>{details.length}/500</Text>
 
           {/* Evidence photo upload */}
-          <Text style={styles.evidenceLabel}>Evidence photos (optional)</Text>
+          <Text style={styles.evidenceLabel}>{t('evidence.label')}</Text>
           {evidenceItems.length > 0 ? (
             <View style={styles.evidenceGrid}>
               {evidenceItems.map((item, i) => (
@@ -576,7 +602,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                 accessibilityLabel="Take evidence photo with camera"
               >
                 <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
-                <Text style={styles.evidenceUploadText}>Camera</Text>
+                <Text style={styles.evidenceUploadText}>{t('evidence.camera')}</Text>
               </AnimatedPressable>
               <AnimatedPressable
                 style={[styles.evidenceUploadBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
@@ -591,12 +617,12 @@ export default function ReportScreen({ navigation, route }: Props) {
                 ) : (
                   <Ionicons name="images-outline" size={18} color={colors.textPrimary} />
                 )}
-                <Text style={styles.evidenceUploadText}>Gallery</Text>
+                <Text style={styles.evidenceUploadText}>{t('evidence.gallery')}</Text>
               </AnimatedPressable>
             </View>
           ) : null}
           <Text style={styles.evidenceCount}>
-            {evidenceItems.length}/3 photos
+            {t('evidence.count', { count: evidenceItems.length })}
           </Text>
         </View>
       ) : null}

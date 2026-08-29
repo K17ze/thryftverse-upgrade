@@ -49,6 +49,7 @@ import {
   type ListingQualityScore } from '../services/listingQualityApi';
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -68,6 +69,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
   const { showError, showInfo } = useNotifications();
   const { categories, conditions } = useTaxonomy();
   const { currencySymbol } = useFormattedPrice();
+  const { t } = useAppTranslation('aiListing');
   const categoryOptions = useMemo(
     () => categories.filter((n) => n.parentId === null).map((n) => n.name),
     [categories],
@@ -467,8 +469,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* -- Header -- product language, not AI branding */}
       <ScreenHeader
-        title="Quick list"
-        subtitle="Snap photos · review · publish"
+        title={t('header.title')}
+        subtitle={t('header.subtitle')}
         backIcon="arrow-back"
         onBack={() => navigation.goBack()}
         style={{
@@ -541,12 +543,12 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
           {photos.length > 0 && !isAnalyzing && (
             <View>
               {/* Title */}
-              <FieldLabel label="Title" colors={colors} styles={styles} />
+              <FieldLabel label={t('fields.title')} colors={colors} styles={styles} />
               <TextInput
                 style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={title}
                 onChangeText={handleTitleChange}
-                placeholder="e.g. Vintage Levi's 501 Denim Jacket"
+                placeholder={t('placeholders.title')}
                 placeholderTextColor={colors.textMuted}
                 returnKeyType="next"
               />
@@ -561,12 +563,12 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               )}
 
               {/* Description */}
-              <FieldLabel label="Description" colors={colors} styles={styles} />
+              <FieldLabel label={t('fields.description')} colors={colors} styles={styles} />
               <TextInput
                 style={[styles.fieldTextarea, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={description}
                 onChangeText={handleDescriptionChange}
-                placeholder="Describe your item…"
+                placeholder={t('placeholders.description')}
                 placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={4}
@@ -585,7 +587,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               {/* Category + Brand row */}
               <View style={styles.fieldRow}>
                 <View style={{ flex: 1, marginRight: Space.sm }}>
-                  <FieldLabel label="Category" colors={colors} styles={styles} />
+                  <FieldLabel label={t('fields.category')} colors={colors} styles={styles} />
                   <Pressable
                     style={({ pressed }) => [styles.pickerField, { borderColor: colors.border }, pressed && { opacity: 0.6 }]}
                     onPress={() => setPickerMode('Category')}
@@ -600,7 +602,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                       ]}
                       numberOfLines={1}
                     >
-                      {category || 'Select category'}
+                      {category || t('placeholders.selectCategory')}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color={colors.textMuted} aria-hidden={true} />
                   </Pressable>
@@ -617,12 +619,12 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 </View>
 
                 <View style={{ flex: 1 }}>
-                  <FieldLabel label="Brand" colors={colors} styles={styles} />
+                  <FieldLabel label={t('fields.brand')} colors={colors} styles={styles} />
                   <TextInput
                     style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
                     value={brand}
                     onChangeText={handleBrandChange}
-                    placeholder="Brand"
+                    placeholder={t('placeholders.brand')}
                     placeholderTextColor={colors.textMuted}
                   />
                   {brandSuggestion && (
@@ -641,7 +643,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               {/* Condition + Price row */}
               <View style={styles.fieldRow}>
                 <View style={{ flex: 1, marginRight: Space.sm }}>
-                  <FieldLabel label="Condition" colors={colors} styles={styles} />
+                  <FieldLabel label={t('fields.condition')} colors={colors} styles={styles} />
                   <Pressable
                     style={({ pressed }) => [styles.pickerField, { borderColor: colors.border }, pressed && { opacity: 0.6 }]}
                     onPress={() => setPickerMode('Condition')}
@@ -656,7 +658,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                       ]}
                       numberOfLines={1}
                     >
-                      {condition || 'Select condition'}
+                      {condition || t('placeholders.selectCondition')}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color={colors.textMuted} aria-hidden={true} />
                   </Pressable>
@@ -669,7 +671,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 </View>
 
                 <View style={{ flex: 1 }}>
-                  <FieldLabel label="Price (GBP)" colors={colors} styles={styles} />
+                  <FieldLabel label={t('fields.price')} colors={colors} styles={styles} />
                   <TextInput
                     style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
                     value={price}
@@ -677,7 +679,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                       markDirty('price');
                       setPrice(sanitizeDecimalInput(v));
                     }}
-                    placeholder="0.00"
+                    placeholder={t('placeholders.price')}
                     placeholderTextColor={colors.textMuted}
                     keyboardType="decimal-pad"
                   />
@@ -702,7 +704,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               </View>
 
               {/* Tags */}
-              <FieldLabel label="Tags" colors={colors} styles={styles} />
+              <FieldLabel label={t('fields.tags')} colors={colors} styles={styles} />
               <View style={styles.tagsWrap}>
                 {tags.map((tag) => (
                   <View key={tag} style={[styles.tagChip, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -724,7 +726,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                     style={[styles.tagInput, { color: colors.textPrimary }]}
                     value={tagInput}
                     onChangeText={setTagInput}
-                    placeholder="Add tag"
+                    placeholder={t('placeholders.addTag')}
                     placeholderTextColor={colors.textMuted}
                     onSubmitEditing={handleAddTag}
                     returnKeyType="done"
@@ -760,31 +762,31 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               />
 
               {/* Material composition + weight — used to calculate real environmental impact */}
-              <FieldLabel label="Material composition" colors={colors} styles={styles} />
+              <FieldLabel label={t('fields.materialComposition')} colors={colors} styles={styles} />
               <TextInput
                 style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={materialComposition}
                 onChangeText={setMaterialComposition}
-                placeholder="e.g. cotton, polyester, wool..."
+                placeholder={t('placeholders.material')}
                 placeholderTextColor={colors.textMuted}
               />
-              <FieldLabel label="Weight (kg)" colors={colors} styles={styles} />
+              <FieldLabel label={t('fields.weight')} colors={colors} styles={styles} />
               <TextInput
                 style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
                 value={weightKg}
                 onChangeText={(v) => setWeightKg(sanitizeDecimalInput(v))}
-                placeholder="e.g. 0.45"
+                placeholder={t('placeholders.weight')}
                 placeholderTextColor={colors.textMuted}
                 keyboardType="decimal-pad"
               />
               <Text style={[styles.impactHelperText, { color: colors.textMuted }]}>
-                Used to calculate real environmental impact. Optional but recommended.
+                {t('impact.helper')}
               </Text>
 
               {/* Listing preview */}
               <View style={styles.sectionLabelWrap}>
                 <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                  Preview
+                  {t('preview.label')}
                 </Text>
               </View>
               <ListingPreviewCard
@@ -799,7 +801,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               {/* Listing quality meter */}
               <View style={styles.sectionLabelWrap}>
                 <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                  Completeness
+                  {t('preview.completeness')}
                 </Text>
               </View>
               <ListingQualityMeter score={qualityScore} />
@@ -812,7 +814,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       {photos.length > 0 && (
         <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
           <AppButton
-            title={isSubmitting ? 'Publishing…' : 'Review & publish'}
+            title={isSubmitting ? t('publish.publishing') : t('publish.reviewPublish')}
             onPress={handlePublish}
             disabled={!canPublish}
             loading={isSubmitting}
@@ -832,7 +834,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
           selectedValue={pickerMode === 'Category' ? category : condition}
           onSelect={pickerMode === 'Category' ? handleCategorySelect : handleConditionSelect}
           onClose={() => setPickerMode(null)}
-          title={pickerMode === 'Category' ? 'Select category' : 'Select condition'}
+          title={pickerMode === 'Category' ? t('picker.selectCategory') : t('picker.selectCondition')}
           colors={colors}
         />
       )}
@@ -854,6 +856,7 @@ interface SuggestionRowProps {
 }
 
 function SuggestionRow({ suggestion, onAccept, onDismiss, colors, styles, compact }: SuggestionRowProps) {
+  const { t } = useAppTranslation('aiListing');
   const candidateText = useMemo(() => {
     if (typeof suggestion.candidate === 'string') return suggestion.candidate;
     if (Array.isArray(suggestion.candidate)) return (suggestion.candidate as string[]).join(', ');
@@ -891,7 +894,7 @@ function SuggestionRow({ suggestion, onAccept, onDismiss, colors, styles, compac
           accessibilityHint="Apply this suggestion to the field"
         >
           <Text style={[styles.suggestionAcceptText, { color: colors.brand }]}>
-            Use
+            {t('suggestion.use')}
           </Text>
         </Pressable>
         <Pressable
@@ -950,6 +953,7 @@ function PhotoCaptureSection({
   onEnhancePhoto,
   colors,
   styles }: PhotoCaptureSectionProps) {
+  const { t } = useAppTranslation('aiListing');
   const thumbSize = (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3;
 
   return (
@@ -964,7 +968,7 @@ function PhotoCaptureSection({
               <Image source={{ uri: photo.uri }} style={styles.photoImage} />
               {index === 0 && (
                 <View style={[styles.coverBadge, { backgroundColor: colors.brand }]}>
-                  <Text style={[styles.coverBadgeText, { color: colors.textInverse }]}>Cover</Text>
+                  <Text style={[styles.coverBadgeText, { color: colors.textInverse }]}>{t('photo.cover')}</Text>
                 </View>
               )}
               <Pressable
@@ -984,7 +988,7 @@ function PhotoCaptureSection({
                 accessibilityHint="Opens photo enhancement to improve this listing image"
               >
                 <Ionicons name="color-filter-outline" size={12} color={colors.brand} aria-hidden={true} />
-                <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>Enhance</Text>
+                <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>{t('photo.enhance')}</Text>
               </Pressable>
             </View>
           ))}
@@ -1000,7 +1004,7 @@ function PhotoCaptureSection({
           accessibilityHint="Open camera to capture a photo"
         >
           <Ionicons name="camera-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
-          <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>Camera</Text>
+          <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>{t('photo.camera')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.captureBtn, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && { opacity: 0.6 }]}
@@ -1010,7 +1014,7 @@ function PhotoCaptureSection({
           accessibilityHint="Open gallery to select photos"
         >
           <Ionicons name="images-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
-          <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>Gallery</Text>
+          <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>{t('photo.library')}</Text>
         </Pressable>
       </View>
     </View>
@@ -1096,17 +1100,17 @@ function EmptyState({
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
+  const { t } = useAppTranslation('aiListing');
   return (
     <View style={styles.emptyState}>
       <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
         <Ionicons name="camera-outline" size={28} color={colors.textMuted} aria-hidden={true} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-        Snap to list
+        {t('empty.title')}
       </Text>
       <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
-        Add photos above and we'll suggest a title, description, category and
-        price range. Review and edit everything before publishing.
+        {t('empty.body')}
       </Text>
     </View>
   );
@@ -1125,6 +1129,7 @@ interface ErrorBannerProps {
 }
 
 function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBannerProps) {
+  const { t } = useAppTranslation('aiListing');
   return (
     <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
       <View style={styles.errorHeader}>
@@ -1150,7 +1155,7 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
         accessibilityLabel="Retry"
         accessibilityHint="Retry the failed action"
       >
-        <Text style={[styles.errorRetryText, { color: colors.danger }]}>Retry</Text>
+        <Text style={[styles.errorRetryText, { color: colors.danger }]}>{t('error.retry')}</Text>
       </Pressable>
     </View>
   );

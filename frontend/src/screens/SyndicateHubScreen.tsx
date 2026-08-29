@@ -518,9 +518,6 @@ export default function CoOwnHubScreen() {
     if (item.kind === 'highlights') {
       return (
         <View style={styles.highlightsSection}>
-          <View style={styles.highlightsHeading}>
-            <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>MARKET HIGHLIGHTS</Text>
-          </View>
           <CoOwnMarketHighlightsCarousel items={highlights} onPressItem={handleHighlightPress} />
         </View>
       );
@@ -533,7 +530,6 @@ export default function CoOwnHubScreen() {
         <View style={styles.majorSection}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeadingGroup}>
-              <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>YOUR PORTFOLIO</Text>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.2}>Positions</Text>
             </View>
             <AnimatedPressable
@@ -598,7 +594,6 @@ export default function CoOwnHubScreen() {
         <View style={styles.instrumentsHeader} accessibilityLabel="Market search and sorting">
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeadingGroup}>
-              <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>MARKETPLACE</Text>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.2}>{SECTION_TITLES[activeSegment]}</Text>
             </View>
             <Text style={[styles.resultCount, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{filteredAssets.length} {filteredAssets.length === 1 ? 'market' : 'markets'}</Text>
@@ -952,13 +947,6 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.md,
   },
-  highlightsHeading: {
-    minHeight: Space.xl - Space.xs,
-    paddingHorizontal: Space.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   tabsSurface: {
     minHeight: Control.hit + 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -1009,13 +997,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     gap: Space.xs / 2,
-  },
-  sectionEyebrow: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: LetterSpacing.caps,
-    textTransform: 'uppercase',
   },
   sectionTitle: {
     fontSize: TypographyV2.screenTitle.size,

@@ -51,7 +51,7 @@ export default function OrderReceiptScreen() {
   const { colors, isDark } = useAppTheme();
 
   // Theme-aware color overrides for the static styles.
-  const t = React.useMemo(() => ({
+  const themed = React.useMemo(() => ({
     container: { backgroundColor: colors.background },
     loadingText: { color: colors.textMuted },
     errorTitle: { color: colors.textPrimary },
@@ -70,7 +70,7 @@ export default function OrderReceiptScreen() {
     totalValue: { color: colors.textPrimary },
     immutableText: { color: colors.textMuted },
     pendingText: { color: colors.textMuted },
-    nextStepsCard: { borderTopColor: colors.border, backgroundColor: colors.brandSubtle },
+    nextStepsCard: { borderTopColor: colors.border },
     nextStepsTitle: { color: colors.textPrimary },
     nextStepDotActive: { backgroundColor: colors.brand },
     nextStepDotPending: { backgroundColor: colors.border },
@@ -149,7 +149,7 @@ export default function OrderReceiptScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, t.container]}>
+      <View style={[styles.container, themed.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <ScreenHeader
           title="Receipt"
@@ -183,7 +183,7 @@ export default function OrderReceiptScreen() {
 
   if (loadError || !order) {
     return (
-      <View style={[styles.container, t.container]}>
+      <View style={[styles.container, themed.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <ScreenHeader
           title="Receipt"
@@ -192,9 +192,9 @@ export default function OrderReceiptScreen() {
         />
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
-          <Text style={[styles.errorTitle, t.errorTitle]}>Receipt could not be loaded</Text>
-          <Pressable style={({ pressed }) => [styles.retryBtn, t.retryBtn, pressed && styles.retryBtnPressed]} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
-            <Text style={[styles.retryBtnText, t.retryBtnText]}>Retry</Text>
+          <Text style={[styles.errorTitle, themed.errorTitle]}>Receipt could not be loaded</Text>
+          <Pressable style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && styles.retryBtnPressed]} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
+            <Text style={[styles.retryBtnText, themed.retryBtnText]}>Retry</Text>
           </Pressable>
         </View>
       </View>
@@ -203,7 +203,7 @@ export default function OrderReceiptScreen() {
 
   if (!isBuyer && !isSeller) {
     return (
-      <View style={[styles.container, t.container]}>
+      <View style={[styles.container, themed.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <ScreenHeader
           title="Receipt"
@@ -212,7 +212,7 @@ export default function OrderReceiptScreen() {
         />
         <View style={styles.errorContainer}>
           <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
-          <Text style={[styles.errorTitle, t.errorTitle]}>You do not have access to this receipt</Text>
+          <Text style={[styles.errorTitle, themed.errorTitle]}>You do not have access to this receipt</Text>
         </View>
       </View>
     );
@@ -236,7 +236,7 @@ export default function OrderReceiptScreen() {
   const counterpartyName = counterparty?.username ?? 'Unknown';
 
   return (
-    <View style={[styles.container, t.container]}>
+    <View style={[styles.container, themed.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <ScreenHeader
@@ -270,19 +270,19 @@ export default function OrderReceiptScreen() {
         {/* Success header for completed orders */}
         {isReceiptFinal && normalisedStatus !== 'cancelled' && normalisedStatus !== 'refunded' ? (
           <View style={styles.successHeader}>
-            <View style={[styles.successIconWrap, t.successIconWrap]}>
+            <View style={[styles.successIconWrap, themed.successIconWrap]}>
               <Ionicons name="checkmark" size={28} color={colors.success} />
             </View>
-            <Text style={[styles.successTitle, t.successTitle]}>
+            <Text style={[styles.successTitle, themed.successTitle]}>
               {isBuyer ? 'Order complete' : 'Payment received'}
             </Text>
-            <Text style={[styles.successSubtitle, t.successSubtitle]}>Receipt #{shortOrderId}</Text>
+            <Text style={[styles.successSubtitle, themed.successSubtitle]}>Receipt #{shortOrderId}</Text>
           </View>
         ) : null}
 
         <View style={styles.receiptCard}>
           <View style={styles.receiptHeader}>
-            <Text style={[styles.receiptTitle, t.receiptTitle]}>Order Receipt</Text>
+            <Text style={[styles.receiptTitle, themed.receiptTitle]}>Order Receipt</Text>
             <Pressable
               onPress={handleCopyOrderId}
               hitSlop={{ top: 8, bottom: 8 }}
@@ -290,7 +290,7 @@ export default function OrderReceiptScreen() {
               accessibilityLabel={`Copy order ID ${shortOrderId}`}
             >
               <View style={styles.orderIdRow}>
-                <Text style={[styles.orderIdLabel, t.orderIdLabel]}>#{shortOrderId}</Text>
+                <Text style={[styles.orderIdLabel, themed.orderIdLabel]}>#{shortOrderId}</Text>
                 <Ionicons name="copy-outline" size={14} color={colors.textMuted} />
               </View>
             </Pressable>
@@ -302,11 +302,11 @@ export default function OrderReceiptScreen() {
             <ReceiptRow label={counterpartyRole} value={`@${counterpartyName}`} />
           </View>
 
-          <View style={[styles.receiptDivider, t.receiptDivider]} />
+          <View style={[styles.receiptDivider, themed.receiptDivider]} />
 
           {/* Itemized item — image + title + price for visual verification */}
           <View style={styles.receiptSection}>
-            <Text style={[styles.sectionLabel, t.sectionLabel]}>Item</Text>
+            <Text style={[styles.sectionLabel, themed.sectionLabel]}>Item</Text>
             <View style={styles.itemizedRow}>
               {order.listingImageUrl ? (
                 <CachedImage
@@ -330,10 +330,10 @@ export default function OrderReceiptScreen() {
             </View>
           </View>
 
-          <View style={[styles.receiptDivider, t.receiptDivider]} />
+          <View style={[styles.receiptDivider, themed.receiptDivider]} />
 
           <View style={styles.receiptSection}>
-            <Text style={[styles.sectionLabel, t.sectionLabel]}>Transaction breakdown</Text>
+            <Text style={[styles.sectionLabel, themed.sectionLabel]}>Transaction breakdown</Text>
             <ReceiptRow label="Item" value={subtotal} />
             {hasBuyerProtection && (
               <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, currencyCode, fiatOpts)} />
@@ -341,16 +341,16 @@ export default function OrderReceiptScreen() {
             <ReceiptRow label="Platform charge" value={platformCharge} />
             <ReceiptRow label="Delivery" value={postage} />
             <View style={styles.totalRow}>
-              <Text style={[styles.totalLabel, t.totalLabel]}>Total</Text>
-              <Text style={[styles.totalValue, t.totalValue]}>{total}</Text>
+              <Text style={[styles.totalLabel, themed.totalLabel]}>Total</Text>
+              <Text style={[styles.totalValue, themed.totalValue]}>{total}</Text>
             </View>
           </View>
 
           {order.trackingNumber && (
             <>
-              <View style={[styles.receiptDivider, t.receiptDivider]} />
+              <View style={[styles.receiptDivider, themed.receiptDivider]} />
               <View style={styles.receiptSection}>
-                <Text style={[styles.sectionLabel, t.sectionLabel]}>Shipping</Text>
+                <Text style={[styles.sectionLabel, themed.sectionLabel]}>Shipping</Text>
                 {order.shippingProvider && (
                   <ReceiptRow label="Carrier" value={order.shippingProvider} />
                 )}
@@ -365,11 +365,11 @@ export default function OrderReceiptScreen() {
             </>
           )}
 
-          <View style={[styles.receiptDivider, t.receiptDivider]} />
+          <View style={[styles.receiptDivider, themed.receiptDivider]} />
 
           <View style={styles.immutableNotice}>
             <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
-            <Text style={[styles.immutableText, t.immutableText]}>
+            <Text style={[styles.immutableText, themed.immutableText]}>
               This receipt is an immutable record of the transaction at the time of the order.
             </Text>
           </View>
@@ -377,7 +377,7 @@ export default function OrderReceiptScreen() {
           {!isReceiptFinal && (
             <View style={styles.pendingNotice}>
               <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-              <Text style={[styles.pendingText, t.pendingText]}>
+              <Text style={[styles.pendingText, themed.pendingText]}>
                 This order is still in progress. The receipt will update as the order progresses.
               </Text>
             </View>
@@ -385,19 +385,19 @@ export default function OrderReceiptScreen() {
 
           {/* What happens next — contextual next-step hint for pending orders */}
           {!isReceiptFinal && isBuyer && (
-            <View style={[styles.nextStepsCard, t.nextStepsCard]}>
-              <Text style={[styles.nextStepsTitle, t.nextStepsTitle]}>What happens next</Text>
+            <View style={[styles.nextStepsCard, themed.nextStepsCard]}>
+              <Text style={[styles.nextStepsTitle, themed.nextStepsTitle]}>What happens next</Text>
               <View style={styles.nextStepItem}>
-                <View style={[styles.nextStepDot, t.nextStepDotActive]} />
-                <Text style={[styles.nextStepText, t.nextStepText]}>Seller prepares and dispatches your item</Text>
+                <View style={[styles.nextStepDot, themed.nextStepDotActive]} />
+                <Text style={[styles.nextStepText, themed.nextStepText]}>Seller prepares and dispatches your item</Text>
               </View>
               <View style={styles.nextStepItem}>
-                <View style={[styles.nextStepDot, t.nextStepDotPending]} />
-                <Text style={[styles.nextStepTextMuted, t.nextStepTextMuted]}>Carrier delivers to your address</Text>
+                <View style={[styles.nextStepDot, themed.nextStepDotPending]} />
+                <Text style={[styles.nextStepTextMuted, themed.nextStepTextMuted]}>Carrier delivers to your address</Text>
               </View>
               <View style={styles.nextStepItem}>
-                <View style={[styles.nextStepDot, t.nextStepDotPending]} />
-                <Text style={[styles.nextStepTextMuted, t.nextStepTextMuted]}>You confirm receipt and can leave a review</Text>
+                <View style={[styles.nextStepDot, themed.nextStepDotPending]} />
+                <Text style={[styles.nextStepTextMuted, themed.nextStepTextMuted]}>You confirm receipt and can leave a review</Text>
               </View>
             </View>
           )}
@@ -410,7 +410,7 @@ export default function OrderReceiptScreen() {
           accessibilityRole="button"
           accessibilityLabel="View order details"
         >
-          <Text style={[styles.viewDetailBtnText, t.viewDetailBtnText]}>View order details</Text>
+          <Text style={[styles.viewDetailBtnText, themed.viewDetailBtnText]}>View order details</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.brand} />
         </Pressable>
 
@@ -422,7 +422,7 @@ export default function OrderReceiptScreen() {
           accessibilityLabel="Save or share receipt"
         >
           <Ionicons name="download-outline" size={18} color={colors.brand} />
-          <Text style={[styles.saveBtnText, t.viewDetailBtnText]}>Save or share receipt</Text>
+          <Text style={[styles.saveBtnText, themed.viewDetailBtnText]}>Save or share receipt</Text>
         </Pressable>
       </ScrollView>
     </View>

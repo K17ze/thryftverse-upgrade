@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { TypeStyles, Space, Radius, Typography } from '../theme/designTokens';
+import { TypeStyles, Space, Radius, Typography, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -116,15 +116,21 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
   );
 }
 
-function StatCard({ icon, label, value, tone }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
+// Flat metric row — label left, value right, hairline separator below.
+// Replaces the 2x2 StatCard grid (generic dashboard silhouette) with an
+// inline list that passes the thumbnail test: the eye reads a labelled
+// ledger, not four identical grey tiles.
+function FlagshipMetricLine({ icon, label, value, tone }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const color = tone === 'success' ? colors.success : tone === 'brand' ? colors.brand : colors.textPrimary;
+  const valueColor = tone === 'success' ? colors.success : tone === 'brand' ? colors.brand : colors.textPrimary;
   return (
-    <View style={styles.statTile}>
-      <Ionicons name={icon} size={18} color={color} />
-      <Text style={styles.statTileValue} numberOfLines={1}>{value}</Text>
-      <Text style={styles.statTileLabel} numberOfLines={1}>{label}</Text>
+    <View style={styles.metricRow}>
+      <View style={styles.metricLabel}>
+        <Ionicons name={icon} size={16} color={colors.textMuted} />
+        <Text style={styles.metricLabelText} numberOfLines={1}>{label}</Text>
+      </View>
+      <Text style={[styles.metricValue, { color: valueColor }]} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
@@ -237,26 +243,26 @@ export default function MyListingsScreen() {
     if (listings.length === 0) return null;
     return (
       <View style={styles.headerSection}>
-        {/* Analytics summary */}
-        <View style={styles.statsGrid}>
-          <StatCard
+        {/* Analytics summary — flat metric ledger, no card chrome */}
+        <View style={styles.metricList}>
+          <FlagshipMetricLine
             icon="pricetag-outline"
             label="Active"
             value={String(analytics.activeCount)}
             tone="success"
           />
-          <StatCard
+          <FlagshipMetricLine
             icon="checkmark-done"
             label="Sold"
             value={String(analytics.soldCount)}
             tone="brand"
           />
-          <StatCard
+          <FlagshipMetricLine
             icon="cash-outline"
             label="Avg price"
             value={formatFromFiat(analytics.avgActivePrice, currencyCode)}
           />
-          <StatCard
+          <FlagshipMetricLine
             icon="trending-up-outline"
             label="Active value"
             value={formatFromFiat(analytics.totalActiveValue, currencyCode)}
@@ -447,25 +453,30 @@ function createStyles(colors: ThemeColors) {
   headerSection: {
     gap: Space.sm,
     marginBottom: Space.sm },
-  statsGrid: {
+  metricList: {
+    // Flat ledger — no fill, no shadow, no card chrome.
+    // Hairline separators between rows provide the only visible structure.
+    marginBottom: Space.xs },
+  metricRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm },
-  statTile: {
-    width: '48%',
-    flexGrow: 1,
-    gap: 2,
-    paddingVertical: Space.sm },
-  statTileValue: {
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border },
+  metricLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    flexShrink: 1 },
+  metricLabelText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
+  metricValue: {
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: TypographyV2.sectionTitle.fontFamily,
-    color: colors.textPrimary,
     letterSpacing: TypographyV2.sectionTitle.letterSpacing },
-  statTileLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    letterSpacing: TypographyV2.meta.letterSpacing },
   quickActionsRow: {
     flexDirection: 'row',
     gap: Space.xs },

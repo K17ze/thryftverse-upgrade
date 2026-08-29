@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import Reanimated, {
   useAnimatedStyle,
   interpolate,
@@ -16,8 +16,6 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { AnimatedHeart } from '../AnimatedHeart';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 interface ListingMediaHeroProps {
   images: string[];
@@ -53,7 +51,8 @@ export function ListingMediaHero({
   scrollY }: ListingMediaHeroProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const heroStyle = useAnimatedStyle(() => {
@@ -161,10 +160,10 @@ export function ListingMediaHero({
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
   heroContainer: {
-    width: SCREEN_W,
+    width: screenWidth,
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden' },

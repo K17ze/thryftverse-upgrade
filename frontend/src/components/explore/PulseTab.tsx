@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  Dimensions } from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -29,7 +28,6 @@ import { fetchTrendingListings, type TrendingListing } from '../../services/mark
 import { openProductDetail } from '../../platform/product/openProductDetail';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-const { width: SCREEN_W } = Dimensions.get('window');
 
 /* ── Activity item types ── */
 type ActivityType = 'auction_live' | 'fresh_drop' | 'price_drop';

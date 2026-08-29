@@ -471,7 +471,6 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
         <View style={styles.metaRow}>
           {priorityDisplay && (
             <View style={styles.metaItem}>
-              <Meta color={colors.textMuted}>PRIORITY</Meta>
               <View style={styles.priorityValueRow}>
                 <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
                 <Text style={[styles.metaValue, { color: priorityColor }]}>{priorityDisplay.label}</Text>
@@ -479,12 +478,10 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
             </View>
           )}
           <View style={styles.metaItem}>
-            <Meta color={colors.textMuted}>OPENED</Meta>
             <Text style={styles.metaValue}>{createdDate}</Text>
           </View>
           {createdDate !== updatedDate && (
             <View style={styles.metaItem}>
-              <Meta color={colors.textMuted}>UPDATED</Meta>
               <Text style={styles.metaValue}>{updatedDate}</Text>
             </View>
           )}
@@ -494,7 +491,6 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
       {/* ── Requested outcome — flat text block, hairline separator ─────── */}
       {caseRecord.requestedOutcome && (
         <View style={styles.section}>
-          <Meta color={colors.textMuted} style={styles.sectionLabel}>REQUESTED OUTCOME</Meta>
           <Text style={styles.outcomeText}>{caseRecord.requestedOutcome}</Text>
         </View>
       )}
@@ -502,7 +498,6 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
       {/* ── Resolution disposition — flat text block ─────────────────────── */}
       {caseRecord.resolutionDisposition && (
         <View style={styles.section}>
-          <Meta color={colors.textMuted} style={styles.sectionLabel}>RESOLUTION</Meta>
           <Text style={styles.outcomeText}>
             {DISPOSITION_LABEL[caseRecord.resolutionDisposition] ?? caseRecord.resolutionDisposition.replace(/_/g, ' ')}
           </Text>
@@ -512,7 +507,6 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
       {/* ── Related context — flat rows with hairline separators ─────────── */}
       {contextLinks.length > 0 && (
         <View style={styles.section}>
-          <Meta color={colors.textMuted} style={styles.sectionLabel}>RELATED</Meta>
           <View style={styles.contextList}>
             {contextLinks.map((link, index) => (
               <React.Fragment key={`${link.kind}:${link.id}`}>

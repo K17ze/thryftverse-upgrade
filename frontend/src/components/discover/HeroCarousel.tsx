@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   FlatList,
   ViewToken } from 'react-native';
 import { Video, ResizeMode } from '../compat/Video';
@@ -15,8 +15,6 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Radius, Space, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export interface HeroItem {
   id: string;
@@ -42,7 +40,8 @@ export function HeroCarousel({ items, autoPlayInterval = 5000 }: Props) {
   const isInteractingRef = useRef(false);
   const reducedMotion = useReducedMotion();
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
 
   const startAutoPlay = useCallback(() => {
     if (autoPlayTimerRef.current) clearInterval(autoPlayTimerRef.current);
@@ -175,11 +174,11 @@ export function HeroCarousel({ items, autoPlayInterval = 5000 }: Props) {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
     slide: {
-      width: SCREEN_W,
-      height: SCREEN_W * 1.3,
+      width: screenWidth,
+      height: screenWidth * 1.3,
       position: 'relative' },
     media: {
       width: '100%',

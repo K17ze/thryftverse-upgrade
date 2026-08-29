@@ -13,6 +13,7 @@ import {
   cancelOrder,
   deliverOrder,
 } from '../services/commerceApi';
+import { getOrderReview } from '../services/reviewApi';
 import { parseApiError } from '../lib/apiClient';
 import { t } from '../i18n';
 import { useToast } from '../context/ToastContext';
@@ -23,6 +24,7 @@ export type OrderMutation = 'cancel' | 'ship' | 'deliver' | 'refund' | null;
 export interface UseOrderDetailResult {
   backendOrder: CommerceOrder | null;
   parcelEvents: OrderParcelEvent[];
+  hasReview: boolean;
   isInitialLoading: boolean;
   isRefreshing: boolean;
   loadError: string | null;
@@ -40,6 +42,7 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
 
   const [backendOrder, setBackendOrder] = useState<CommerceOrder | null>(null);
   const [parcelEvents, setParcelEvents] = useState<OrderParcelEvent[]>([]);
+  const [hasReview, setHasReview] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -91,6 +94,19 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
     }
   }, [orderId]);
 
+  // --- Fetch review state ---
+  const fetchReview = useCallback(async () => {
+    try {
+      const review = await getOrderReview(orderId);
+      if (!isMountedRef.current) return;
+      setHasReview(review !== null);
+    } catch {
+      // Review endpoint may not exist for all orders yet; default to false.
+      if (!isMountedRef.current) return;
+      setHasReview(false);
+    }
+  }, [orderId]);
+
   // --- Full refresh ---
   const refreshOrder = useCallback(async (isManual: boolean = false) => {
     if (isManual) {
@@ -100,6 +116,7 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
     const [orderResult] = await Promise.all([
       fetchOrder(),
       fetchParcelEvents(),
+      fetchReview(),
     ]);
 
     if (!isMountedRef.current) return;
@@ -111,7 +128,7 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
     }
 
     return orderResult;
-  }, [fetchOrder, fetchParcelEvents]);
+  }, [fetchOrder, fetchParcelEvents, fetchReview]);
 
   // --- Focus-aware refresh ---
   useFocusEffect(
@@ -187,6 +204,7 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
   return {
     backendOrder,
     parcelEvents,
+    hasReview,
     isInitialLoading,
     isRefreshing,
     loadError,

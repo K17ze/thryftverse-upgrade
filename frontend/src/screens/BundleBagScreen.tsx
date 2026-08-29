@@ -156,6 +156,7 @@ export default function BundleBagScreen() {
             data={sellerListings}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
+            ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
             contentContainerStyle={styles.list}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             // Performance: bundle bags can list many seller items; FlashList
@@ -223,21 +224,18 @@ function createStyles(colors: ThemeColors) {
   list: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    gap: Space.sm,
     paddingBottom: 300 },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border },
+    paddingVertical: Space.sm + 2 },
   itemRowSelected: {
-    borderColor: colors.brand,
     backgroundColor: colors.brandSubtle },
+  itemSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderSubtle },
   checkbox: {
     width: Space.lg,
     height: Space.lg,

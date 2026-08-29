@@ -1080,6 +1080,13 @@
     "picker": {
       "selectCategory": "Select category",
       "selectCondition": "Select condition"
+    },
+    "empty": {
+      "title": "Snap to list",
+      "body": "Add photos above and we'll suggest a title, description, category and price range. Review and edit everything before publishing."
+    },
+    "error": {
+      "retry": "Retry"
     }
   },
   "report": {
@@ -1093,6 +1100,8 @@
     "received": {
       "title": "Report received",
       "body": "We'll review and let you know the outcome.",
+      "reportId": "Report #{{reportId}}",
+      "receivedAt": "Received at {{time}}",
       "referenceNote": "Reference this number in future support contact.",
       "blockUser": "Block this user",
       "blockedNote": "This account is blocked and cannot contact you.",
@@ -1118,7 +1127,7 @@
       "label": "Evidence photos (optional)",
       "camera": "Camera",
       "gallery": "Gallery",
-      "count": "{count}/3 photos"
+      "count": "{{count}}/3 photos"
     },
     "reasons": {
       "spam": "Spam",
@@ -1175,11 +1184,20 @@
     "submitted": {
       "title": "Appeal submitted",
       "body": "We'll review and let you know the outcome.",
+      "appealId": "Appeal #{{appealId}}",
+      "submittedAt": "Submitted at {{time}}",
       "referenceNote": "Reference this number in future support contact.",
       "done": "Done"
     },
     "duration": {
-      "permanent": "Permanent"
+      "permanent": "Permanent",
+      "until": "Until {{date}}"
+    },
+    "decision": {
+      "noViolation": "No violation",
+      "restrict": "Content restricted",
+      "escalate": "Escalated",
+      "emergencyHold": "Emergency hold"
     },
     "grounds": {
       "label": "Why do you think this decision was wrong?",
@@ -1189,7 +1207,7 @@
       "label": "Evidence photos (optional)",
       "camera": "Camera",
       "gallery": "Gallery",
-      "count": "{count}/3 photos"
+      "count": "{{count}}/3 photos"
     },
     "submit": {
       "label": "Submit appeal"

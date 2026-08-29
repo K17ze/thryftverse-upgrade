@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TextInput } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -13,8 +13,6 @@ import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
-const { height, width } = Dimensions.get('window');
-
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -27,7 +25,8 @@ interface Props {
 
 export function BottomSheetPicker({ visible, onClose, title, options, selectedValue, onSelect, searchable }: Props) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { height, width } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, width, height), [colors, width, height]);
   const [searchQuery, setSearchQuery] = useState('');
   const [shouldRender, setShouldRender] = useState(visible);
   const translateY = useSharedValue(height);
@@ -46,7 +45,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
       translateY.value = reducedMotion ? withTiming(height, { duration: 0 }) : height;
       setShouldRender(false);
     }
-  }, [shouldRender, visible, reducedMotion]);
+  }, [shouldRender, visible, reducedMotion, height]);
 
   const handleClose = () => {
     translateY.value = reducedMotion ? withTiming(height, { duration: 0 }) : height;
@@ -145,7 +144,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, width: number, height: number) => StyleSheet.create({
   sheet: {
     position: 'absolute',
     bottom: 0,

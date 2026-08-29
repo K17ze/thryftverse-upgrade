@@ -6,7 +6,7 @@ import {
   View,
   StyleSheet,
   Text,
-  Dimensions,
+  useWindowDimensions,
   ScrollView,
   Platform } from 'react-native';
 import Reanimated, {
@@ -26,9 +26,6 @@ import { GradientRing } from './shared/GradientRing';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
-
-const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get('window');
-const DRAWER_HEIGHT = SCREEN_H * 0.55;
 
 export type LayoutType =
   | 'single'
@@ -225,10 +222,12 @@ export default function LayoutPicker({
   const { spring } = useMotionConfig();
   const haptic = useHaptic();
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { height: SCREEN_H, width: SCREEN_W } = useWindowDimensions();
+  const drawerHeight = SCREEN_H * 0.55;
+  const styles = React.useMemo(() => createStyles(colors, drawerHeight, SCREEN_W), [colors, drawerHeight, SCREEN_W]);
 
   // Drawer slide-up + backdrop fade (Reanimated)
-  const translateY = useSharedValue(DRAWER_HEIGHT);
+  const translateY = useSharedValue(drawerHeight);
   const backdropOpacity = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
   const scrollRef = React.useRef<ScrollView>(null);
@@ -261,11 +260,11 @@ export default function LayoutPicker({
       }
     } else {
       if (reducedMotion) {
-        translateY.value = DRAWER_HEIGHT;
+        translateY.value = drawerHeight;
         backdropOpacity.value = 0;
         contentOpacity.value = 0;
       } else {
-        translateY.value = withSpring(DRAWER_HEIGHT, spring.entrance);
+        translateY.value = withSpring(drawerHeight, spring.entrance);
         backdropOpacity.value = withTiming(0, { duration: 150 });
         contentOpacity.value = withTiming(0, { duration: 100 });
       }
@@ -345,7 +344,7 @@ export default function LayoutPicker({
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, drawerHeight: number = 0, screenWidth: number = 0) {
   return StyleSheet.create({
     backdrop: {
       ...StyleSheet.absoluteFill,
@@ -355,7 +354,7 @@ function createStyles(colors: ThemeColors) {
       bottom: 0,
       left: 0,
       right: 0,
-      height: DRAWER_HEIGHT,
+      height: drawerHeight,
       backgroundColor: colors.surface,
       borderTopLeftRadius: Radius.xxl,
       borderTopRightRadius: Radius.xxl,
@@ -379,7 +378,7 @@ function createStyles(colors: ThemeColors) {
     scrollContent: {
       flexDirection: 'row',
       gap: THUMB_GAP,
-      paddingHorizontal: (SCREEN_W - THUMB_SIZE) / 2,
+      paddingHorizontal: (screenWidth - THUMB_SIZE) / 2,
       paddingVertical: Space.sm },
     layoutCard: {
       width: THUMB_SIZE,

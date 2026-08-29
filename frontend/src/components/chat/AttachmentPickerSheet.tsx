@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,8 +15,6 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export type AttachmentType =
   | 'gallery'
@@ -64,7 +62,8 @@ interface AttachmentPickerSheetProps {
 export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = false, hasLinkedItem = false, hasLinkedOrder = false }: AttachmentPickerSheetProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
-  const translateY = useSharedValue(SCREEN_HEIGHT);
+  const { height: screenHeight } = useWindowDimensions();
+  const translateY = useSharedValue(screenHeight);
   const opacity = useSharedValue(0);
   const [rendered, setRendered] = React.useState(visible);
 
@@ -75,10 +74,10 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
       translateY.value = withTiming(0, { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) });
     } else if (rendered) {
       opacity.value = withTiming(0, { duration: Motion.duration.fast });
-      translateY.value = withTiming(SCREEN_HEIGHT * 0.5, { duration: Motion.duration.normal });
+      translateY.value = withTiming(screenHeight * 0.5, { duration: Motion.duration.normal });
       setTimeout(() => setRendered(false), 220);
     }
-  }, [visible, rendered, opacity, translateY, reducedMotion]);
+  }, [visible, rendered, opacity, translateY, reducedMotion, screenHeight]);
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: opacity.value }));

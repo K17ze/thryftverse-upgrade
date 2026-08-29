@@ -36,7 +36,7 @@ import { useOrderDetail } from '../hooks/useOrderDetail';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
-import { Space, Radius, Stroke, Control, ZIndex } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke, ZIndex } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { buildTrackingUrl } from '../services/shippingProviderRegistry';
 import { getListingCoverUri } from '../utils/media';
@@ -85,40 +85,19 @@ export default function OrderDetailScreen() {
   // via this themed proxy so the screen is fully dark-mode compatible.
   const themed = useMemo(() => ({
     container: { backgroundColor: colors.background },
-    loadingText: { color: colors.textMuted },
     errorTitle: { color: colors.textPrimary },
     errorBody: { color: colors.textMuted },
     retryBtn: { backgroundColor: colors.brand },
     retryBtnText: { color: colors.textInverse },
     orderNumber: { color: colors.textMuted },
-    statusLabel: { color: colors.textPrimary },
     statusExplanation: { color: colors.textSecondary },
     lastUpdated: { color: colors.textMuted },
     refreshErrorText: { color: colors.textMuted },
     retryLink: { color: colors.brand },
     sectionDivider: { backgroundColor: colors.border },
-    sectionLabel: { color: colors.textMuted },
-    counterpartyName: { color: colors.textPrimary },
-    counterpartyBtn: { borderColor: colors.border },
-    counterpartyBtnText: { color: colors.brand },
-    escrowBanner: { backgroundColor: colors.successSubtle, borderColor: colors.successBorder },
-    escrowTitle: { color: colors.textPrimary },
-    escrowSub: { color: colors.textSecondary },
-    escrowCountdown: { color: colors.textMuted },
-    etaBanner: { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder },
-    etaLabel: { color: colors.textMuted },
-    etaValue: { color: colors.textPrimary },
-    etaService: { color: colors.textSecondary },
-    etaIconWrap: { backgroundColor: colors.brandSubtle },
     staleBanner: { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder },
     staleText: { color: colors.warning },
-    detailLabel: { color: colors.textSecondary },
-    detailValue: { color: colors.textPrimary },
-    detailValueLink: { color: colors.brand },
-    shippingLabelBtnText: { color: colors.brand },
-    txDivider: { backgroundColor: colors.border },
-    supportLabel: { color: colors.textPrimary },
-    supportSub: { color: colors.textMuted } }), [colors]);
+    detailLabel: { color: colors.textSecondary } }), [colors]);
 
   const currentUser = useStore((state) => state.currentUser);
   const getSupportTicketsForOrder = useStore((state) => state.getSupportTicketsForOrder);
@@ -126,6 +105,7 @@ export default function OrderDetailScreen() {
   const {
     backendOrder,
     parcelEvents,
+    hasReview,
     isInitialLoading,
     isRefreshing,
     loadError,
@@ -285,13 +265,9 @@ export default function OrderDetailScreen() {
     if (!backendOrder) return [];
     return buildTimelineEntries(normalisedStatus, backendOrder, parcelEvents, {
       hasOpenResolution: Boolean(openTicket),
-      // TODO: The backend does not currently expose a per-order review state
-      // (hasReview / review field on CommerceOrder). When it does, wire this
-      // to the actual value. Until then, the timeline does not claim a review
-      // exists when it may not.
-      hasReview: false,
+      hasReview,
       deliveredAt: backendOrder.deliveredAt });
-  }, [backendOrder, normalisedStatus, parcelEvents, openTicket]);
+  }, [backendOrder, normalisedStatus, parcelEvents, openTicket, hasReview]);
 
   // --- Shipment details ---
   const latestParcelEvent = parcelEvents.length > 0
@@ -486,13 +462,11 @@ export default function OrderDetailScreen() {
       status: backendOrder.status,
       role: isBuyer ? 'buyer' : 'seller',
       hasOpenResolution: Boolean(openTicket),
-      // TODO: Wire to actual review state when the backend exposes a per-order
-      // hasReview/review field on CommerceOrder. Until then, do not fabricate.
-      hasReview: false,
+      hasReview,
       hasTracking: Boolean(backendOrder.trackingNumber || parcelEvents.length > 0),
       fulfilmentSnapshot: backendOrder.fulfilmentSnapshot ?? null,
       isSubmitting: orderMutation !== null });
-  }, [backendOrder, isKnown, isBuyer, openTicket, parcelEvents.length, orderMutation]);
+  }, [backendOrder, isKnown, isBuyer, openTicket, parcelEvents.length, orderMutation, hasReview]);
 
   const mutationLocked = orderMutation !== null;
 
@@ -968,7 +942,7 @@ export default function OrderDetailScreen() {
         {/* 4e. Completed order — quiet completion state, operational chrome collapsed */}
         {isCompleted ? (
           <CompletedOrderSummary
-            hasReview={false}
+            hasReview={hasReview}
             onLeaveReview={() => { haptics.tap(); setReviewPromptVisible(true); }}
             onBuyAgain={() => {
               haptics.tap();
@@ -993,8 +967,6 @@ export default function OrderDetailScreen() {
             style={styles.timelineSection}
             onLayout={(e) => { timelineYRef.current = e.nativeEvent.layout.y; }}
           >
-          <Text style={[styles.sectionLabel, themed.sectionLabel]}>Timeline</Text>
-
           {/* Package contents — compact row so buyer can see WHAT is in the parcel */}
           <View style={styles.packageContentsWrap}>
             <Text style={[styles.packageContentsLabel, themed.detailLabel]}>Package contents</Text>
@@ -1161,10 +1133,6 @@ const styles = StyleSheet.create({
   retryBtnPressed: {
     opacity: 0.85,
     transform: [{ scale: 0.97 }] },
-  counterpartyBtnPressed: {
-    opacity: 0.7 },
-  supportRowPressed: {
-    opacity: 0.7 },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1172,14 +1140,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.md },
-  loadingText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
@@ -1236,11 +1196,6 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.bodyStrong.lineHeight,
     fontFamily: TypographyV2.bodyStrong.fontFamily,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing },
-  statusLabel: {
-    fontSize: TypographyV2.priceHero.size,
-    lineHeight: TypographyV2.priceHero.lineHeight,
-    fontFamily: TypographyV2.priceHero.fontFamily,
-    letterSpacing: TypographyV2.priceHero.letterSpacing },
   statusExplanation: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
@@ -1271,86 +1226,8 @@ const styles = StyleSheet.create({
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
     marginVertical: Space.lg },
-  sectionLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
-    marginBottom: Space.sm },
-  counterpartySection: {
-    paddingVertical: Space.sm },
-  counterpartyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm },
-  counterpartyIdentity: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm },
-  counterpartyAvatar: {
-    width: Space.xxl,
-    height: Space.xxl,
-    borderRadius: Radius.full },
-  counterpartyName: {
-    flex: 1,
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
-  counterpartyActions: {
-    flexDirection: 'row',
-    gap: Space.sm },
-  counterpartyBtn: {
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
-    minHeight: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  counterpartyBtnText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing },
   timelineSection: {
     paddingVertical: Space.sm },
-  etaBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth },
-  etaIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  etaContent: {
-    flex: 1,
-    gap: 2 },
-  etaLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    opacity: 0.6 },
-  etaValue: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: TypographyV2.body.fontFamily },
-  etaService: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    opacity: 0.5 },
   staleBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1365,91 +1242,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     opacity: 0.7 },
-  escrowBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm + 2,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth },
-  escrowTextWrap: {
-    flex: 1,
-    gap: Space.xs / 2 },
-  escrowTitle: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  escrowSub: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  escrowCountdown: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    marginTop: Space.xs / 2,
-    fontVariant: ['tabular-nums'] },
-  shipmentSection: {
-    paddingVertical: Space.sm },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Space.sm,
-    gap: Space.md },
-  detailLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  detailValue: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    textAlign: 'right',
-    flex: 1 },
-  detailValueLink: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    fontVariant: ['tabular-nums'] },
-  copyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2 },
-  shippingLabelBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingVertical: Space.sm + 2,
-    marginTop: Space.xs,
-    minHeight: Control.hit },
-  shippingLabelBtnText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  // ─── Text link (Track on carrier site) — text action, not a button ───
-  textLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.sm,
-    marginTop: Space.xs,
-    minHeight: Control.hit },
-  textLink: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing },
   // ─── Latest event summary — one muted text line, not a card ───
   latestEventLine: {
     fontSize: TypographyV2.meta.size,
@@ -1457,32 +1249,6 @@ const styles = StyleSheet.create({
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
     marginBottom: Space.sm },
-  transactionSection: {
-    paddingVertical: Space.sm },
-  txDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm },
-  supportSection: {
-    paddingVertical: Space.sm },
-  supportRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-    minHeight: Control.hit },
-  supportInfo: {
-    flex: 1 },
-  supportLabel: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
-  supportSub: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    marginTop: Space.xs / 2 },
   // ─── Package contents ───
   packageContentsWrap: {
     marginBottom: Space.sm },
@@ -1491,114 +1257,4 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    marginBottom: Space.xs },
-  packageContentsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm },
-  packageThumb: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.sm },
-  packageContentsText: {
-    flex: 1,
-    gap: Space.xxs },
-  packageContentsTitle: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing },
-  packageContentsSub: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily },
-  // ─── Issue category selector ───
-  issueSheetBackdrop: {
-    ...StyleSheet.absoluteFill,
-    zIndex: ZIndex.modal,
-    justifyContent: 'flex-end' },
-  issueSheetBackdropPress: {
-    ...StyleSheet.absoluteFill },
-  issueSheet: {
-    borderTopLeftRadius: Radius.xxl,
-    borderTopRightRadius: Radius.xxl,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-    paddingBottom: Space.xl,
-    gap: Space.xs },
-  issueSheetTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-    fontFamily: TypographyV2.sectionTitle.fontFamily,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
-  issueSheetSub: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: TypographyV2.body.fontFamily,
-    marginBottom: Space.sm },
-  issueContextHeader: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.size + 4,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
-    marginTop: Space.sm,
-    marginBottom: Space.xs },
-  issueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit },
-  issueRowPressed: {
-    opacity: 0.6 },
-  issueRowText: {
-    flex: 1,
-    gap: Space.xxs },
-  issueRowLabel: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
-  issueRowDesc: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily },
-  issueCancelBtn: {
-    paddingVertical: Space.sm + 2,
-    marginTop: Space.sm,
-    alignItems: 'center',
-    minHeight: Control.hit,
-    justifyContent: 'center' },
-  issueCancelBtnPressed: {
-    opacity: 0.6 },
-  issueCancelBtnText: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
-  // ─── Completed order summary ───
-  completedSection: {
-    paddingVertical: Space.sm,
-    gap: Space.xs },
-  completedTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-    fontFamily: TypographyV2.sectionTitle.fontFamily,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-    marginBottom: Space.sm },
-  completedActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit },
-  completedActionPressed: {
-    opacity: 0.6 },
-  completedActionText: {
-    flex: 1,
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing } });
+    marginBottom: Space.xs } });

@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Dimensions, Text } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
@@ -21,7 +21,6 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { REDUCED_SPRING } from '../theme/motionTokens';
 
-const { width } = Dimensions.get('window');
 const ITEM_SIZE = 80;
 const SPACING = 12;
 const TOTAL_SIZE = ITEM_SIZE + SPACING;

@@ -11,7 +11,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Elevation, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, LetterSpacing, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -22,7 +22,6 @@ import { useHaptic } from '../hooks/useHaptic';
 import { Caption, Meta } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
-import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import * as ImagePicker from 'expo-image-picker';
@@ -205,51 +204,46 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          {/* Order Context Card */}
+          {/* Order Context — flat section, no card chrome */}
           {order && (
-            <View>
-              <ElevatedSurface variant="surface" style={styles.orderCard}>
-                <View style={styles.orderRow}>
-                  {order.listingImageUrl && (
-                    <CachedImage
-                      uri={getListingCoverUri([order.listingImageUrl], '')}
-                      style={styles.orderThumb}
-                      contentFit="cover"
-                    />
-                  )}
-                  <View style={styles.orderInfo}>
-                    <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
-                    <Text style={styles.orderMeta}>Order #{orderId.slice(-8).toUpperCase()}</Text>
-                    <Text style={styles.orderStatus}>{order.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</Text>
-                  </View>
+            <View style={styles.orderCard}>
+              <View style={styles.orderRow}>
+                {order.listingImageUrl && (
+                  <CachedImage
+                    uri={getListingCoverUri([order.listingImageUrl], '')}
+                    style={styles.orderThumb}
+                    contentFit="cover"
+                  />
+                )}
+                <View style={styles.orderInfo}>
+                  <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
+                  <Text style={styles.orderMeta}>Order #{orderId.slice(-8).toUpperCase()}</Text>
+                  <Text style={styles.orderStatus}>{order.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</Text>
                 </View>
-              </ElevatedSurface>
+              </View>
             </View>
           )}
 
-          {/* Existing Open Ticket */}
+          {/* Existing Open Ticket — flat section */}
           {openTicket && !isSubmitted && (
-            <View>
-              <ElevatedSurface variant="surface" style={styles.existingTicketCard}>
-                <View style={styles.existingTicketRow}>
-                  <Ionicons name="help-circle-outline" size={22} color={colors.brand} />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.existingTicketLabel}>Open support request</Text>
-                    <Caption color={colors.textMuted}>{openTicket.topicLabel}</Caption>
-                  </View>
+            <View style={styles.existingTicketCard}>
+              <View style={styles.existingTicketRow}>
+                <Ionicons name="help-circle-outline" size={22} color={colors.brand} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.existingTicketLabel}>Open support request</Text>
+                  <Caption color={colors.textMuted}>{openTicket.topicLabel}</Caption>
                 </View>
-                <AppButton
-                  title="View ticket"
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id })}
-                />
-              </ElevatedSurface>
+              </View>
+              <AppButton
+                title="View ticket"
+                variant="secondary"
+                size="sm"
+                onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id })}
+              />
             </View>
           )}
 
           <View>
-            <Meta color={colors.textMuted} style={styles.sectionLabel}>REASON</Meta>
             <View style={styles.topicsCard}>
               {availableTopics.map((topic, index) => {
                 const isActive = selectedTopic === topic.id;
@@ -324,7 +318,6 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           })()}
 
           <View>
-            <Meta color={colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
             <View style={styles.detailsCard}>
               <AppInput
                 value={details}
@@ -481,18 +474,11 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: LetterSpacing.caps,
     marginBottom: Space.sm },
   topicsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    ...Elevation.subtle },
+    overflow: 'hidden' },
   guidanceCard: {
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    backgroundColor: colors.brandSubtle,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.brandBorder,
     gap: Space.xs + 2 },
   guidanceHeader: {
     flexDirection: 'row',
@@ -540,10 +526,7 @@ function createStyles(colors: ThemeColors) {
   topicLabelActive: {
     color: colors.brand },
   detailsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    ...Elevation.subtle },
+    padding: Space.md },
   textArea: {
     minHeight: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 4,
     textAlignVertical: 'top' },
@@ -618,10 +601,9 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     gap: Space.sm },
   orderCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
     padding: Space.md,
-    ...Elevation.subtle },
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border },
   orderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -647,11 +629,10 @@ function createStyles(colors: ThemeColors) {
     color: colors.brand,
     textTransform: 'capitalize' },
   existingTicketCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
     padding: Space.md,
     gap: Space.sm,
-    ...Elevation.subtle },
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border },
   existingTicketRow: {
     flexDirection: 'row',
     alignItems: 'center' },
@@ -660,10 +641,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary },
   evidenceCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    ...Elevation.subtle },
+    padding: Space.md },
   evidenceThumbs: {
     flexDirection: 'row',
     flexWrap: 'wrap',

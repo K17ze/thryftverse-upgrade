@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   FlatList,
   ViewToken } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,8 +15,6 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export interface HeroItem {
   id: string;
@@ -34,7 +32,8 @@ interface Props {
 
 export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props) {
   const { colors, isDark } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList<HeroItem>>(null);
   const autoPlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -152,11 +151,11 @@ export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
   slide: {
-    width: SCREEN_W,
-    height: SCREEN_W * 1.05,
+    width: screenWidth,
+    height: screenWidth * 1.05,
     position: 'relative' },
   media: {
     width: '100%',

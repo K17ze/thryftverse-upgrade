@@ -1,0 +1,12 @@
+Phase 4: Fix MessageContextMenu SCREEN_HEIGHT, OrderDetailScreen imports, LayoutPicker/TemplatePicker optional params
+
+- Replace module-level SCREEN_HEIGHT with useWindowDimensions in MessageContextMenu
+- Add missing Stroke and ZIndex imports to OrderDetailScreen
+- Make drawerHeight/screenWidth optional in LayoutPicker/TemplatePicker createStyles
+- Clean up dead styles in OrderDetailScreen (counterparty, eta, escrow, shipment, detail rows)
+- Remove decorative sparkles icon from SellerAnalytics v2Header
+- Add missing i18n keys for report/appeal/listing screens
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

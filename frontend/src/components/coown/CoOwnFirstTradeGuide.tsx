@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
@@ -60,8 +60,6 @@ const GUIDE_STEPS: GuideStep[] = [
 ];
 
 // ── Component ────────────────────────────────────────────────────────────────
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export function CoOwnFirstTradeGuide({
   visible,

@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   Pressable,
   ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,9 +16,7 @@ import type { LookApiItem } from '../../services/looksApi';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 
-const { width: SCREEN_W } = Dimensions.get('window');
 const GRID_GAP = 8;
-const TILE_WIDTH = (SCREEN_W - Space.md * 2 - GRID_GAP) / 2;
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -41,6 +39,8 @@ export function ProfileLooksGrid({
   onCreateLook,
   navigation }: ProfileLooksGridProps) {
   const { colors } = useAppTheme();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const tileWidth = (SCREEN_W - Space.md * 2 - GRID_GAP) / 2;
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (isLoading && looks.length === 0) {
     return (
@@ -104,7 +104,7 @@ export function ProfileLooksGrid({
         return (
           <AnimatedPressable
             key={look.id}
-            style={[styles.tile, { width: TILE_WIDTH }]}
+            style={[styles.tile, { width: tileWidth }]}
             activeOpacity={0.9}
             onPress={() => navigation.navigate('LookDetail', { lookId: look.id })}
             accessibilityRole="button"

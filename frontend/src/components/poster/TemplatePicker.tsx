@@ -4,7 +4,7 @@ import {
   StyleSheet,
   Text,
   ScrollView,
-  Dimensions } from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
@@ -25,9 +25,6 @@ import { GradientRing } from './shared/GradientRing';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
-
-const { height: SCREEN_H } = Dimensions.get('window');
-const DRAWER_HEIGHT = SCREEN_H * 0.5;
 
 export type TemplateCategory = 'all' | 'drop' | 'auction' | 'coown' | 'sale' | 'general';
 
@@ -181,10 +178,12 @@ export default function TemplatePicker({
   const { spring, stagger } = useMotionConfig();
   const haptic = useHaptic();
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { height: SCREEN_H } = useWindowDimensions();
+  const drawerHeight = SCREEN_H * 0.5;
+  const styles = React.useMemo(() => createStyles(colors, drawerHeight), [colors, drawerHeight]);
 
   // Drawer slide-up + backdrop fade (Reanimated 4)
-  const translateY = useSharedValue(DRAWER_HEIGHT);
+  const translateY = useSharedValue(drawerHeight);
   const backdropOpacity = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
 
@@ -209,16 +208,16 @@ export default function TemplatePicker({
       }
     } else {
       if (reducedMotion) {
-        translateY.value = DRAWER_HEIGHT;
+        translateY.value = drawerHeight;
         backdropOpacity.value = 0;
         contentOpacity.value = 0;
       } else {
-        translateY.value = withSpring(DRAWER_HEIGHT, spring.entrance);
+        translateY.value = withSpring(drawerHeight, spring.entrance);
         backdropOpacity.value = withTiming(0, { duration: Motion.duration.fast });
         contentOpacity.value = withTiming(0, { duration: Motion.duration.fast });
       }
     }
-  }, [visible, reducedMotion, spring.entrance, translateY, backdropOpacity, contentOpacity]);
+  }, [visible, reducedMotion, spring.entrance, translateY, backdropOpacity, contentOpacity, drawerHeight]);
 
   const drawerStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }] }));
@@ -344,7 +343,7 @@ export default function TemplatePicker({
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, drawerHeight: number = 0) {
   return StyleSheet.create({
     backdrop: {
       ...StyleSheet.absoluteFill,
@@ -354,7 +353,7 @@ function createStyles(colors: ThemeColors) {
       bottom: 0,
       left: 0,
       right: 0,
-      height: DRAWER_HEIGHT,
+      height: drawerHeight,
       backgroundColor: colors.surface,
       borderTopLeftRadius: Radius.xxl,
       borderTopRightRadius: Radius.xxl,
@@ -372,7 +371,7 @@ function createStyles(colors: ThemeColors) {
     title: {
       fontSize: TypographyV2.sectionTitle.size,
       fontFamily: TypographyV2.sectionTitle.fontFamily,
-      color: colors.scrimTextPrimary,
+      color: colors.textPrimary,
       textAlign: 'center',
       marginBottom: Space.md },
     tabRow: {
@@ -390,9 +389,9 @@ function createStyles(colors: ThemeColors) {
     tabText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.scrimTextSecondary },
+      color: colors.textSecondary },
     tabTextActive: {
-      color: colors.scrimTextPrimary },
+      color: colors.textPrimary },
     gridWrapper: {
       flex: 1 },
     gridContent: {
@@ -429,8 +428,8 @@ function createStyles(colors: ThemeColors) {
     cardLabel: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.scrimTextSecondary,
+      color: colors.textSecondary,
       textAlign: 'center' },
     cardLabelActive: {
-      color: colors.scrimTextPrimary } });
+      color: colors.textPrimary } });
 }

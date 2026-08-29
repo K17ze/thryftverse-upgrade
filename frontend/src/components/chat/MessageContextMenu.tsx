@@ -4,7 +4,7 @@ import {
   StyleSheet,
   Modal,
   Animated,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -26,8 +26,6 @@ interface MessageContextMenuProps {
   isFailed?: boolean;
 }
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 export function MessageContextMenu({
   visible,
   onClose,
@@ -37,6 +35,7 @@ export function MessageContextMenu({
   isFailed,
 }: MessageContextMenuProps) {
   const { colors } = useAppTheme();
+  const { height: screenHeight } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const actions = React.useMemo<ActionDef[]>(() => {
@@ -46,7 +45,7 @@ export function MessageContextMenu({
       messageText,
     });
   }, [messageText, isOwnMessage, isFailed]);
-  const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const slideAnim = React.useRef(new Animated.Value(screenHeight)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -73,7 +72,7 @@ export function MessageContextMenu({
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
-          toValue: SCREEN_HEIGHT,
+          toValue: screenHeight,
           duration: Motion.duration.slow,
           useNativeDriver: true,
         }),

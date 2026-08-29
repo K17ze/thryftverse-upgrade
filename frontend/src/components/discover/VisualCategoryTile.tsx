@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -7,8 +7,6 @@ import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 interface Props {
   title: string;
@@ -19,11 +17,6 @@ interface Props {
   size?: 'large' | 'medium' | 'small';
 }
 
-const SIZE_MAP = {
-  large: { width: SCREEN_W - Space.md * 2, height: 180, titleSize: TypographyV2.screenTitle.size, radius: Radius.xl },
-  medium: { width: (SCREEN_W - Space.md * 2 - Space.sm) / 2, height: 140, titleSize: TypographyV2.itemTitle.size, radius: Radius.lg },
-  small: { width: (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3, height: 110, titleSize: TypographyV2.body.size, radius: Radius.md } };
-
 export function VisualCategoryTile({
   title,
   subtitle,
@@ -33,6 +26,11 @@ export function VisualCategoryTile({
   size = 'medium' }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const SIZE_MAP = {
+    large: { width: SCREEN_W - Space.md * 2, height: 180, titleSize: TypographyV2.screenTitle.size, radius: Radius.xl },
+    medium: { width: (SCREEN_W - Space.md * 2 - Space.sm) / 2, height: 140, titleSize: TypographyV2.itemTitle.size, radius: Radius.lg },
+    small: { width: (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3, height: 110, titleSize: TypographyV2.body.size, radius: Radius.md } };
   const dims = SIZE_MAP[size];
 
   const GRADIENT_OVERLAYS: readonly [string, string] = isDark

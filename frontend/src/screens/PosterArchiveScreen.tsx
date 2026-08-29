@@ -628,7 +628,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2 },
@@ -640,7 +640,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(244,240,232,0.85)' },
+    backgroundColor: colors.brand },
   cardTitle: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
@@ -652,9 +652,9 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: 3 },
   statusActive: {
-    backgroundColor: 'rgba(76, 217, 100, 0.85)' },
+    backgroundColor: colors.success },
   statusArchived: {
-    backgroundColor: 'rgba(0,0,0,0.6)' },
+    backgroundColor: colors.overlay },
   statusText: {
     color: colors.scrimTextPrimary,
     fontSize: TypographyV2.meta.size,
@@ -664,7 +664,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.xs - 1,
     alignSelf: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2 },

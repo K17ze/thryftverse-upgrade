@@ -10,7 +10,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Elevation, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -21,7 +21,6 @@ import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
-import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { getSupportCase } from '../services/supportConversationApi';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
@@ -272,25 +271,23 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
       header={<FlagshipHeader title="Support Request" onBack={() => navigation.goBack()} />}
       contentStyle={{ gap: Space.lg }}
     >
-        {/* Order context */}
+        {/* Order context — flat section, no card chrome */}
         {order && (
-          <View>
-            <ElevatedSurface variant="surface" style={styles.orderContextCard}>
-              <View style={styles.orderContextRow}>
-                {order.listingImageUrl && (
-                  <CachedImage
-                    uri={getListingCoverUri([order.listingImageUrl], '')}
-                    style={styles.orderContextThumb}
-                    contentFit="cover"
-                  />
-                )}
-                <View style={styles.orderContextInfo}>
-                  <Text style={styles.orderContextTitle} numberOfLines={2}>{order.listingTitle}</Text>
-                  <Text style={styles.orderContextMeta}>Order #{ticket.orderId.slice(-8).toUpperCase()}</Text>
-                  <Text style={styles.orderContextStatus}>{order.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</Text>
-                </View>
+          <View style={styles.orderContextCard}>
+            <View style={styles.orderContextRow}>
+              {order.listingImageUrl && (
+                <CachedImage
+                  uri={getListingCoverUri([order.listingImageUrl], '')}
+                  style={styles.orderContextThumb}
+                  contentFit="cover"
+                />
+              )}
+              <View style={styles.orderContextInfo}>
+                <Text style={styles.orderContextTitle} numberOfLines={2}>{order.listingTitle}</Text>
+                <Text style={styles.orderContextMeta}>Order #{ticket.orderId.slice(-8).toUpperCase()}</Text>
+                <Text style={styles.orderContextStatus}>{order.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</Text>
               </View>
-            </ElevatedSurface>
+            </View>
           </View>
         )}
 
@@ -577,10 +574,7 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: 1.2,
     marginBottom: Space.sm },
   detailsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.lg,
-    ...Elevation.subtle },
+    padding: Space.lg },
   detailsText: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
@@ -594,11 +588,8 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
     paddingVertical: Space.md,
-    paddingHorizontal: Space.lg,
-    ...Elevation.subtle },
+    paddingHorizontal: Space.lg },
   orderLinkText: {
     flex: 1,
     fontSize: TypographyV2.body.size,
@@ -608,21 +599,17 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
     paddingVertical: Space.md,
-    paddingHorizontal: Space.lg,
-    ...Elevation.subtle },
+    paddingHorizontal: Space.lg },
   conversationLinkText: {
     flex: 1,
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary },
   orderContextCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
     padding: Space.md,
-    ...Elevation.subtle },
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border },
   orderContextRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -648,10 +635,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.brand,
     textTransform: 'capitalize' },
   evidenceCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    ...Elevation.subtle },
+    padding: Space.md },
   evidenceThumbs: {
     flexDirection: 'row',
     flexWrap: 'wrap',
