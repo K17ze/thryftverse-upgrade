@@ -7,7 +7,7 @@ import {
   View,
   ViewStyle,
   StyleProp,
-  Dimensions,
+  useWindowDimensions,
   type AccessibilityRole } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -52,7 +52,6 @@ const ARROW_SIZE = 8;
 const TOOLTIP_PADDING_H = Space.sm;
 const TOOLTIP_PADDING_V = Space.xs;
 const MAX_WIDTH = 240;
-const SCREEN = Dimensions.get('window');
 
 /**
  * AppTooltip — a positioned tooltip that appears relative to a wrapped
@@ -71,6 +70,7 @@ export function AppTooltip({
   duration = 0,
   style }: AppTooltipProps) {
   const { colors, isDark } = useAppTheme();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { spring } = useMotionConfig();
   const reducedMotion = useReducedMotion();
   const anchorRef = React.useRef<View>(null);
@@ -104,7 +104,7 @@ export function AppTooltip({
       setRect({ x, y, width, height });
       let resolved = placement;
       if (placement === 'top' && y < 120) resolved = 'bottom';
-      if (placement === 'bottom' && y + height > SCREEN.height - 120) resolved = 'top';
+      if (placement === 'bottom' && y + height > screenHeight - 120) resolved = 'top';
       setComputedPlacement(resolved);
       setVisible(true);
       clearAutoDismiss();
@@ -112,7 +112,7 @@ export function AppTooltip({
         timeoutRef.current = setTimeout(dismiss, duration);
       }
     });
-  }, [placement, duration, dismiss, clearAutoDismiss]);
+  }, [placement, duration, dismiss, clearAutoDismiss, screenHeight]);
 
   React.useEffect(() => {
     if (visible) {
@@ -132,8 +132,8 @@ export function AppTooltip({
     transform: [{ scale: scale.value }] }));
 
   const tooltipLayout = React.useMemo(
-    () => (rect ? computeTooltipLayout(rect, computedPlacement) : null),
-    [rect, computedPlacement],
+    () => (rect ? computeTooltipLayout(rect, computedPlacement, screenWidth, screenHeight) : null),
+    [rect, computedPlacement, screenWidth, screenHeight],
   );
 
   const triggerProps = React.useMemo(() => {
@@ -173,7 +173,7 @@ interface TooltipLayout {
   top: number;
 }
 
-function computeTooltipLayout(rect: MeasuredRect, placement: AppTooltipPlacement): TooltipLayout {
+function computeTooltipLayout(rect: MeasuredRect, placement: AppTooltipPlacement, screenWidth: number, screenHeight: number): TooltipLayout {
   const centerX = rect.x + rect.width / 2;
   const centerY = rect.y + rect.height / 2;
   const estimatedWidth = Math.min(MAX_WIDTH, 200);
@@ -182,20 +182,20 @@ function computeTooltipLayout(rect: MeasuredRect, placement: AppTooltipPlacement
   switch (placement) {
     case 'top':
       return {
-        left: clamp(centerX - estimatedWidth / 2, 8, SCREEN.width - estimatedWidth - 8),
+        left: clamp(centerX - estimatedWidth / 2, 8, screenWidth - estimatedWidth - 8),
         top: rect.y - estimatedHeight - ARROW_SIZE - Space.xxs };
     case 'bottom':
       return {
-        left: clamp(centerX - estimatedWidth / 2, 8, SCREEN.width - estimatedWidth - 8),
+        left: clamp(centerX - estimatedWidth / 2, 8, screenWidth - estimatedWidth - 8),
         top: rect.y + rect.height + ARROW_SIZE + Space.xxs };
     case 'left':
       return {
         left: rect.x - estimatedWidth - ARROW_SIZE - Space.xxs,
-        top: clamp(centerY - estimatedHeight / 2, 8, SCREEN.height - estimatedHeight - 8) };
+        top: clamp(centerY - estimatedHeight / 2, 8, screenHeight - estimatedHeight - 8) };
     case 'right':
       return {
         left: rect.x + rect.width + ARROW_SIZE + Space.xxs,
-        top: clamp(centerY - estimatedHeight / 2, 8, SCREEN.height - estimatedHeight - 8) };
+        top: clamp(centerY - estimatedHeight / 2, 8, screenHeight - estimatedHeight - 8) };
   }
 }
 

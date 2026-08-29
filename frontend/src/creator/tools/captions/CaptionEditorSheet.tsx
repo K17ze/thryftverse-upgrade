@@ -146,20 +146,25 @@ export function CaptionEditorSheet({
     (index: number) => {
       const layout = fontLayouts.current[index];
       if (!layout) return;
-      Animated.parallel([
-        Animated.spring(fontUnderlineLeft, {
-          toValue: layout.x,
-          useNativeDriver: false,
-          stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping }),
-        Animated.spring(fontUnderlineWidth, {
-          toValue: layout.width,
-          useNativeDriver: false,
-          stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping }),
-      ]).start();
+      if (reducedMotion) {
+        fontUnderlineLeft.setValue(layout.x);
+        fontUnderlineWidth.setValue(layout.width);
+      } else {
+        Animated.parallel([
+          Animated.spring(fontUnderlineLeft, {
+            toValue: layout.x,
+            useNativeDriver: false, // left/width are not native-driver supported
+            stiffness: Motion.spring.indicator.stiffness,
+            damping: Motion.spring.indicator.damping }),
+          Animated.spring(fontUnderlineWidth, {
+            toValue: layout.width,
+            useNativeDriver: false, // left/width are not native-driver supported
+            stiffness: Motion.spring.indicator.stiffness,
+            damping: Motion.spring.indicator.damping }),
+        ]).start();
+      }
     },
-    [fontUnderlineLeft, fontUnderlineWidth],
+    [fontUnderlineLeft, fontUnderlineWidth, reducedMotion],
   );
 
   useEffect(() => {

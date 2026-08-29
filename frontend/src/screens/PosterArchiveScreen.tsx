@@ -5,9 +5,9 @@ import {
   StyleSheet,
   StatusBar,
   RefreshControl,
-  Dimensions,
   AccessibilityInfo,
-  TextInput } from 'react-native';
+  TextInput,
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,11 +28,6 @@ import { useStore } from '../store/useStore';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PosterArchive'>;
-
-const { width: SCREEN_W } = Dimensions.get('window');
-// 16px screen padding + 8px gap between cards
-const CARD_W = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
-const CARD_H = CARD_W * (16 / 9);
 
 /**
  * Relative date formatter — "just now", "3h ago", "2d ago", "1w ago".
@@ -57,7 +52,11 @@ function formatRelativeDate(iso: string): string {
 
 export default function PosterArchiveScreen({ navigation }: Props) {
   const { colors, isDark } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  // 16px screen padding + 8px gap between cards
+  const CARD_W = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
+  const CARD_H = CARD_W * (16 / 9);
+  const styles = useMemo(() => createStyles(colors, CARD_W), [colors, CARD_W]);
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -509,7 +508,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, cardW: number) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -536,7 +535,7 @@ function createStyles(colors: ThemeColors) {
     flexWrap: 'wrap',
     gap: Space.sm },
   skeletonCard: {
-    width: CARD_W },
+    width: cardW },
   skeletonFooter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -595,13 +594,13 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     marginBottom: Space.sm },
   card: {
-    width: CARD_W,
+    width: cardW,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     ...Elevation.card },
   cardMedia: {
-    width: CARD_W,
+    width: cardW,
     aspectRatio: 9 / 16,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden' },

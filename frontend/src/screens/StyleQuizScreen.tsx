@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   Platform } from 'react-native';
 import Reanimated, { FadeInRight, FadeInLeft } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,8 +22,6 @@ import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -57,8 +55,9 @@ export default function StyleQuizScreen() {
   const reducedMotion = useReducedMotion();
   const updatePersonalisation = useStore((state) => state.updatePersonalisationPreferences);
   const { colors } = useAppTheme();
+  const { width: SCREEN_W } = useWindowDimensions();
   const { currencySymbol } = useFormattedPrice();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
 
   const PRICE_OPTIONS = useMemo<QuizOption[]>(() => [
     { label: `Under ${currencySymbol}50`, value: 'budget' },
@@ -237,7 +236,8 @@ export default function StyleQuizScreen() {
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   return (
     <View style={styles.summaryRow}>
       <Text style={styles.summaryLabel}>{label}</Text>
@@ -246,7 +246,7 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
   scrollContent: { paddingHorizontal: Space.md, paddingTop: Space.lg, paddingBottom: Space.xl },
   progressWrap: {
@@ -293,7 +293,7 @@ function createStyles(colors: ThemeColors) {
     flexWrap: 'wrap',
     gap: Space.sm },
   optionCard: {
-    width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
+    width: (screenWidth - Space.md * 2 - Space.sm) / 2,
     aspectRatio: 1.2,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,

@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  Dimensions,
+  useWindowDimensions,
   Share,
   Pressable,
   ActivityIndicator } from 'react-native';
@@ -56,8 +56,6 @@ import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 // A profile cover is identity media, not a thin toolbar backdrop. At 200pt it
 // retains a useful crop on common phone widths while leaving the avatar/stats
 // seam outside the cover-control layer.
@@ -90,6 +88,7 @@ function formatCompact(n: number): string {
 
 export default function MyProfileScreen() {
   const { colors, isDark } = useAppTheme();
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const { t: tt } = useAppTranslation('myProfile');
 

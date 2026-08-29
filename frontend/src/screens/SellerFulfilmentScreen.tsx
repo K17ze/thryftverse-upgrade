@@ -16,6 +16,7 @@ import { TypographyV2 } from '../theme/typography.v2';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { getOrder, shipOrder, assertHandoff, type CommerceOrder } from '../services/commerceApi';
+import { getOrderReview } from '../services/reviewApi';
 import { parseApiError } from '../lib/apiClient';
 import { fetchJson } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
@@ -92,6 +93,7 @@ export default function SellerFulfilmentScreen() {
   const [order, setOrder] = useState<CommerceOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasReview, setHasReview] = useState(false);
   const [isDispatching, setIsDispatching] = useState(false);
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
@@ -132,6 +134,16 @@ export default function SellerFulfilmentScreen() {
       if (fetched.trackingNumber) setTrackingNumber(fetched.trackingNumber);
       if (fetched.shippingProvider) setShippingProvider(fetched.shippingProvider);
       if (fetched.shippingLabelUrl) setGeneratedLabelUrl(fetched.shippingLabelUrl);
+
+      // Fetch review state to correctly gate review/inspect capabilities.
+      try {
+        const review = await getOrderReview(orderId);
+        if (!isMountedRef.current) return;
+        setHasReview(review !== null);
+      } catch {
+        if (!isMountedRef.current) return;
+        setHasReview(false);
+      }
     } catch (error) {
       if (!isMountedRef.current) return;
       setLoadError('Order could not be loaded. Check your connection and try again.');
@@ -155,10 +167,10 @@ export default function SellerFulfilmentScreen() {
       status: order.status,
       role: isSeller ? 'seller' : 'buyer',
       hasOpenResolution: false,
-      hasReview: false,
+      hasReview,
       hasTracking: Boolean(order.trackingNumber),
       fulfilmentSnapshot: order.fulfilmentSnapshot ?? null });
-  }, [order, isSeller]);
+  }, [order, isSeller, hasReview]);
   const canDispatch = capabilities?.canDispatch ?? false;
 
   // Determine shipping mode from the immutable fulfilment snapshot.

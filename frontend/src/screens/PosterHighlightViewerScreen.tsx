@@ -5,7 +5,7 @@ import {
   StyleSheet,
   StatusBar,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   AccessibilityInfo,
   BackHandler } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,7 +31,6 @@ import Reanimated, {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PosterHighlightViewer'>;
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TICK_MS = 50;
 const DEFAULT_DURATION = 5000;
 const ERROR_ICON_SIZE = 40;
@@ -40,6 +39,7 @@ const SWIPE_THRESHOLD = 40;
 
 export default function PosterHighlightViewerScreen({ route, navigation }: Props) {
   const { colors, isDark } = useAppTheme();
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();

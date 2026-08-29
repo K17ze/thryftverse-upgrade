@@ -13,6 +13,7 @@ import { Caption, Headline } from './ui/Text';
 
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 interface AttachmentOption {
   id: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -46,27 +47,36 @@ export function AttachmentMenu({
   style,
 }: AttachmentMenuProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const attachmentOptions = React.useMemo(() => getAttachmentOptions(colors), [colors]);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
     if (isVisible) {
-      Animated.spring(slideAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        damping: Motion.spring.sheet.damping,
-        stiffness: Motion.spring.sheet.stiffness,
-        mass: Motion.spring.sheet.mass,
-      }).start();
+      if (reducedMotion) {
+        slideAnim.setValue(1);
+      } else {
+        Animated.spring(slideAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          damping: Motion.spring.sheet.damping,
+          stiffness: Motion.spring.sheet.stiffness,
+          mass: Motion.spring.sheet.mass,
+        }).start();
+      }
     } else {
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: Motion.duration.slow,
-        useNativeDriver: true,
-      }).start();
+      if (reducedMotion) {
+        slideAnim.setValue(0);
+      } else {
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: Motion.duration.slow,
+          useNativeDriver: true,
+        }).start();
+      }
     }
-  }, [isVisible]);
+  }, [isVisible, reducedMotion]);
 
   const handleOptionPress = (option: AttachmentOption) => {
     onSelectOption?.(option.id);

@@ -14,6 +14,7 @@ import { Caption, BodyEmphasis } from '../ui/Text';
 import { deriveMessageActions } from '../../utils/messageContextMenuCapabilities';
 import type { ActionDef } from '../../utils/messageContextMenuCapabilities';
 import { Motion } from '../../theme/motionTokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report';
 
@@ -35,6 +36,7 @@ export function MessageContextMenu({
   isFailed,
 }: MessageContextMenuProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const { height: screenHeight } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -50,35 +52,45 @@ export function MessageContextMenu({
 
   React.useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: Motion.duration.fast,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: Motion.spring.sheet.damping,
-          stiffness: Motion.spring.sheet.stiffness,
-          mass: Motion.spring.sheet.mass,
-        }),
-      ]).start();
+      if (reducedMotion) {
+        fadeAnim.setValue(1);
+        slideAnim.setValue(0);
+      } else {
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: Motion.duration.fast,
+            useNativeDriver: true,
+          }),
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            damping: Motion.spring.sheet.damping,
+            stiffness: Motion.spring.sheet.stiffness,
+            mass: Motion.spring.sheet.mass,
+          }),
+        ]).start();
+      }
     } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: Motion.duration.fast,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: screenHeight,
-          duration: Motion.duration.slow,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      if (reducedMotion) {
+        fadeAnim.setValue(0);
+        slideAnim.setValue(screenHeight);
+      } else {
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: Motion.duration.fast,
+            useNativeDriver: true,
+          }),
+          Animated.timing(slideAnim, {
+            toValue: screenHeight,
+            duration: Motion.duration.slow,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
     }
-  }, [visible]);
+  }, [visible, reducedMotion, screenHeight]);
 
   const handleAction = (action: MessageAction) => {
     onAction(action);

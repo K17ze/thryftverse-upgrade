@@ -28,7 +28,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   ImageStyle,
   ActivityIndicator,
   Pressable,
@@ -89,9 +89,7 @@ import { createStableId } from '../utils/createStableId';
 type Props = NativeStackScreenProps<RootStackParamList, 'MoodboardEditor'>;
 
 // ── Layout constants ──
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CANVAS_HEIGHT_RATIO = 0.7;
-const CANVAS_HEIGHT = Math.round(SCREEN_H * CANVAS_HEIGHT_RATIO);
 const PICKER_TILE_SIZE = 72;
 const PICKER_TILE_GAP = Space.sm;
 const ITEM_BASE_SIZE = 120; // base pixel size of a canvas item at scale 1
@@ -490,6 +488,8 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const CANVAS_HEIGHT = Math.round(SCREEN_H * CANVAS_HEIGHT_RATIO);
   const styles = useStyles();
 
   const moodboardId = route.params?.moodboardId;

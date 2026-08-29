@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   RefreshControl,
   ImageStyle,
   ScrollView } from 'react-native';
@@ -42,16 +42,11 @@ import { openProductDetail } from '../platform/product/openProductDetail';
 type Props = NativeStackScreenProps<RootStackParamList, 'GalleriaCollectionDetail'>;
 
 // ── Layout constants ──
-const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_HEIGHT = Math.round(SCREEN_W * 0.62);
 const MASONRY_GAP = Space.sm;
 // Two columns balance visual richness with per-tile legibility on phone widths;
 // more columns would shrink art below a useful size, one column wastes horizontal space.
 const MASONRY_COLUMN_COUNT = 2;
 const MASONRY_PADDING = Space.md;
-const MASONRY_COL_WIDTH =
-  (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
-  MASONRY_COLUMN_COUNT;
 
 // Skeleton height variation communicates loading without inventing media geometry.
 // The ratios mirror common asset aspect ratios so the loading-to-populated transition is minimal.
@@ -60,12 +55,12 @@ const SKELETON_ASPECT_RATIOS = [1.25, 1.0, 1.32, 0.92] as const;
 // ---------------------------------------------------------------------------
 // Masonry layout — true Pinterest-style column assignment by shortest height
 // ---------------------------------------------------------------------------
-function buildMasonryColumns(items: GalleriaFeaturedAsset[]): GalleriaFeaturedAsset[][] {
+function buildMasonryColumns(items: GalleriaFeaturedAsset[], colWidth: number): GalleriaFeaturedAsset[][] {
   const cols: GalleriaFeaturedAsset[][] = Array.from({ length: MASONRY_COLUMN_COUNT }, () => []);
   const heights = Array.from({ length: MASONRY_COLUMN_COUNT }, () => 0);
 
   items.forEach((item) => {
-    const imgHeight = Math.round(MASONRY_COL_WIDTH * item.aspectRatio);
+    const imgHeight = Math.round(colWidth * item.aspectRatio);
     const metaHeight = 72;
     const itemHeight = imgHeight + metaHeight + MASONRY_GAP;
 
@@ -97,6 +92,10 @@ const CollectionItemCard = React.memo(function CollectionItemCard({
 }) {
   const styles = useStyles();
   const { formatFromFiat } = useFormattedPrice();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const imageHeight = Math.round(MASONRY_COL_WIDTH * asset.aspectRatio);
 
   return (
@@ -134,10 +133,14 @@ const CollectionItemCard = React.memo(function CollectionItemCard({
 // ---------------------------------------------------------------------------
 function MasonrySkeleton() {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const skeletonItems = Array.from({ length: 6 }).map((_, i) => ({
     id: `skel-${i}`,
     aspectRatio: SKELETON_ASPECT_RATIOS[i % SKELETON_ASPECT_RATIOS.length] }));
-  const columns = buildMasonryColumns(skeletonItems as GalleriaFeaturedAsset[]);
+  const columns = buildMasonryColumns(skeletonItems as GalleriaFeaturedAsset[], MASONRY_COL_WIDTH);
 
   return (
     <View style={styles.masonryGrid}>
@@ -172,6 +175,11 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const HERO_HEIGHT = Math.round(SCREEN_W * 0.62);
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const styles = useStyles();
 
   const collectionId = route.params?.collectionId;
@@ -279,7 +287,7 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
 
   const collection = detail?.collection ?? null;
   const items = detail?.items ?? [];
-  const masonryColumns = useMemo(() => buildMasonryColumns(items), [items]);
+  const masonryColumns = useMemo(() => buildMasonryColumns(items, MASONRY_COL_WIDTH), [items, MASONRY_COL_WIDTH]);
   const sharedTag = collection ? `galleria-collection-${collection.id}` : undefined;
 
   // ── Error state ──
@@ -483,6 +491,8 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
 // ---------------------------------------------------------------------------
 function useStyles() {
   const { colors } = useAppTheme();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const HERO_HEIGHT = Math.round(SCREEN_W * 0.62);
   return React.useMemo(
     () =>
       StyleSheet.create({
@@ -649,6 +659,6 @@ function useStyles() {
           color: colors.textPrimary,
           fontVariant: ['tabular-nums'],
           letterSpacing: TypographyV2.body.letterSpacing } }),
-    [colors],
+    [colors, SCREEN_W, HERO_HEIGHT],
   );
 }

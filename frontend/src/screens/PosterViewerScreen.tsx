@@ -5,7 +5,7 @@ import {
   StyleSheet,
   StatusBar,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   AppState,
   Image,
   ActivityIndicator,
@@ -76,7 +76,6 @@ import * as Clipboard from 'expo-clipboard';
 import { Sentry } from '../platform/monitoring';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TICK_MS = 50;
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -94,7 +93,8 @@ export default function PosterViewerScreen() {
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, SCREEN_WIDTH, SCREEN_HEIGHT), [colors, SCREEN_WIDTH, SCREEN_HEIGHT]);
 
   const [stories, setStories] = React.useState<PosterStory[]>([]);
   const [storyIndex, setStoryIndex] = React.useState(0);
@@ -1206,7 +1206,7 @@ function handleTagPress(
   }
 }
 
-function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
+function createStyles(colors: ReturnType<typeof useAppTheme>['colors'], screenWidth: number, screenHeight: number) {
   return StyleSheet.create({
   container: {
     flex: 1,
@@ -1234,8 +1234,8 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     fontSize: TypographyV2.body.size },
   mediaFull: {
     position: 'absolute',
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    width: screenWidth,
+    height: screenHeight,
     justifyContent: 'center',
     alignItems: 'center' },
   textFrameContent: {

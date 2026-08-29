@@ -12,7 +12,7 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  Dimensions,
+  useWindowDimensions,
   Platform,
   Share,
   ActivityIndicator } from 'react-native';
@@ -51,9 +51,6 @@ import {
   getSlotIcon } from '../services/styleGraph';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-const { width: SCREEN_W } = Dimensions.get('window');
-const SLOT_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * 4) / 5;
-
 const SLOTS: OutfitSlot[] = ['top', 'bottom', 'shoes', 'outerwear', 'accessory'];
 
 // ── Helper Components ──
@@ -62,14 +59,16 @@ function SlotCircle({
   slot,
   item,
   isActive,
-  onPress }: {
+  onPress,
+  slotSize }: {
   slot: OutfitSlot;
   item?: StyleItem;
   isActive: boolean;
   onPress: () => void;
+  slotSize: number;
 }) {
   const { colors } = useAppTheme();
-  const slotStyles = useMemo(() => createSlotStyles(colors), [colors]);
+  const slotStyles = useMemo(() => createSlotStyles(colors, slotSize), [colors, slotSize]);
   return (
     <AnimatedPressable
       style={[slotStyles.circle, isActive && slotStyles.circleActive]}
@@ -98,11 +97,11 @@ function SlotCircle({
   );
 }
 
-function createSlotStyles(colors: ThemeColors) {
+function createSlotStyles(colors: ThemeColors, slotSize: number) {
   return StyleSheet.create({
   circle: {
-    width: SLOT_SIZE,
-    height: SLOT_SIZE,
+    width: slotSize,
+    height: slotSize,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
@@ -132,13 +131,15 @@ function createSlotStyles(colors: ThemeColors) {
 function ItemThumb({
   item,
   onPress,
-  isSelected }: {
+  isSelected,
+  screenWidth }: {
   item: StyleItem;
   onPress: () => void;
   isSelected: boolean;
+  screenWidth: number;
 }) {
   const { colors } = useAppTheme();
-  const thumbStyles = useMemo(() => createThumbStyles(colors), [colors]);
+  const thumbStyles = useMemo(() => createThumbStyles(colors, screenWidth), [colors, screenWidth]);
   return (
     <AnimatedPressable
       style={[thumbStyles.card, isSelected && thumbStyles.cardSelected]}
@@ -178,10 +179,10 @@ function ItemThumb({
   );
 }
 
-function createThumbStyles(colors: ThemeColors) {
+function createThumbStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
   card: {
-    width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
+    width: (screenWidth - Space.md * 2 - Space.sm) / 2,
     overflow: 'hidden',
     marginBottom: Space.sm,
     borderBottomWidth: Stroke.hairline,
@@ -256,6 +257,8 @@ function createScoreStyles(colors: ThemeColors) {
 
 export default function OutfitBuilderScreen() {
   const navigation = useNavigation<NavT>();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const SLOT_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * 4) / 5;
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
   const collections = useStore((s) => s.collections);
   const createCollectionFn = useStore((s) => s.createCollection);
@@ -584,6 +587,7 @@ export default function OutfitBuilderScreen() {
                   item={outfitItems[slot]}
                   isActive={activeSlot === slot}
                   onPress={() => setActiveSlot(slot)}
+                  slotSize={SLOT_SIZE}
                 />
                 <T.Meta color={activeSlot === slot ? colors.brand : colors.textMuted} style={styles.slotLabel}>
                   {getSlotLabel(slot)}
@@ -684,6 +688,7 @@ export default function OutfitBuilderScreen() {
                   item={item}
                   onPress={() => toggleItem(item)}
                   isSelected={outfitItems[activeSlot]?.id === item.id}
+                  screenWidth={SCREEN_W}
                 />
               </View>
             ))}

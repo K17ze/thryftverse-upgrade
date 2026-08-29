@@ -308,18 +308,18 @@ export const Elevation = {
 import { Dimensions } from 'react-native';
 
 
-import { TypographyV2 } from '../theme/typography.v2';const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { TypographyV2 } from '../theme/typography.v2';
 
 export const Layout = {
-  screenWidth: SCREEN_WIDTH,
-  screenHeight: SCREEN_HEIGHT,
+  get screenWidth() { return Dimensions.get('window').width; },
+  get screenHeight() { return Dimensions.get('window').height; },
   /** 2-column masonry grid item width with 16px gaps */
-  gridItemWidth: (SCREEN_WIDTH - Space.md * 3) / 2,
+  get gridItemWidth() { return (Dimensions.get('window').width - Space.md * 3) / 2; },
   /** Full width minus padding */
-  contentWidth: SCREEN_WIDTH - Space.md * 2,
+  get contentWidth() { return Dimensions.get('window').width - Space.md * 2; },
   /** Standard grid configuration */
   gridColumns: 2,
-  gridGap: Space.sm } as const;
+  gridGap: Space.sm };
 
 // ============================================================================
 // Z-INDEX SCALE

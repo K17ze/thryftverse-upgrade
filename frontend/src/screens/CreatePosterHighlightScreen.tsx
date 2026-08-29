@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   FlatList,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   AccessibilityInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,15 +31,15 @@ import {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreatePosterHighlight'>;
 
-const { width: SCREEN_W } = Dimensions.get('window');
 const NUM_COLS = 3;
-const THUMB_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * (NUM_COLS - 1)) / NUM_COLS;
 const COVER_PREVIEW_W = 120;
 const COVER_THUMB_W = 52;
 
 export default function CreatePosterHighlightScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const THUMB_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * (NUM_COLS - 1)) / NUM_COLS;
+  const styles = React.useMemo(() => createStyles(colors, THUMB_SIZE), [colors, THUMB_SIZE]);
   const { show } = useToast();
   const haptic = useHaptic();
   const currentUser = useStore((state) => state.currentUser);
@@ -420,7 +420,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, thumbSize: number) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -490,10 +490,10 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.xxl,
       gap: Space.sm },
     thumbWrap: {
-      width: THUMB_SIZE,
+      width: thumbSize,
       marginBottom: Space.sm },
     thumb: {
-      width: THUMB_SIZE,
+      width: thumbSize,
       aspectRatio: 9 / 16,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,

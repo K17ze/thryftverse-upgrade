@@ -31,6 +31,7 @@ import { BarChart } from '../components/charts/BarChart';
 import type { ChartPoint } from '../components/charts/types';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useA11yAudit } from '../hooks/useA11yAudit';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { formatFiatAmount } from '../utils/currency';
@@ -138,6 +139,7 @@ export default function CreatorAnalyticsDashboardScreen() {
   const { colors } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
   const { currencyCode } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -221,7 +223,9 @@ export default function CreatorAnalyticsDashboardScreen() {
   const onSelectPeriod = (next: PeriodKey) => {
     if (next === period) return;
     haptic.selection();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!reducedMotion) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     setPeriod(next);
   };
 

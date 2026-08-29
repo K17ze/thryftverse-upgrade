@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  Dimensions,
+  useWindowDimensions,
   Share,
   Pressable } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -48,13 +48,12 @@ import { t } from '../i18n';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
 type RouteT = RouteProp<RootStackParamList, 'ManageListing'>;
 
 export default function ManageListingScreen() {
   const { colors, isDark } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const insets = useSafeAreaInsets();
@@ -595,7 +594,7 @@ export default function ManageListingScreen() {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
 
@@ -620,17 +619,17 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.sectionTitle.size,
       fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.textPrimary,
-      maxWidth: SCREEN_W * 0.5 },
+      maxWidth: screenWidth * 0.5 },
 
     // ── Media carousel ──
     heroWrap: {
-      width: SCREEN_W,
-      height: SCREEN_W,
+      width: screenWidth,
+      height: screenWidth,
       position: 'relative',
       backgroundColor: colors.surface },
     heroImage: {
-      width: SCREEN_W,
-      height: SCREEN_W },
+      width: screenWidth,
+      height: screenWidth },
     heroOverlay: {
       ...StyleSheet.absoluteFill,
       backgroundColor: colors.overlay },

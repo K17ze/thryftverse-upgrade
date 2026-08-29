@@ -5,7 +5,7 @@ import {
   StyleSheet,
   StatusBar,
   RefreshControl,
-  Dimensions,
+  useWindowDimensions,
   ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,7 +40,6 @@ import { ShareSheet } from '../components/ShareSheet';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { Space, Radius, DockConstants, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 220;
 
 /**
@@ -74,7 +73,8 @@ export default function CollectionDetailScreen() {
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   const [refreshing, setRefreshing] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [confirmSheet, setConfirmSheet] = useState<{
@@ -445,7 +445,8 @@ function MoreLikeThisRow({
   currencyCode: string;
 }) {
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   const similarItems = React.useMemo(() => {
     if (collectionItems.length === 0) return [];
     const brands = new Set(collectionItems.map((i) => i.brand?.toLowerCase()));
@@ -488,7 +489,7 @@ function MoreLikeThisRow({
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
   container: {
     flex: 1,
@@ -539,7 +540,7 @@ function createStyles(colors: ThemeColors) {
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4 },
   coverWrap: {
-    width: SCREEN_W,
+    width: screenWidth,
     height: COVER_H,
     position: 'relative',
     marginBottom: Space.md },

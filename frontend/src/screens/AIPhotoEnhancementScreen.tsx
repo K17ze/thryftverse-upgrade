@@ -18,7 +18,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   Image,
   ScrollView,
   Pressable,
@@ -57,12 +57,6 @@ import {
 import { setEnhancementResult } from '../services/enhancementResultHandoff';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIPhotoEnhancement'>;
-
-const { width: SCREEN_W } = Dimensions.get('window');
-/** 4:5 aspect ratio preview — marketplace standard (Depop, Vinted, Instagram). */
-const PREVIEW_HEIGHT = Math.round(SCREEN_W * (5 / 4));
-/** Media stage width — screen minus the scroll content horizontal padding. */
-const MEDIA_WIDTH = SCREEN_W - Space.md * 2;
 
 type ScreenPhase =
   | 'checking' // fetching capability from server
@@ -108,6 +102,11 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { isOffline } = useConnectivity();
+  const { width: SCREEN_W } = useWindowDimensions();
+  /** 4:5 aspect ratio preview — marketplace standard (Depop, Vinted, Instagram). */
+  const PREVIEW_HEIGHT = Math.round(SCREEN_W * (5 / 4));
+  /** Media stage width — screen minus the scroll content horizontal padding. */
+  const MEDIA_WIDTH = SCREEN_W - Space.md * 2;
 
   const imageUri = route.params.imageUri;
 
@@ -382,7 +381,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
     checkCapability();
   }, [checkCapability, updateSliderPosition]);
 
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, PREVIEW_HEIGHT), [colors, PREVIEW_HEIGHT]);
 
   const selectedPreset = useMemo(
     () => presets.find((p) => p.id === selectedPresetId) ?? null,
@@ -856,7 +855,7 @@ function OfflineNotice({ colors, styles }: OfflineNoticeProps) {
 // Styles
 // ===========================================================================
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, previewHeight: number) {
   return StyleSheet.create({
     root: { flex: 1 },
     // Header
@@ -886,7 +885,7 @@ function createStyles(colors: ThemeColors) {
     emptySubtitle: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, textAlign: 'center' },
     // Media stage — the dominant object
     mediaStage: {
-      width: '100%', height: PREVIEW_HEIGHT, borderRadius: Radius.lg,
+      width: '100%', height: previewHeight, borderRadius: Radius.lg,
       overflow: 'hidden', backgroundColor: colors.surfaceAlt },
     mediaImage: { width: '100%', height: '100%' },
     beforeOverlay: { position: 'absolute', top: 0, left: 0, bottom: 0, overflow: 'hidden' },

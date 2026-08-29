@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   RefreshControl } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,8 +23,6 @@ import { mapListingToDiscoverySummary } from '../contracts/DiscoveryListingSumma
 import type { Listing } from '../domain';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'ExploreCollection'>;
 
@@ -33,7 +31,8 @@ export default function ExploreCollectionScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   const { listings, isSyncing, refreshListings } = useBackendData();
   const savedProducts = useStore((state) => state.savedProducts);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
@@ -217,7 +216,7 @@ export default function ExploreCollectionScreen() {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
     headerInfo: {
       paddingHorizontal: Space.md,
@@ -241,6 +240,6 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       gap: Space.sm },
     loadingCard: {
-      width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
+      width: (screenWidth - Space.md * 2 - Space.sm) / 2,
       marginBottom: Space.md } });
 }

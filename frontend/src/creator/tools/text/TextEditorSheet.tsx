@@ -49,6 +49,7 @@ import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { Motion } from '../../../theme/motionTokens';
 import { FontChooserRail } from './FontChooserRail';
 import { CURATED_FONTS, resolveFontPreviewStyle } from './FontRegistry';
@@ -129,6 +130,7 @@ export function TextEditorSheet({
   onConfirm }: TextEditorSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const styles = useEditorStyles(colors);
   const inputRef = useRef<TextInput>(null);
   const { recents, commitColor: addRecent } = useCreatorColorHistory();
@@ -192,20 +194,25 @@ export function TextEditorSheet({
     ) => {
       const layout = layouts[index];
       if (!layout) return;
-      Animated.parallel([
-        Animated.spring(leftVal, {
-          toValue: layout.x,
-          useNativeDriver: false,
-          stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping }),
-        Animated.spring(widthVal, {
-          toValue: layout.width,
-          useNativeDriver: false,
-          stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping }),
-      ]).start();
+      if (reducedMotion) {
+        leftVal.setValue(layout.x);
+        widthVal.setValue(layout.width);
+      } else {
+        Animated.parallel([
+          Animated.spring(leftVal, {
+            toValue: layout.x,
+            useNativeDriver: false, // left/width are not native-driver supported
+            stiffness: Motion.spring.indicator.stiffness,
+            damping: Motion.spring.indicator.damping }),
+          Animated.spring(widthVal, {
+            toValue: layout.width,
+            useNativeDriver: false, // left/width are not native-driver supported
+            stiffness: Motion.spring.indicator.stiffness,
+            damping: Motion.spring.indicator.damping }),
+        ]).start();
+      }
     },
-    [],
+    [reducedMotion],
   );
 
   // Animate alignment underline when alignment changes

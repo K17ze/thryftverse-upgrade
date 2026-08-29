@@ -136,20 +136,25 @@ export function StickerBrowserSheet({
     (index: number) => {
       const layout = tabLayouts.current[index];
       if (!layout) return;
-      Animated.parallel([
-        Animated.spring(underlineLeft, {
-          toValue: layout.x,
-          useNativeDriver: false,
-          stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping }),
-        Animated.spring(underlineWidth, {
-          toValue: layout.width,
-          useNativeDriver: false,
-          stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping }),
-      ]).start();
+      if (reduceMotion) {
+        underlineLeft.setValue(layout.x);
+        underlineWidth.setValue(layout.width);
+      } else {
+        Animated.parallel([
+          Animated.spring(underlineLeft, {
+            toValue: layout.x,
+            useNativeDriver: false, // left/width are not native-driver supported
+            stiffness: Motion.spring.indicator.stiffness,
+            damping: Motion.spring.indicator.damping }),
+          Animated.spring(underlineWidth, {
+            toValue: layout.width,
+            useNativeDriver: false, // left/width are not native-driver supported
+            stiffness: Motion.spring.indicator.stiffness,
+            damping: Motion.spring.indicator.damping }),
+        ]).start();
+      }
     },
-    [underlineLeft, underlineWidth],
+    [underlineLeft, underlineWidth, reduceMotion],
   );
 
   useEffect(() => {

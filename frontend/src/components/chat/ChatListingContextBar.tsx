@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, TypeStyles, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -36,11 +37,12 @@ export function ChatListingContextBar({
   onTitlePress,
   defaultCollapsed = false }: ChatListingContextBarProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const toggleCollapsed = () => {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === 'ios' && !reducedMotion) {
       LayoutAnimation.configureNext(
         LayoutAnimation.create(200, 'easeInEaseOut', 'opacity'),
       );

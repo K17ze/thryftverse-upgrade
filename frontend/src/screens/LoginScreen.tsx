@@ -178,7 +178,7 @@ export default function LoginScreen() {
 
   const statusEnterAnimation = reducedMotionEnabled
     ? undefined
-    : FadeInUp.springify().damping(20).duration(400);
+    : FadeInUp.springify().damping(20);
   const statusExitAnimation = reducedMotionEnabled ? undefined : FadeOutUp;
   const layoutAnimation = reducedMotionEnabled ? undefined : Layout.springify();
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AccessibilityInfo, Dimensions } from 'react-native';
+import { AccessibilityInfo, useWindowDimensions } from 'react-native';
 import {
   Gesture,
   type PanGesture,
@@ -31,7 +31,6 @@ import type { CreatorDocument } from '../creator/composition';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const LONG_PRESS_THRESHOLD_MS = 350;
 const SWIPE_THRESHOLD = 40;
 const DOUBLE_TAP_DEBOUNCE_MS = 300;
@@ -91,6 +90,8 @@ export function usePosterViewerGesture(config: PosterViewerGestureConfig): Poste
     haptic,
     currentUserId,
   } = config;
+
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
 
   const [heartBurst, setHeartBurst] = React.useState<{ id: number; x: number; y: number } | null>(null);
 

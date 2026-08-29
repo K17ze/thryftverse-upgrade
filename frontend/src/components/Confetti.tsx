@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Dimensions } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -13,16 +13,15 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Motion } from '../theme/motionTokens';
 
-const { width, height } = Dimensions.get('window');
-
 interface ParticleProps {
   x: number;
   y: number;
   color: string;
   delay: number;
+  screenHeight: number;
 }
 
-function Particle({ x, y, color, delay }: ParticleProps) {
+function Particle({ x, y, color, delay, screenHeight }: ParticleProps) {
   const translateY = useSharedValue(0);
   const translateX = useSharedValue(0);
   const scale = useSharedValue(0);
@@ -43,7 +42,7 @@ function Particle({ x, y, color, delay }: ParticleProps) {
       delay,
       withSequence(
         withTiming(-y, { duration: Motion.duration.slow, easing: Easing.out(Easing.quad) }),
-        withTiming(height, { duration: Motion.duration.crawl, easing: Easing.in(Easing.quad) })
+        withTiming(screenHeight, { duration: Motion.duration.crawl, easing: Easing.in(Easing.quad) })
       )
     );
 
@@ -89,6 +88,7 @@ function Particle({ x, y, color, delay }: ParticleProps) {
 export function Confetti({ count = 40 }: { count?: number }) {
   const reducedMotion = useReducedMotion();
   const { colors } = useAppTheme();
+  const { width, height } = useWindowDimensions();
   const confettiColors = [colors.antiqueGold, colors.danger, colors.bronze, colors.surfaceElevated];
   const particles = Array.from({ length: count }).map((_, i) => ({
     id: i,
@@ -115,7 +115,7 @@ export function Confetti({ count = 40 }: { count?: number }) {
   return (
     <View style={{ position: 'absolute', top: height * 0.4, left: width / 2, zIndex: 100 }} pointerEvents="none">
       {particles.map((p) => (
-        <Particle key={p.id} {...p} />
+        <Particle key={p.id} {...p} screenHeight={height} />
       ))}
     </View>
   );

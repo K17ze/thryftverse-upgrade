@@ -1101,6 +1101,22 @@ export const useStore = create<StoreState>()(
       },
     })),
   checkCoOwnEligibility: (_settlementMode = 'ONEZE') => {
+    const c = get().coOwnCompliance;
+    if (!c.kycVerified) {
+      return { ok: false, message: 'Identity verification (KYC) required' };
+    }
+    if (!c.riskDisclosureAccepted) {
+      return { ok: false, message: 'Risk disclosure must be accepted' };
+    }
+    if (!c.stableCoinWalletConnected) {
+      return { ok: false, message: 'Stablecoin wallet connection required' };
+    }
+    if (!c.educationCompleted) {
+      return { ok: false, message: 'Co-ownership education module required' };
+    }
+    if (c.dac7Completed === false) {
+      return { ok: false, message: 'DAC7 tax information required' };
+    }
     return { ok: true };
   },
   buyCoOwnUnits: (asset, buyerId, units) => {

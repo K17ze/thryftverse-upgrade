@@ -17,6 +17,7 @@ import { Typography, Radius, Space, Stroke} from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../theme/motionTokens';
 import { Linking } from 'react-native';
 
@@ -39,6 +40,7 @@ export default function VisualSearchCamera({
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [facing, setFacing] = React.useState<'back' | 'front'>('back');
   const device = useCameraDevice(facing);
@@ -134,21 +136,30 @@ export default function VisualSearchCamera({
   };
 
   const handleShutterPress = () => {
-    Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.88, duration: Motion.duration.touch, useNativeDriver: false }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: Motion.duration.fast, useNativeDriver: false }),
-    ]).start();
+    if (reducedMotion) {
+      scaleAnim.setValue(1);
+    } else {
+      Animated.sequence([
+        Animated.timing(scaleAnim, { toValue: 0.88, duration: Motion.duration.touch, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: Motion.duration.fast, useNativeDriver: true }),
+      ]).start();
+    }
     takePhoto();
   };
 
   const handleTapFocus = (evt: GestureResponderEvent) => {
     const { locationX, locationY } = evt.nativeEvent;
     setFocusPoint({ x: locationX, y: locationY });
-    focusAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(focusAnim, { toValue: 1, duration: Motion.duration.normal, useNativeDriver: false }),
-      Animated.timing(focusAnim, { toValue: 0, duration: Motion.duration.normal, useNativeDriver: false, delay: 400 }),
-    ]).start(() => setFocusPoint(null));
+    if (reducedMotion) {
+      focusAnim.setValue(0);
+      setFocusPoint(null);
+    } else {
+      focusAnim.setValue(0);
+      Animated.sequence([
+        Animated.timing(focusAnim, { toValue: 1, duration: Motion.duration.normal, useNativeDriver: true }),
+        Animated.timing(focusAnim, { toValue: 0, duration: Motion.duration.normal, useNativeDriver: true, delay: 400 }),
+      ]).start(() => setFocusPoint(null));
+    }
     // Perform real AE/AF/AWB focus metering if the device supports it,
     // matching the CreatorCamera pattern. The Camera view converts view
     // coordinates to camera coordinates internally.

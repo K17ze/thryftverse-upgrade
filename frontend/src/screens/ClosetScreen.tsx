@@ -7,7 +7,7 @@ import {
   RefreshControl,
   ScrollView,
   Share,
-  Dimensions,
+  useWindowDimensions,
   Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
@@ -41,7 +41,7 @@ import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import { Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout, AspectRatio } from '../theme/designTokens';
+import { Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, AspectRatio } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
@@ -52,23 +52,23 @@ const SORT_OPTIONS: SortOption[] = ['Default', 'Recently saved', 'Price: Low to 
 // ── Mosaic geometry — matches ClosetMediaMosaic tile dimensions so the
 //    loading skeleton preserves the final 3:4 portrait silhouette and
 //    avoids layout shift when media decodes (AGENTS.md §14, §16). ──
-const { width: SCREEN_W } = Dimensions.get('window');
 const SKEL_COLUMNS = 3;
 const SKEL_GAP = Space.sm;
 const SKEL_PADDING = Space.md;
-const SKEL_TILE_W =
-  (SCREEN_W - SKEL_PADDING * 2 - SKEL_GAP * (SKEL_COLUMNS - 1)) / SKEL_COLUMNS;
-const SKEL_TILE_H = SKEL_TILE_W / AspectRatio.portrait;
 
 // ── Board card skeleton geometry — matches ClosetBoardCard 2-column grid ──
 const BOARD_COLS = 2;
 const BOARD_GAP = Space.sm;
-const BOARD_CARD_W = (SCREEN_W - Space.md * 2 - BOARD_GAP) / BOARD_COLS;
-const BOARD_CARD_H = BOARD_CARD_W / AspectRatio.portrait + 8;
 
 export default function ClosetScreen() {
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const SKEL_TILE_W =
+    (SCREEN_W - SKEL_PADDING * 2 - SKEL_GAP * (SKEL_COLUMNS - 1)) / SKEL_COLUMNS;
+  const SKEL_TILE_H = SKEL_TILE_W / AspectRatio.portrait;
+  const BOARD_CARD_W = (SCREEN_W - Space.md * 2 - BOARD_GAP) / BOARD_COLS;
+  const BOARD_CARD_H = BOARD_CARD_W / AspectRatio.portrait + 8;
 
   const t = StyleSheet.create({
     container: { backgroundColor: colors.background },
@@ -597,7 +597,7 @@ export default function ClosetScreen() {
                     removeOutfit(outfit.id);
                   } });
               }}
-              style={styles.outfitCard}
+              style={{ width: (SCREEN_W - Space.md * 2 - Space.sm) / 2 }}
             />
           ))}
         </View>
@@ -1035,8 +1035,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     gap: Space.sm,
     paddingTop: Space.sm },
-  outfitCard: {
-    width: (Layout.screenWidth - Space.md * 2 - Space.sm) / 2 },
   skeletonWrap: {
     paddingHorizontal: SKEL_PADDING,
     gap: SKEL_GAP,

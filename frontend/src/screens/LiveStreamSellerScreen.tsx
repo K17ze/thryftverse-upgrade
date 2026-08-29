@@ -18,7 +18,7 @@ import {
   TextInput,
   FlatList,
   Image,
-  Dimensions,
+  useWindowDimensions,
   StatusBar,
   ScrollView,
   ActivityIndicator } from 'react-native';
@@ -140,7 +140,8 @@ export function LiveStreamSellerScreen() {
   const haptic = useHaptic();
   const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, SCREEN_WIDTH), [colors, SCREEN_WIDTH]);
 
   const isDemo = LIVE_SHOPPING_DEMO_MODE;
   const [phase, setPhase] = useState<SellerPhase>('setup');
@@ -716,9 +717,7 @@ export function LiveStreamSellerScreen() {
   );
 }
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, screenWidth: number) => StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   // ── Setup ──
@@ -851,7 +850,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.textPrimary },
   // ── Live ──
   sellerCameraPreview: {
-    width: SCREEN_WIDTH,
+    width: screenWidth,
     height: Space.xxl * 4 + Space.sm,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',

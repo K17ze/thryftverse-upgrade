@@ -1,5 +1,5 @@
 import React, { useCallback, useRef } from 'react';
-import { View, Dimensions, StyleSheet } from 'react-native';
+import { View, useWindowDimensions, StyleSheet } from 'react-native';
 import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
   useSharedValue,
@@ -20,7 +20,6 @@ import { isVideoUri } from '../utils/media';
 import { Radius } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-const { width: W } = Dimensions.get('window');
 const MAX_ZOOM = 4;
 const MIN_ZOOM = 1;
 
@@ -40,12 +39,13 @@ interface ImagePageProps {
   uri: string;
   onDoubleTap?: () => void;
   sharedTransitionTag?: string;
+  screenWidth: number;
 }
 
-function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
+function ImagePage({ uri, onDoubleTap, sharedTransitionTag, screenWidth }: ImagePageProps) {
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -75,8 +75,8 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
     .onUpdate((e) => {
       const zoomLevel = Math.max(scale.value, savedScale.value);
       if (zoomLevel > 1) {
-        const maxTransX = (W * (zoomLevel - 1)) / 2;
-        const maxTransY = (W * (zoomLevel - 1)) / 2;
+        const maxTransX = (screenWidth * (zoomLevel - 1)) / 2;
+        const maxTransY = (screenWidth * (zoomLevel - 1)) / 2;
         const nextX = savedTranslateX.value + e.translationX;
         const nextY = savedTranslateY.value + e.translationY;
         translateX.value = applyRubberBand(nextX, -maxTransX, maxTransX);
@@ -94,8 +94,8 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
         return;
       }
 
-      const maxTransX = (W * (zoomLevel - 1)) / 2;
-      const maxTransY = (W * (zoomLevel - 1)) / 2;
+      const maxTransX = (screenWidth * (zoomLevel - 1)) / 2;
+      const maxTransY = (screenWidth * (zoomLevel - 1)) / 2;
       const projectedX = translateX.value + e.velocityX * 0.08;
       const projectedY = translateY.value + e.velocityY * 0.08;
       const targetX = clamp(projectedX, -maxTransX, maxTransX);
@@ -155,7 +155,8 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag }: ImagePageProps) {
 
 function VideoPage({ uri, shouldPlay }: { uri: string; shouldPlay: boolean }) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: W } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, W), [colors, W]);
   return (
     <View style={styles.page}>
       <Video
@@ -180,7 +181,8 @@ interface DotProps {
 function Dot({ index, activeIndex }: DotProps) {
   const isActive = index === activeIndex;
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  // Dot only uses styles.dot which doesn't reference W; pass 0 as placeholder.
+  const styles = React.useMemo(() => createStyles(colors, 0), [colors]);
   const width = useSharedValue(isActive ? 24 : 8);
 
   React.useEffect(() => {
@@ -204,9 +206,11 @@ interface Props {
   onIndexChange?: (index: number) => void;
 }
 
-export function ImageViewer({ images, height = W, onDoubleTap, itemId, onIndexChange }: Props) {
+export function ImageViewer({ images, height, onDoubleTap, itemId, onIndexChange }: Props) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: W } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, W), [colors, W]);
+  const resolvedHeight = height ?? W;
   const [activeIndex, setActiveIndex] = React.useState(0);
 
   React.useEffect(() => {
@@ -227,7 +231,7 @@ export function ImageViewer({ images, height = W, onDoubleTap, itemId, onIndexCh
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 });
 
   return (
-    <View style={{ height }}>
+    <View style={{ height: resolvedHeight }}>
       <FlatList
         data={images}
         keyExtractor={(_, i) => String(i)}
@@ -243,6 +247,7 @@ export function ImageViewer({ images, height = W, onDoubleTap, itemId, onIndexCh
             <ImagePage
               uri={item}
               onDoubleTap={onDoubleTap}
+              screenWidth={W}
               sharedTransitionTag={index === 0 && itemId ? `image-${itemId}-0` : undefined}
             />
           )
@@ -259,7 +264,7 @@ export function ImageViewer({ images, height = W, onDoubleTap, itemId, onIndexCh
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, W: number) => StyleSheet.create({
   page: {
     width: W,
     height: W,

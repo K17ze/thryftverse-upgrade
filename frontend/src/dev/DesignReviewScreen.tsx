@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, StyleSheet, Dimensions } from 'react-native';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Stroke} from '../theme/designTokens';
@@ -19,8 +19,6 @@ import {
   FlagshipHeroSection,
   FlagshipActionCluster,
 } from '../components/flagship';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export default function DesignReviewScreen() {
   const { colors } = useAppTheme();

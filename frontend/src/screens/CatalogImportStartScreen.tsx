@@ -115,7 +115,7 @@ export default function CatalogImportStartScreen() {
     [sources]
   );
 
-  const enter = reducedMotion ? undefined : FadeInUp.duration(280).springify().damping(24).stiffness(220);
+  const enter = reducedMotion ? undefined : FadeInUp.springify().damping(24).stiffness(220);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {

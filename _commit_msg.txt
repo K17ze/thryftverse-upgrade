@@ -1,13 +1,22 @@
-Phase 4: label-everything removal, skeleton responsive dims, outfit theme-awareness, i18n migration, expo-image video thumbnails
+Phase 4 Wave 1: P0 dead controls, springify+duration fix, useReducedMotion gaps, stale Dimensions.get migration
 
-- Remove uppercase textTransform and decorative eyebrows across CoOwn, ProductCard, CommerceDetailIdentity, SustainabilityBadge (AGENTS.md §4 label-everything disease)
-- Migrate skeletons from stale Dimensions.get('window') to reactive useWindowDimensions() (BoardSkeleton, ItemDetailSkeleton, LookDetailSkeleton, PosterViewerSkeleton)
-- Tokenize OutfitBuilder BG_COLORS to colors.outfitBackgrounds with light/dark parity (8 curated warm-paper neutrals per theme)
-- Migrate MyProfileScreen toast/completion CTAs to i18n
-- Add expo-image for SharedConversationMediaScreen video thumbnails with poster field readiness
-- Remove stale module-level Dimensions.get from AuthLandingScreen, EditListingScreen, SellScreen
-- Add ThemeColors outfitBackgrounds with readonly string[] support
-- Add i18n keys for report, appeal, sell, galleria, myProfile namespaces
+P0 Dead Controls:
+- Wire checkCoOwnEligibility to enforce KYC, risk disclosure, stablecoin wallet, education, DAC7 compliance gates
+- Wire InAppNotificationBanner onAction prop with action button rendering + navigation handler in InAppNotificationCenter
+- Wire SellerFulfilmentScreen hasReview via getOrderReview fetch instead of hardcoded false
+
+Motion Language:
+- Remove .duration() from springify() chains in SignUp, Login, CatalogImport, UpdateManager (spring+duration don't compose)
+- Fix VisualSearchCamera useNativeDriver: false → true (transform/opacity support native driver)
+- Add useReducedMotion gating to AttachmentMenu, MessageContextMenu, TextEditorSheet, StickerBrowserSheet, CaptionEditorSheet
+- Add useReducedMotion gating to LayoutAnimation in InventoryManagement, CreatorAnalyticsDashboard, ChatListingContextBar
+
+Stale Dimensions.get Migration:
+- Migrate 32 files from module-level Dimensions.get('window') to reactive useWindowDimensions()
+- Screens: MyProfile, OutfitBuilder, AIPoweredListing, PosterArchive, Galleria, Home, StyleQuiz, PosterViewer, PosterHighlightViewer, MoodboardHome, MoodboardEditor, ManageListing, LookDetail, LiveStreamSeller, ListingPreview, GalleriaCollectionDetail, ExploreCollection, CreatePosterHighlight, CollectionDetail, Closet, AIPhotoEnhancement, LiveStreamViewer
+- Components: ProfileSkeleton, ProductGridSkeleton, AppTooltip, AppPopover, ImageViewer, Confetti
+- Hooks/Utils: usePosterViewerGesture, accessibility.ts, designTokens.ts
+- Dev: DesignReviewScreen
 
 Generated with [Devin](https://devin.ai)
 

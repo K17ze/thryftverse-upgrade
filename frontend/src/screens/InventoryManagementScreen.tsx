@@ -29,6 +29,7 @@ import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import {
   fetchUserListingsFromApi,
@@ -76,6 +77,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
   const { currencyCode, formatFromFiat } = useFormattedPrice();
@@ -269,10 +271,12 @@ export default function InventoryManagementScreen({ navigation }: Props) {
   // ── Bulk selection ──
   const enterSelectionMode = useCallback((itemId: string) => {
     haptic.medium();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!reducedMotion) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     setSelectionMode(true);
     setSelectedIds(new Set([itemId]));
-  }, [haptic]);
+  }, [haptic, reducedMotion]);
 
   const toggleSelection = useCallback((itemId: string) => {
     haptic.selection();
@@ -286,10 +290,12 @@ export default function InventoryManagementScreen({ navigation }: Props) {
 
   const exitSelectionMode = useCallback(() => {
     haptic.light();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!reducedMotion) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     setSelectionMode(false);
     setSelectedIds(new Set());
-  }, [haptic]);
+  }, [haptic, reducedMotion]);
 
   const handleBulkPause = useCallback(async (resume: boolean) => {
     const ids = Array.from(selectedIds);

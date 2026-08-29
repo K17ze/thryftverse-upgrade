@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,16 +29,15 @@ import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ListingPreview'>;
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const HERO_HEIGHT = SCREEN_H * 0.65;
-
 export default function ListingPreviewScreen({ navigation, route }: Props) {
   const { preview, origin } = route.params;
   const insets = useSafeAreaInsets();
   const { currencyCode, formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const HERO_HEIGHT = SCREEN_H * 0.65;
+  const styles = useMemo(() => createStyles(colors, SCREEN_W, HERO_HEIGHT), [colors, SCREEN_W, HERO_HEIGHT]);
 
   const photos = preview?.photos ?? [];
   const title = preview?.title?.trim() || 'Untitled listing';
@@ -266,7 +265,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number, heroHeight: number) {
   return StyleSheet.create({
   container: {
     flex: 1,
@@ -274,8 +273,8 @@ function createStyles(colors: ThemeColors) {
   scrollContent: {
     paddingBottom: 0 },
   heroWrap: {
-    width: SCREEN_W,
-    height: HERO_HEIGHT,
+    width: screenWidth,
+    height: heroHeight,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden' },
   heroEmpty: {

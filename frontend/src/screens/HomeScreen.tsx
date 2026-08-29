@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  Dimensions,
   RefreshControl,
   Modal,
   Pressable,
@@ -100,7 +99,6 @@ const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
 const POSTER_CARD_WIDTH = 76;
 const POSTER_CARD_HEIGHT = 135;
 const LISTING_CARD_CHROME_HEIGHT = 110;
-const SCREEN_WIDTH = Dimensions.get('window').width;
 // Look rail card dimensions — used in the feed interruption rail for Looks.
 const LOOK_CARD_WIDTH = 120;
 const LOOK_CARD_HEIGHT = 160;
@@ -844,7 +842,7 @@ export default function HomeScreen() {
       // Looks rail — authored interruption of Look thumbnails
       if (isLookMarker(item)) {
         return (
-          <View style={[styles.flashListItem, { width: SCREEN_WIDTH }]}>
+          <View style={[styles.flashListItem, { width: windowWidth }]}>
             <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Space.xs }}>
                 <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textPrimary }} maxFontSizeMultiplier={1.4}>

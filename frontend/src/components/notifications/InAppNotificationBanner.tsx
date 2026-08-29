@@ -74,6 +74,7 @@ export interface InAppNotificationBannerProps {
 export function InAppNotificationBanner({
   notification,
   onDismiss,
+  onAction,
   index = 0 }: InAppNotificationBannerProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
@@ -115,6 +116,10 @@ export function InAppNotificationBanner({
     );
     opacity.value = withTiming(0, { duration: Motion.duration.fast });
   }, [notification.id, onDismiss, opacity, reducedMotion, translateY]);
+
+  const handleAction = React.useCallback(() => {
+    if (onAction) onAction(notification);
+  }, [notification, onAction]);
 
   // Entrance — slide in from top (or instant when reduced motion).
   useEffect(() => {
@@ -228,6 +233,20 @@ export function InAppNotificationBanner({
           </View>
 
           <View style={styles.actionsColumn}>
+            {notification.actionLabel && onAction ? (
+              <AnimatedPressable
+                onPress={handleAction}
+                style={styles.actionBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel={notification.actionLabel}
+                accessibilityHint={`Opens ${notification.actionLabel}`}
+              >
+                <Text style={[styles.actionText, { color: accentColor }]} numberOfLines={1}>
+                  {notification.actionLabel}
+                </Text>
+              </AnimatedPressable>
+            ) : null}
             <AnimatedPressable
               onPress={handleTapDismiss}
               style={styles.dismissBtn}
@@ -299,6 +318,17 @@ const styles = StyleSheet.create({
     paddingTop: Space.xs },
   dismissBtn: {
     padding: Space.xs },
+  actionBtn: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  actionText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: FontSize.caption,
+    letterSpacing: LetterSpacing.normal,
+  },
   progressTrack: {
     height: 1.5,
     backgroundColor: 'transparent',

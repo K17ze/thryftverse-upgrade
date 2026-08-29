@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   Pressable,
   Share,
   Modal,
@@ -59,8 +59,6 @@ import { ApiRequestError } from '../lib/apiClient';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'LookDetail'>;
 
@@ -84,7 +82,8 @@ export default function LookDetailScreen() {
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   useVisuallyComplete('LookDetail');
 
   const { lookId } = route.params;
@@ -1092,7 +1091,7 @@ export default function LookDetailScreen() {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     headerRow: {
@@ -1130,11 +1129,11 @@ function createStyles(colors: ThemeColors) {
 
     // ── Media pager ──
     heroWrap: {
-      width: SCREEN_W,
+      width: screenWidth,
       position: 'relative',
       backgroundColor: colors.surfaceAlt,
       overflow: 'hidden' },
-    heroPage: { width: SCREEN_W, height: '100%' },
+    heroPage: { width: screenWidth, height: '100%' },
     heroGradient: {
       position: 'absolute',
       bottom: 0,

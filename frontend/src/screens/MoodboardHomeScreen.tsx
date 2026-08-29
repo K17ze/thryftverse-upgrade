@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   RefreshControl,
   ImageStyle,
   Pressable } from 'react-native';
@@ -61,15 +61,11 @@ function formatRelativeTime(isoTimestamp: string): string {
 }
 
 // ── Layout constants ──
-const { width: SCREEN_W } = Dimensions.get('window');
 const USER_CARD_WIDTH = 200;
 const USER_CARD_HEIGHT = 240;
 const MASONRY_GAP = Space.sm;
 const MASONRY_COLUMN_COUNT = 2;
 const MASONRY_PADDING = Space.md;
-const MASONRY_COL_WIDTH =
-  (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
-  MASONRY_COLUMN_COUNT;
 
 // Gap between items in the 2×2 cover collage (inset between collage tiles)
 const COLLAGE_GAP = 2;
@@ -194,6 +190,10 @@ const PublicMoodboardCard = React.memo(function PublicMoodboardCard({
   cardHeight: number;
 }) {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
 
   return (
     <AnimatedPressable
@@ -253,6 +253,10 @@ function UserRailSkeleton() {
 
 function DiscoverMasonrySkeleton() {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   return (
     <View style={styles.masonryGrid}>
       {Array.from({ length: MASONRY_COLUMN_COUNT }).map((_, colIdx) => (
@@ -298,6 +302,10 @@ export default function MoodboardHomeScreen() {
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const styles = useStyles();
   const reducedMotion = useReducedMotion();
 
@@ -409,7 +417,7 @@ export default function MoodboardHomeScreen() {
         </View>
       );
     },
-    [handleMoodboardPress],
+    [handleMoodboardPress, MASONRY_COL_WIDTH],
   );
 
   const overrideItemLayout = useCallback(

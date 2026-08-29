@@ -44,7 +44,7 @@ export function UpdateManager(): React.ReactElement | null {
   if (!isUpdateAvailable) return null;
 
   const styles = createStyles(colors);
-  const entering = reducedMotion ? undefined : SlideInDown.duration(280).springify().damping(20);
+  const entering = reducedMotion ? undefined : SlideInDown.springify().damping(20);
 
   return (
     <Reanimated.View

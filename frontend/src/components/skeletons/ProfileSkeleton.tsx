@@ -1,20 +1,16 @@
 import React from 'react';
-import { View, Dimensions, StyleSheet } from 'react-native';
+import { View, useWindowDimensions, StyleSheet } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 import { Radius, Space, AvatarSize } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
-const { width: W } = Dimensions.get('window');
-
 // ── Geometry constants — mirror MyProfileScreen exact final layout ──
 const COVER_HEIGHT = 152;
 const AVATAR_SIZE = AvatarSize.identity;
 const GRID_COLS = 3;
 const GRID_GAP = Space.xs;
-const CARD_WIDTH = (W - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
-const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait
 
 /**
  * ProfileSkeleton — deterministic skeleton matching the exact final
@@ -34,6 +30,9 @@ const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait
  */
 export function ProfileSkeleton() {
   const { colors } = useAppTheme();
+  const { width: W } = useWindowDimensions();
+  const CARD_WIDTH = (W - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+  const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait
 
   return (
     <View style={styles.container}>

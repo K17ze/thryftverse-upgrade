@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   Image,
   ScrollView,
   KeyboardAvoidingView,
@@ -50,8 +50,6 @@ import {
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useAppTranslation } from '../i18n/useAppTranslation';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIPoweredListing'>;
 
@@ -954,6 +952,7 @@ function PhotoCaptureSection({
   colors,
   styles }: PhotoCaptureSectionProps) {
   const { t } = useAppTranslation('aiListing');
+  const { width: SCREEN_W } = useWindowDimensions();
   const thumbSize = (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3;
 
   return (

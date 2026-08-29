@@ -33,7 +33,7 @@ import {
   TextInput,
   FlatList,
   Image,
-  Dimensions,
+  useWindowDimensions,
   StatusBar,
   Platform,
   KeyboardAvoidingView,
@@ -145,7 +145,8 @@ export function LiveStreamViewerScreen() {
   const { requireAuth } = useSignupWall();
   const reducedMotion = useReducedMotion();
   const { formatFromFiat, currencyCode, currencySymbol } = useFormattedPrice();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { height: SCREEN_HEIGHT } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, SCREEN_HEIGHT), [colors, SCREEN_HEIGHT]);
   const { t } = useAppTranslation('liveStreamViewer');
 
   const sessionId = route.params.sessionId;
@@ -1002,10 +1003,7 @@ export function LiveStreamViewerScreen() {
 // Styles
 // ---------------------------------------------------------------------------
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, screenHeight: number) => StyleSheet.create({
   container: {
     flex: 1 },
   // ── Full-screen video plane ──
@@ -1151,7 +1149,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     zIndex: 10 },
   // ── Chat overlay (semi-transparent) ──
   chatOverlayContainer: {
-    height: SCREEN_HEIGHT * 0.22,
+    height: screenHeight * 0.22,
     paddingLeft: Space.md,
     paddingRight: Space.md },
   chatListContent: {

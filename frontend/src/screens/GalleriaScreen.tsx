@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   RefreshControl,
   ImageStyle } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -41,9 +41,6 @@ import { useAppTranslation } from '../i18n/useAppTranslation';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 // ── Layout constants ──
-const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_HEIGHT = Math.round(SCREEN_W * (4 / 5));
-const FEATURED_COLLECTION_HEIGHT = Math.round(SCREEN_W * (5 / 6));
 // Collection rail card dimensions — intentional design constants:
 // 200pt width balances cover-image legibility with ~3 cards visible per viewport;
 // 260pt height gives the cover image room to breathe while keeping curator meta compact.
@@ -52,9 +49,6 @@ const COLLECTION_CARD_HEIGHT = 260;
 const MASONRY_GAP = Space.sm;
 const MASONRY_COLUMN_COUNT = 2;
 const MASONRY_PADDING = Space.md;
-const MASONRY_COL_WIDTH =
-  (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
-  MASONRY_COLUMN_COUNT;
 
 // Skeleton height variation communicates loading without inventing media geometry.
 const SKELETON_ASPECT_RATIOS = [1.25, 1.0, 1.32, 0.92] as const;
@@ -219,6 +213,10 @@ const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
 }) {
   const styles = useStyles();
   const { formatFromFiat } = useFormattedPrice();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const imageHeight = Math.round(MASONRY_COL_WIDTH * asset.aspectRatio);
 
   return (
@@ -268,6 +266,7 @@ const EditorialListItem = React.memo(function EditorialListItem({
   size?: 'large' | 'standard';
 }) {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
   const heroHeight = size === 'large'
     ? Math.round(SCREEN_W * (5 / 8))
     : Math.round(SCREEN_W * (9 / 16));
@@ -323,12 +322,12 @@ const EditorialListItem = React.memo(function EditorialListItem({
 // ---------------------------------------------------------------------------
 // Masonry layout — true Pinterest-style column assignment by shortest height
 // ---------------------------------------------------------------------------
-function buildMasonryColumns(items: GalleriaFeaturedAsset[]): GalleriaFeaturedAsset[][] {
+function buildMasonryColumns(items: GalleriaFeaturedAsset[], colWidth: number): GalleriaFeaturedAsset[][] {
   const cols: GalleriaFeaturedAsset[][] = Array.from({ length: MASONRY_COLUMN_COUNT }, () => []);
   const heights = Array.from({ length: MASONRY_COLUMN_COUNT }, () => 0);
 
   items.forEach((item) => {
-    const imgHeight = Math.round(MASONRY_COL_WIDTH * item.aspectRatio);
+    const imgHeight = Math.round(colWidth * item.aspectRatio);
     const metaHeight = 72; // approximate: collection + title(2 lines) + valuation
     const itemHeight = imgHeight + metaHeight + MASONRY_GAP;
 
@@ -352,6 +351,8 @@ function buildMasonryColumns(items: GalleriaFeaturedAsset[]): GalleriaFeaturedAs
 // ---------------------------------------------------------------------------
 function HeroSkeleton() {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const HERO_HEIGHT = Math.round(SCREEN_W * (4 / 5));
   return (
     <View style={styles.heroContainer}>
       <PremiumSkeletonTile width="100%" height={HERO_HEIGHT} borderRadius={Radius.none} />
@@ -382,10 +383,14 @@ function CollectionRailSkeleton() {
 
 function FeaturedMasonrySkeleton() {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const skeletonItems = Array.from({ length: 6 }).map((_, i) => ({
     id: `skel-${i}`,
     aspectRatio: SKELETON_ASPECT_RATIOS[i % SKELETON_ASPECT_RATIOS.length] }));
-  const columns = buildMasonryColumns(skeletonItems as GalleriaFeaturedAsset[]);
+  const columns = buildMasonryColumns(skeletonItems as GalleriaFeaturedAsset[], MASONRY_COL_WIDTH);
 
   return (
     <View style={styles.masonryGrid}>
@@ -412,6 +417,7 @@ function FeaturedMasonrySkeleton() {
 
 function EditorialSkeleton() {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
   const heroHeight = Math.round(SCREEN_W * (9 / 16));
   return (
     <View style={styles.editorialItem}>
@@ -767,6 +773,9 @@ export default function GalleriaScreen() {
 // ---------------------------------------------------------------------------
 function useStyles() {
   const { colors } = useAppTheme();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const HERO_HEIGHT = Math.round(SCREEN_W * (4 / 5));
+  const FEATURED_COLLECTION_HEIGHT = Math.round(SCREEN_W * (5 / 6));
   return React.useMemo(
     () =>
       StyleSheet.create({
@@ -1114,6 +1123,6 @@ function useStyles() {
           lineHeight: TypographyV2.meta.lineHeight,
           fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textSecondary } }),
-    [colors],
+    [colors, HERO_HEIGHT, FEATURED_COLLECTION_HEIGHT],
   );
 }

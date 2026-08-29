@@ -185,10 +185,10 @@ export default function SignUpScreen() {
 
   const statusEnterAnimation = reducedMotionEnabled
     ? undefined
-    : FadeInUp.springify().damping(20).duration(400);
+    : FadeInUp.springify().damping(20);
   const statusExitAnimation = reducedMotionEnabled ? undefined : FadeOutUp;
   const layoutAnimation = reducedMotionEnabled ? undefined : Layout.springify();
-  const stepEnter = reducedMotionEnabled ? undefined : FadeInRight.duration(250).springify().damping(22);
+  const stepEnter = reducedMotionEnabled ? undefined : FadeInRight.springify().damping(22);
   const stepExit = reducedMotionEnabled ? undefined : FadeOutLeft.duration(180);
 
   const progress = ((step + 1) / 3) * 100;
