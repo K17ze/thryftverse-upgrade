@@ -11,7 +11,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -337,7 +337,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           {!isSubmitted && showEvidence && evidenceConfig && (
             <View>
               <Meta color={colors.textMuted} style={styles.sectionLabel}>
-                {evidenceConfig.needsPhotos ? 'EVIDENCE' : 'EVIDENCE (OPTIONAL)'}
+                {evidenceConfig.needsPhotos ? 'Evidence' : 'Evidence (optional)'}
               </Meta>
               <View style={styles.evidenceCard}>
                 {evidenceConfig.hint ? (
@@ -471,7 +471,6 @@ function createStyles(colors: ThemeColors) {
     gap: Space.lg },
   sectionLabel: {
     marginLeft: Space.sm,
-    letterSpacing: LetterSpacing.caps,
     marginBottom: Space.sm },
   topicsCard: {
     overflow: 'hidden' },

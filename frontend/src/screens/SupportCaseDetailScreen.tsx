@@ -533,7 +533,6 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
 
       {/* ── Timeline — vertical line with dots, flat (no card) ───────────── */}
       <View style={styles.section}>
-        <Meta color={colors.textMuted} style={styles.sectionLabel}>TIMELINE</Meta>
         {publicEvents.length === 0 ? (
           <Text style={styles.emptyTimelineText}>No public activity yet.</Text>
         ) : (
@@ -586,7 +585,7 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
       {/* ── Message input — add information to the case ───────────────────── */}
       {canSendMessage && (
         <View style={styles.messageSection}>
-          <Meta color={colors.textMuted} style={styles.sectionLabel}>ADD INFORMATION</Meta>
+          <Meta color={colors.textMuted} style={styles.sectionLabel}>Add information</Meta>
           <AppInput
             ref={inputRef}
             value={messageText}
@@ -685,8 +684,7 @@ function createStyles(colors: ThemeColors) {
     section: {
       gap: Space.sm },
     sectionLabel: {
-      letterSpacing: 1.2,
-      textTransform: 'uppercase' },
+      letterSpacing: 0 },
     outcomeText: {
       fontSize: TypographyV2.body.size,
       lineHeight: TypographyV2.body.lineHeight + 4,

@@ -7,12 +7,6 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Meta } from '../ui/Text';
 
-function toSentenceCase(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return value;
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
-}
-
 export function ChatInfoSection({
   title,
   children,
@@ -23,12 +17,11 @@ export function ChatInfoSection({
 }) {
   const { colors } = useAppTheme();
   const rows = React.Children.toArray(children);
-  const sectionTitle = toSentenceCase(title);
 
   return (
     <View style={styles.section}>
       <Meta color={danger ? colors.danger : colors.textMuted} style={styles.sectionLabel}>
-        {sectionTitle}
+        {title}
       </Meta>
       <View>
         {rows.map((child, index) =>

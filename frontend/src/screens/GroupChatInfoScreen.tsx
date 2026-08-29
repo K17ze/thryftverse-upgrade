@@ -681,7 +681,7 @@ function SettingsTab({
 
   return (
     <View style={styles.paddedContent}>
-      <ChatInfoSection title="CONVERSATION">
+      <ChatInfoSection title="Conversation">
         <ChatInfoRow
           icon="chatbubble-ellipses-outline"
           label="Quick replies"
@@ -697,7 +697,7 @@ function SettingsTab({
         />
       </ChatInfoSection>
 
-      <ChatInfoSection title="AI AGENTS">
+      <ChatInfoSection title="AI agents">
         <ChatInfoRow
           icon="hardware-chip-outline"
           label="Manage AI agents"
@@ -711,7 +711,7 @@ function SettingsTab({
         />
       </ChatInfoSection>
 
-      <ChatInfoSection title="CHAT HISTORY">
+      <ChatInfoSection title="Chat history">
         <ChatInfoRow
           icon="archive-outline"
           label="Archive conversation"
@@ -721,7 +721,7 @@ function SettingsTab({
         />
       </ChatInfoSection>
 
-      <ChatInfoSection title="INVITE">
+      <ChatInfoSection title="Invite">
         <ChatInfoRow
           icon="link-outline"
           label="Invite via link"
@@ -760,7 +760,7 @@ function SettingsTab({
         )}
       </ChatInfoSection>
 
-      <ChatInfoSection title="MEMBERSHIP" danger>
+      <ChatInfoSection title="Membership" danger>
         <ChatInfoRow
           icon="flag-outline"
           label="Report group"
