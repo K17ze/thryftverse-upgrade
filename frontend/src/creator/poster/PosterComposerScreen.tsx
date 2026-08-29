@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke, Type} from '../../theme/designTokens';
+import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -3142,7 +3142,7 @@ function createStyles(colors: ThemeColors) {
   },
   safeZoneLabelText: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     letterSpacing: 0.3,
   },
   // ── Bottom gradient scrim ──
