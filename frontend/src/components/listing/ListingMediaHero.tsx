@@ -91,7 +91,7 @@ export function ListingMediaHero({
         style={[StyleSheet.absoluteFill, styles.bigHeartWrap, bigHeartStyle]}
         pointerEvents="none"
       >
-        <Ionicons name="heart" size={100} color="#fff" style={styles.bigHeartIcon} />
+        <Ionicons name="heart" size={100} color={colors.scrimTextPrimary} style={styles.bigHeartIcon} />
       </Reanimated.View>
 
       {isSold && (
@@ -110,7 +110,7 @@ export function ListingMediaHero({
 
       {images.length > 0 && isVideoUri(images[activeIndex]) && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play-circle" size={16} color="#fff" />
+          <Ionicons name="play-circle" size={16} color={colors.scrimTextPrimary} />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
@@ -122,7 +122,7 @@ export function ListingMediaHero({
           {...PressPresets.iconButton}
           accessibilityLabel="Go back"
         >
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} />
         </AnimatedPressable>
 
         <View style={styles.headerRight}>
@@ -132,7 +132,7 @@ export function ListingMediaHero({
             {...PressPresets.iconButton}
             accessibilityLabel="Share this listing"
           >
-            <Ionicons name="share-outline" size={24} color="#fff" />
+            <Ionicons name="share-outline" size={24} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -145,7 +145,7 @@ export function ListingMediaHero({
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isSaved ? colors.brand : '#fff'}
+              color={isSaved ? colors.brand : colors.scrimTextPrimary}
             />
           </AnimatedPressable>
 
@@ -155,7 +155,7 @@ export function ListingMediaHero({
               onToggle={onToggleFav}
               size={24}
               activeColor={colors.danger}
-              inactiveColor="#fff"
+              inactiveColor={colors.scrimTextPrimary}
             />
           </View>
         </View>
@@ -178,7 +178,7 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     height: 120,
-    backgroundColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: colors.glassBg,
   },
   bigHeartWrap: {
     alignItems: 'center',
@@ -186,7 +186,7 @@ function createStyles(colors: ThemeColors) {
     zIndex: 5,
   },
   bigHeartIcon: {
-    shadowColor: '#000',
+    shadowColor: colors.textPrimary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -210,13 +210,13 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     bottom: 16,
     right: 16,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.md,
   },
   indexText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
@@ -227,13 +227,13 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.md,
   },
   videoBadgeText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
@@ -255,7 +255,7 @@ function createStyles(colors: ThemeColors) {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },

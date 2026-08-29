@@ -131,7 +131,7 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
               accessibilityLabel={option.label}
               accessibilityRole="button"
             >
-              <View style={[styles.optionIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+              <View style={styles.optionIconWrap}>
                 <Ionicons name={option.icon} size={24} color={colors.textPrimary} />
               </View>
               <Text style={[styles.optionLabel, { color: colors.textSecondary }]}>

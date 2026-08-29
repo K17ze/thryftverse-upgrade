@@ -210,7 +210,7 @@ export function ShareSheet({ visible, onClose, shareParams }: ShareSheetProps) {
               accessibilityLabel={`Share to ${option.label}`}
               accessibilityRole="button"
             >
-              <View style={[styles.optionIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+              <View style={styles.optionIconWrap}>
                 <Ionicons
                   name={option.icon}
                   size={24}

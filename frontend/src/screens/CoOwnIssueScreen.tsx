@@ -161,7 +161,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         {/* Note — trust card */}
         <View style={styles.note}>
           <View style={[styles.noteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.noteIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+            <View style={styles.noteIconWrap}>
               <Ionicons name="information-circle" size={16} color={colors.textSecondary} />
             </View>
             <View style={styles.noteTextWrap}>

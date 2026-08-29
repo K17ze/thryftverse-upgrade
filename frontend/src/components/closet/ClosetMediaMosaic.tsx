@@ -204,7 +204,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
         {/* Price-drop badge — compact, top-left, only when on sale & not sold */}
         {!isSold && hasPriceDrop ? (
           <View style={styles.priceDropBadge}>
-            <Ionicons name="pricetag" size={9} color="#fff" />
+            <Ionicons name="pricetag" size={9} color={colors.scrimTextPrimary} />
             <Text style={styles.priceDropText}>
               -{Math.round(((item.originalPrice! - item.price) / item.originalPrice!) * 100)}%
             </Text>
@@ -228,7 +228,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
                 <Ionicons
                   name={isFav ? 'heart' : 'heart-outline'}
                   size={18}
-                  color={isFav ? colors.danger : '#fff'}
+                  color={isFav ? colors.danger : colors.scrimTextPrimary}
                   style={styles.toggleGlyph}
                 />
               </AnimatedPressable>
@@ -246,7 +246,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
                 <Ionicons
                   name={isSaved ? 'bookmark' : 'bookmark-outline'}
                   size={18}
-                  color={isSaved ? colors.brand : '#fff'}
+                  color={isSaved ? colors.brand : colors.scrimTextPrimary}
                   style={styles.toggleGlyph}
                 />
               </AnimatedPressable>
@@ -308,7 +308,7 @@ const createStyles = (colors: ThemeColors) =>
     // Sold state
     soldScrim: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.45)',
+      backgroundColor: colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -316,7 +316,7 @@ const createStyles = (colors: ThemeColors) =>
       position: 'absolute',
       fontSize: Type.caption.size,
       fontFamily: Typography.family.bold,
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       letterSpacing: 1,
       textTransform: 'uppercase',
       top: '50%',
@@ -339,7 +339,7 @@ const createStyles = (colors: ThemeColors) =>
     priceDropText: {
       fontSize: 9,
       fontFamily: Typography.family.bold,
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       letterSpacing: 0.2,
     },
     // Toggle row
@@ -357,7 +357,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'center',
     },
     toggleGlyph: {
-      textShadowColor: 'rgba(0,0,0,0.55)',
+      textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 4,
     },
@@ -381,9 +381,9 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: Type.meta.size,
       lineHeight: Type.meta.lineHeight,
       fontFamily: Typography.family.semibold,
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       letterSpacing: 0.1,
-      textShadowColor: 'rgba(0,0,0,0.5)',
+      textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
       marginBottom: 1,
@@ -392,9 +392,9 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: Type.caption.size,
       lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.bold,
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       letterSpacing: 0.1,
-      textShadowColor: 'rgba(0,0,0,0.5)',
+      textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
     },

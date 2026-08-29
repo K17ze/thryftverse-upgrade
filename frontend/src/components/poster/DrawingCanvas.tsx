@@ -29,7 +29,7 @@ import {
 } from '@shopify/react-native-skia';
 import { Typography, Radius, Space, Stroke } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
@@ -890,7 +890,7 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles
 // ─────────────────────────────────────────────────────────────────────────────
-function createStyles(colors: any) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   drawTopBar: {
     position: 'absolute',
@@ -1053,7 +1053,7 @@ function createStyles(colors: any) {
     alignItems: 'center',
   },
   confirmClearText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 15,
     fontFamily: Typography.family.bold,
   },

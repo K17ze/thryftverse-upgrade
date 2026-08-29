@@ -153,7 +153,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },

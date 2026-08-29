@@ -14,7 +14,7 @@ import Reanimated, {
 
 import { Typography, Radius, Space, Stroke } from '../../../theme/designTokens';
 import { AnimatedPressable } from '../../AnimatedPressable';
-import { useAppTheme } from '../../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
@@ -66,6 +66,8 @@ const ColorSwatch = React.memo(function ColorSwatch({
 }: ColorSwatchProps) {
   const haptic = useHaptic();
   const { spring, stagger } = useMotionConfig();
+  const { colors } = useAppTheme();
+  const swatchStyles = React.useMemo(() => createSwatchStyles(colors), [colors]);
 
   // Per-swatch staggered entrance: scale 0.8->1.0 with spring
   const entrance = useSharedValue(reducedMotion ? 1 : 0);
@@ -134,6 +136,7 @@ export default function BackgroundPicker({ visible, currentColor, onSelect, onCl
   const reducedMotion = useReducedMotion();
   const { isEnabled, spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const swatchStyles = React.useMemo(() => createSwatchStyles(colors), [colors]);
   const [showCustom, setShowCustom] = React.useState(false);
   const [hsl, setHsl] = React.useState(() => hexToHsl(currentColor ?? '#9b0202'));
 
@@ -330,17 +333,19 @@ export default function BackgroundPicker({ visible, currentColor, onSelect, onCl
   );
 }
 
-const swatchStyles = StyleSheet.create({
-  colorOrb: {
-    width: SWATCH_SIZE, height: SWATCH_SIZE, borderRadius: SWATCH_SIZE / 2,
-    borderWidth: Stroke.standard, borderColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  transparentOrb: { backgroundColor: 'transparent' },
-  addColorOrb: { borderWidth: Stroke.standard },
-});
+function createSwatchStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    colorOrb: {
+      width: SWATCH_SIZE, height: SWATCH_SIZE, borderRadius: SWATCH_SIZE / 2,
+      borderWidth: Stroke.standard, borderColor: colors.glassBorder,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    transparentOrb: { backgroundColor: 'transparent' },
+    addColorOrb: { borderWidth: Stroke.standard },
+  });
+}
 
-function createStyles(colors: any) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     backdrop: {
       ...StyleSheet.absoluteFill,

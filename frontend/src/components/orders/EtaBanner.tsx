@@ -18,7 +18,7 @@ export function EtaBanner({ etaWindow, estimatedDeliveryLabel, serviceName }: Pr
 
   const themed = useMemo(() => ({
     etaBanner: { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}25` },
-    etaIconWrap: { backgroundColor: colors.brandSubtle },
+    etaIconWrap: {},
     etaLabel: { color: colors.textMuted },
     etaValue: { color: colors.textPrimary },
     etaService: { color: colors.textSecondary },

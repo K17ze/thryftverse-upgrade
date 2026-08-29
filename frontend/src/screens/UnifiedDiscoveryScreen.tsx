@@ -765,13 +765,13 @@ function CollectionRailCard({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.sm, right: Space.sm, bottom: Space.sm }} pointerEvents="none">
-          <Text style={{ color: '#FFFFFF', fontFamily: FontFamily.semibold, fontSize: Type.meta.size, letterSpacing: 0.5 }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.semibold, fontSize: Type.meta.size, letterSpacing: 0.5 }} numberOfLines={1}>
             {collection.theme.toUpperCase()}
           </Text>
-          <Text style={{ color: '#FFFFFF', fontFamily: FontFamily.bold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.bold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
             {collection.title}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.75)', fontFamily: FontFamily.regular, fontSize: Type.caption.size }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextSecondary, fontFamily: FontFamily.regular, fontSize: Type.caption.size }} numberOfLines={1}>
             {collection.curator}
           </Text>
         </View>
@@ -929,21 +929,21 @@ function createStyles(colors: ThemeColors) {
       bottom: Space.md,
     },
     heroEyebrow: {
-      color: '#FFFFFF',
+      color: colors.scrimTextPrimary,
       fontFamily: FontFamily.semibold,
       fontSize: Type.meta.size,
       letterSpacing: 1,
       marginBottom: Space.xs,
     },
     heroTitle: {
-      color: '#FFFFFF',
+      color: colors.scrimTextPrimary,
       fontFamily: FontFamily.bold,
       fontSize: Type.subtitle.size + 2,
       lineHeight: Type.subtitle.lineHeight + 4,
       marginBottom: Space.xs / 2,
     },
     heroMeta: {
-      color: 'rgba(255,255,255,0.78)',
+      color: colors.scrimTextSecondary,
       fontFamily: FontFamily.regular,
       fontSize: Type.caption.size,
     },

@@ -57,7 +57,7 @@ export function CheckoutPaymentSelector({
               }`}
             >
               <View style={styles.rowLeft}>
-                <View style={[styles.cardIconWrap, isSelected && styles.cardIconWrapSelected]}>
+                <View style={styles.cardIconWrap}>
                   {method.type === 'apple_pay' ? (
                     <Text style={styles.walletIconText}>Apple Pay</Text>
                   ) : method.type === 'google_pay' ? (
@@ -167,12 +167,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  cardIconWrapSelected: {
-    backgroundColor: `${colors.brand}15`,
   },
   walletIconText: {
     fontSize: Type.meta.size,
@@ -227,7 +223,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    backgroundColor: `${colors.brand}12`,
     alignItems: 'center',
     justifyContent: 'center',
   },

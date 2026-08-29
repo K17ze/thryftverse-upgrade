@@ -337,6 +337,7 @@ interface VideoPageProps {
 
 function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPageProps) {
   const { colors } = useAppTheme();
+  const videoControlStyles = useMemo(() => createVideoControlStyles(colors), [colors]);
   const [appIsActive, setAppIsActive] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -469,7 +470,7 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
               accessibilityLabel="Play video"
               accessibilityRole="button"
             >
-              <Ionicons name="play" size={32} color="#fff" />
+              <Ionicons name="play" size={32} color={colors.scrimTextPrimary} />
             </Pressable>
           )}
           <View style={videoControlStyles.controlBar}>
@@ -480,7 +481,7 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />
+              <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color={colors.scrimTextPrimary} />
             </Pressable>
             <Pressable
               style={videoControlStyles.controlBtn}
@@ -489,7 +490,7 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={isMuted ? 'volume-mute' : 'volume-medium'} size={20} color="#fff" />
+              <Ionicons name={isMuted ? 'volume-mute' : 'volume-medium'} size={20} color={colors.scrimTextPrimary} />
             </Pressable>
             {onOpenFullscreen ? (
               <Pressable
@@ -499,7 +500,7 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
                 accessibilityRole="button"
                 hitSlop={8}
               >
-                <Ionicons name="expand" size={20} color="#fff" />
+                <Ionicons name="expand" size={20} color={colors.scrimTextPrimary} />
               </Pressable>
             ) : null}
           </View>
@@ -509,7 +510,7 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
   );
 }
 
-const videoControlStyles = StyleSheet.create({
+const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
   bottomScrim: {
     position: 'absolute',
     bottom: 0,
@@ -526,7 +527,7 @@ const videoControlStyles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -689,7 +690,7 @@ export function MediaStage({
               accessibilityLabel="Go back"
               accessibilityHint="Returns to the previous screen"
             >
-              <Ionicons name="chevron-back" size={24} color="#fff" style={styles.controlIcon} />
+              <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} style={styles.controlIcon} />
             </AnimatedPressable>
           ) : <View style={styles.controlBtn} />}
 
@@ -705,7 +706,7 @@ export function MediaStage({
                 <Ionicons
                   name={ctrl.icon}
                   size={24}
-                  color={ctrl.active ? (ctrl.activeColor ?? colors.brand) : '#fff'}
+                  color={ctrl.active ? (ctrl.activeColor ?? colors.brand) : colors.scrimTextPrimary}
                   style={styles.controlIcon}
                 />
               </AnimatedPressable>
@@ -743,7 +744,7 @@ export function MediaStage({
       {/* Video badge — lower-left when the active page is video */}
       {mediaItems.length > 0 && mediaItems[activeIndex]?.kind === 'video' && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play-circle" size={16} color="#fff" />
+          <Ionicons name="play-circle" size={16} color={colors.scrimTextPrimary} />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
@@ -792,7 +793,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // Subtle media-contrast scrim behind control glyphs — functional
   // (legibility over arbitrary imagery), not decorative chrome.
   controlIcon: {
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
@@ -800,7 +801,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     bottom: Space.sm,
     right: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.md,
@@ -818,16 +819,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: colors.scrimTextTertiary,
   },
   dotActive: {
     width: 14,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
+    backgroundColor: colors.scrimTextPrimary,
   },
   indexText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: FontFamily.medium,
   },
@@ -838,13 +839,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.md,
   },
   videoBadgeText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: FontFamily.medium,
   },

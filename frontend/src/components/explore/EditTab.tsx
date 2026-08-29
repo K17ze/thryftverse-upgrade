@@ -325,7 +325,6 @@ function createStyles(colors: ThemeColors) {
     width: 48,
     height: 48,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },

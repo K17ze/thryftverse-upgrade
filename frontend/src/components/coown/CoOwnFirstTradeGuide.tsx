@@ -169,7 +169,7 @@ export function CoOwnFirstTradeGuide({
             showsVerticalScrollIndicator={false}
           >
             <View style={[styles.stepCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={[styles.stepIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+              <View style={styles.stepIconWrap}>
                 <Ionicons name={step.icon} size={32} color={stepIconColor} />
               </View>
               <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>{step.title}</Text>

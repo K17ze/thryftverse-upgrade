@@ -313,7 +313,6 @@ function createStyles(colors: ThemeColors) {
     width: Control.chrome,
     height: Control.chrome,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },

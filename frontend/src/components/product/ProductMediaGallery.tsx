@@ -46,9 +46,9 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
   return v;
 };
 
-const subComponentStyles = StyleSheet.create({
+const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
-    backgroundColor: '#0a0a0a',
+    backgroundColor: colors.background,
   },
   image: {
     width: '100%',
@@ -66,6 +66,8 @@ interface MediaPageProps {
 }
 
 function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoomStart }: MediaPageProps) {
+  const { colors } = useAppTheme();
+  const subComponentStyles = React.useMemo(() => createSubComponentStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
   const [failed, setFailed] = useState(false);
   const scale = useSharedValue(1);
@@ -173,6 +175,8 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
 }
 
 function VideoPage({ uri, width, height, shouldPlay }: { uri: string; width: number; height: number; shouldPlay: boolean }) {
+  const { colors } = useAppTheme();
+  const subComponentStyles = React.useMemo(() => createSubComponentStyles(colors), [colors]);
   return (
     <View style={[subComponentStyles.page, { width, height }]}>
       <Video
@@ -310,7 +314,7 @@ export function ProductMediaGallery({
         style={[StyleSheet.absoluteFill, styles.bigHeartWrap, bigHeartStyle]}
         pointerEvents="none"
       >
-        <Ionicons name="heart" size={100} color="#fff" style={styles.bigHeartIcon} />
+        <Ionicons name="heart" size={100} color={colors.scrimTextPrimary} style={styles.bigHeartIcon} />
       </Reanimated.View>
 
       {isSold && (
@@ -327,7 +331,7 @@ export function ProductMediaGallery({
           {...PressPresets.iconButton}
           accessibilityLabel="Go back"
         >
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} />
         </AnimatedPressable>
 
         <View style={styles.headerRight}>
@@ -337,7 +341,7 @@ export function ProductMediaGallery({
             {...PressPresets.iconButton}
             accessibilityLabel="Share this listing"
           >
-            <Ionicons name="share-outline" size={24} color="#fff" />
+            <Ionicons name="share-outline" size={24} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -350,7 +354,7 @@ export function ProductMediaGallery({
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isSaved ? colors.brand : '#fff'}
+              color={isSaved ? colors.brand : colors.scrimTextPrimary}
             />
           </AnimatedPressable>
 
@@ -360,7 +364,7 @@ export function ProductMediaGallery({
               onToggle={onToggleFav}
               size={24}
               activeColor={colors.danger}
-              inactiveColor="#fff"
+              inactiveColor={colors.scrimTextPrimary}
             />
           </View>
         </View>
@@ -383,7 +387,7 @@ export function ProductMediaGallery({
       {/* Video badge */}
       {images.length > 0 && isVideoUri(images[activeIndex]) && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play-circle" size={16} color="#fff" />
+          <Ionicons name="play-circle" size={16} color={colors.scrimTextPrimary} />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
@@ -418,7 +422,7 @@ export function ProductMediaGallery({
                   />
                   {isVid && (
                     <View style={styles.thumbnailVideoBadge}>
-                      <Ionicons name="play" size={8} color="#fff" />
+                      <Ionicons name="play" size={8} color={colors.scrimTextPrimary} />
                     </View>
                   )}
                 </Pressable>
@@ -444,7 +448,7 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     height: 120,
-    backgroundColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: colors.glassBg,
   },
   bigHeartWrap: {
     alignItems: 'center',
@@ -452,7 +456,7 @@ function createStyles(colors: ThemeColors) {
     zIndex: 5,
   },
   bigHeartIcon: {
-    shadowColor: '#000',
+    shadowColor: colors.textPrimary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -490,7 +494,7 @@ function createStyles(colors: ThemeColors) {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -498,13 +502,13 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     bottom: Space.sm,
     right: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.md,
   },
   indexText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
@@ -515,13 +519,13 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: 5,
     borderRadius: Radius.md,
   },
   videoBadgeText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
@@ -546,7 +550,7 @@ function createStyles(colors: ThemeColors) {
   },
   thumbnailActive: {
     opacity: 1,
-    borderColor: '#fff',
+    borderColor: colors.scrimTextPrimary,
   },
   thumbnailImage: {
     width: '100%',
@@ -559,7 +563,7 @@ function createStyles(colors: ThemeColors) {
     width: 14,
     height: 14,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },

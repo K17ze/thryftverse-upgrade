@@ -542,7 +542,7 @@ function createEyedropperStyles(colors: ThemeColors) {
   return StyleSheet.create({
     eyedropperBackdrop: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.3)',
+      backgroundColor: colors.overlay,
     },
     loupe: {
       position: 'absolute',
@@ -554,10 +554,10 @@ function createEyedropperStyles(colors: ThemeColors) {
       height: 80,
       borderRadius: Radius.full,
       borderWidth: 3,
-      borderColor: '#FFFFFF',
+      borderColor: colors.scrimTextPrimary,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOpacity: 0.3,
       shadowRadius: 8,
       shadowOffset: { width: 0, height: 4 },
@@ -567,13 +567,13 @@ function createEyedropperStyles(colors: ThemeColors) {
       position: 'absolute',
       width: 20,
       height: 1,
-      backgroundColor: 'rgba(255,255,255,0.8)',
+      backgroundColor: colors.scrimTextSecondary,
     },
     loupeCrosshairV: {
       position: 'absolute',
       width: 1,
       height: 20,
-      backgroundColor: 'rgba(255,255,255,0.8)',
+      backgroundColor: colors.scrimTextSecondary,
     },
     loupeLabel: {
       marginTop: 4,

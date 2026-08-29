@@ -1,5 +1,6 @@
 import React from 'react';
 import { Typography, Radius, Type, Space, Stroke } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   View,
   StyleSheet,
@@ -61,8 +62,9 @@ const SNAP_INTERVAL = THUMB_SIZE + THUMB_GAP;
 
 // ── Layout preview mock ──────────────────────────────────────────────
 function LayoutPreview({ type }: { type: LayoutType }) {
+  const { colors } = useAppTheme();
   const boxStyle = {
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.glassBorder,
     borderRadius: Radius.sm,
     flex: 1,
   };
@@ -143,6 +145,8 @@ const LayoutCard = React.memo(function LayoutCard({
 }: LayoutCardProps) {
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Per-card entrance: stagger by index (50ms delay per item)
   const cardEntrance = useSharedValue(reducedMotion ? 1 : 0);
@@ -225,6 +229,8 @@ export default function LayoutPicker({
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Drawer slide-up + backdrop fade (Reanimated)
   const translateY = useSharedValue(DRAWER_HEIGHT);
@@ -348,72 +354,74 @@ export default function LayoutPicker({
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  drawer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: DRAWER_HEIGHT,
-    backgroundColor: 'rgba(18,18,22,0.98)',
-    borderTopLeftRadius: Radius.xxl,
-    borderTopRightRadius: Radius.xxl,
-    overflow: 'hidden',
-    paddingBottom: Space.lg,
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 6,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  title: {
-    fontSize: 18,
-    fontFamily: Typography.family.bold,
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: Space.md,
-  },
-  scrollContent: {
-    flexDirection: 'row',
-    gap: THUMB_GAP,
-    paddingHorizontal: (SCREEN_W - THUMB_SIZE) / 2,
-    paddingVertical: Space.sm,
-  },
-  layoutCard: {
-    width: THUMB_SIZE,
-    alignItems: 'center',
-    gap: 8,
-  },
-  layoutPreview: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: Radius.xl,
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.15)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    padding: Space.xs,
-    overflow: 'hidden',
-  },
-  layoutPreviewActive: {
-    borderColor: 'transparent',
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  layoutLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.6)',
-  },
-  layoutLabelActive: {
-    color: '#fff',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    backdrop: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: colors.overlay,
+    },
+    drawer: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: DRAWER_HEIGHT,
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: Radius.xxl,
+      borderTopRightRadius: Radius.xxl,
+      overflow: 'hidden',
+      paddingBottom: Space.lg,
+    },
+    handleRow: {
+      alignItems: 'center',
+      paddingTop: 10,
+      paddingBottom: 6,
+    },
+    handle: {
+      width: 36,
+      height: 4,
+      borderRadius: Radius.sm,
+      backgroundColor: colors.glassBorder,
+    },
+    title: {
+      fontSize: 18,
+      fontFamily: Typography.family.bold,
+      color: colors.scrimTextPrimary,
+      textAlign: 'center',
+      marginBottom: Space.md,
+    },
+    scrollContent: {
+      flexDirection: 'row',
+      gap: THUMB_GAP,
+      paddingHorizontal: (SCREEN_W - THUMB_SIZE) / 2,
+      paddingVertical: Space.sm,
+    },
+    layoutCard: {
+      width: THUMB_SIZE,
+      alignItems: 'center',
+      gap: 8,
+    },
+    layoutPreview: {
+      width: THUMB_SIZE,
+      height: THUMB_SIZE,
+      borderRadius: Radius.xl,
+      borderWidth: Stroke.standard,
+      borderColor: colors.glassBorder,
+      backgroundColor: colors.glassBorder,
+      padding: Space.xs,
+      overflow: 'hidden',
+    },
+    layoutPreviewActive: {
+      borderColor: 'transparent',
+      backgroundColor: colors.glassBorder,
+    },
+    layoutLabel: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.scrimTextSecondary,
+    },
+    layoutLabelActive: {
+      color: colors.scrimTextPrimary,
+    },
+  });
+}

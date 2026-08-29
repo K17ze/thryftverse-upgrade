@@ -484,11 +484,11 @@ function LookDiscoveryTile({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd }}>
-          <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
             {unit.title}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xxs, marginTop: 2 }}>
-            <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: 12, lineHeight: 16 }} numberOfLines={1}>
+            <Text style={{ color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold, fontSize: 12, lineHeight: 16 }} numberOfLines={1}>
               @{creator}
             </Text>
             {creatorVerified && (
@@ -557,7 +557,7 @@ function PosterDiscoveryTile({
         <Ionicons name="play" size={16} color={colors.scrimTextPrimary} style={{ position: 'absolute', top: Space.sm, right: Space.sm }} />
         <View style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd, flexDirection: 'row', alignItems: 'center', gap: Space.xxs }}>
           <Text
-            style={{ color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: 12, lineHeight: 16 }}
+            style={{ color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold, fontSize: 12, lineHeight: 16 }}
             numberOfLines={1}
           >
             @{creator}

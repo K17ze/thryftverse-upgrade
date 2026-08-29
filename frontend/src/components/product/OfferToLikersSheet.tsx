@@ -395,7 +395,6 @@ const createStyles = (themed: {
     width: 32,
     height: 32,
     borderRadius: Radius.full,
-    backgroundColor: `${themed.brand}15`,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,

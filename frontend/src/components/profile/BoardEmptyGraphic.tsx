@@ -18,18 +18,16 @@ export function BoardEmptyGraphic({
   icon = 'folder-open-outline',
   size = 120,
 }: BoardEmptyGraphicProps) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
 
-  const bg: [string, string] = isDark
-    ? [colors.surfaceAlt, colors.surface]
-    : [colors.surfaceAlt, colors.surface];
+  const bg: [string, string] = [colors.surfaceAlt, colors.surface];
 
-  const iconColor = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)';
-  const dotColor = isDark ? '#fff' : '#000';
-  const iconRingBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-  const iconRingBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-  const titleColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
-  const subtitleColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+  const iconColor = colors.textMuted;
+  const dotColor = colors.textPrimary;
+  const iconRingBg = colors.surfaceAlt;
+  const iconRingBorder = colors.borderSubtle;
+  const titleColor = colors.textSecondary;
+  const subtitleColor = colors.textMuted;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>

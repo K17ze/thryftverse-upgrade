@@ -103,7 +103,7 @@ const ToolButton = React.memo(function ToolButton({ tool, isActive, onPress }: T
             <Ionicons name={tool.icon} size={iconSize} color={colors.brand} />
           </View>
         ) : (
-          // Inactive: transparent with subtle border
+          // Inactive: transparent hit target
           <View
             style={[
               styles.toolIconBg,
@@ -111,8 +111,6 @@ const ToolButton = React.memo(function ToolButton({ tool, isActive, onPress }: T
                 width: size,
                 height: size,
                 borderRadius: size / 2,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.18)',
                 backgroundColor: 'transparent',
               },
             ]}

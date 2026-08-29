@@ -13,7 +13,7 @@ import { Camera, type CameraRef, useCameraDevice, useCameraPermission, usePhotoO
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -171,7 +171,7 @@ export default function VisualSearchCamera({
   if (permissionStatus === 'loading') {
     return (
       <View style={styles.permissionOverlay}>
-        <ActivityIndicator size="large" color="#fff" />
+        <ActivityIndicator size="large" color={colors.scrimTextPrimary} />
       </View>
     );
   }
@@ -180,7 +180,7 @@ export default function VisualSearchCamera({
     return (
       <View style={styles.permissionOverlay}>
         <View style={styles.permissionContent}>
-          <Ionicons name="camera-outline" size={48} color="#fff" />
+          <Ionicons name="camera-outline" size={48} color={colors.scrimTextPrimary} />
           <Text style={styles.permissionTitle} accessibilityRole="header">Camera access needed</Text>
           <Text style={styles.permissionText}>
             Enable camera permission in Settings to search with a photo.
@@ -212,7 +212,7 @@ export default function VisualSearchCamera({
     return (
       <View style={styles.permissionOverlay}>
         <View style={styles.permissionContent}>
-          <Ionicons name="camera-outline" size={48} color="#fff" />
+          <Ionicons name="camera-outline" size={48} color={colors.scrimTextPrimary} />
           <Text style={styles.permissionTitle} accessibilityRole="header">No camera available</Text>
           <Text style={styles.permissionText}>
             A camera could not be found on this device.
@@ -272,7 +272,7 @@ export default function VisualSearchCamera({
           accessibilityHint="Closes the camera and returns to the previous screen"
           accessibilityRole="button"
         >
-          <Ionicons name="close" size={26} color="#fff" style={styles.topIcon} />
+          <Ionicons name="close" size={26} color={colors.scrimTextPrimary} style={styles.topIcon} />
         </Pressable>
 
         <View style={styles.topRightControls}>
@@ -284,7 +284,7 @@ export default function VisualSearchCamera({
             accessibilityHint="View your saved visual searches"
             accessibilityRole="button"
           >
-            <Ionicons name="time-outline" size={24} color="#fff" style={styles.topIcon} />
+            <Ionicons name="time-outline" size={24} color={colors.scrimTextPrimary} style={styles.topIcon} />
           </Pressable>
           <Pressable
             style={styles.topIconBtn}
@@ -295,7 +295,7 @@ export default function VisualSearchCamera({
             accessibilityRole="switch"
             accessibilityState={{ checked: flash === 'on' }}
           >
-            <Ionicons name={flash === 'on' ? 'flash' : 'flash-off'} size={24} color="#fff" style={styles.topIcon} />
+            <Ionicons name={flash === 'on' ? 'flash' : 'flash-off'} size={24} color={colors.scrimTextPrimary} style={styles.topIcon} />
           </Pressable>
         </View>
       </View>
@@ -312,7 +312,7 @@ export default function VisualSearchCamera({
           {lastImageUri ? (
             <Image source={{ uri: lastImageUri }} style={styles.galleryThumb} />
           ) : (
-            <Ionicons name="images-outline" size={24} color="#fff" />
+            <Ionicons name="images-outline" size={24} color={colors.scrimTextPrimary} />
           )}
           <Text style={styles.bottomLabel}>Gallery</Text>
         </Pressable>
@@ -338,7 +338,7 @@ export default function VisualSearchCamera({
           accessibilityLabel="Switch camera"
           accessibilityRole="button"
         >
-          <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
+          <Ionicons name="camera-reverse-outline" size={24} color={colors.scrimTextPrimary} />
           <Text style={styles.bottomLabel}>Flip</Text>
         </Pressable>
       </View>
@@ -351,10 +351,10 @@ export default function VisualSearchCamera({
   );
 }
 
-const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   permissionOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -366,13 +366,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   permissionTitle: {
     fontFamily: Typography.family.semibold,
     fontSize: 18,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     marginTop: Space.sm,
   },
   permissionText: {
     fontFamily: Typography.family.regular,
     fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.scrimTextSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -394,20 +394,20 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingVertical: 10,
     borderRadius: Radius.xxl,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: colors.scrimTextTertiary,
     backgroundColor: 'transparent',
   },
   permissionSecondaryBtnText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.scrimTextSecondary,
   },
   focusReticle: {
     position: 'absolute',
     width: 60,
     height: 60,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.scrimTextPrimary,
     borderRadius: Radius.sm,
     pointerEvents: 'none',
   },
@@ -435,7 +435,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     justifyContent: 'center',
   },
   topIcon: {
-    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
@@ -460,8 +460,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     height: 44,
     borderRadius: Radius.xxl,
     borderWidth: 2,
-    borderColor: '#fff',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderColor: colors.scrimTextPrimary,
+    backgroundColor: colors.glassBorder,
   },
   facingBtn: {
     alignItems: 'center',
@@ -471,14 +471,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   bottomLabel: {
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.scrimTextSecondary,
   },
   shutterOuter: {
     width: SHUTTER_SIZE,
     height: SHUTTER_SIZE,
     borderRadius: SHUTTER_SIZE / 2,
     borderWidth: 5,
-    borderColor: '#fff',
+    borderColor: colors.scrimTextPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
@@ -487,7 +487,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     width: SHUTTER_INNER,
     height: SHUTTER_INNER,
     borderRadius: SHUTTER_INNER / 2,
-    backgroundColor: '#fff',
+    backgroundColor: colors.scrimTextPrimary,
   },
   shutterBusy: {
     opacity: 0.5,
@@ -499,11 +499,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingHorizontal: Space.md,
     paddingVertical: 6,
     borderRadius: Radius.xl,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
   },
   modeText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
 });

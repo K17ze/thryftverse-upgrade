@@ -284,6 +284,7 @@ function VideoPage({
   const [appIsActive, setAppIsActive] = useState(true);
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
+  const videoControlStyles = useMemo(() => createVideoControlStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
 
   // ── Custom video control state ──
@@ -531,7 +532,7 @@ function VideoPage({
               accessibilityLabel="Play video"
               accessibilityRole="button"
             >
-              <Ionicons name="play" size={32} color="#fff" />
+              <Ionicons name="play" size={32} color={colors.scrimTextPrimary} />
             </Pressable>
           )}
 
@@ -545,7 +546,7 @@ function VideoPage({
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />
+              <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color={colors.scrimTextPrimary} />
             </Pressable>
 
             {/* Scrub bar — only when duration is meaningful (> 0) */}
@@ -591,7 +592,7 @@ function VideoPage({
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={isMuted ? 'volume-mute' : 'volume-medium'} size={20} color="#fff" />
+              <Ionicons name={isMuted ? 'volume-mute' : 'volume-medium'} size={20} color={colors.scrimTextPrimary} />
             </Pressable>
 
             {/* Fullscreen */}
@@ -602,7 +603,7 @@ function VideoPage({
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name="expand" size={20} color="#fff" />
+              <Ionicons name="expand" size={20} color={colors.scrimTextPrimary} />
             </Pressable>
           </View>
         </>
@@ -611,7 +612,7 @@ function VideoPage({
   );
 }
 
-const videoControlStyles = StyleSheet.create({
+const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
   bottomScrim: {
     position: 'absolute',
     bottom: 0,
@@ -628,7 +629,7 @@ const videoControlStyles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -658,13 +659,13 @@ const videoControlStyles = StyleSheet.create({
   scrubTrackBg: {
     height: 3,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: colors.scrimTextTertiary,
     overflow: 'visible',
   },
   scrubTrackFill: {
     height: '100%',
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
+    backgroundColor: colors.scrimTextPrimary,
   },
   scrubThumb: {
     position: 'absolute',
@@ -672,11 +673,11 @@ const videoControlStyles = StyleSheet.create({
     width: 13,
     height: 13,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
+    backgroundColor: colors.scrimTextPrimary,
     marginLeft: -6.5,
   },
   timeText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
@@ -994,7 +995,7 @@ export function CommerceMediaStage({
           style={[StyleSheet.absoluteFill, styles.bigHeartWrap, bigHeartStyle]}
           pointerEvents="none"
         >
-          <Ionicons name="heart" size={100} color="#fff" style={styles.bigHeartIcon} />
+          <Ionicons name="heart" size={100} color={colors.scrimTextPrimary} style={styles.bigHeartIcon} />
         </Reanimated.View>
       )}
 
@@ -1012,7 +1013,7 @@ export function CommerceMediaStage({
             {...PressPresets.iconButton}
             accessibilityLabel="Go back"
           >
-            <Ionicons name="chevron-back" size={24} color="#fff" style={styles.controlIcon} />
+            <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} style={styles.controlIcon} />
           </AnimatedPressable>
 
           <View style={styles.headerRight}>
@@ -1022,7 +1023,7 @@ export function CommerceMediaStage({
               {...PressPresets.iconButton}
               accessibilityLabel="Share"
             >
-              <Ionicons name="share-outline" size={24} color="#fff" style={styles.controlIcon} />
+              <Ionicons name="share-outline" size={24} color={colors.scrimTextPrimary} style={styles.controlIcon} />
             </AnimatedPressable>
 
             {showSaveControl && onSave && (
@@ -1035,7 +1036,7 @@ export function CommerceMediaStage({
                 <Ionicons
                   name={isSaved ? 'bookmark' : 'bookmark-outline'}
                   size={24}
-                  color={isSaved ? colors.brand : '#fff'}
+                  color={isSaved ? colors.brand : colors.scrimTextPrimary}
                   style={styles.controlIcon}
                 />
               </AnimatedPressable>
@@ -1048,7 +1049,7 @@ export function CommerceMediaStage({
                   onToggle={onToggleFav}
                   size={24}
                   activeColor={colors.danger}
-                  inactiveColor="#fff"
+                  inactiveColor={colors.scrimTextPrimary}
                 />
               </View>
             )}
@@ -1100,7 +1101,7 @@ export function CommerceMediaStage({
 
       {mediaItems.length > 0 && mediaItems[activeIndex]?.kind === 'video' && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play-circle" size={16} color="#fff" />
+          <Ionicons name="play-circle" size={16} color={colors.scrimTextPrimary} />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
@@ -1110,7 +1111,7 @@ export function CommerceMediaStage({
           visual cue that pinch-to-zoom is available. */}
       {!reducedMotion && mediaItems.length > 0 && (
         <Reanimated.View style={[styles.zoomHint, zoomHintStyle]} pointerEvents="none">
-          <Ionicons name="add-circle-outline" size={18} color="#fff" style={styles.zoomHintIcon} />
+          <Ionicons name="add-circle-outline" size={18} color={colors.scrimTextPrimary} style={styles.zoomHintIcon} />
           <Text style={styles.zoomHintText}>Pinch to zoom</Text>
         </Reanimated.View>
       )}
@@ -1139,7 +1140,7 @@ export function CommerceMediaStage({
                 >
                   {isVid ? (
                     <View style={[styles.thumbnailImage, styles.thumbnailVideoFallback]}>
-                      <Ionicons name="play-circle" size={20} color="#fff" />
+                      <Ionicons name="play-circle" size={20} color={colors.scrimTextPrimary} />
                     </View>
                   ) : (
                     <CachedImage
@@ -1154,7 +1155,7 @@ export function CommerceMediaStage({
                   )}
                   {isVid && (
                     <View style={styles.thumbnailVideoBadge}>
-                      <Ionicons name="play" size={8} color="#fff" />
+                      <Ionicons name="play" size={8} color={colors.scrimTextPrimary} />
                     </View>
                   )}
                 </Pressable>
@@ -1211,7 +1212,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     zIndex: 5,
   },
   bigHeartIcon: {
-    shadowColor: '#000',
+    shadowColor: colors.textPrimary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -1255,7 +1256,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // Subtle media-contrast scrim behind control glyphs. Functional
   // (legibility over arbitrary imagery), not decorative chrome.
   controlIcon: {
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
@@ -1281,7 +1282,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     bottom: Space.sm,
     right: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.md,
@@ -1301,16 +1302,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: colors.scrimTextTertiary,
   },
   dotActive: {
     width: 14,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
+    backgroundColor: colors.scrimTextPrimary,
   },
   indexText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
@@ -1321,13 +1322,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.md,
   },
   videoBadgeText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
@@ -1340,18 +1341,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.md,
   },
   zoomHintIcon: {
-    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   zoomHintText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
   },
@@ -1384,7 +1385,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   thumbnailActive: {
     opacity: 1,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.scrimTextPrimary,
   },
   thumbnailPressed: {
     opacity: 0.8,
@@ -1395,7 +1396,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     height: '100%',
   },
   thumbnailVideoFallback: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1406,7 +1407,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },

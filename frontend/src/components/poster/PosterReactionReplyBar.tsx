@@ -24,7 +24,7 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography, Control } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
@@ -241,7 +241,7 @@ export function PosterReactionReplyBar({
               accessibilityLabel={`View story activity${viewerCount != null ? `, ${viewerCount} viewer${viewerCount !== 1 ? 's' : ''}` : ''}`}
               accessibilityHint="Views story activity and insights"
             >
-              <Ionicons name="eye-outline" size={Control.iconCompact} color="#fff" />
+              <Ionicons name="eye-outline" size={Control.iconCompact} color={colors.scrimTextPrimary} />
               <Text style={styles.activityBtnText}>
                 {viewerCount != null ? `${viewerCount} viewer${viewerCount !== 1 ? 's' : ''}` : 'Activity'}
               </Text>
@@ -258,7 +258,7 @@ export function PosterReactionReplyBar({
               accessibilityLabel="Share story"
               accessibilityHint="Opens share sheet"
             >
-              <Ionicons name="share-outline" size={Control.icon} color="#fff" />
+              <Ionicons name="share-outline" size={Control.icon} color={colors.scrimTextPrimary} />
             </AnimatedPressable>
           )}
         </View>
@@ -366,7 +366,7 @@ export function PosterReactionReplyBar({
             <TextInput
               style={styles.replyInput}
               placeholder="Send message"
-              placeholderTextColor="rgba(255,255,255,0.55)"
+              placeholderTextColor={colors.scrimTextSecondary}
               value={replyText}
               onChangeText={(text) => {
                 setReplyText(text);
@@ -415,9 +415,9 @@ export function PosterReactionReplyBar({
             accessibilityHint="Sends your reply"
           >
             {isSending ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
             ) : (
-              <Ionicons name="send" size={Control.icon} color="#fff" />
+              <Ionicons name="send" size={Control.icon} color={colors.scrimTextPrimary} />
             )}
           </AnimatedPressable>
         )}
@@ -436,7 +436,7 @@ export function PosterReactionReplyBar({
             accessibilityHint="Bookmarks this story for later viewing"
             accessibilityState={{ selected: !!isSaved }}
           >
-            <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={Control.icon} color="#fff" />
+            <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={Control.icon} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
         )}
 
@@ -453,7 +453,7 @@ export function PosterReactionReplyBar({
             accessibilityLabel="Share story"
             accessibilityHint="Opens share sheet"
           >
-            <Ionicons name="share-outline" size={Control.icon} color="#fff" />
+            <Ionicons name="share-outline" size={Control.icon} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
         )}
       </View>
@@ -529,7 +529,7 @@ function ReactionButton({
   );
 }
 
-function createStyles(colors: any) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       paddingHorizontal: Space.md,
@@ -549,7 +549,7 @@ function createStyles(colors: any) {
       borderRadius: Radius.full,
       overflow: 'hidden',
       alignSelf: 'flex-end',
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.25,
       shadowRadius: 12,
@@ -559,7 +559,7 @@ function createStyles(colors: any) {
     reactionTrayGlass: {
       borderRadius: Radius.full,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'rgba(255,255,255,0.2)',
+      borderColor: colors.glassBorder,
     },
     // Reaction emoji button — 44pt hit target with a 26pt glyph.
     // The visible glyph is smaller than the hit area so the emoji
@@ -572,7 +572,7 @@ function createStyles(colors: any) {
       alignItems: 'center',
     },
     reactionActive: {
-      backgroundColor: 'rgba(255,255,255,0.22)',
+      backgroundColor: colors.glassBorder,
     },
     // 26pt emoji — within Instagram's 24-28pt band, evenly spaced.
     reactionGlyph: {
@@ -595,9 +595,9 @@ function createStyles(colors: any) {
       paddingHorizontal: Space.sm + 2,
       height: 32,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.15)',
+      backgroundColor: colors.glassBg,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'rgba(255,255,255,0.12)',
+      borderColor: colors.glassBorder,
     },
     quickReplyEmoji: {
       fontSize: Type.body.size,
@@ -605,7 +605,7 @@ function createStyles(colors: any) {
     quickReplyText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
-      color: 'rgba(255,255,255,0.9)',
+      color: colors.scrimTextPrimary,
     },
     inputRow: {
       flexDirection: 'row',
@@ -636,14 +636,14 @@ function createStyles(colors: any) {
       height: Control.hit,
       borderRadius: Radius.full,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'rgba(255,255,255,0.25)',
+      borderColor: colors.glassBorder,
       overflow: 'hidden',
     },
     // Focus state — 2pt white at 0.3 opacity per §4 stroke grammar
     // (2pt reserved for focus/selection). The subtle highlight makes
     // the active input boundary unmistakable without shouting.
     replyInputWrapFocused: {
-      borderColor: 'rgba(255,255,255,0.3)',
+      borderColor: colors.glassBorder,
       borderWidth: 2,
     },
     // Glass background layer for the reply input pill. The blur is
@@ -652,7 +652,7 @@ function createStyles(colors: any) {
     // blur fallback renders a flat tint.
     replyInputGlass: {
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.08)',
+      backgroundColor: colors.glassBg,
     },
     replyInput: {
       height: Control.hit,
@@ -660,7 +660,7 @@ function createStyles(colors: any) {
       borderRadius: Radius.full,
       paddingHorizontal: Space.md,
       paddingVertical: 0,
-      color: 'rgba(255,255,255,0.95)',
+      color: colors.scrimTextPrimary,
       fontFamily: Typography.family.regular,
       fontSize: Type.bodyStrong.size,
     },
@@ -670,7 +670,7 @@ function createStyles(colors: any) {
       right: Space.sm,
       fontSize: 11,
       fontFamily: Typography.family.regular,
-      color: 'rgba(255,255,255,0.5)',
+      color: colors.scrimTextSecondary,
       fontVariant: ['tabular-nums'],
     },
     replyCounterLimit: {
@@ -696,7 +696,7 @@ function createStyles(colors: any) {
       alignItems: 'center',
       gap: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: 'rgba(255,255,255,0.08)',
+      borderTopColor: colors.glassBorder,
     },
     activityBtn: {
       flexDirection: 'row',
@@ -709,7 +709,7 @@ function createStyles(colors: any) {
       minHeight: Control.hit,
     },
     activityBtnText: {
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       fontFamily: Typography.family.semibold,
       fontSize: Type.body.size,
     },

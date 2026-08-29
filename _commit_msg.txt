@@ -1,0 +1,24 @@
+P1 flagship fixes: icon-in-circle disease (12 files), hardcoded colors to theme tokens (26 files)
+
+8 parallel batches:
+
+Icon-in-circle disease (12 files):
+- Removed visible backgroundColor/border from utility icon wrappers per AGENTS.md §4
+- EditTab quizIconWrap, EtaBanner etaIconWrap, OfferToLikersSheet headerIconWrap
+- CheckoutPaymentSelector cardIconWrap/addCardIconWrap, CreateCollectionScreen/EditCollectionScreen toggleIconWrap
+- CoOwnIssueScreen noteIconWrap, ShareSheet optionIconWrap (both platform and components copies)
+- SwipeableMessage actionIcon, CoOwnFirstTradeGuide stepIconWrap, CreativeToolbar inactive toolIconBg
+- Wrappers kept as transparent 44pt hit targets; active/selection states exempt
+
+Hardcoded colors to theme tokens (26 files):
+- Legacy Colors.*/ActiveTheme ternaries: HeroCarousel, ImageEmptyGraphic, OrdersEmptyGraphic, BoardEmptyGraphic, MoodboardEditorScreen
+- Screen styles: PosterHighlightViewerScreen, LiveShoppingHomeScreen, ChatMediaPreviewScreen, LiveStreamViewerScreen, UnifiedDiscoveryScreen
+- Component media stages: CommerceMediaStage, ProductMediaGallery, MediaStage, ListingMediaHero, FullscreenMediaViewer, VisualSearchCamera
+- Poster/discover: PosterReactionReplyBar, TemplatePicker, FontColorPicker, BackgroundPicker, LayoutPicker, FilterStrip, DrawingCanvas, PinterestMasonryGrid, ClosetMediaMosaic
+- Converted static StyleSheet.create to createStyles(colors: ThemeColors) factory pattern where needed
+- Replaced #fff/#000/rgba scrims with colors.scrimTextPrimary/scrimTextSecondary/overlay/glassBorder tokens
+- Left color DATA arrays (palettes, filter matrices, isLightColor logic) untouched
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

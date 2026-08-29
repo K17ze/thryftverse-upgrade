@@ -30,6 +30,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography, Space, Radius, Type, Control, Stroke } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -72,6 +73,8 @@ function FullscreenImagePage({
 }: FullscreenImagePageProps) {
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
+  const { colors } = useAppTheme();
+  const subStyles = useMemo(() => createSubStyles(colors), [colors]);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -188,13 +191,13 @@ function FullscreenImagePage({
 
   return (
     <GestureDetector gesture={composed}>
-      <Reanimated.View style={[styles.page, { width, height }, dismissStyle]}>
-        <Reanimated.View style={[styles.imageWrap, animStyle]}>
+      <Reanimated.View style={[subStyles.page, { width, height }, dismissStyle]}>
+        <Reanimated.View style={[subStyles.imageWrap, animStyle]}>
           <CachedImage
             uri={item.uri}
             previewUri={item.posterUri ?? undefined}
-            style={styles.image}
-            containerStyle={{ width: '100%', height: '100%', backgroundColor: '#000' }}
+            style={subStyles.image}
+            containerStyle={{ width: '100%', height: '100%', backgroundColor: colors.background }}
             contentFit="contain"
             focalPoint={item.focalPoint ?? undefined}
             downscaleWidth={Math.round(width * 2)}
@@ -220,6 +223,8 @@ function FullscreenVideoPage({
 }) {
   // Pause when the app is backgrounded to prevent audio bleed.
   const [appIsActive, setAppIsActive] = useState(true);
+  const { colors } = useAppTheme();
+  const subStyles = useMemo(() => createSubStyles(colors), [colors]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -239,13 +244,13 @@ function FullscreenVideoPage({
   return (
     <GestureDetector gesture={singleTap}>
       <View
-        style={[styles.page, { width, height }]}
+        style={[subStyles.page, { width, height }]}
         accessible
         accessibilityLabel={item.altText ?? 'Product video'}
       >
         <Video
           source={{ uri: item.uri }}
-          style={styles.image}
+          style={subStyles.image}
           resizeMode={ResizeMode.CONTAIN}
           shouldPlay={shouldPlay}
           isMuted
@@ -286,6 +291,8 @@ export function FullscreenMediaViewer({
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const listRef = useRef<FlatList<ProductMediaItem>>(null);
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 });
   const mediaItems = useMemo<ProductMediaItem[]>(() => {
@@ -416,7 +423,7 @@ export function FullscreenMediaViewer({
           accessibilityLabel="Close fullscreen viewer"
           accessibilityHint="Closes the image viewer and returns to the previous screen"
         >
-          <Ionicons name="close" size={24} color="#fff" />
+          <Ionicons name="close" size={24} color={colors.scrimTextPrimary} />
         </AnimatedPressable>
       </Reanimated.View>
 
@@ -456,14 +463,14 @@ export function FullscreenMediaViewer({
                       borderRadius: Radius.sm,
                       overflow: 'hidden',
                       borderWidth: isActive ? Stroke.emphasis : 0,
-                      borderColor: isActive ? '#fff' : 'transparent',
+                      borderColor: isActive ? colors.scrimTextPrimary : 'transparent',
                     }}
                     contentFit="cover"
                     downscaleWidth={48}
                   />
                   {item.kind === 'video' && (
                     <View style={styles.thumbVideoBadge} pointerEvents="none">
-                      <Ionicons name="play" size={10} color="#fff" />
+                      <Ionicons name="play" size={10} color={colors.scrimTextPrimary} />
                     </View>
                   )}
                 </Pressable>
@@ -487,18 +494,33 @@ export function FullscreenMediaViewer({
   );
 }
 
-const styles = StyleSheet.create({
+const createSubStyles = (colors: ThemeColors) => StyleSheet.create({
+  page: {
+    backgroundColor: colors.background,
+  },
+  imageWrap: {
+    width: '100%',
+    height: '100%',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+});
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   overlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
     zIndex: 999,
   },
   page: {
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   imageWrap: {
     width: '100%',
@@ -538,7 +560,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     // Near-transparent chrome (AGENTS.md §4: ordinary controls default to
     // transparent). Legibility comes from the top scrim, not an opaque disc.
-    backgroundColor: 'rgba(0,0,0,0.22)',
+    backgroundColor: colors.overlay,
   },
   // Bottom chrome — thumbnail strip + index pill, fades with tap-to-toggle.
   bottomChrome: {
@@ -579,7 +601,7 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -588,13 +610,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   indicatorText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs - 1,
     borderRadius: Radius.full,
     letterSpacing: 0.3,
   },
-});
+  });
+}

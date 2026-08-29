@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -493,11 +493,11 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   );
 }
 
-function createStyles(colors: any) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: '#000',
+      backgroundColor: colors.background,
     },
     mediaLayer: {
       ...StyleSheet.absoluteFill,
@@ -508,7 +508,7 @@ function createStyles(colors: any) {
     },
     overlay: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.25)',
+      backgroundColor: colors.overlay,
     },
     // Top gradient scrim — ensures chrome legibility over any media content
     topScrim: {
@@ -540,7 +540,7 @@ function createStyles(colors: any) {
       gap: Space.md,
     },
     errorText: {
-      color: 'rgba(255,255,255,0.8)',
+      color: colors.scrimTextSecondary,
       fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
     },
@@ -553,10 +553,10 @@ function createStyles(colors: any) {
       paddingHorizontal: Space.lg,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.15)',
+      backgroundColor: colors.glassBorder,
     },
     errorBtnText: {
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
     },
@@ -573,12 +573,12 @@ function createStyles(colors: any) {
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(0,0,0,0.25)',
+      backgroundColor: colors.overlay,
     },
     topTitle: {
       flex: 1,
       textAlign: 'center',
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       fontSize: Type.subtitle.size,
       fontFamily: Typography.family.bold,
       letterSpacing: Type.subtitle.letterSpacing,
@@ -608,21 +608,21 @@ function createStyles(colors: any) {
       right: Space.md,
     },
     captionText: {
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       fontSize: Type.body.size,
       lineHeight: Type.body.lineHeight + 2,
       fontFamily: Typography.family.regular,
-      textShadowColor: 'rgba(0,0,0,0.7)',
+      textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 8,
     },
     captionMore: {
-      color: 'rgba(255,255,255,0.7)',
+      color: colors.scrimTextSecondary,
       fontFamily: Typography.family.medium,
       fontSize: Type.body.size,
     },
     textFrameCaption: {
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       fontSize: Type.title.size,
       fontFamily: Typography.family.bold,
       textAlign: 'center',
@@ -635,10 +635,10 @@ function createStyles(colors: any) {
       alignItems: 'center',
     },
     frameCounterText: {
-      color: 'rgba(255,255,255,0.7)',
+      color: colors.scrimTextSecondary,
       fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
-      backgroundColor: 'rgba(0,0,0,0.35)',
+      backgroundColor: colors.overlay,
       paddingHorizontal: Space.smMd,
       paddingVertical: Space.xs - 1,
       borderRadius: Radius.full,
@@ -648,14 +648,14 @@ function createStyles(colors: any) {
       ...StyleSheet.absoluteFill,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: 'rgba(0,0,0,0.7)',
+      backgroundColor: colors.overlay,
       gap: Space.smMd,
       zIndex: 25,
     },
     mediaErrorText: {
       fontFamily: Typography.family.medium,
       fontSize: Type.body.size,
-      color: '#fff',
+      color: colors.scrimTextPrimary,
     },
     retryBtn: {
       flexDirection: 'row',
@@ -664,10 +664,10 @@ function createStyles(colors: any) {
       paddingHorizontal: Space.md + 4,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.18)',
+      backgroundColor: colors.glassBorder,
     },
     retryBtnText: {
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       fontFamily: Typography.family.semibold,
       fontSize: Type.body.size,
     },
@@ -680,7 +680,7 @@ function createStyles(colors: any) {
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(0,0,0,0.4)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
       zIndex: 15,
@@ -690,7 +690,7 @@ function createStyles(colors: any) {
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(0,0,0,0.28)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
       zIndex: 12,
@@ -708,13 +708,13 @@ function createStyles(colors: any) {
     scrubberTrack: {
       height: 3,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.25)',
+      backgroundColor: colors.glassBorder,
       overflow: 'visible',
     },
     scrubberFill: {
       height: 3,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.9)',
+      backgroundColor: colors.scrimTextPrimary,
     },
     scrubberHandle: {
       position: 'absolute',
@@ -723,7 +723,7 @@ function createStyles(colors: any) {
       height: 11,
       marginLeft: -5.5,
       borderRadius: Radius.full,
-      backgroundColor: '#fff',
+      backgroundColor: colors.scrimTextPrimary,
     },
   });
 }

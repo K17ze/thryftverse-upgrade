@@ -108,7 +108,7 @@ function lotStatusLabel(status: LotStatus, currentPrice: number): string {
 function lotStatusBgColor(status: LotStatus, colors: ThemeColors): string {
   switch (status) {
     case 'scheduled':
-      return 'rgba(0,0,0,0.45)';
+      return colors.overlay;
     case 'open':
       return colors.success;
     case 'closing':
@@ -117,7 +117,7 @@ function lotStatusBgColor(status: LotStatus, colors: ThemeColors): string {
       return colors.success;
     case 'passed':
     case 'cancelled':
-      return 'rgba(0,0,0,0.45)';
+      return colors.overlay;
   }
 }
 
@@ -1016,7 +1016,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   fullScreenVideo: {
     flex: 1,
     position: 'relative',
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   demoVideoPlaceholder: {
     flex: 1,
@@ -1079,13 +1079,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
   },
   sellerIdentityChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingLeft: Space.xs,
     paddingRight: Space.sm,
@@ -1158,7 +1158,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.sm,
@@ -1192,7 +1192,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'baseline',
     gap: Space.xs / 2,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.chat,
@@ -1224,7 +1224,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   systemMessage: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.sm,
@@ -1238,14 +1238,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   // ── Product showcase panel (floating, semi-transparent) ──
   productShowcasePanel: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     marginHorizontal: Space.sm,
     marginBottom: Space.xs,
     padding: Space.sm,
     gap: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: colors.glassBorder,
   },
   lotStatusRow: {
     flexDirection: 'row',
@@ -1346,7 +1346,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     paddingVertical: Space.sm,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.glassBorder,
     minHeight: Control.chrome,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1370,7 +1370,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     height: Space.xl + Space.xs,
     paddingHorizontal: Space.md,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.scrimTextPrimary,
