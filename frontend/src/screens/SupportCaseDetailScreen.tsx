@@ -6,14 +6,14 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
-} from 'react-native';
+  Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -25,8 +25,7 @@ import type {
   SupportCase,
   SupportCaseEvent,
   CaseOperationalState,
-  CaseResolutionDisposition,
-} from '../contracts/support';
+  CaseResolutionDisposition } from '../contracts/support';
 import { getSupportCase, sendSupportCaseMessage, appealSupportCase } from '../services/supportConversationApi';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
@@ -49,8 +48,7 @@ const STATE_DISPLAY: Record<CaseOperationalState, StateDisplay> = {
   in_review: { label: 'Under review', tone: 'pending', icon: 'search-outline' },
   awaiting_external: { label: 'Awaiting external party', tone: 'pending', icon: 'globe-outline' },
   resolved: { label: 'Resolved', tone: 'success', icon: 'checkmark-circle-outline' },
-  closed: { label: 'Closed', tone: 'neutral', icon: 'lock-closed-outline' },
-};
+  closed: { label: 'Closed', tone: 'neutral', icon: 'lock-closed-outline' } };
 
 // ============================================================================
 // RESOLUTION DISPOSITION MAPPING
@@ -68,8 +66,7 @@ const DISPOSITION_LABEL: Record<CaseResolutionDisposition, string> = {
   duplicate: 'Duplicate case',
   merged: 'Merged with another case',
   external_dispute: 'Resolved via external dispute',
-  unable_to_resolve: 'Unable to resolve',
-};
+  unable_to_resolve: 'Unable to resolve' };
 
 // ============================================================================
 // PRIORITY MAPPING — subtle indicator, not decorative
@@ -83,8 +80,7 @@ const PRIORITY_DISPLAY: Record<SupportCase['priority'], PriorityDisplay> = {
   urgent: { label: 'Urgent', color: 'danger' },
   high: { label: 'High', color: 'warning' },
   normal: { label: 'Normal', color: 'textSecondary' },
-  low: { label: 'Low', color: 'textMuted' },
-};
+  low: { label: 'Low', color: 'textMuted' } };
 
 // ============================================================================
 // ACTOR ROLE MAPPING
@@ -125,8 +121,7 @@ function renderEvent(event: SupportCaseEvent): EventRender {
       const count = typeof p.count === 'number' ? p.count : null;
       return {
         label: 'Evidence received',
-        summary: count != null ? `${count} item${count === 1 ? '' : 's'} attached` : null,
-      };
+        summary: count != null ? `${count} item${count === 1 ? '' : 's'} attached` : null };
     }
     case 'assigned': {
       const team = str(p.team) ?? str(p.assignedTeam);
@@ -175,8 +170,7 @@ function renderEvent(event: SupportCaseEvent): EventRender {
       const detail = str(p.detail) ?? str(p.summary);
       return {
         label: event.eventType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        summary: detail,
-      };
+        summary: detail };
     }
   }
 }
@@ -257,8 +251,7 @@ function formatTimestamp(iso: string): string {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
-    minute: '2-digit',
-  });
+    minute: '2-digit' });
 }
 
 function formatDate(iso: string): string {
@@ -267,8 +260,7 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
-    year: 'numeric',
-  });
+    year: 'numeric' });
 }
 
 // ============================================================================
@@ -383,8 +375,7 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
         } finally {
           setAppealing(false);
         }
-      },
-    });
+      } });
   }, [caseRecord, appealing, haptic, show, setConfirmSheet]);
 
   const handleContextLinkPress = useCallback(
@@ -656,186 +647,150 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
       gap: Space.lg,
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
 
     // ── Identity ──
     identityBlock: {
-      gap: Space.md,
-    },
+      gap: Space.md },
     identityRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.md,
-    },
+      gap: Space.md },
     issueType: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     caseId: {
       marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     metaRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.lg,
       borderTopWidth: Stroke.hairline,
       borderTopColor: colors.border,
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
     metaItem: {
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     metaValue: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     priorityValueRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     priorityDot: {
       width: 6,
       height: 6,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
 
     // ── Sections ──
     section: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     sectionLabel: {
       letterSpacing: 1.2,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
     outcomeText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight + 4,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight + 4,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
 
     // ── Context links ──
     contextList: {
       borderTopWidth: Stroke.hairline,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     contextRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     contextLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     contextId: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     hairline: {
       height: Stroke.hairline,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
 
     // ── Timeline ──
     timeline: {
-      paddingTop: Space.xs,
-    },
+      paddingTop: Space.xs },
     timelineRow: {
       flexDirection: 'row',
-      gap: Space.md,
-    },
+      gap: Space.md },
     timelineRail: {
       width: 12,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     timelineDot: {
       width: 8,
       height: 8,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     timelineDotCustomer: {
-      backgroundColor: colors.textPrimary,
-    },
+      backgroundColor: colors.textPrimary },
     timelineLine: {
       width: Stroke.standard,
       flex: 1,
       backgroundColor: colors.border,
       marginTop: Space.xs / 2,
-      minHeight: Space.lg,
-    },
+      minHeight: Space.lg },
     timelineContent: {
       flex: 1,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     timelineLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     timelineSummary: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight + 2,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary,
-      marginTop: Space.xs / 2,
-    },
+      marginTop: Space.xs / 2 },
     timelineMeta: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     timelineActor: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     timelineTime: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     emptyTimelineText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
 
     // ── Actions ──
     fullWidth: {
-      width: '100%',
-    },
+      width: '100%' },
 
     // ── Message input ──
     messageSection: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     messageInputContainer: {
       minHeight: 72,
-      alignItems: 'flex-start',
-    },
+      alignItems: 'flex-start' },
     messageInput: {
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     sendBtn: {
-      alignSelf: 'flex-start',
-    },
+      alignSelf: 'flex-start' },
 
     // ── Closed notice ──
     closedNotice: {
@@ -844,13 +799,10 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
       paddingVertical: Space.md,
       borderTopWidth: Stroke.hairline,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     closedNoticeText: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textMuted } });
 }

@@ -16,7 +16,8 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-import { Space, Radius, Type, Typography, LetterSpacing, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, LetterSpacing, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InviteFriends'>;
@@ -70,8 +71,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
     invited: 0,
     joined: 0,
     rewarded: 0,
-    creditsBalance: 0,
-  });
+    creditsBalance: 0 });
   const [statsUnavailable, setStatsUnavailable] = React.useState(false);
 
   const [referralHistory, setReferralHistory] = React.useState<ReferralHistoryItem[]>([]);
@@ -93,8 +93,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
           invited: data.invited ?? 0,
           joined: data.joined ?? 0,
           rewarded: data.rewarded ?? 0,
-          creditsBalance: data.creditsBalance ?? 0,
-        });
+          creditsBalance: data.creditsBalance ?? 0 });
       })
       .catch(() => {
         if (mounted) setStatsUnavailable(true);
@@ -147,8 +146,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
     try {
       await Share.share({
         message: `Join me on Thryftverse — the marketplace for second-hand fashion. Use my code ${referralCode} and we both earn credit when you make your first sale. ${inviteLink}`,
-        title: 'Invite to Thryftverse',
-      });
+        title: 'Invite to Thryftverse' });
     } catch {}
   };
 
@@ -167,8 +165,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       const name = item.inviteeName || item.inviteeHandle || 'Anonymous';
       const dateLabel = new Date(item.invitedAt).toLocaleDateString('en-GB', {
         day: '2-digit',
-        month: 'short',
-      });
+        month: 'short' });
       const badgeStyle =
         item.status === 'invited' ? styles.badgeMuted :
         item.status === 'joined' ? styles.badgeBrand :
@@ -389,137 +386,116 @@ function createStyles(colors: ThemeColors) {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
       paddingTop: Space.lg,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     heroWrap: {
-      marginBottom: Space.xl,
-    },
+      marginBottom: Space.xl },
     heroTitle: {
-      fontSize: Type.title.size,
-      lineHeight: Type.title.lineHeight,
-      letterSpacing: Type.title.letterSpacing,
-      fontFamily: Typography.family.extrabold,
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
       color: colors.textPrimary,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     heroSubtitle: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     sectionLabel: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       letterSpacing: LetterSpacing.caps,
-      fontFamily: Typography.family.medium,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
       marginBottom: Space.sm,
-      marginLeft: Space.xs,
-    },
+      marginLeft: Space.xs },
     section: { marginBottom: Space.lg },
     codeRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     codeText: {
-      fontSize: Type.title.size,
-      lineHeight: Type.title.lineHeight,
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
       letterSpacing: Space.xs / 2,
-      fontFamily: Typography.family.extrabold,
-      color: colors.textPrimary,
-    },
+      fontFamily: TypographyV2.screenTitle.fontFamily,
+      color: colors.textPrimary },
     linkRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     linkText: {
       flex: 1,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textMuted },
     copyBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
     copyText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      fontFamily: Typography.family.semibold,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.brand },
     shareRow: {
       flexDirection: 'row',
       justifyContent: 'space-around',
-      marginBottom: Space.xl,
-    },
+      marginBottom: Space.xl },
     shareIconBtn: { alignItems: 'center', gap: Space.xs + 2 },
     shareIconLabel: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      letterSpacing: Type.meta.letterSpacing,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     rewardsHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     rewardsTitle: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     statsRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     statCell: {
       flex: 1,
       alignItems: 'center',
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     statValue: {
-      fontSize: Type.title.size,
-      lineHeight: Type.title.lineHeight,
-      fontFamily: Typography.family.extrabold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
+      color: colors.textPrimary },
     statLabel: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     statDivider: {
       width: Stroke.standard,
       height: Space.xl + Space.xs,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     rewardsFootnote: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight + 2,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     loyaltyHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     loyaltyIconWrap: {
       width: Space.xl + Space.xl - 4,
       height: Space.xl + Space.xl - 4,
@@ -527,133 +503,106 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.emphasis,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     loyaltyInfo: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     loyaltyTierName: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      color: colors.textPrimary },
     loyaltySubtext: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     loyaltyProgressTrack: {
       height: Space.xs + 2,
       borderRadius: Radius.sm,
       backgroundColor: colors.border,
       marginBottom: Space.md,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     loyaltyProgressFill: {
       height: '100%',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     loyaltyFootnote: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight + 2,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     statsUnavailableRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     statsUnavailableText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight + 2,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     stepRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     stepRowBordered: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     stepIconWrap: {
       width: Control.chromeCompact,
       height: Space.xl + Space.xs,
       borderRadius: Radius.xl,
       backgroundColor: colors.brandSubtle,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     stepText: {
       flex: 1,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     historyRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     historyRowBordered: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     historyInfo: {
       flex: 1,
       gap: Space.xs / 2,
-      marginRight: Space.sm,
-    },
+      marginRight: Space.sm },
     historyName: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     historyDate: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     badge: {
       paddingVertical: Space.xs / 2,
       paddingHorizontal: Space.sm,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     badgeText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      letterSpacing: Type.meta.letterSpacing,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontFamily: TypographyV2.meta.fontFamily },
     badgeMuted: {
       // TODO: replace `${colors.textMuted}15` with textMutedSubtle token when available
-      backgroundColor: `${colors.textMuted}15`,
-    },
+      backgroundColor: `${colors.textMuted}15` },
     badgeMutedText: {
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     badgeBrand: {
-      backgroundColor: colors.brandSubtle,
-    },
+      backgroundColor: colors.brandSubtle },
     badgeBrandText: {
-      color: colors.brand,
-    },
+      color: colors.brand },
     badgeSuccess: {
-      backgroundColor: colors.successSubtle,
-    },
+      backgroundColor: colors.successSubtle },
     badgeSuccessText: {
-      color: colors.success,
-    },
-  });
+      color: colors.success } });
 }

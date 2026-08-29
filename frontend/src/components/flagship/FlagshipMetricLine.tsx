@@ -22,7 +22,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, type TextStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, FontFamily, Numeric } from '../../theme/designTokens';
+import { Space, FontFamily, Numeric } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface FlagshipMetricLineProps {
   /** Label — left-aligned, regular weight. */
@@ -57,8 +58,7 @@ export function FlagshipMetricLine({
   success = false,
   separated = false,
   labelStyle,
-  valueStyle,
-}: FlagshipMetricLineProps) {
+  valueStyle }: FlagshipMetricLineProps) {
   const { colors } = useAppTheme();
 
   const valueColor = danger
@@ -109,44 +109,35 @@ export function FlagshipMetricLine({
 const styles = StyleSheet.create({
   row: {
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.md,
-  },
+    gap: Space.md },
   labelWrap: {
     flex: 1,
     minWidth: 0,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   label: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight },
   subLabel: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   value: {
     ...Numeric.numericMeta,
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    textAlign: 'right',
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    textAlign: 'right' },
   valueEmphasis: {
     ...Numeric.priceList,
     fontFamily: FontFamily.bold,
-    textAlign: 'right',
-  },
-});
+    textAlign: 'right' } });

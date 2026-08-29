@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { OrderStatusStepper, OrderStepperStage } from '../orders/OrderStatusStepper';
@@ -54,8 +55,7 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         icon: 'receipt-outline',
         iconColor: colors.brand,
         stage: 'placed',
-        nextStep: 'Awaiting payment confirmation',
-      };
+        nextStep: 'Awaiting payment confirmation' };
     case 'payment_confirmed':
       return {
         title: 'Payment confirmed',
@@ -63,8 +63,7 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         icon: 'checkmark-circle-outline',
         iconColor: colors.success,
         stage: 'paid',
-        nextStep: 'Seller preparing for dispatch',
-      };
+        nextStep: 'Seller preparing for dispatch' };
     case 'order_shipped':
       return {
         title: 'Order shipped',
@@ -72,8 +71,7 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         icon: 'cube-outline',
         iconColor: colors.brand,
         stage: 'shipped',
-        nextStep: 'In carrier transit',
-      };
+        nextStep: 'In carrier transit' };
     case 'order_in_transit':
       return {
         title: 'In transit',
@@ -81,16 +79,14 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         icon: 'car-outline',
         iconColor: colors.brand,
         stage: 'in_transit',
-        nextStep: 'Out for delivery',
-      };
+        nextStep: 'Out for delivery' };
     case 'order_delivered':
       return {
         title: 'Delivered',
         subtitle: 'Delivery has been confirmed.',
         icon: 'checkmark-done-circle-outline',
         iconColor: colors.success,
-        stage: 'delivered',
-      };
+        stage: 'delivered' };
     case 'order_cancelled':
       return {
         title: 'Order cancelled',
@@ -98,8 +94,7 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         icon: 'close-circle-outline',
         iconColor: colors.danger,
         isFailure: true,
-        failureLabel: 'Cancelled',
-      };
+        failureLabel: 'Cancelled' };
     case 'order_refunded':
       return {
         title: 'Refunded',
@@ -107,8 +102,7 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConf
         icon: 'cash-outline',
         iconColor: colors.danger,
         isFailure: true,
-        failureLabel: 'Refunded',
-      };
+        failureLabel: 'Refunded' };
   }
 }
 
@@ -123,8 +117,7 @@ export function CommerceStateCard({
   trackingNumber,
   carrier,
   timestamp,
-  onPress,
-}: CommerceStateCardProps) {
+  onPress }: CommerceStateCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const config = useMemo(() => getStateConfig(type, colors), [type, colors]);
@@ -230,103 +223,85 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surface,
     padding: Space.md,
     gap: Space.sm,
-    maxWidth: 320,
-  },
+    maxWidth: 320 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   headerBody: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   title: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.2 },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   timestamp: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     flexShrink: 0,
     maxWidth: 80,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   itemImage: {
     width: 40,
     height: 40,
     borderRadius: Radius.sm,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   itemImageFallback: {
     backgroundColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemTitle: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    lineHeight: 17,
-  },
+    lineHeight: 17 },
   trackingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-  },
+    gap: 5 },
   trackingText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: 0.1,
-  },
+    letterSpacing: 0.1 },
   nextStepRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   nextStepText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: 0.1,
-  },
+    letterSpacing: 0.1 },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   orderIdText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: 0.3,
-  },
+    letterSpacing: 0.3 },
   viewDetailsText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand } });

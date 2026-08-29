@@ -35,7 +35,8 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataPrivacy'>;
 
@@ -60,8 +61,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
     recommendationPersonalization,
     setRecommendationPersonalization,
     thirdPartySharing,
-    setThirdPartySharing,
-  } = useSettingsPreferences();
+    setThirdPartySharing } = useSettingsPreferences();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const handleOpenExternal = async (url: string) => {
@@ -258,40 +258,32 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     demoBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textSecondary,
-      flex: 1,
-    },
+      flex: 1 },
     infoBlock: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     infoHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     infoTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     infoBody: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     destructiveDivider: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
-  });
+      borderTopWidth: StyleSheet.hairlineWidth } });
 }

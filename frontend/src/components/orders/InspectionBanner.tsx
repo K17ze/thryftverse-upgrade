@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { t } from '../../i18n';
 
 // Shown to buyers when status = 'delivered' (not yet 'completed').
@@ -16,8 +17,7 @@ import { t } from '../../i18n';
 export function InspectionBanner({
   inspectionDeadlineAt,
   onConfirmReceipt,
-  onReportIssue,
-}: {
+  onReportIssue }: {
   inspectionDeadlineAt: string | null;
   onConfirmReceipt: () => void;
   onReportIssue: () => void;
@@ -95,35 +95,28 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   inspectionHeader: {
     flexDirection: 'row',
     gap: Space.sm,
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   inspectionIcon: {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   inspectionHeaderText: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   inspectionTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   inspectionSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.size + 4,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.size + 4 },
   inspectionActions: {
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   inspectionPrimaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -131,12 +124,10 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.lg,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   inspectionPrimaryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   inspectionSecondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -145,14 +136,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   inspectionSecondaryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   inspectionFootnote: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.size + 4,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.size + 4 } });

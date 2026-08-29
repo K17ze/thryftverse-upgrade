@@ -4,7 +4,8 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, IconGrammar, ThumbSize } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, IconGrammar, ThumbSize } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
@@ -30,8 +31,7 @@ export function FlagshipOrderCard({
   buyerName,
   orderDate,
   onPress,
-  index = 0,
-}: FlagshipOrderCardProps) {
+  index = 0 }: FlagshipOrderCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const tone =
@@ -110,66 +110,53 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-  },
+    borderColor: colors.borderSubtle },
   imageWrap: {
     width: IMAGE_SIZE,
     height: IMAGE_SIZE,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   image: {
     width: IMAGE_SIZE,
-    height: IMAGE_SIZE,
-  },
+    height: IMAGE_SIZE },
   imageFallback: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   content: {
     flex: 1,
     marginLeft: Space.sm,
     justifyContent: 'center',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   title: {
     flex: 1,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.semibold,
     color: colors.textPrimary,
-    lineHeight: 20,
-  },
+    lineHeight: 20 },
   price: {
-    fontSize: Type.priceList.size,
+    fontSize: TypographyV2.priceList.size,
     fontFamily: FontFamily.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.2 },
   middleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   actor: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    color: colors.textSecondary,
-  },
+    color: colors.textSecondary },
   date: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     color: colors.textMuted,
-    marginTop: Space.xxs,
-  },
+    marginTop: Space.xxs },
   chevron: {
-    marginLeft: Space.xs,
-  },
-});
+    marginLeft: Space.xs } });

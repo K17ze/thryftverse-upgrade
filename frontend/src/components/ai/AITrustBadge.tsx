@@ -23,7 +23,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 /** Qualitative confidence level — never a raw percentage to users. */
 export type AIConfidence = 'high' | 'medium' | 'low' | 'exploratory';
@@ -42,8 +43,7 @@ const CONFIDENCE_LABEL: Record<AIConfidence, string> = {
   high: 'High confidence',
   medium: 'Medium confidence',
   low: 'Low confidence',
-  exploratory: 'Exploratory',
-};
+  exploratory: 'Exploratory' };
 
 /** Dot colour per confidence level. Uses semantic theme tokens, not raw hex. */
 function dotColorFor(confidence: AIConfidence, colors: ThemeColors): string {
@@ -68,8 +68,7 @@ export function AITrustBadge({
   confidence,
   label,
   isDemo,
-  style,
-}: AITrustBadgeProps) {
+  style }: AITrustBadgeProps) {
   const { colors } = useAppTheme();
   const dotColor = dotColorFor(confidence, colors);
   const text = label ?? CONFIDENCE_LABEL[confidence];
@@ -113,23 +112,18 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   dot: {
     width: 6,
     height: 6,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   label: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   demoSuffix: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

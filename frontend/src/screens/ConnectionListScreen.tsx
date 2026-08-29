@@ -6,8 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -25,12 +24,12 @@ import { useStore } from '../store/useStore';
 import {
   useFollowersInfinite,
   useFollowingInfinite,
-  useFollowMutation,
-} from '../platform/server';
+  useFollowMutation } from '../platform/server';
 import { haptics } from '../utils/haptics';
 import type { FollowListUser } from '../services/profileApi';
 
-import { Typography, Radius, Type, Space, Stroke, Control } from '../theme/designTokens';
+import { Radius, Space, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type ConnectionListRouteProp = RouteProp<RootStackParamList, 'ConnectionList'>;
@@ -278,8 +277,7 @@ function FollowButton({
   userId,
   serverIsFollowing,
   colors,
-  styles,
-}: {
+  styles }: {
   userId: string;
   serverIsFollowing?: boolean;
   colors: ThemeColors;
@@ -322,8 +320,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     searchInputWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -333,18 +330,15 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       backgroundColor: colors.surfaceAlt,
       borderWidth: Stroke.hairline,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     searchIcon: {
-      marginLeft: -Space.xs / 2,
-    },
+      marginLeft: -Space.xs / 2 },
     searchInput: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      paddingVertical: 0,
-    },
+      paddingVertical: 0 },
     listContent: { paddingBottom: Space.xxl + Space.xl },
     row: {
       flexDirection: 'row',
@@ -352,48 +346,40 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
-      minHeight: Space.xxl + Space.xxl + Space.xs,
-    },
+      minHeight: Space.xxl + Space.xxl + Space.xs },
     rowPressed: { opacity: 0.6 },
     rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: Space.md + 44 + Space.md },
     avatarWrap: {},
     avatar: { width: 44, height: 44, borderRadius: Radius.xxl },
     avatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-    avatarInitials: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
+    avatarInitials: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textSecondary },
     identityCol: { flex: 1 },
-    displayName: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-    handle: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
+    displayName: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary },
+    handle: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary, marginTop: 1 },
     followBtn: {
       minWidth: Control.hit + Space.sm,
       height: Control.hit - 4,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.sm + 2,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     notFollowingBtn: {
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     followingBtn: {
       backgroundColor: colors.surfaceAlt,
       borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     followBtnText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     notFollowingBtnText: {
-      color: colors.background,
-    },
+      color: colors.background },
     followingBtnText: {
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, paddingHorizontal: Space.md, minHeight: Space.xxl + Space.xxl + Space.xs },
     skeletonAvatar: { width: 44, height: 44, borderRadius: Radius.xxl, backgroundColor: colors.surfaceAlt },
     skeletonIdentity: { flex: 1, gap: Space.xs },
-    skeletonName: { width: '40%', height: Type.body.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
-    skeletonHandle: { width: '28%', height: Type.caption.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
-    footerIndicator: { paddingVertical: Space.md, alignItems: 'center' },
-  });
+    skeletonName: { width: '40%', height: TypographyV2.body.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
+    skeletonHandle: { width: '28%', height: TypographyV2.meta.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
+    footerIndicator: { paddingVertical: Space.md, alignItems: 'center' } });
 }

@@ -16,11 +16,11 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
 import {
-  CoOwnStateCanvas,
-} from '../components/coown';
+  CoOwnStateCanvas } from '../components/coown';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { fetchCoOwnDistributions, fetchDripEnrollments, updateDripEnrollment, fetchCoOwnAssetById, type CoOwnDistribution } from '../services/marketApi';
@@ -307,178 +307,144 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     gap: Space.sm,
-    paddingBottom: Space.xxl,
-  },
+    paddingBottom: Space.xxl },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   summaryCard: {
     borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.lg,
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   summaryLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   summaryValue: {
-    fontSize: Type.priceHero.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: TypographyV2.priceHero.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.priceHero.letterSpacing,
-  },
+    letterSpacing: TypographyV2.priceHero.letterSpacing },
   summaryCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   distCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   distHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    padding: Space.md,
-  },
+    padding: Space.md },
   distIcon: {
     width: Control.chrome,
     height: Control.chrome,
     borderRadius: Radius.md,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   distHeaderText: {
-    flex: 1,
-  },
+    flex: 1 },
   distType: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   distDate: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs - 2,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   amountBadge: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   amountText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   distDetails: {
     padding: Space.md,
     gap: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   detailLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   detailValue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   dripCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   dripHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.md,
-  },
+    gap: Space.md },
   dripIcon: {
     width: Space.xl + 8,
     height: Space.xl + 8,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   dripHeaderText: {
-    flex: 1,
-  },
+    flex: 1 },
   dripTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   dripBody: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs - 2,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   dripAssetList: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: Space.sm,
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   dripAssetRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   dripAssetInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flex: 1,
-  },
+    flex: 1 },
   dripAssetDot: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   dripAssetName: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    flex: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    flex: 1 },
   dripEnrolledBadge: {
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs - 2,
-  },
+    paddingVertical: Space.xs - 2 },
   dripEnrolledText: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily },
   dripEmptyWrap: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs,
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   dripEmpty: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    flex: 1,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    flex: 1 } });
 }

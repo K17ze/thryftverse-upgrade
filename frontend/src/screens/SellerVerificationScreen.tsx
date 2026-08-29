@@ -5,12 +5,12 @@ import {
   StyleSheet,
   Pressable,
   RefreshControl,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Radius, Type, LetterSpacing, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, LetterSpacing, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
@@ -18,8 +18,7 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import {
   fetchSellerVerificationDemands,
-  type SellerVerificationDemand,
-} from '../services/marketApi';
+  type SellerVerificationDemand } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { t } from '../i18n';
 
@@ -28,8 +27,7 @@ const DEMAND_TYPE_LABELS: Record<string, string> = {
   authenticity: 'Authenticity proof',
   possession: 'Possession proof',
   condition: 'Condition report',
-  inspection: 'In-person inspection',
-};
+  inspection: 'In-person inspection' };
 
 const STATUS_ICONS: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
   pending: 'hourglass-outline',
@@ -37,8 +35,7 @@ const STATUS_ICONS: Record<string, React.ComponentProps<typeof Ionicons>['name']
   compliant: 'checkmark-circle',
   failed: 'close-circle',
   expired: 'time-outline',
-  withdrawn: 'remove-circle-outline',
-};
+  withdrawn: 'remove-circle-outline' };
 
 function getStatusColor(status: string, colors: ThemeColors): string {
   switch (status) {
@@ -102,8 +99,7 @@ export default function SellerVerificationScreen() {
     if (demand.status === 'pending') {
       navigation.navigate('VerificationResponse', {
         assetId: demand.assetId,
-        demandId: demand.id,
-      });
+        demandId: demand.id });
     } else {
       navigation.navigate('AssetDetail', { assetId: demand.assetId });
     }
@@ -330,8 +326,7 @@ function createStyles(colors: ThemeColors) {
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     summaryBanner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -340,89 +335,72 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.lg,
       borderRadius: Radius.lg,
       marginBottom: Space.md,
-      gap: Space.lg,
-    },
+      gap: Space.lg },
     summaryItem: {
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     summaryNumber: {
-      fontSize: Type.priceHero.size,
-      fontFamily: Typography.family.bold,
-      lineHeight: Type.priceHero.lineHeight,
-    },
+      fontSize: TypographyV2.priceHero.size,
+      fontFamily: TypographyV2.priceHero.fontFamily,
+      lineHeight: TypographyV2.priceHero.lineHeight },
     summaryLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: LetterSpacing.wide + 0.08,
       textTransform: 'uppercase',
-      marginTop: Space.xs - 2,
-    },
+      marginTop: Space.xs - 2 },
     summaryDivider: {
       width: Stroke.standard,
-      height: Space.xl,
-    },
+      height: Space.xl },
     section: {
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     sectionTitle: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: LetterSpacing.wide + 0.18,
       textTransform: 'uppercase',
       marginBottom: Space.sm,
-      marginLeft: Space.xs - 2,
-    },
+      marginLeft: Space.xs - 2 },
     demandCard: {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       paddingVertical: Space.md,
       paddingHorizontal: Space.md,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     demandHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     assetThumb: {
       width: Control.hit,
       height: Control.hit,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     assetInfo: {
       flex: 1,
-      gap: Space.xs - 2,
-    },
+      gap: Space.xs - 2 },
     assetTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      lineHeight: Type.bodyStrong.lineHeight,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     demandType: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     demandStatusRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       marginTop: Space.sm,
-      marginLeft: Control.hit + Space.sm,
-    },
+      marginLeft: Control.hit + Space.sm },
     statusBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     statusText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      textTransform: 'capitalize',
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      textTransform: 'capitalize' },
     deadlineText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     actionPrompt: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -431,11 +409,8 @@ function createStyles(colors: ThemeColors) {
       marginLeft: Control.hit + Space.sm,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     actionPromptText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily } });
 }

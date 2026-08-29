@@ -5,8 +5,7 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  Dimensions,
-} from 'react-native';
+  Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -14,7 +13,8 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Typography, DockConstants, Type, Radius, Stroke, Control } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -45,8 +45,7 @@ import {
 
   evaluateListingCompleteness,
   type ListingFieldValues,
-  type ListingFieldKey,
-} from '../contracts/listingCategoryPolicy';
+  type ListingFieldKey } from '../contracts/listingCategoryPolicy';
 import { t } from '../i18n';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -103,8 +102,7 @@ export default function EditListingScreen() {
     qualityTipsText: { color: colors.textSecondary },
     qualityTipsLabel: { color: colors.brand },
     soldCompsText: { color: colors.textMuted },
-    soldCompsAction: { color: colors.brand },
-  }), [colors]);
+    soldCompsAction: { color: colors.brand } }), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { itemId } = route.params;
@@ -201,8 +199,7 @@ export default function EditListingScreen() {
             kind: 'image' as const,
             source: 'remote' as const,
             status: 'uploaded' as const,
-            publicUrl: uri,
-          }));
+            publicUrl: uri }));
           setMediaItems(items);
         } else {
           setLoadError(true);
@@ -259,8 +256,7 @@ export default function EditListingScreen() {
         width: asset.width,
         height: asset.height,
         durationMs: asset.durationMs,
-        status: 'draft',
-      };
+        status: 'draft' };
       return [...prev, draftItem].slice(0, 10);
     });
   }, []);
@@ -276,8 +272,7 @@ export default function EditListingScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsMultipleSelection: true,
         allowsEditing: false,
-        quality: 0.9,
-      });
+        quality: 0.9 });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const assets = result.assets.map(convertPickerAsset);
         const existing = mediaItems.map((m) => ({
@@ -289,8 +284,7 @@ export default function EditListingScreen() {
           fileSize: m.fileSize,
           width: m.width,
           height: m.height,
-          durationMs: m.durationMs,
-        }));
+          durationMs: m.durationMs }));
         const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
 
         if (validation.errors.length > 0) {
@@ -319,8 +313,7 @@ export default function EditListingScreen() {
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All,
-        quality: 0.9,
-      });
+        quality: 0.9 });
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = convertPickerAsset(result.assets[0]);
         const existing = mediaItems.map((m) => ({
@@ -332,8 +325,7 @@ export default function EditListingScreen() {
           fileSize: m.fileSize,
           width: m.width,
           height: m.height,
-          durationMs: m.durationMs,
-        }));
+          durationMs: m.durationMs }));
         const validation = validateMediaAssets([asset], existing, { maxTotalCount: 10 });
         if (validation.errors.length > 0) {
           setErrorMsg(validation.errors.map((e) => e.message).join('. '));
@@ -404,8 +396,7 @@ export default function EditListingScreen() {
       condition: condition || null,
       images: mediaItems.length > 0 ? mediaItems.map((m) => m.publicUrl || m.uri) : null,
       shippingMethod: shippingMethod || null,
-      shippingPayer: shippingPayer || null,
-    };
+      shippingPayer: shippingPayer || null };
     return evaluateListingCompleteness(values);
   }, [title, description, price, category, brand, size, condition, mediaItems, shippingMethod, shippingPayer]);
 
@@ -420,8 +411,7 @@ export default function EditListingScreen() {
     condition: 'condition',
     images: 'photos',
     shippingMethod: 'shipping method',
-    shippingPayer: 'shipping payer',
-  };
+    shippingPayer: 'shipping payer' };
 
   const editCompletenessLabel = editCompleteness.canActivate
     ? 'Ready to publish'
@@ -493,8 +483,7 @@ export default function EditListingScreen() {
           fileSize: m.fileSize,
           width: m.width,
           height: m.height,
-          durationMs: m.durationMs,
-        }));
+          durationMs: m.durationMs }));
         queue.addAssets(assets);
         await queue.run();
         const queueItems = queue.getItems();
@@ -506,8 +495,7 @@ export default function EditListingScreen() {
               ...m,
               status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status,
               publicUrl: qi.publicUrl || m.publicUrl,
-              error: qi.error || m.error,
-            };
+              error: qi.error || m.error };
           })
         );
 
@@ -537,8 +525,7 @@ export default function EditListingScreen() {
             sortOrder: existingRemotePhotos.length + i,
             mediaWidth: qi.asset.width,
             mediaHeight: qi.asset.height,
-            finalizationId: qi.finalizationId!,
-          });
+            finalizationId: qi.finalizationId! });
         }
       }
 
@@ -557,8 +544,7 @@ export default function EditListingScreen() {
         shippingMethod: shippingMethod || undefined,
         shippingPayer: shippingPayer || undefined,
         imageUrl: coverUri,
-        coverFinalizationId,
-      });
+        coverFinalizationId });
 
       setSaveStage('completed');
       haptics.success();
@@ -593,10 +579,8 @@ export default function EditListingScreen() {
         description: description.trim() || undefined,
         photos,
         shippingMethod: shippingMethod || undefined,
-        shippingPayer: shippingPayer || undefined,
-      },
-      origin: 'edit',
-    });
+        shippingPayer: shippingPayer || undefined },
+      origin: 'edit' });
   }, [title, price, originalPrice, brand, condition, category, size, description, shippingMethod, shippingPayer, mediaItems, navigation]);
 
   /* ── discard confirmation ── */
@@ -609,8 +593,7 @@ export default function EditListingScreen() {
         confirmLabel: 'Discard',
         cancelLabel: 'Keep editing',
         variant: 'danger',
-        onConfirm: () => navigation.goBack(),
-      });
+        onConfirm: () => navigation.goBack() });
     } else {
       navigation.goBack();
     }
@@ -688,8 +671,7 @@ export default function EditListingScreen() {
     tags: [],
     shippingMethod,
     shippingPayer,
-    listingMode: 'sell_now',
-  }), [mediaItems, title, brand, category, size, condition, description, price, originalPrice, shippingMethod, shippingPayer]);
+    listingMode: 'sell_now' }), [mediaItems, title, brand, category, size, condition, description, price, originalPrice, shippingMethod, shippingPayer]);
 
   /* ── listing status label ── */
   const listingStatusLabel = useMemo(() => {
@@ -756,8 +738,7 @@ export default function EditListingScreen() {
                       kind: 'image' as const,
                       source: 'remote' as const,
                       status: 'uploaded' as const,
-                      publicUrl: uri,
-                    }));
+                      publicUrl: uri }));
                     setMediaItems(items);
                   } else {
                     setLoadError(true);
@@ -1300,165 +1281,132 @@ export default function EditListingScreen() {
 
 const styles = StyleSheet.create({
   navStatusText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   navStatusUnsaved: {
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   scroll: {
-    flex: 1,
-  },
+    flex: 1 },
   scrollContent: {
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   loadingContainer: {
     flex: 1,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    gap: Space.md,
-  },
+    gap: Space.md },
   skeletonFormGap: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.md,
-    paddingHorizontal: Space.xl,
-  },
+    paddingHorizontal: Space.xl },
   errorTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   retryBtn: {
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
-    borderRadius: Radius.xxl,
-  },
+    borderRadius: Radius.xxl },
   retryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   statusDot: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   statusDotActive: {},
   statusText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   restrictedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   restrictedText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   sectionGroup: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   sectionHeading: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   fieldGroup: {
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   fieldLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs },
   fieldInput: {
     fontSize: Typography.size.bodyLarge,
     fontFamily: Typography.family.regular,
     paddingVertical: Space.sm,
-    minHeight: Control.hit + Space.sm,
-  },
+    minHeight: Control.hit + Space.sm },
   fieldInputDisabled: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   hairline: {
     height: Stroke.hairline,
-    marginVertical: Space.xs,
-  },
+    marginVertical: Space.xs },
   pickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
-    minHeight: Control.hit + Space.sm,
-  },
+    minHeight: Control.hit + Space.sm },
   pickerRowInner: {
-    flex: 1,
-  },
+    flex: 1 },
   pickerValue: {
     fontSize: Typography.size.bodyLarge,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: Typography.family.regular },
   pickerPlaceholder: {},
   priceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   currencySymbol: {
     fontSize: Typography.size.bodyLarge,
     fontFamily: Typography.family.bold,
-    marginRight: Space.xs + 2,
-  },
+    marginRight: Space.xs + 2 },
   priceInput: {
     flex: 1,
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily },
   discountPreview: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    marginTop: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs },
   descInput: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     minHeight: Space.xxl + Space.xxl + Space.sm,
     paddingVertical: Space.sm,
-    lineHeight: Type.bodyStrong.lineHeight + 1,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight + 1 },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    textAlign: 'right',
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'right' },
   inlineErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   inlineErrorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   /* -- photo guidance card -- */
   photoGuideCard: {
@@ -1467,71 +1415,58 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   photoGuideHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   photoGuideTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   photoGuideMin: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   photoGuideTips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm + 2,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   photoGuideTipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   photoGuideTip: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   /* -- price suggestion block -- */
   priceSuggestionBlock: {
     marginTop: Space.xs,
-    gap: 0,
-  },
+    gap: 0 },
   soldCompsHint: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     marginTop: Space.xs,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   soldCompsText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    flex: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    flex: 1 },
   soldCompsAction: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   /* -- field validation -- */
   fieldLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   fieldRequiredHint: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   /* -- category-aware completeness indicator (flat inline) -- */
   completenessRow: {
@@ -1539,20 +1474,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   completenessTextWrap: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   completenessLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   completenessHint: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   /* -- compact quality bar (fixed above footer) -- */
   qualityBar: {
@@ -1560,54 +1491,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xs,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   qualityBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   qualityBarLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   qualityBarLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   qualityBarRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   qualityBarScore: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   qualityBarTier: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   qualityTipsToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   qualityTipsLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   qualityBarTrack: {
     height: Stroke.emphasis,
     borderRadius: Radius.sm,
     backgroundColor: 'transparent',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   qualityBarFill: {
     height: '100%',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   qualityTipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1615,30 +1535,23 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
     borderRadius: Radius.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   qualityTipChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs / 2 + 1,
-  },
+    gap: Space.xs / 2 + 1 },
   qualityTipsList: {
     gap: Space.xs - 1,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   qualityTipBulletRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   qualityTipBullet: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   qualityTipsText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight - 1,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight - 1 } });

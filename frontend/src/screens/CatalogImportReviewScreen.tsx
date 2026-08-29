@@ -14,8 +14,7 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -25,12 +24,11 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Stroke,
   Control,
-  DockConstants,
-} from '../theme/designTokens';
+  DockConstants } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { ImportListingTile } from '../components/catalogImport/ImportListingTile';
@@ -40,8 +38,7 @@ import {
   CatalogImportError,
   type ImportItemDTO,
   type ItemReadiness,
-  type SellerDecision,
-} from '../services/catalogImportApi';
+  type SellerDecision } from '../services/catalogImportApi';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'CatalogImportReview'>;
@@ -126,9 +123,7 @@ export default function CatalogImportReviewScreen() {
         attestation: {
           ownsRights: true,
           accurateFacts: true,
-          noBuyerData: true,
-        },
-      });
+          noBuyerData: true } });
       if (!isMountedRef.current) return;
       navigation.navigate('CatalogImportProgress', { batchId });
     } catch (cause) {
@@ -260,8 +255,7 @@ export default function CatalogImportReviewScreen() {
         contentContainerStyle={{
           paddingHorizontal: Space.sm,
           paddingVertical: Space.sm,
-          paddingBottom: insets.bottom + DockConstants.singleActionHeight + Space.md,
-        }}
+          paddingBottom: insets.bottom + DockConstants.singleActionHeight + Space.md }}
         keyExtractor={(item) => item.id}
         onEndReached={() => { if (hasMore) void loadMore(); }}
         onEndReachedThreshold={0.5}
@@ -275,8 +269,7 @@ export default function CatalogImportReviewScreen() {
           {
             paddingBottom: insets.bottom + Space.sm,
             backgroundColor: colors.background,
-            borderTopColor: colors.borderSubtle,
-          },
+            borderTopColor: colors.borderSubtle },
         ]}
       >
         {issueCount > 0 ? (
@@ -321,8 +314,7 @@ function FilterTabButton({
   label,
   active,
   colors,
-  onPress,
-}: {
+  onPress }: {
   label: string;
   active: boolean;
   colors: ThemeColors;
@@ -352,27 +344,22 @@ const createTabStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       minHeight: Control.hit,
-      paddingHorizontal: Space.smMd,
-    },
+      paddingHorizontal: Space.smMd },
     tabLabel: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.label.size,
-      lineHeight: Type.label.lineHeight,
-      letterSpacing: Type.label.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      letterSpacing: TypographyV2.label.letterSpacing,
+      color: colors.textPrimary },
     tabLabelInactive: {
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     tabUnderline: {
       position: 'absolute',
       bottom: 0,
       width: 24,
       height: Stroke.emphasis,
       borderRadius: Stroke.emphasis,
-      backgroundColor: colors.brand,
-    },
-  });
+      backgroundColor: colors.brand } });
 
 // ── Skeleton tile — flat surfaceAlt square matching tile layout ──────────────
 function SkeletonTile({ colors, index }: { colors: ThemeColors; index: number }) {
@@ -391,36 +378,29 @@ const createSkeletonStyles = (colors: ThemeColors) =>
     cell: {
       flex: 1,
       gap: Space.xs,
-      padding: Space.sm / 2,
-    },
+      padding: Space.sm / 2 },
     media: {
       width: '100%',
       aspectRatio: 1,
       borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     line: {
       height: 10,
       borderRadius: Radius.sm,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     lineShort: {
-      width: '60%',
-    },
-  });
+      width: '60%' } });
 
 // ── Back button — transparent 44pt hit, 22pt glyph, no chrome ────────────────
 const backHitStyle = {
   width: Control.hit,
   height: Control.hit,
   alignItems: 'center' as const,
-  justifyContent: 'center' as const,
-};
+  justifyContent: 'center' as const };
 
 function BackButton({
   colors,
-  onPress,
-}: {
+  onPress }: {
   colors: ThemeColors;
   onPress: () => void;
 }) {
@@ -441,46 +421,37 @@ function BackButton({
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     screen: {
-      flex: 1,
-    },
+      flex: 1 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     summaryWrap: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     summaryText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     tabsScroll: {
       flexGrow: 0,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     tabsContent: {
       paddingHorizontal: Space.sm,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     gridWrap: {
-      flex: 1,
-    },
+      flex: 1 },
     gridContent: {
       paddingHorizontal: Space.sm,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     tileCell: {
       flex: 1,
-      padding: Space.sm / 2,
-    },
+      padding: Space.sm / 2 },
     dock: {
       position: 'absolute',
       left: 0,
@@ -488,38 +459,31 @@ const createStyles = (colors: ThemeColors) =>
       bottom: 0,
       paddingTop: Space.sm,
       paddingHorizontal: Space.md,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
+      borderTopWidth: StyleSheet.hairlineWidth },
     issueLine: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.danger,
       textAlign: 'center',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     approveErrorText: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.danger,
       textAlign: 'center',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     dockButton: {
       height: DockConstants.primaryButtonHeight,
       borderRadius: Radius.sm,
       backgroundColor: colors.brand,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     dockButtonDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     dockButtonText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-      color: colors.textInverse,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      color: colors.textInverse } });

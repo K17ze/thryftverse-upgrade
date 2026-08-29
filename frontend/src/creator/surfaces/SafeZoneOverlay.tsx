@@ -14,7 +14,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { FontFamily, IconGrammar, Stroke, Type} from '../../theme/designTokens';
+import { FontFamily, IconGrammar, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
 
@@ -69,8 +70,7 @@ export function SafeZoneOverlay({ visible, topHeight, bottomHeight, style }: Saf
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
-    zIndex: 45,
-  },
+    zIndex: 45 },
   topBand: {
     position: 'absolute',
     left: 0,
@@ -81,8 +81,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingBottom: 4,
-  },
+    paddingBottom: 4 },
   bottomBand: {
     position: 'absolute',
     left: 0,
@@ -93,16 +92,14 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: 4,
-  },
+    paddingTop: 4 },
   contentBoundary: {
     position: 'absolute',
     left: 0,
     right: 0,
     borderWidth: Stroke.standard,
     borderColor: RED_TINT_CONTENT_EDGE,
-    borderStyle: 'dashed',
-  },
+    borderStyle: 'dashed' },
   label: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -110,12 +107,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   labelText: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: RED_TINT_LABEL,
-    letterSpacing: 0.3,
-  },
-});
+    letterSpacing: 0.3 } });

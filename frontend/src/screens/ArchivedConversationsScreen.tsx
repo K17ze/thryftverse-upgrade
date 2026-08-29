@@ -7,7 +7,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Typography, Space } from '../theme/designTokens';
+import { Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
@@ -71,8 +72,7 @@ export default function ArchivedConversationsScreen() {
         } catch {
           show('Could not delete this conversation. Check your connection and try again.', 'error');
         }
-      },
-    });
+      } });
   };
 
   const handleClearAll = () => {
@@ -101,8 +101,7 @@ export default function ArchivedConversationsScreen() {
         } else {
           show('Archive cleared', 'info');
         }
-      },
-    });
+      } });
   };
 
   return (
@@ -194,18 +193,14 @@ export default function ArchivedConversationsScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     skeletonWrap: {
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     listContent: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     clearAllBtn: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.danger,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-  });
+      letterSpacing: TypographyV2.meta.letterSpacing } });
 }

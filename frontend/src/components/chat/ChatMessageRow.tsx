@@ -1,10 +1,10 @@
 import React, { useMemo } from "react";
 
-import {
+
+import { TypographyV2 } from '../../theme/typography.v2';import {
   View,
   Text,
-  StyleSheet,
-} from "react-native";
+  StyleSheet } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -14,12 +14,11 @@ import { MarketplaceChatCard } from "./MarketplaceChatCard";
 import { MessageBubble } from "./MessageBubble";
 import {
   LinkPreviewCard,
-  extractFirstUrl,
-} from "./LinkPreviewCard";
+  extractFirstUrl } from "./LinkPreviewCard";
 import { PaymentWarningCard } from "./PaymentWarningCard";
 
 import { useAppTheme } from "../../theme/ThemeContext";
-import { Space, Radius, Type, Typography, Control, Stroke } from "../../theme/designTokens";
+import { Space, Radius, Control, Stroke } from "../../theme/designTokens";
 import { t } from "../../i18n";
 import { type SupportedCurrencyCode } from "../../constants/currencies";
 import type { CurrencyDisplayMode } from "../../utils/currency";
@@ -27,19 +26,16 @@ import { useFormattedPrice } from "../../hooks/useFormattedPrice";
 
 import {
   isFirstInCluster as isFirstInClusterHelper,
-  isLastInCluster as isLastInClusterHelper,
-} from "../../utils/messageGrouping";
+  isLastInCluster as isLastInClusterHelper } from "../../utils/messageGrouping";
 import {
   isTrustedSystemMessage,
-  resolveSystemMessageProvenance,
-} from "../../utils/systemMessageProvenance";
+  resolveSystemMessageProvenance } from "../../utils/systemMessageProvenance";
 import { containsOffPlatformPaymentPattern } from "../../utils/chatSafetyWarnings";
 
 import {
   type Message,
   formatDateSeparator,
-  formatMessageTime,
-} from "../../hooks/chat";
+  formatMessageTime } from "../../hooks/chat";
 
 export type FormatFromFiat = (
   fiatAmount: number,
@@ -110,8 +106,7 @@ export function ChatMessageRow({
   onRetryAgentDraft,
   onScrollToMessage,
   onDismissWarning,
-  isNewMessage,
-}: ChatMessageRowProps) {
+  isNewMessage }: ChatMessageRowProps) {
   const { colors } = useAppTheme();
   const { currencyCode } = useFormattedPrice();
 
@@ -121,53 +116,44 @@ export function ChatMessageRow({
       marginVertical: Space.md,
       paddingVertical: 0,
       paddingHorizontal: 0,
-      alignSelf: "center",
-    },
+      alignSelf: "center" },
 
     dateText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       letterSpacing: 0.4,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
 
     statusWrap: {
       marginVertical: Space.xs,
       paddingHorizontal: Space.md,
-      alignItems: "center",
-    },
+      alignItems: "center" },
 
     msgRow: {
       flexDirection: "column",
       width: "100%",
       gap: Space.xs,
-      paddingHorizontal: 0,
-    },
+      paddingHorizontal: 0 },
 
     msgRowRight: {
-      alignItems: "stretch",
-    },
+      alignItems: "stretch" },
 
     linkPreviewWrap: {
       maxWidth: "78%",
       alignSelf: "flex-start",
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
 
     linkPreviewWrapRight: {
-      alignSelf: "flex-end",
-    },
+      alignSelf: "flex-end" },
 
     selectionRow: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
 
     selectionRowRight: {
-      flexDirection: "row-reverse",
-    },
+      flexDirection: "row-reverse" },
 
     checkbox: {
       width: Control.icon,
@@ -178,43 +164,36 @@ export function ChatMessageRow({
       backgroundColor: colors.surfaceAlt,
       alignItems: "center",
       justifyContent: "center",
-      marginHorizontal: Space.sm,
-    },
+      marginHorizontal: Space.sm },
 
     checkboxActive: {
       backgroundColor: colors.brand,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
 
     unreadDividerWrap: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       marginVertical: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
 
     unreadDividerLine: {
       flex: 1,
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
 
     unreadDividerBadge: {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
-      backgroundColor: colors.brandSubtle,
-    },
+      backgroundColor: colors.brandSubtle },
 
     unreadDividerText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.brand,
       letterSpacing: 0.3,
-      textTransform: 'uppercase',
-    },
-  }), [colors]);
+      textTransform: 'uppercase' } }), [colors]);
 
   const prevMsg = messages[index - 1];
   const nextMsg = messages[index + 1];
@@ -306,8 +285,7 @@ export function ChatMessageRow({
             itemTitle: msg.commerceState.itemTitle,
             itemImage: msg.commerceState.itemImage,
             trackingNumber: msg.commerceState.trackingNumber,
-            carrier: msg.commerceState.carrier,
-          }}
+            carrier: msg.commerceState.carrier }}
           onViewOrder={() => {
             navigation.navigate("OrderDetail", { orderId: msg.commerceState!.orderId });
           }}
@@ -335,8 +313,7 @@ export function ChatMessageRow({
       type: msg.type === "system" ? "system" : undefined,
       systemTitle: msg.systemTitle,
       text: msg.text,
-      timestamp: msg.date ?? "",
-    })
+      timestamp: msg.date ?? "" })
   ) {
     const provenance = resolveSystemMessageProvenance({
       id: msg.id,
@@ -345,8 +322,7 @@ export function ChatMessageRow({
       type: msg.type === "system" ? "system" : undefined,
       systemTitle: msg.systemTitle,
       text: msg.text,
-      timestamp: msg.date ?? "",
-    });
+      timestamp: msg.date ?? "" });
     const content = (
       <View key={msg.id} style={styles.statusWrap}>
         <MarketplaceChatCard
@@ -386,8 +362,7 @@ export function ChatMessageRow({
           senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
           offer={msg.offer}
           formattedPrice={formatFromFiat(msg.offer!.price, currencyCode, {
-            displayMode: "fiat",
-          })}
+            displayMode: "fiat" })}
           formattedOriginalPrice={formatFromFiat(
             msg.offer!.originalPrice, currencyCode,
             { displayMode: "fiat" },
@@ -494,8 +469,7 @@ export function ChatMessageRow({
                     mediaType: msg.mediaType ?? "image",
                     senderLabel: msg.senderLabel,
                     timestamp: msg.date,
-                    messageId: msg.id,
-                  });
+                    messageId: msg.id });
                 }
               : undefined
           }
@@ -508,8 +482,7 @@ export function ChatMessageRow({
                   return parent
                     ? {
                         senderName: parent.senderLabel ?? t('chat.fallbackUserName'),
-                        text: parent.text ?? "",
-                      }
+                        text: parent.text ?? "" }
                     : null;
                 })()
               : null
@@ -565,8 +538,7 @@ export function ChatMessageRow({
               onReport={() => {
                 navigation.navigate("Report", {
                   type: "user",
-                  targetId: msg.senderId,
-                });
+                  targetId: msg.senderId });
               }}
               isMe={isMe}
             />

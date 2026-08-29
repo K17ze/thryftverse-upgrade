@@ -4,15 +4,15 @@ import {
   Text,
   StyleSheet,
   Dimensions,
-  RefreshControl,
-} from 'react-native';
+  RefreshControl } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useBackendData } from '../context/BackendDataContext';
 import { useStore } from '../store/useStore';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
@@ -222,32 +222,25 @@ function createStyles(colors: ThemeColors) {
     headerInfo: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.sm,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     headerSubtitle: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     headerCount: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     loadingWrap: {
       flex: 1,
       paddingHorizontal: Space.md,
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
     loadingGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'space-between',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     loadingCard: {
       width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
-      marginBottom: Space.md,
-    },
-  });
+      marginBottom: Space.md } });
 }

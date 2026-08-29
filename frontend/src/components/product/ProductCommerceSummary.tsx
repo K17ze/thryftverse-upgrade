@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { ListingCommerceContext } from '../../platform/product';
 import { NativeSheet } from '../../platform/native';
 import { ProductPolicySheet } from './ProductPolicySheet';
@@ -24,8 +25,7 @@ interface CommerceRow {
 export function ProductCommerceSummary({
   commerce,
   formattedPrice,
-  formattedProtectionTotal,
-}: ProductCommerceSummaryProps) {
+  formattedProtectionTotal }: ProductCommerceSummaryProps) {
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -40,9 +40,7 @@ export function ProductCommerceSummary({
       value: formattedProtectionTotal,
       sheetContent: {
         title: 'Estimated total',
-        body: `Item price: ${formattedPrice}\nBuyer protection fee: ${commerce.buyerProtectionFee != null ? formatFromFiat(commerce.buyerProtectionFee) : 'Included'}\n\nThe estimated total includes the item price and buyer protection fee. Shipping costs are confirmed at checkout.`,
-      },
-    });
+        body: `Item price: ${formattedPrice}\nBuyer protection fee: ${commerce.buyerProtectionFee != null ? formatFromFiat(commerce.buyerProtectionFee) : 'Included'}\n\nThe estimated total includes the item price and buyer protection fee. Shipping costs are confirmed at checkout.` } });
   }
 
   if (commerce.shippingMethod) {
@@ -52,9 +50,7 @@ export function ProductCommerceSummary({
       value: commerce.shippingMethod,
       sheetContent: {
         title: 'Shipping',
-        body: `Shipping method: ${commerce.shippingMethod}\nShipping payer: ${commerce.shippingPayer === 'seller' ? 'Seller covers shipping' : 'Buyer pays shipping'}\n\nFinal shipping cost is confirmed at checkout based on your delivery address.`,
-      },
-    });
+        body: `Shipping method: ${commerce.shippingMethod}\nShipping payer: ${commerce.shippingPayer === 'seller' ? 'Seller covers shipping' : 'Buyer pays shipping'}\n\nFinal shipping cost is confirmed at checkout based on your delivery address.` } });
   }
 
   if (commerce.estimatedDeliveryStart && commerce.estimatedDeliveryEnd) {
@@ -64,9 +60,7 @@ export function ProductCommerceSummary({
       value: `${commerce.estimatedDeliveryStart} – ${commerce.estimatedDeliveryEnd}`,
       sheetContent: {
         title: 'Delivery estimate',
-        body: `Estimated delivery: ${commerce.estimatedDeliveryStart} to ${commerce.estimatedDeliveryEnd}\n\nThis is an estimate based on the seller's dispatch time and standard shipping. Actual delivery may vary.`,
-      },
-    });
+        body: `Estimated delivery: ${commerce.estimatedDeliveryStart} to ${commerce.estimatedDeliveryEnd}\n\nThis is an estimate based on the seller's dispatch time and standard shipping. Actual delivery may vary.` } });
   }
 
   if (commerce.protectionPolicy?.available) {
@@ -76,9 +70,7 @@ export function ProductCommerceSummary({
       value: commerce.protectionPolicy.label,
       sheetContent: {
         title: commerce.protectionPolicy.label,
-        body: commerce.protectionPolicy.summary,
-      },
-    });
+        body: commerce.protectionPolicy.summary } });
   }
 
   if (commerce.returnPolicy) {
@@ -94,9 +86,7 @@ export function ProductCommerceSummary({
         title: 'Return policy',
         body: commerce.returnPolicy.accepted
           ? `This seller accepts returns${commerce.returnPolicy.windowDays ? ` within ${commerce.returnPolicy.windowDays} days` : ''}.${commerce.returnPolicy.conditions ? `\n\n${commerce.returnPolicy.conditions}` : ''}`
-          : 'This seller does not accept returns. Check the item description carefully before purchasing.',
-      },
-    });
+          : 'This seller does not accept returns. Check the item description carefully before purchasing.' } });
   }
 
   rows.push({
@@ -105,9 +95,7 @@ export function ProductCommerceSummary({
     value: 'Thryftverse checkout',
     sheetContent: {
       title: 'Secure payment',
-      body: 'All payments are processed through Thryftverse secure checkout. Your payment details are encrypted and never shared with the seller.',
-    },
-  });
+      body: 'All payments are processed through Thryftverse secure checkout. Your payment details are encrypted and never shared with the seller.' } });
 
   if (commerce.authenticity && commerce.authenticity.status !== 'not_offered') {
     rows.push({
@@ -118,9 +106,7 @@ export function ProductCommerceSummary({
         title: 'Authenticity',
         body: commerce.authenticity.status === 'verified'
           ? 'This item has been verified for authenticity by Thryftverse.'
-          : 'This item may be eligible for authenticity verification. Learn more at checkout.',
-      },
-    });
+          : 'This item may be eligible for authenticity verification. Learn more at checkout.' } });
   }
 
   if (rows.length === 0) return null;
@@ -175,52 +161,42 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   sectionTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     marginBottom: Space.sm,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flex: 1,
-  },
+    flex: 1 },
   rowLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   rowValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   sheetContent: {
     paddingHorizontal: Space.lg,
-    paddingBottom: Space.lg,
-  },
-  });
+    paddingBottom: Space.lg } });
 }

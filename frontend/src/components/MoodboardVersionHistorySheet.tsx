@@ -4,14 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { FormSheet } from './sheets/FormSheet';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily } from '../theme/designTokens';
+import { Space, Radius, FontFamily } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import {
   fetchMoodboardVersions,
   restoreMoodboardVersion,
   pinMoodboardVersion,
-  type MoodboardVersion,
-} from '../services/moodboardApi';
+  type MoodboardVersion } from '../services/moodboardApi';
 import { formatShortDateTime } from '../utils/dateFormat';
 import { ConfirmationSheet } from './ConfirmationSheet';
 
@@ -24,8 +24,7 @@ export interface MoodboardVersionHistorySheetProps {
 }
 
 export function MoodboardVersionHistorySheet({
-  visible, onDismiss, moodboardId, isOwner, onRestored,
-}: MoodboardVersionHistorySheetProps) {
+  visible, onDismiss, moodboardId, isOwner, onRestored }: MoodboardVersionHistorySheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -86,8 +85,7 @@ export function MoodboardVersionHistorySheet({
         message: '',
         confirmLabel: 'OK',
         variant: 'default',
-        onConfirm: () => {},
-      });
+        onConfirm: () => {} });
     } finally {
       setBusyId(null);
     }
@@ -112,8 +110,7 @@ export function MoodboardVersionHistorySheet({
         } finally {
           setBusyId(null);
         }
-      },
-    });
+      } });
   }, [haptic, moodboardId, load, onRestored]);
 
   const renderRow = (version: MoodboardVersion, index: number) => {
@@ -223,62 +220,50 @@ const createStyles = (colors: ThemeColors) =>
     list: { paddingBottom: Space.lg },
     row: {
       flexDirection: 'row', alignItems: 'center',
-      paddingVertical: Space.md, paddingHorizontal: Space.xs,
-    },
+      paddingVertical: Space.md, paddingHorizontal: Space.xs },
     rowPinned: { backgroundColor: colors.brandSubtle, borderRadius: Radius.sm },
     rowSeparator: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
     rowMain: { flex: 1, marginRight: Space.sm },
     rowHeader: { flexDirection: 'row', alignItems: 'baseline', gap: Space.sm },
     revision: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.numericMeta.size, lineHeight: Type.numericMeta.lineHeight,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.numericMeta.size, lineHeight: TypographyV2.numericMeta.lineHeight,
+      color: colors.brand },
     label: {
       flexShrink: 1, fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size, lineHeight: Type.bodyStrong.lineHeight,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size, lineHeight: TypographyV2.bodyStrong.lineHeight,
+      color: colors.textPrimary },
     source: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.meta.size, lineHeight: Type.meta.lineHeight,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size, lineHeight: TypographyV2.meta.lineHeight,
+      color: colors.textMuted },
     rowMeta: { flexDirection: 'row', alignItems: 'baseline', gap: Space.sm, marginTop: Space.xxs },
     timestamp: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size, lineHeight: Type.caption.lineHeight,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size, lineHeight: TypographyV2.meta.lineHeight,
+      color: colors.textMuted },
     createdBy: {
       flexShrink: 1, fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size, lineHeight: Type.caption.lineHeight,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size, lineHeight: TypographyV2.meta.lineHeight,
+      color: colors.textSecondary },
     rowActions: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
     iconButton: {
       width: 36, height: 36, borderRadius: Radius.sm,
-      alignItems: 'center', justifyContent: 'center',
-    },
+      alignItems: 'center', justifyContent: 'center' },
     restoreButton: {
       height: 32, paddingHorizontal: Space.sm, borderRadius: Radius.md,
       alignItems: 'center', justifyContent: 'center',
-      backgroundColor: colors.brandSubtle,
-    },
-    restoreText: { fontFamily: FontFamily.semibold, fontSize: Type.meta.size, color: colors.brand },
+      backgroundColor: colors.brandSubtle },
+    restoreText: { fontFamily: FontFamily.semibold, fontSize: TypographyV2.meta.size, color: colors.brand },
     stateWrap: {
       alignItems: 'center', justifyContent: 'center',
-      paddingVertical: Space.xl, paddingHorizontal: Space.md,
-    },
+      paddingVertical: Space.xl, paddingHorizontal: Space.md },
     stateText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size, lineHeight: Type.body.lineHeight,
-      color: colors.textSecondary, textAlign: 'center',
-    },
+      fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary, textAlign: 'center' },
     retryButton: {
       marginTop: Space.md, paddingHorizontal: Space.md, height: 36,
       borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center',
-      backgroundColor: colors.brandSubtle,
-    },
-    retryText: { fontFamily: FontFamily.semibold, fontSize: Type.meta.size, color: colors.brand },
-  });
+      backgroundColor: colors.brandSubtle },
+    retryText: { fontFamily: FontFamily.semibold, fontSize: TypographyV2.meta.size, color: colors.brand } });

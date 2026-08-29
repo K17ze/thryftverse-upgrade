@@ -14,7 +14,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { getAvailableAgents, type ChatAgent } from '../../services/chatAgentsApi';
@@ -36,8 +37,7 @@ export function ChatAgentPicker({
   onClose,
   onDeploy,
   deployedAgentIds = [],
-  conversationId,
-}: ChatAgentPickerProps) {
+  conversationId }: ChatAgentPickerProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const demoAgents = useMemo(() => (__DEV__ ? getAvailableAgents() : []), []);
@@ -191,15 +191,13 @@ function deploymentToAgent(d: ConversationBotDeployment): ChatAgent {
     avatar: 'sparkles-outline',
     description: d.commandHint,
     capabilities: d.permissionsSnapshot,
-    isDemo: false,
-  };
+    isDemo: false };
 }
 
 function AgentRow({
   agent,
   deployed,
-  onAdd,
-}: {
+  onAdd }: {
   agent: ChatAgent;
   deployed: boolean;
   onAdd: () => void;
@@ -253,8 +251,7 @@ function EmptyState({
   title,
   body,
   actionLabel,
-  onAction,
-}: {
+  onAction }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   body: string;
@@ -293,8 +290,7 @@ const createStyles = (colors: ThemeColors) =>
     overlay: {
       flex: 1,
       backgroundColor: colors.overlay,
-      justifyContent: 'flex-end',
-    },
+      justifyContent: 'flex-end' },
     sheet: {
       borderTopLeftRadius: Radius.xl,
       borderTopRightRadius: Radius.xl,
@@ -302,126 +298,104 @@ const createStyles = (colors: ThemeColors) =>
       paddingTop: Space.sm,
       paddingBottom: Space.xxl,
       gap: Space.sm,
-      maxHeight: '85%',
-    },
+      maxHeight: '85%' },
     handle: {
       width: 36,
       height: 4,
       borderRadius: Radius.full,
       alignSelf: 'center',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     header: {
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     title: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     subtitle: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: TypeStyles.body.fontFamily,
-      marginTop: 2,
-    },
+      marginTop: 2 },
     list: {
-      flexGrow: 0,
-    },
+      flexGrow: 0 },
     listContent: {
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       minHeight: 68,
       paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     iconTarget: {
       width: 44,
       height: 44,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     rowText: {
       flex: 1,
-      gap: 1,
-    },
+      gap: 1 },
     rowLabel: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
     rowDescription: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypeStyles.body.fontFamily },
     addBtn: {
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.full,
       minWidth: 72,
       minHeight: 44,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     addBtnText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
     demoNotice: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      minHeight: 32,
-    },
+      minHeight: 32 },
     demoText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypeStyles.body.fontFamily },
     loadingState: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.sm,
-      paddingVertical: Space.xl,
-    },
+      paddingVertical: Space.xl },
     loadingText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypeStyles.body.fontFamily },
     emptyState: {
       alignItems: 'center',
       paddingVertical: Space.xl,
       paddingHorizontal: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyIcon: {
       width: Space.xxl,
       height: Space.xxl,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     emptyTitle: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     emptyBody: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight + 2,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
       fontFamily: TypeStyles.body.fontFamily,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     retryBtn: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
@@ -429,11 +403,8 @@ const createStyles = (colors: ThemeColors) =>
       minHeight: 44,
       justifyContent: 'center',
       alignItems: 'center',
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     retryBtnText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily } });

@@ -6,8 +6,7 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
-  Linking,
-} from 'react-native';
+  Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,7 +17,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
 import { useA11yAudit } from '../hooks/useA11yAudit';
-import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, IconGrammar } from '../theme/designTokens';
+import { Space, Radius, Typography, DockConstants, LetterSpacing, IconGrammar } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
 import { izeToUsd, formatUsd } from '../utils/currency';
 import { parseApiError } from '../lib/apiClient';
@@ -26,14 +26,12 @@ import {
   getIzePosition,
   getWalletSnapshot,
   getSellerWalletBalances,
-  type SellerWalletBalanceItem,
-} from '../services/walletApi';
+  type SellerWalletBalanceItem } from '../services/walletApi';
 import {
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
-  type CoOwn1ZeBalance,
-} from '../components/coown';
+  type CoOwn1ZeBalance } from '../components/coown';
 import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -80,8 +78,7 @@ export default function WalletScreen({ navigation }: Props) {
     safeguardingTermsUrl: null,
     snapshotSequence: 0,
     serverTimestamp: '',
-    reconciliationState: 'reconciled',
-  });
+    reconciliationState: 'reconciled' });
   // Fiat balance kept in parallel for the "Buy 1ZE with fiat balance" flow.
   const [availableFiatBalance, setAvailableFiatBalance] = useState(0);
   // Seller wallet: pending vs available balance with per-order breakdown.
@@ -133,16 +130,14 @@ export default function WalletScreen({ navigation }: Props) {
           safeguardingTermsUrl: position.balances.safeguardingTermsUrl ?? null,
           snapshotSequence: position.balances.snapshotSequence,
           serverTimestamp: position.balances.serverTimestamp,
-          reconciliationState: position.balances.reconciliationState,
-        });
+          reconciliationState: position.balances.reconciliationState });
         setAvailableFiatBalance(fiatWallet?.snapshot.availableGbp ?? 0);
         if (sellerWallet) {
           setSellerBalances({
             availableGbp: sellerWallet.balances.availableGbp,
             pendingGbp: sellerWallet.balances.pendingGbp,
             heldInReserveGbp: sellerWallet.balances.heldInReserveGbp,
-            pendingBreakdown: sellerWallet.pendingBreakdown,
-          });
+            pendingBreakdown: sellerWallet.pendingBreakdown });
         }
       })
       .catch((err) => {
@@ -665,8 +660,7 @@ function SubBalanceRow({
   value,
   formatBalance,
   colors,
-  emphasize = false,
-}: {
+  emphasize = false }: {
   label: string;
   value: number;
   formatBalance: (v: number) => string;
@@ -698,40 +692,34 @@ function SubBalanceRow({
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
 
   // ── Balance hero — flat, no card (spec 17 viewport 1) ──
   balanceHero: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   balanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   balanceLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   // 44pt transparent hit area — visible eye glyph is 20pt
   eyeToggle: {
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: -Space.xs,
-  },
+    marginRight: -Space.xs },
   balanceMasked: {
     fontSize: 40,
     lineHeight: 44,
     fontFamily: Typography.family.bold,
     letterSpacing: 2,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   // Largest text on screen — tabular-nums, bold
   balanceValue: {
     fontSize: 40,
@@ -739,39 +727,33 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
     letterSpacing: -1,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   balanceUnit: {
     fontSize: 20,
     lineHeight: 44,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   localFiatRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginTop: Space.xs + 2,
-  },
+    marginTop: Space.xs + 2 },
   localFiatText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   localFiatSuffix: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // ── Primary actions — 3 equal-width buttons in a row ──
   actionRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   actionBtn: {
     flex: 1,
     minHeight: 44,
@@ -779,20 +761,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs - 1,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   actionBtnPrimary: {
-    borderWidth: 0,
-  },
+    borderWidth: 0 },
   actionBtnSecondary: {
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   actionBtnLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // ── Pending attention row (now FlagshipNavigationRow) ──
 
@@ -800,45 +778,38 @@ const styles = StyleSheet.create({
 
   // ── Sub-balance flat rows (restrained — muted, smaller) ──
   subBalanceSection: {
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   subBalanceSectionLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.xs + 2,
-  },
+    marginBottom: Space.xs + 2 },
   breakdownSection: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 0,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   subBalanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Space.sm + 2,
-    gap: Space.md,
-  },
+    gap: Space.md },
   subBalanceLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   subBalanceValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   subBalanceUnit: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   // ── Withdrawable (restrained — muted) ──
   withdrawableRow: {
@@ -850,97 +821,79 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: Space.md,
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   withdrawableLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   withdrawableLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   withdrawableValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
 
   // ── Transaction history ──
   txHistorySection: {
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   txHistoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   txHistoryTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   txHistorySeeAll: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // ── Skeleton ──
   skeletonSubRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
 
   // ── Safeguarding info (flat canvas, hairline divider — no card) ──
   infoContent: {
     padding: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   disclosureSection: {
     paddingHorizontal: 0,
     paddingVertical: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   infoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   infoTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   infoBody: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   safeguardingLinksRow: {
     flexDirection: 'row',
     gap: Space.md,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   safeguardingLink: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   infoDivider: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
-  },
-});
+    marginVertical: Space.sm } });

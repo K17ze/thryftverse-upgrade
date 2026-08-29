@@ -5,8 +5,7 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,7 +15,8 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, Elevation, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -334,139 +334,114 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   content: {
     flex: 1,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   contentContainer: {
     paddingTop: Space.md,
     paddingBottom: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   headerAction: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   headerActionDisabled: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   // ── Cover preview ──
   coverPreviewSection: {
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   coverPreview: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     padding: Space.md,
     borderRadius: Radius.lg,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   coverPlaceholder: {
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverPreviewInfo: {
-    flex: 1,
-  },
+    flex: 1 },
   coverPreviewLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + 0.38,
-  },
+    letterSpacing: LetterSpacing.caps + 0.38 },
   coverPreviewSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs / 2,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // ── Mosaic ──
   mosaicTile: {
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   mosaicGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     borderRadius: Radius.md,
     overflow: 'hidden',
-    gap: 2,
-  },
+    gap: 2 },
   mosaicTileSmall: {
     borderRadius: Radius.sm,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   mosaicTileEmpty: {
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   mosaicImg: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   // ── Cards ──
   card: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   // Flat section — no card background, hairline separator.
   // Anti-AI-slop: avoids generic dashboard silhouette of stacked equal-weight cards.
   flatSection: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   label: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps + 0.38,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   textArea: {
     minHeight: Space.xl + Space.xxl,
-    textAlignVertical: 'top',
-  },
+    textAlignVertical: 'top' },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textAlign: 'right',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   toggleIconWrap: {
     width: Control.chrome,
     height: Control.chrome,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   toggleText: {
-    flex: 1,
-  },
+    flex: 1 },
   toggleLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   toggleSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: Space.xs / 2,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   togglePill: {
     width: Space.xxl,
     height: Space.lg + Space.xs,
@@ -475,54 +450,44 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     justifyContent: 'center',
-    paddingHorizontal: Space.xs - 1,
-  },
+    paddingHorizontal: Space.xs - 1 },
   togglePillActive: {
     backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-  },
+    borderColor: colors.textPrimary },
   toggleKnob: {
     width: Space.lg - Space.xs,
     height: Space.lg - Space.xs,
     borderRadius: Radius.lg,
     backgroundColor: colors.background,
-    ...Elevation.card,
-  },
+    ...Elevation.card },
   toggleKnobActive: {
-    alignSelf: 'flex-end',
-  },
+    alignSelf: 'flex-end' },
   // ── Item selection ──
   itemSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   itemCount: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   itemScrollContent: {
     gap: Space.sm,
     paddingRight: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   itemCard: {
     width: 110,
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
     padding: Space.xs + 2,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   itemThumbWrap: {
     position: 'relative',
     width: '100%',
-    height: 90,
-  },
+    height: 90 },
   itemThumb: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemCheckBadge: {
     position: 'absolute',
     top: Space.xs,
@@ -531,40 +496,31 @@ function createStyles(colors: ThemeColors) {
     height: Space.xl - Space.xs,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemCardTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.meta.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   itemCardPrice: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Empty items ──
   emptyItemsCard: {
     alignItems: 'center',
     padding: Space.lg,
     borderRadius: Radius.lg,
     gap: Space.sm,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   emptyItemsTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   emptyItemsSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   footer: {
-    marginTop: 'auto',
-  },
+    marginTop: 'auto' },
   btnDisabled: {
-    opacity: 0.45,
-  },
-  });
+    opacity: 0.45 } });
 }

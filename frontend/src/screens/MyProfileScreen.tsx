@@ -8,8 +8,7 @@ import {
   Dimensions,
   Share,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { EmptyState } from '../components/EmptyState';
 import Reanimated, {
   useSharedValue,
@@ -17,13 +16,12 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  FadeIn,
-} from 'react-native-reanimated';
+  FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, FontFamily, Control, LetterSpacing, Type } from '../theme/designTokens';
+import { Space, FontFamily, Control, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useStore } from '../store/useStore';
@@ -143,13 +141,11 @@ export default function MyProfileScreen() {
     portfolioPreview: { backgroundColor: colors.surfaceAlt },
     portfolioLabel: { color: colors.textSecondary },
     portfolioHoldingTitle: { color: colors.textPrimary },
-    portfolioHoldingUnits: { color: colors.textMuted },
-  };
+    portfolioHoldingUnits: { color: colors.textMuted } };
   const tMyProfile = {
     awayBanner: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     awayBannerTitle: { color: colors.textPrimary },
-    awayBannerSub: { color: colors.textMuted },
-  };
+    awayBannerSub: { color: colors.textMuted } };
 
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
@@ -223,8 +219,7 @@ export default function MyProfileScreen() {
               isOpen: a.isOpen,
               yourUnits: h?.units ?? 0,
               avgEntryPriceGBP: h?.avgEntry,
-              realizedProfitGBP: h?.realized,
-            };
+              realizedProfitGBP: h?.realized };
           });
         setCoOwnHoldings(merged);
       })
@@ -294,8 +289,7 @@ export default function MyProfileScreen() {
     retryAvatar,
     retryCover,
     revertAvatar,
-    revertCover,
-  } = useProfileMediaUpload(
+    revertCover } = useProfileMediaUpload(
     user?.id,
     confirmedAvatarRemote,
     confirmedCoverRemote,
@@ -426,8 +420,7 @@ export default function MyProfileScreen() {
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
-    },
-  });
+    } });
 
   const coverStyle = useAnimatedStyle(() => {
     const translateY = interpolate(
@@ -448,18 +441,15 @@ export default function MyProfileScreen() {
           [0, COVER_HEIGHT],
           [0, -COVER_HEIGHT],
           Extrapolation.CLAMP
-        ),
-      },
-    ],
-  }));
+        ) },
+    ] }));
 
   const topUtilityStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [0, 80], [1, 0], Extrapolation.CLAMP);
     const translateY = interpolate(scrollY.value, [0, 80], [0, -8], Extrapolation.CLAMP);
     return {
       opacity,
-      transform: [{ translateY }],
-    };
+      transform: [{ translateY }] };
   });
 
   const headerOpacityStyle = useAnimatedStyle(() => {
@@ -479,8 +469,7 @@ export default function MyProfileScreen() {
       await Share.share({
         message: `Check out @${user.username} on Thryftverse! https://thryftverse.com/@${user.username}`,
         url: `https://thryftverse.com/@${user.username}`,
-        title: `${user.displayName || user.username} on Thryftverse`,
-      });
+        title: `${user.displayName || user.username} on Thryftverse` });
     } catch { /* user cancelled or share unavailable */ }
   };
 
@@ -498,46 +487,39 @@ export default function MyProfileScreen() {
         icon: 'bag-handle-outline' as const,
         label: 'Orders',
         onPress: () => { haptic.light(); navigation.navigate('MyOrders'); },
-        accessibilityLabel: 'Orders',
-      },
+        accessibilityLabel: 'Orders' },
       {
         icon: 'pulse-outline' as const,
         label: 'Analytics',
         onPress: () => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); },
-        accessibilityLabel: 'Creator analytics',
-      },
+        accessibilityLabel: 'Creator analytics' },
       {
         icon: 'bookmark-outline' as const,
         label: 'Closet',
         value: `${savedCount + wishlistCount} items`,
         onPress: () => { haptic.light(); navigation.navigate('Closet'); },
-        accessibilityLabel: 'Closet',
-      },
+        accessibilityLabel: 'Closet' },
       {
         icon: 'wallet-outline' as const,
         label: 'Wallet',
         onPress: () => { haptic.light(); navigation.navigate('Wallet'); },
-        accessibilityLabel: 'Wallet',
-      },
+        accessibilityLabel: 'Wallet' },
       {
         icon: 'timer-outline' as const,
         label: 'Auctions',
         onPress: () => { haptic.light(); navigation.navigate('AuctionHome'); },
-        accessibilityLabel: 'Browse auctions',
-      },
+        accessibilityLabel: 'Browse auctions' },
       {
         icon: 'layers-outline' as const,
         label: 'Co-own',
         value: coOwnHoldings.length > 0 ? `${coOwnHoldings.length} assets` : undefined,
         onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
-        accessibilityLabel: 'Browse co-own market',
-      },
+        accessibilityLabel: 'Browse co-own market' },
       {
         icon: 'storefront-outline' as const,
         label: 'Seller Hub',
         onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
-        accessibilityLabel: 'Seller Hub',
-      },
+        accessibilityLabel: 'Seller Hub' },
     ],
     [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation]
   );
@@ -1171,23 +1153,18 @@ const myProfileStyles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.md - 2,
     borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   awayBannerTextWrap: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   awayBannerTitle: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   awayBannerSub: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.meta.lineHeight,
-  },
-});
+    lineHeight: TypographyV2.meta.lineHeight } });
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
@@ -1201,8 +1178,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: COVER_HEIGHT,
     zIndex: 0,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   // Cover gradient fades — match the public ProfileHero treatment for control
   // contrast and a premium authored cover. Top fade improves floating button
   // legibility; bottom fade softens the avatar seam.
@@ -1211,100 +1187,84 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 80,
-  },
+    height: 80 },
   coverBottomFade: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 40,
-  },
+    height: 40 },
   coverActionLayer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: COVER_HEIGHT,
-    zIndex: 8,
-  },
+    zIndex: 8 },
   topUtilityRow: {
     position: 'absolute',
     left: Space.md - 2,
     right: Space.md - 2,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   topUtilityRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   topUtilityIconBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // ── Co-Own portfolio preview — flagship elevated card ──
   portfolioPreview: {
     marginHorizontal: Space.md,
     marginTop: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    borderRadius: RadiusRoleValue.sheetDialog,
-  },
+    borderRadius: RadiusRoleValue.sheetDialog },
   portfolioHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   portfolioLabel: {
     fontSize: TypographyV2.label.size,
     fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
   portfolioHoldings: {
     flexDirection: 'row',
-    gap: Space.md,
-  },
+    gap: Space.md },
   portfolioHoldingCard: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   portfolioHoldingImage: {
     width: 48,
     height: 48,
     borderRadius: RadiusRoleValue.mediaThumbnail,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   portfolioHoldingInfo: {
     flexShrink: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   portfolioHoldingTitle: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.meta.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   portfolioHoldingUnits: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     lineHeight: TypographyV2.meta.lineHeight,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   topUtilityVisible: {
     width: Space.xl - 2,
     height: Space.xl - 2,
     borderRadius: RadiusRoleValue.standalonePanel,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverEditTarget: {
     position: 'absolute',
     right: Space.md - 2,
@@ -1312,16 +1272,14 @@ const styles = StyleSheet.create({
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverEditVisible: {
     width: Space.xl + 2,
     height: Space.xl + 2,
     borderRadius: RadiusRoleValue.dominantPanel,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverFailure: {
     position: 'absolute',
     left: Space.md - 2,
@@ -1333,31 +1291,26 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.sheetDialog,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   coverFailureCopy: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 3,
-  },
+    gap: Space.xs + 3 },
   coverFailureText: {
     flexShrink: 1,
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.meta.size,
-  },
+    fontSize: TypographyV2.meta.size },
   coverFailureAction: {
     minWidth: Space.xxl + 4,
     minHeight: Space.xl + 2,
     paddingHorizontal: Space.sm,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverFailureActionText: {
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.meta.size,
-  },
+    fontSize: TypographyV2.meta.size },
 
   // Collapsed header
   floatingHeader: {
@@ -1370,13 +1323,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingBottom: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   floatingHeaderTitle: {
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.priceList.letterSpacing,
-  },
+    letterSpacing: TypographyV2.priceList.letterSpacing },
 
   // Listings grid
   gridHeader: {
@@ -1384,31 +1335,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   gridHeaderCount: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   gridHeaderAction: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontFamily: FontFamily.semibold },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   gridCard: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   gridImageWrap: {
     borderRadius: RadiusRoleValue.mediaThumbnail,
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   pinnedBadge: {
     position: 'absolute',
     top: 6,
@@ -1417,12 +1362,10 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   gridImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   // Hero card gradient overlay — price sits on a subtle bottom fade so the
   // first viewport is media-dense without a separate text block below.
   heroPriceGradient: {
@@ -1432,46 +1375,38 @@ const styles = StyleSheet.create({
     right: 0,
     height: 56,
     borderBottomLeftRadius: RadiusRoleValue.compactControl,
-    borderBottomRightRadius: RadiusRoleValue.compactControl,
-  },
+    borderBottomRightRadius: RadiusRoleValue.compactControl },
   heroPriceOverlay: {
     position: 'absolute',
     bottom: 8,
     left: 10,
-    right: 10,
-  },
+    right: 10 },
   heroPriceText: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.bold,
     letterSpacing: -0.1,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   heroBrandText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    marginTop: 1,
-  },
+    marginTop: 1 },
   soldOverlay: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   soldText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.bold,
-    letterSpacing: LetterSpacing.caps + 0.18,
-  },
+    letterSpacing: LetterSpacing.caps + 0.18 },
   gridPrice: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.bold,
     marginTop: Space.xs + 1,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   gridBrand: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    marginTop: 1,
-  },
+    marginTop: 1 },
 
   // Listings empty state — compact in-grid prompt, not full blank page
   listingsEmpty: {
@@ -1479,81 +1414,67 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Space.xl + Space.sm,
     paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   listingsEmptyTitle: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   listingsEmptyBody: {
     maxWidth: 280,
     fontFamily: FontFamily.regular,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   listingsEmptyCta: {
     marginTop: Space.xs + 2,
     minHeight: Control.hit,
     paddingHorizontal: Space.md + 2,
     justifyContent: 'center',
-    borderRadius: RadiusRoleValue.sheetDialog,
-  },
+    borderRadius: RadiusRoleValue.sheetDialog },
   listingsEmptyCtaText: {
     fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontFamily: FontFamily.semibold },
   listingsEmptyImportLink: {
     marginTop: Space.sm,
     minHeight: Control.hit,
     justifyContent: 'center',
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   listingsEmptyImportText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.medium,
-    lineHeight: Type.body.lineHeight,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    lineHeight: TypographyV2.body.lineHeight,
+    letterSpacing: TypographyV2.body.letterSpacing },
 
   // About — flat editorial rows, flagship elevated
   aboutContainer: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   aboutSectionTitle: {
     fontSize: TypographyV2.label.size,
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
     paddingTop: Space.md + 4,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   aboutRow: {
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   aboutRowLast: {
-    borderBottomWidth: 0,
-  },
+    borderBottomWidth: 0 },
   aboutLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
     textTransform: 'uppercase',
-    letterSpacing: TypographyV2.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
   aboutValue: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   aboutEmpty: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
     textAlign: 'center',
-    paddingVertical: Space.xl + Space.sm,
-  },
+    paddingVertical: Space.xl + Space.sm },
 
   // Stats row — followers / following / listings / sales
   statsRow: {
@@ -1564,55 +1485,45 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     paddingVertical: Space.sm + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   statCell: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.xs,
-    gap: Space.xs / 4,
-  },
+    gap: Space.xs / 4 },
   statValue: {
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: FontFamily.semibold,
     lineHeight: TypographyV2.sectionTitle.lineHeight,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-  },
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   statLabel: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-  },
+    fontFamily: FontFamily.regular },
   statDivider: {
     width: StyleSheet.hairlineWidth,
-    height: Space.xl - Space.xs,
-  },
+    height: Space.xl - Space.xs },
 
   // Seller trust badges — horizontal scroll
   trustBadgesScroll: {
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   trustBadgesContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xs / 2,
-  },
+    paddingVertical: Space.xs / 2 },
   trustBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   trustBadgeText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    letterSpacing: 0.1,
-  },
+    letterSpacing: 0.1 },
   trustBadgeSep: {
     width: StyleSheet.hairlineWidth,
-    height: Space.sm + Space.xxs,
-  },
+    height: Space.sm + Space.xxs },
 
   // Profile completion prompt — flagship elevated card
   completionCard: {
@@ -1622,30 +1533,25 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
     borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: Space.md,
-  },
+    gap: Space.md },
   completionHead: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   completionHeadText: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   completionTitle: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   completionPercent: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
     letterSpacing: 0.1,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   completionDismiss: {
     width: 28,
     height: 28,
@@ -1653,17 +1559,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: -Space.xs / 2,
     marginRight: -Space.xs / 2,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   completionTrack: {
     height: 4,
     borderRadius: RadiusRoleValue.pillAvatar,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   completionFill: {
     height: '100%',
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   completionCta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1671,13 +1574,11 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     minHeight: Control.hit,
     borderRadius: RadiusRoleValue.mediaThumbnail,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   completionCtaText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: 0.1,
-  },
+    letterSpacing: 0.1 },
 
   // Growth tasks — optional onboarding prompts (first listing / audience)
   growthCard: {
@@ -1687,45 +1588,36 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
     borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   growthHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   growthTitle: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   growthRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
     paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   growthRowLast: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   growthRowText: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   growthRowTitle: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.medium,
     letterSpacing: TypographyV2.body.letterSpacing,
-    lineHeight: TypographyV2.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   growthRowSub: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    lineHeight: TypographyV2.meta.lineHeight,
-  },
-});
+    lineHeight: TypographyV2.meta.lineHeight } });

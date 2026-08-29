@@ -8,8 +8,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -18,10 +17,9 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
-  Numeric,
-} from '../theme/designTokens';
+  Numeric } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipMetricLine } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
@@ -48,8 +46,7 @@ import {
   type ContentRankingResponse,
   type AnalyticsPeriod,
   type Completeness,
-  type EarningsSummary,
-} from '../services/creatorAnalyticsApi';
+  type EarningsSummary } from '../services/creatorAnalyticsApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -58,8 +55,7 @@ type PeriodKey = AnalyticsPeriod;
 const PERIOD_LABELS: Record<PeriodKey, string> = {
   '7d': '7 days',
   '30d': '30 days',
-  '90d': '90 days',
-};
+  '90d': '90 days' };
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -250,8 +246,7 @@ export default function CreatorAnalyticsDashboardScreen() {
     if (!timeline) return [];
     return timeline.points.map((p) => ({
       x: shortDate(p.date),
-      y: p.views,
-    }));
+      y: p.views }));
   }, [timeline]);
 
   // ── Derived: chart accessibility summary for screen readers ────────
@@ -736,8 +731,7 @@ function ContentRankingRow({
   item,
   rank,
   colors,
-  isLast,
-}: {
+  isLast }: {
   item: ContentRankingResponse['items'][number];
   rank: number;
   colors: ThemeColors;
@@ -851,118 +845,98 @@ function createStyles(colors: ThemeColors) {
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     bannerWrap: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     // ── Period selector: hairline tabs ──
     periodRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm + Space.xs,
-    },
+      gap: Space.sm + Space.xs },
     periodTab: {
       alignItems: 'center',
       paddingVertical: Space.xs,
-      paddingHorizontal: Space.xxs,
-    },
+      paddingHorizontal: Space.xxs },
     periodTabText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
-      letterSpacing: 0.3,
-    },
+      letterSpacing: 0.3 },
     periodTabIndicator: {
       position: 'absolute',
       bottom: 0,
       left: 0,
       right: 0,
       height: 2,
-      borderRadius: 1,
-    },
+      borderRadius: 1 },
     // ── Freshness ──
     freshnessRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     freshnessDot: {
       width: 6,
       height: 6,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     freshnessText: {
-      fontSize: Type.meta.size,
-      fontFamily: FontFamily.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium },
     freshnessWatermark: {
-      fontSize: Type.meta.size,
-      fontFamily: FontFamily.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular },
     // ── Hero ──
     heroWrap: {
       paddingTop: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     heroMediaWrap: {
       position: 'relative',
       height: 140,
       borderRadius: Radius.md,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     heroMedia: {
       width: '100%',
-      height: 140,
-    },
+      height: 140 },
     heroOverlay: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
-      padding: Space.md,
-    },
+      padding: Space.md },
     heroLabel: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.scrimTextSecondary,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.scrimTextSecondary },
     heroRow: {
       flexDirection: 'row',
       alignItems: 'baseline',
       gap: Space.sm,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     heroValue: {
       ...Numeric.priceList,
-      fontSize: Type.priceHero.size,
-      lineHeight: Type.priceHero.lineHeight,
-      letterSpacing: Type.priceHero.letterSpacing,
+      fontSize: TypographyV2.priceHero.size,
+      lineHeight: TypographyV2.priceHero.lineHeight,
+      letterSpacing: TypographyV2.priceHero.letterSpacing,
       fontFamily: FontFamily.bold,
-      color: colors.scrimTextPrimary,
-    },
+      color: colors.scrimTextPrimary },
     heroDelta: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs - 2,
       paddingHorizontal: Space.xs + 1,
       paddingVertical: Space.xs - 1,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     heroDeltaText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       letterSpacing: 0.2,
-      color: colors.scrimTextPrimary,
-    },
+      color: colors.scrimTextPrimary },
     // ── Comparison context ──
     comparisonContext: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     // ── Suppressed dimensions ──
     suppressedCallout: {
       flexDirection: 'row',
@@ -972,17 +946,14 @@ function createStyles(colors: ThemeColors) {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     suppressedText: {
       flex: 1,
-      fontSize: Type.meta.size,
-      fontFamily: FontFamily.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular },
     // ── Metrics ──
     metricsSection: {
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     // ── Partial error ──
     partialBanner: {
       flexDirection: 'row',
@@ -991,91 +962,72 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm + Space.xs,
       paddingVertical: Space.sm,
       borderRadius: Radius.sm,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     partialText: {
       flex: 1,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     // ── Chart ──
     chartSection: {
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     // ── Content ranking ──
     contentSection: {
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     contentRowPress: {
-      marginLeft: -Space.xs,
-    },
+      marginLeft: -Space.xs },
     sectionLabel: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
-      letterSpacing: Type.caption.letterSpacing,
-      marginBottom: Space.sm,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginBottom: Space.sm },
     // ── Earnings ──
     earningsSection: {
-      marginTop: Space.xl,
-    },
+      marginTop: Space.xl },
     payoutButton: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.sm + 2,
       borderRadius: Radius.sm,
       marginTop: Space.md,
-      minHeight: 48,
-    },
+      minHeight: 48 },
     payoutButtonText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.semibold,
-      color: colors.textInverse,
-    },
+      color: colors.textInverse },
     earningsEntries: {
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     entriesLabel: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     entryRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     entryInfo: {
       flex: 1,
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     entryType: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     entryDesc: {
-      fontSize: Type.meta.size,
-      fontFamily: FontFamily.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular },
     entryAmount: {
       ...Numeric.numericMeta,
-      fontSize: Type.body.size,
-      fontFamily: FontFamily.semibold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.semibold },
     // ── Footer ──
     footer: {
       marginTop: Space.xl,
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     footerText: {
-      fontSize: Type.meta.size - 1,
-      fontFamily: FontFamily.regular,
-    },
-  });
+      fontSize: TypographyV2.meta.size - 1,
+      fontFamily: FontFamily.regular } });
 }
 
 function createContentRowStyles(colors: ThemeColors) {
@@ -1085,51 +1037,40 @@ function createContentRowStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm + 2,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     rank: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       width: 20,
       textAlign: 'center',
-      ...Numeric.numericMeta,
-    },
+      ...Numeric.numericMeta },
     thumbWrap: {
       width: 48,
-      height: 48,
-    },
+      height: 48 },
     thumb: {
       width: 48,
       height: 48,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     thumbFallback: {
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     info: {
       flex: 1,
-      gap: Space.xs - 1,
-    },
+      gap: Space.xs - 1 },
     title: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     meta: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     metaText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     metaDot: {
-      fontSize: Type.meta.size - 1,
-    },
-  });
+      fontSize: TypographyV2.meta.size - 1 } });
 }
 
 function createSkeletonStyles(colors: ThemeColors) {
@@ -1140,16 +1081,12 @@ function createSkeletonStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     skelContentRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.sm + 2,
-    },
+      paddingVertical: Space.sm + 2 },
     skelContentInfo: {
-      flex: 1,
-    },
-  });
+      flex: 1 } });
 }

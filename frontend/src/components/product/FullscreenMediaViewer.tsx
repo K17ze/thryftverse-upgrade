@@ -8,8 +8,7 @@ import {
   AccessibilityInfo,
   AppState,
   StatusBar,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -20,16 +19,15 @@ import Reanimated, {
   FadeIn,
   FadeOut,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 import {
   GestureDetector,
   Gesture,
-  FlatList,
-} from 'react-native-gesture-handler';
+  FlatList } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Space, Radius, Type, Control, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
@@ -69,8 +67,7 @@ function FullscreenImagePage({
   onClose,
   onZoomStart,
   onToggleChrome,
-  chromeVisible,
-}: FullscreenImagePageProps) {
+  chromeVisible }: FullscreenImagePageProps) {
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
   const { colors } = useAppTheme();
@@ -179,15 +176,13 @@ function FullscreenImagePage({
       { translateX: translateX.value },
       { translateY: translateY.value },
       { scale: scale.value },
-    ],
-  }));
+    ] }));
 
   // Dismiss transform — applied to the outer container so the image
   // slides down with diminishing opacity (iOS Photos drag-to-dismiss).
   const dismissStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: dismissY.value }],
-    opacity: dismissOpacity.value,
-  }));
+    opacity: dismissOpacity.value }));
 
   return (
     <GestureDetector gesture={composed}>
@@ -213,8 +208,7 @@ function FullscreenVideoPage({
   width,
   height,
   isActive,
-  onToggleChrome,
-}: {
+  onToggleChrome }: {
   item: ProductMediaItem;
   width: number;
   height: number;
@@ -285,8 +279,7 @@ export function FullscreenMediaViewer({
   visible,
   onClose,
   onZoomStart,
-  onActiveIndexChange,
-}: FullscreenMediaViewerProps) {
+  onActiveIndexChange }: FullscreenMediaViewerProps) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -303,8 +296,7 @@ export function FullscreenMediaViewer({
       .map((uri) => ({
         uri,
         kind: videoUriSet.has(uri) || isVideoUri(uri) ? 'video' : 'image',
-        fit: 'contain',
-      }));
+        fit: 'contain' }));
   }, [images, media, videoUris]);
   const safeInitialIndex = mediaItems.length > 0
     ? Math.min(Math.max(initialIndex, 0), mediaItems.length - 1)
@@ -333,8 +325,7 @@ export function FullscreenMediaViewer({
   // Chrome animated style — applies to close button, index, thumbnail strip.
   const chromeStyle = useAnimatedStyle(() => ({
     opacity: chromeOpacity.value,
-    pointerEvents: chromeOpacity.value > 0.5 ? 'auto' as const : 'none' as const,
-  }));
+    pointerEvents: chromeOpacity.value > 0.5 ? 'auto' as const : 'none' as const }));
 
   useEffect(() => {
     if (!visible) return;
@@ -344,8 +335,7 @@ export function FullscreenMediaViewer({
     requestAnimationFrame(() => {
       listRef.current?.scrollToIndex({
         index: safeInitialIndex,
-        animated: false,
-      });
+        animated: false });
     });
   }, [safeInitialIndex, visible, chromeOpacity]);
 
@@ -463,8 +453,7 @@ export function FullscreenMediaViewer({
                       borderRadius: Radius.sm,
                       overflow: 'hidden',
                       borderWidth: isActive ? Stroke.emphasis : 0,
-                      borderColor: isActive ? colors.scrimTextPrimary : 'transparent',
-                    }}
+                      borderColor: isActive ? colors.scrimTextPrimary : 'transparent' }}
                     contentFit="cover"
                     downscaleWidth={48}
                   />
@@ -496,17 +485,13 @@ export function FullscreenMediaViewer({
 
 const createSubStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   imageWrap: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   image: {
     width: '100%',
-    height: '100%',
-  },
-});
+    height: '100%' } });
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -517,19 +502,15 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     bottom: 0,
     backgroundColor: colors.background,
-    zIndex: 999,
-  },
+    zIndex: 999 },
   page: {
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   imageWrap: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   image: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   // Top gradient scrim — ensures close button legibility over bright media.
   topScrim: {
     position: 'absolute',
@@ -550,8 +531,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'flex-end',
     paddingHorizontal: Space.md,
     zIndex: 10,
-    elevation: 10,
-  },
+    elevation: 10 },
   closeButton: {
     width: Control.hit,
     height: Control.hit,
@@ -560,8 +540,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     // Near-transparent chrome (AGENTS.md §4: ordinary controls default to
     // transparent). Legibility comes from the top scrim, not an opaque disc.
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   // Bottom chrome — thumbnail strip + index pill, fades with tap-to-toggle.
   bottomChrome: {
     position: 'absolute',
@@ -569,31 +548,25 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     alignItems: 'center',
     zIndex: 10,
-    elevation: 10,
-  },
+    elevation: 10 },
   thumbStrip: {
-    maxWidth: '100%',
-  },
+    maxWidth: '100%' },
   thumbStripContent: {
     paddingHorizontal: Space.md,
     gap: Space.xs,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   thumbTarget: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   thumbImage: {
     width: 36,
     height: 36,
     borderRadius: Radius.sm,
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   thumbImageActive: {
-    opacity: 1,
-  },
+    opacity: 1 },
   thumbVideoBadge: {
     position: 'absolute',
     bottom: 6,
@@ -603,21 +576,17 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   indicatorContainer: {
     marginTop: Space.xs,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   indicatorText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs - 1,
     borderRadius: Radius.full,
-    letterSpacing: 0.3,
-  },
-  });
+    letterSpacing: 0.3 } });
 }

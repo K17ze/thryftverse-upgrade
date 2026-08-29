@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS, deriveSellerBadges, SELLER_BADGES } from '../../platform/product';
 import { CachedImage } from '../CachedImage';
@@ -20,8 +21,7 @@ export function SellerTrustCard({
   seller,
   onOpenProfile,
   onMessage,
-  onFollow,
-}: SellerTrustCardProps) {
+  onFollow }: SellerTrustCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const rating = seller.rating ?? null;
@@ -40,56 +40,49 @@ export function SellerTrustCard({
     trustMetrics.push({
       icon: 'star',
       label: 'Rating',
-      value: `${rating.toFixed(1)}${reviewCount != null ? ` (${reviewCount})` : ''}`,
-    });
+      value: `${rating.toFixed(1)}${reviewCount != null ? ` (${reviewCount})` : ''}` });
   }
 
   if (completedSales != null) {
     trustMetrics.push({
       icon: 'checkmark-done',
       label: 'Sales',
-      value: `${completedSales} completed`,
-    });
+      value: `${completedSales} completed` });
   }
 
   if (responseRate != null) {
     trustMetrics.push({
       icon: 'chatbubble-ellipses',
       label: 'Response',
-      value: `${responseRate}% rate`,
-    });
+      value: `${responseRate}% rate` });
   }
 
   if (responseTimeLabel) {
     trustMetrics.push({
       icon: 'time',
       label: 'Replies in',
-      value: responseTimeLabel,
-    });
+      value: responseTimeLabel });
   }
 
   if (dispatchTimeLabel) {
     trustMetrics.push({
       icon: 'cube',
       label: 'Dispatch',
-      value: dispatchTimeLabel,
-    });
+      value: dispatchTimeLabel });
   }
 
   if (memberSince) {
     trustMetrics.push({
       icon: 'calendar',
       label: 'Member since',
-      value: memberSince,
-    });
+      value: memberSince });
   }
 
   if (activeListingCount != null) {
     trustMetrics.push({
       icon: 'pricetags',
       label: 'Listings',
-      value: `${activeListingCount} active`,
-    });
+      value: `${activeListingCount} active` });
   }
 
   return (
@@ -230,85 +223,70 @@ function createStyles(colors: ThemeColors) {
     marginHorizontal: Space.md,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    padding: Space.md,
-  },
+    padding: Space.md },
   sectionTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     marginBottom: Space.sm,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   headerRow: {
     flexDirection: 'column',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   avatarWrap: {
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   avatar: {
     width: Space.xxl + Space.xl,
     height: Space.xxl + Space.xl,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   avatarFallback: {
     width: Space.xxl + Space.xl,
     height: Space.xxl + Space.xl,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarFallbackText: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    color: colors.textSecondary },
   profileInfo: {
     flex: 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   username: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     flexShrink: 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   location: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   badgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.xs,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   badge: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   badgeText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   standardsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -318,17 +296,14 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brandSubtle,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-  },
+    borderColor: colors.borderSubtle },
   standardsBadgeText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
   actionRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   followBtn: {
     flex: 1,
     minHeight: 44,
@@ -336,19 +311,15 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   followingBtn: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   followText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse },
   followingText: {
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   messageBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -358,35 +329,28 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   messageText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginTop: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   metricCell: {
     width: '48%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.xs + 2,
-  },
+    paddingVertical: Space.xs + 2 },
   metricLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   metricValue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary } });
 }

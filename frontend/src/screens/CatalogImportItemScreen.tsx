@@ -20,8 +20,7 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,11 +30,10 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Stroke,
-  Control,
-} from '../theme/designTokens';
+  Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ImportedFieldDiff } from '../components/catalogImport/ImportedFieldDiff';
 import { ImportIssueNavigator } from '../components/catalogImport/ImportIssueNavigator';
@@ -49,8 +47,7 @@ import {
   type ImportMediaDTO,
   type BlockingIssue,
   type SellerDecision,
-  type FieldCandidateDTO,
-} from '../services/catalogImportApi';
+  type FieldCandidateDTO } from '../services/catalogImportApi';
 import { useExtractionCandidates } from '../hooks/useExtractionCandidates';
 import type { CatalogImportStackParamList } from './CatalogImportStartScreen';
 
@@ -379,8 +376,7 @@ export default function CatalogImportItemScreen() {
           {
             paddingBottom:
               insets.bottom +
-              (blockingIssues.length > 0 ? Space.lg + 72 : Space.lg),
-          },
+              (blockingIssues.length > 0 ? Space.lg + 72 : Space.lg) },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -600,8 +596,7 @@ export default function CatalogImportItemScreen() {
 // ── Back button — transparent 44pt hit, 22pt glyph, no chrome ────────────────
 function BackButton({
   colors,
-  onPress,
-}: {
+  onPress }: {
   colors: ThemeColors;
   onPress: () => void;
 }) {
@@ -625,8 +620,7 @@ function DecisionButton({
   onPress,
   disabled,
   colors,
-  styles,
-}: {
+  styles }: {
   label: string;
   selected: boolean;
   onPress: () => void;
@@ -668,189 +662,157 @@ const stylesShared = StyleSheet.create({
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     screen: {
-      flex: 1,
-    },
+      flex: 1 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     scroll: {
-      flex: 1,
-    },
+      flex: 1 },
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      flexGrow: 1,
-    },
+      flexGrow: 1 },
     stateWrap: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.smMd,
-    },
+      gap: Space.smMd },
     stateText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary },
     stateTitle: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     retryHit: {
       minHeight: Control.hit,
       paddingHorizontal: Space.lg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     retryText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.brand },
     title: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     mediaRail: {
       paddingVertical: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     extractionErrorRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.xs,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     extractionErrorText: {
       flex: 1,
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.warning,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.warning },
     thumb: {
       width: THUMB_SIZE,
       height: THUMB_SIZE,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     mediaPlaceholder: {
       width: THUMB_SIZE,
       height: THUMB_SIZE,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     decisionRow: {
       flexDirection: 'row',
       gap: Space.sm,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     decisionButton: {
       minHeight: Control.hit,
       borderRadius: Radius.full,
       paddingVertical: Space.sm,
       paddingHorizontal: Space.smMd,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     decisionLabel: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.label.size,
-      lineHeight: Type.label.lineHeight,
-      letterSpacing: Type.label.letterSpacing,
-      textTransform: 'uppercase',
-    },
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      letterSpacing: TypographyV2.label.letterSpacing,
+      textTransform: 'uppercase' },
     issuesBlock: {
       marginTop: Space.sm,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     issueSeparator: {
       borderTopWidth: Stroke.hairline,
       borderTopColor: colors.borderSubtle,
       marginTop: Space.sm,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     issueRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     issueGlyph: {
       flexShrink: 0,
-      marginTop: 2,
-    },
+      marginTop: 2 },
     issueText: {
       flex: 1,
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     issueMessage: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      color: colors.textPrimary },
     issueHint: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textMuted },
     diffList: {
       marginTop: Space.sm,
       borderTopWidth: Stroke.hairline,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     navigatorWrap: {
       position: 'absolute',
       left: 0,
       right: 0,
-      bottom: 0,
-    },
+      bottom: 0 },
     // ── Modal ──
     modalOverlay: {
       flex: 1,
       backgroundColor: colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.lg,
-    },
+      paddingHorizontal: Space.lg },
     modalCard: {
       width: '100%',
       borderRadius: Radius.lg,
       padding: Space.md,
-      gap: Space.md,
-    },
+      gap: Space.md },
     modalTitle: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     modalInput: {
       borderWidth: Stroke.standard,
       borderRadius: Radius.md,
@@ -858,31 +820,25 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: Space.sm,
       minHeight: 96,
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      textAlignVertical: 'top',
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      textAlignVertical: 'top' },
     modalActions: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     modalActionHit: {
       minHeight: Control.hit,
       paddingHorizontal: Space.md,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     modalCancelText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textMuted },
     modalSaveText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.brand,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.brand } });

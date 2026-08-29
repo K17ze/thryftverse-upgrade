@@ -26,15 +26,14 @@ import {
   CartesianChart,
   Bar,
   useChartPressState,
-  type ChartBounds,
-} from 'victory-native';
+  type ChartBounds } from 'victory-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   type ChartPoint,
   type ChartPadding,
-  type ChartTheme,
-} from './types';
+  type ChartTheme } from './types';
 import { ChartTooltip, buildSingleTooltipLines } from './ChartTooltip';
 
 // ============================================================================
@@ -75,8 +74,7 @@ const DEFAULT_PADDING: ChartPadding = {
   top: 16,
   right: 50,
   bottom: 28,
-  left: 8,
-};
+  left: 8 };
 
 // ============================================================================
 // THEME RESOLVER
@@ -96,8 +94,7 @@ function useChartTheme(): ChartTheme {
       positive: colors.coownUp,
       negative: colors.coownDown,
       gridLine: colors.borderSubtle,
-      axisLine: colors.border,
-    }),
+      axisLine: colors.border }),
     [colors],
   );
 }
@@ -110,8 +107,7 @@ function defaultValueFormat(value: number): string {
   if (Math.abs(value) >= 1000) {
     return value.toLocaleString('en-GB', {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
+      maximumFractionDigits: 0 });
   }
   return value.toFixed(0);
 }
@@ -128,8 +124,7 @@ function CrosshairLine({
   xPosition,
   chartBounds,
   color,
-  isActive,
-}: {
+  isActive }: {
   xPosition: SharedValue<number>;
   chartBounds: ChartBounds;
   color: string;
@@ -164,8 +159,7 @@ export function BarChart({
   loading = false,
   error = null,
   emptyMessage = 'No data available',
-  accessibilitySummary,
-}: BarChartProps): React.ReactElement {
+  accessibilitySummary }: BarChartProps): React.ReactElement {
   const appTheme = useChartTheme();
   const theme = useMemo(
     () => ({ ...appTheme, ...themeOverride }),
@@ -189,8 +183,7 @@ export function BarChart({
   // Chart press state for touch feedback.
   const { state: pressState, isActive } = useChartPressState({
     x: data.length > 0 ? data[0].x : '',
-    y: { value: 0 },
-  });
+    y: { value: 0 } });
 
   // Transform ChartPoint[] into Victory Native data rows.
   const chartData = useMemo(() => {
@@ -207,8 +200,7 @@ export function BarChart({
     // Add 10% headroom above max and below min (if min < 0).
     const headroom = (max - min) * 0.1 || 1;
     return {
-      y: [min - (min < 0 ? headroom : 0), max + headroom] as [number, number],
-    };
+      y: [min - (min < 0 ? headroom : 0), max + headroom] as [number, number] };
   }, [chartData]);
 
   // Derive tooltip text from press state (runs on UI thread).
@@ -300,8 +292,7 @@ export function BarChart({
           labelOffset: 6,
           formatXLabel: (label: string | number) =>
             typeof label === 'string' ? label : String(label),
-          tickCount: Math.min(chartData.length, 7),
-        }}
+          tickCount: Math.min(chartData.length, 7) }}
         yAxis={[
           {
             yKeys: ['value'],
@@ -311,13 +302,11 @@ export function BarChart({
             labelOffset: 4,
             formatYLabel: (value: number) => valueFormat(value),
             tickCount: 5,
-            axisSide: 'right',
-          },
+            axisSide: 'right' },
         ]}
         frame={{
           lineColor: axisColor,
-          lineWidth: StyleSheet.hairlineWidth,
-        }}
+          lineWidth: StyleSheet.hairlineWidth }}
         renderOutside={({ chartBounds }) =>
           isActive ? (
             <>
@@ -363,28 +352,22 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.sm,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   skeletonBar: {
     height: 12,
     width: '80%',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   errorText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    textAlign: 'center' },
   emptyTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'center',
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    textAlign: 'center' } });
 
 export default BarChart;

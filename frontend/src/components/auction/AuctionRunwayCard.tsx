@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, useWindowDimensions, Platform } from 'react-nat
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Elevation, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 /** Shared drop-shadow offset for card/image-wrap elevation on iOS.
  *  Extracted so both card variants use the same shadow geometry. */
@@ -62,8 +63,7 @@ function AuctionRunwayCardBase({
   imageHeight: imageHeightOverride,
   metadataBelow = false,
   personalActionLabel,
-  onPersonalAction,
-}: Props) {
+  onPersonalAction }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
@@ -235,16 +235,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     backgroundColor: colors.surface,
     ...Platform.select({
       ios: { shadowColor: colors.shadow, shadowOffset: CARD_SHADOW_OFFSET, shadowOpacity: 0.06, shadowRadius: 8 },
-      android: { elevation: 1 },
-    }),
-  },
+      android: { elevation: 1 } }) },
   cardMetadataBelow: {
     backgroundColor: 'transparent',
-    ...Elevation.none,
-  },
+    ...Elevation.none },
   imageWrap: {
-    position: 'relative',
-  },
+    position: 'relative' },
   // Metadata-below variant: image gets its own rounding + restrained shadow
   imageWrapBelow: {
     position: 'relative',
@@ -252,17 +248,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     overflow: 'hidden',
     ...Platform.select({
       ios: { shadowColor: colors.shadow, shadowOffset: CARD_SHADOW_OFFSET, shadowOpacity: 0.05, shadowRadius: 6 },
-      android: { elevation: 1 },
-    }),
-  },
+      android: { elevation: 1 } }) },
   imageContainer: {
     borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   image: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   topGradient: {
     position: 'absolute',
     top: 0,
@@ -270,15 +262,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     right: 0,
     height: 90,
     borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-  },
+    borderTopRightRadius: Radius.lg },
   gradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-  },
+    bottom: 0 },
   topRow: {
     position: 'absolute',
     top: Space.sm + 2,
@@ -286,8 +276,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     right: Space.sm + 2,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   watchBtn: {
     width: 34,
     height: 34,
@@ -296,88 +285,74 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-  },
+    borderColor: colors.borderSubtle },
   bottomContent: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     padding: Space.md + 4,
-    gap: 5,
-  },
+    gap: 5 },
   brand: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textInverse,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.priceList.size,
+    fontSize: TypographyV2.priceList.size,
     color: colors.textInverse,
     letterSpacing: -0.5,
-    lineHeight: Type.priceList.lineHeight,
-    marginBottom: Space.xs,
-  },
+    lineHeight: TypographyV2.priceList.lineHeight,
+    marginBottom: Space.xs },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   bidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
 
   // ── Metadata-below variant ──
   belowBody: {
     paddingTop: Space.md - 2,
     paddingHorizontal: Space.xxs,
-    gap: 5,
-  },
+    gap: 5 },
   belowBrand: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   belowTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.priceList.size,
+    fontSize: TypographyV2.priceList.size,
     color: colors.textPrimary,
     letterSpacing: -0.5,
-    lineHeight: Type.priceList.lineHeight,
-    marginBottom: Space.xxs,
-  },
+    lineHeight: TypographyV2.priceList.lineHeight,
+    marginBottom: Space.xxs },
   belowMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   belowBidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   personalActionBtn: {
     marginTop: Space.sm + 2,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   personalActionText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textInverse,
-    letterSpacing: 0.3,
-  },
-});
+    letterSpacing: 0.3 } });
 

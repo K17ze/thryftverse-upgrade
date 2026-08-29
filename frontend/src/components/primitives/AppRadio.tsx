@@ -5,14 +5,14 @@ import Reanimated, {
   useAnimatedStyle,
   useDerivedValue,
   withSpring,
-  interpolateColor,
-} from 'react-native-reanimated';
+  interpolateColor } from 'react-native-reanimated';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useHaptics } from '../../platform/haptics';
 import { REDUCED_SPRING } from '../../theme/motionTokens';
-import { Space, Type, Typography } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 const ReanimatedView = Reanimated.View;
 
@@ -44,8 +44,7 @@ export function AppRadio({
   onSelect,
   disabled = false,
   label,
-  testID,
-}: AppRadioProps) {
+  testID }: AppRadioProps) {
   const { colors } = useAppTheme();
   const { spring } = useMotionConfig();
   const haptics = useHaptics();
@@ -67,12 +66,10 @@ export function AppRadio({
       progress.value,
       [0, 1],
       [colors.border, colors.brand],
-    ),
-  }));
+    ) }));
 
   const dotStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: dotScale.value }],
-  }));
+    transform: [{ scale: dotScale.value }] }));
 
   const handlePress = React.useCallback(() => {
     if (disabled) return;
@@ -105,11 +102,9 @@ function createStyles(colors: ThemeColors) {
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: 44,
-    },
+      minHeight: 44 },
     disabled: {
-      opacity: 0.5,
-    },
+      opacity: 0.5 },
     outer: {
       width: OUTER_SIZE,
       height: OUTER_SIZE,
@@ -117,21 +112,17 @@ function createStyles(colors: ThemeColors) {
       borderWidth: OUTER_BORDER_WIDTH,
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: Space.sm,
-    },
+      marginRight: Space.sm },
     dot: {
       width: DOT_SIZE,
       height: DOT_SIZE,
       borderRadius: DOT_SIZE / 2,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     label: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight } });
 }

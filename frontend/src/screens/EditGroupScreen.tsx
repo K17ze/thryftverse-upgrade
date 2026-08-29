@@ -5,16 +5,14 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
-} from 'react-native';
+  View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   fetchConversationFromApi,
   leaveGroupOnApi,
-  updateConversationOnApi,
-} from '../services/chatApi';
+  updateConversationOnApi } from '../services/chatApi';
 import { uploadMedia } from '../services/mediaUpload';
 import { classifyNetworkError, parseApiError } from '../lib/apiClient';
 import { RootStackParamList } from '../navigation/types';
@@ -22,7 +20,8 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Control, Radius, Space, Type, Typography } from '../theme/designTokens';
+import { Control, Radius, Space, Typography } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -131,8 +130,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         allowsMultipleSelection: false,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.88,
-      });
+        quality: 0.88 });
       const selected = result.canceled ? null : result.assets[0];
       if (!selected?.uri) return;
 
@@ -174,8 +172,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         allowsMultipleSelection: false,
         allowsEditing: true,
         aspect: [3, 1],
-        quality: 0.88,
-      });
+        quality: 0.88 });
       const selected = result.canceled ? null : result.assets[0];
       if (!selected?.uri) return;
 
@@ -259,8 +256,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         title: updated.title,
         description: updated.description ?? undefined,
         avatar: updated.avatar ?? undefined,
-        coverPhoto: updated.coverPhoto ?? undefined,
-      });
+        coverPhoto: updated.coverPhoto ?? undefined });
       pendingSaveKeyRef.current = null;
       haptic.success();
       show('Group details updated.', 'success');
@@ -304,8 +300,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
               entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member'
             ),
           ),
-        ),
-      });
+        ) });
 
       const requestedStateLanded = serverTitle.trim() === name.trim()
         && serverDescription.trim() === description.trim()
@@ -340,8 +335,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         onConfirm: () => {
           setConfirmSheet((s) => ({ ...s, visible: false }));
           navigation.goBack();
-        },
-      });
+        } });
       return;
     }
     navigation.goBack();
@@ -368,15 +362,13 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         } finally {
           setIsLeaving(false);
         }
-      },
-    });
+      } });
   };
 
   const mosaicMembers = (conversation.participantProfiles ?? []).map((member) => ({
     id: member.id,
     displayName: member.displayName ?? member.username,
-    avatar: member.avatar,
-  }));
+    avatar: member.avatar }));
 
   return (
     <FlagshipScreen
@@ -638,40 +630,32 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.sm,
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     permissionCopy: {
       textAlign: 'center',
-      maxWidth: 280,
-    },
+      maxWidth: 280 },
     content: {
       paddingBottom: Space.xxl,
-      gap: Space.lg,
-    },
+      gap: Space.lg },
     // Cover photo
     coverSection: {
-      width: '100%',
-    },
+      width: '100%' },
     coverTarget: {
       width: '100%',
       height: 180,
-      position: 'relative',
-    },
+      position: 'relative' },
     coverImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     coverPlaceholder: {
       width: '100%',
       height: '100%',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     coverPlaceholderText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     coverCameraBadge: {
       position: 'absolute',
       right: Space.md,
@@ -681,35 +665,29 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     coverActions: {
       flexDirection: 'row',
       justifyContent: 'center',
       gap: Space.lg,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     coverActionBtn: {
       minHeight: Control.hit,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
     coverActionText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     identity: {
       alignItems: 'center',
       paddingTop: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     avatarTarget: {
       width: 104,
       height: 104,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     cameraBadge: {
       position: 'absolute',
       right: 0,
@@ -721,41 +699,34 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       backgroundColor: colors.brand,
       borderWidth: 2,
-      borderColor: colors.background,
-    },
+      borderColor: colors.background },
     photoAction: {
       marginTop: Space.xs,
       minHeight: Control.hit,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
     photoActionText: {
       color: colors.brand,
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     removePhoto: {
       marginTop: -Space.sm,
       minHeight: Control.hit,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
     removePhotoText: {
       color: colors.textMuted,
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     section: {
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     sectionLabel: {
       marginLeft: 2,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       letterSpacing: 0,
-      textTransform: 'none',
-    },
+      textTransform: 'none' },
     input: {
       minHeight: Control.hit,
       backgroundColor: colors.surface,
@@ -764,18 +735,15 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     textarea: {
       minHeight: 104,
-      textAlignVertical: 'top',
-    },
+      textAlignVertical: 'top' },
     charCount: {
       alignSelf: 'flex-end',
-      marginRight: 2,
-    },
+      marginRight: 2 },
     issue: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -783,11 +751,9 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     issueText: {
-      flex: 1,
-    },
+      flex: 1 },
     checkResultAction: {
       minHeight: Control.hit,
       alignSelf: 'flex-start',
@@ -796,13 +762,11 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
       justifyContent: 'center',
       marginTop: Space.xs,
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
     checkResultText: {
       color: colors.brand,
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     leaveRow: {
       minHeight: Control.hit + 8,
       flexDirection: 'row',
@@ -811,15 +775,11 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.md,
       paddingVertical: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     leaveText: {
       color: colors.danger,
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     disabled: {
-      opacity: 0.55,
-    },
-  });
+      opacity: 0.55 } });
 }

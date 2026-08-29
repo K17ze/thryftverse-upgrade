@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Type, FontFamily, Control } from '../../theme/designTokens';
+import { Space, FontFamily, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { SupportMessageCitation } from '../../contracts/support';
 
 export interface SupportEvidenceRowProps {
@@ -19,8 +20,7 @@ function formatEffectiveDate(iso?: string): string | null {
   return parsed.toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
-    day: 'numeric',
-  });
+    day: 'numeric' });
 }
 
 /**
@@ -34,8 +34,7 @@ function formatEffectiveDate(iso?: string): string | null {
  */
 export function SupportEvidenceRow({
   citations,
-  onPressCitation,
-}: SupportEvidenceRowProps) {
+  onPressCitation }: SupportEvidenceRowProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -113,36 +112,29 @@ function createStyles(colors: ThemeColors) {
       borderTopColor: colors.borderSubtle,
       marginTop: Space.xs,
       paddingTop: Space.xs,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       minHeight: Control.hit,
-      paddingVertical: Space.xs / 2,
-    },
+      paddingVertical: Space.xs / 2 },
     textCol: {
       flex: 1,
-      minWidth: 0,
-    },
+      minWidth: 0 },
     title: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
       color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     metaCol: {
       gap: 1,
-      marginTop: 2,
-    },
+      marginTop: 2 },
     meta: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
-      letterSpacing: Type.meta.letterSpacing,
-      lineHeight: Type.meta.lineHeight,
-    },
-  });
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight } });
 }

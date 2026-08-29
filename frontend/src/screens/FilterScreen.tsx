@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  AnimatedPressable,
-} from '../components/AnimatedPressable';
+  AnimatedPressable } from '../components/AnimatedPressable';
 import {
   View,
   Text,
@@ -11,8 +10,7 @@ import {
   Platform,
   useWindowDimensions,
   Pressable,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -24,7 +22,8 @@ import Reanimated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Radius, Space, Type, Stroke, Control, LetterSpacing, Elevation } from '../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Control, LetterSpacing, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -62,8 +61,7 @@ const SORT_OPTIONS: Array<{ value: SortOption; label: string; accessibilityLabel
 const AUCTION_SORT_OPTION: { value: SortOption; label: string; accessibilityLabel: string } = {
   value: 'Ending soon',
   label: 'Ending soon',
-  accessibilityLabel: 'Sort by ending soon',
-};
+  accessibilityLabel: 'Sort by ending soon' };
 
 const toKey = (value: string) => value.trim().toLowerCase();
 
@@ -114,8 +112,7 @@ export default function FilterScreen() {
     ...conditions.map(c => ({
       value: c.name as ConditionOption,
       label: c.name,
-      accessibilityLabel: c.name,
-    })),
+      accessibilityLabel: c.name })),
   ], [conditions]);
 
   // Feature flag — gates the advanced filter section (quick price presets).
@@ -195,8 +192,7 @@ export default function FilterScreen() {
     });
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   const overlayStyle = useAnimatedStyle(() => {
     const opacity = interpolate(translateY.value, [SNAP_FULL, height], [0.6, 0], Extrapolation.CLAMP);
@@ -238,9 +234,7 @@ export default function FilterScreen() {
         source,
         hasError: Boolean(lastError),
         labels: {
-          live: 'Live data',
-        },
-      }),
+          live: 'Live data' } }),
     [isSyncing, lastError, source],
   );
 
@@ -339,8 +333,7 @@ export default function FilterScreen() {
           category: listing.category,
           subcategory: listing.subcategory,
           brand: listing.brand,
-          sellerLocation: listing.seller?.location ?? null,
-        })
+          sellerLocation: listing.seller?.location ?? null })
       ) {
         return false;
       }
@@ -369,8 +362,7 @@ export default function FilterScreen() {
       condition: selectedCondition as typeof browseFilters.condition,
       sustainableOnly,
       priceMin: parsedMin != null && !Number.isNaN(parsedMin) ? parsedMin : null,
-      priceMax: parsedMax != null && !Number.isNaN(parsedMax) ? parsedMax : null,
-    });
+      priceMax: parsedMax != null && !Number.isNaN(parsedMax) ? parsedMax : null });
     closeBottomSheet();
   };
 
@@ -390,8 +382,7 @@ export default function FilterScreen() {
       sort: activeSort,
       brands: selectedBrands,
       sizes: selectedSizes,
-      condition: selectedCondition,
-    });
+      condition: selectedCondition });
     show(`Saved preset "${trimmed}"`, 'success');
     setPresetName('');
     setIsSavingPreset(false);
@@ -840,8 +831,7 @@ export default function FilterScreen() {
                         styles.sustainableToggle,
                         {
                           borderColor: sustainableOnly ? colors.success : colors.border,
-                          backgroundColor: sustainableOnly ? colors.successSubtle : colors.surfaceAlt,
-                        },
+                          backgroundColor: sustainableOnly ? colors.successSubtle : colors.surfaceAlt },
                       ]}
                     >
                       <View
@@ -849,8 +839,7 @@ export default function FilterScreen() {
                           styles.sustainableToggleThumb,
                           {
                             backgroundColor: sustainableOnly ? colors.success : colors.textMuted,
-                            alignSelf: sustainableOnly ? 'flex-end' : 'flex-start',
-                          },
+                            alignSelf: sustainableOnly ? 'flex-end' : 'flex-start' },
                         ]}
                       />
                     </View>
@@ -1005,32 +994,27 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   handleContainer: {
     alignItems: 'center',
-    paddingVertical: Space.sm + Space.xs,
-  },
+    paddingVertical: Space.sm + Space.xs },
   handle: {
     width: Space.xl + Space.xs,
     height: Space.xs,
     borderRadius: Radius.sm,
-    backgroundColor: colors.borderSubtle,
-  },
+    backgroundColor: colors.borderSubtle },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.lg,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
-  headerTitle: { fontSize: Type.priceList.size, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: Type.priceList.letterSpacing },
+    gap: Space.xs + 2 },
+  headerTitle: { fontSize: TypographyV2.priceList.size, fontFamily: TypographyV2.priceList.fontFamily, color: colors.textPrimary, letterSpacing: TypographyV2.priceList.letterSpacing },
   activeCountBadge: {
     minWidth: Space.lg + 2,
     height: Space.lg + 2,
@@ -1038,42 +1022,36 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.xs + 2,
-  },
+    paddingHorizontal: Space.xs + 2 },
   activeCountBadgeText: {
     fontSize: 11,
     fontFamily: Typography.family.bold,
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
   clearBtn: {
     minHeight: Control.chromeCompact,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.sm,
     borderWidth: 0,
-    backgroundColor: 'transparent',
-  },
-  clearText: { color: colors.brand, fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold },
+    backgroundColor: 'transparent' },
+  clearText: { color: colors.brand, fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily },
   statusRow: {
     paddingHorizontal: Space.lg,
     paddingBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   statusMeta: {
     color: colors.textMuted,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   contextActionRow: {
     marginHorizontal: Space.lg,
     marginBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   contextIdentity: {
     flex: 1,
     minHeight: Control.chromeCompact,
@@ -1084,14 +1062,12 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     paddingHorizontal: Space.sm + 2,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 3,
-  },
+    gap: Space.xs + 3 },
   contextText: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   // Filter presets — flat canvas, no card container (hairline separators only)
   presetsWrap: {
@@ -1106,29 +1082,24 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     borderTopWidth: Stroke.hairline,
     borderTopColor: colors.border,
     borderBottomWidth: Stroke.hairline,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   presetsHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   presetsLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   presetsSaveLink: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
   presetsScroll: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   presetChipWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1137,32 +1108,27 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     borderWidth: Stroke.hairline,
     borderColor: colors.border,
     minHeight: Control.chrome,
-    paddingHorizontal: Space.sm + 2,
-  },
+    paddingHorizontal: Space.sm + 2 },
   presetChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   presetChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    maxWidth: Space.xxl + Space.xxl + Space.lg,
-  },
+    maxWidth: Space.xxl + Space.xxl + Space.lg },
   presetRemoveBtn: {
     width: Space.lg + Space.xs,
     height: Space.lg + Space.xs,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: Space.xs,
-  },
+    marginLeft: Space.xs },
   presetInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   presetInput: {
     flex: 1,
     height: Space.xl + Space.xs + 2,
@@ -1171,28 +1137,24 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     paddingHorizontal: Space.md,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   presetSaveBtn: {
     width: Space.xl + Space.xs + 2,
     height: Space.xl + Space.xs + 2,
     borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   presetSaveBtnDisabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   presetCancelBtn: {
     width: Space.xl + Space.xs + 2,
     height: Space.xl + Space.xs + 2,
     borderRadius: Radius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   presetsEmptyCta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1204,64 +1166,53 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     borderRadius: Radius.none,
     backgroundColor: 'transparent',
     borderWidth: 0,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   presetsEmptyCtaText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
 
   syncRetryBanner: {
     marginHorizontal: Space.lg,
     marginBottom: Space.sm,
-    backgroundColor: colors.surface,
-  },
+    backgroundColor: colors.surface },
   syncRetryBtn: {
-    backgroundColor: colors.surface,
-  },
+    backgroundColor: colors.surface },
 
   scrollContent: { paddingTop: Space.sm, paddingBottom: Space.xxl + Space.xs + Space.xs },
   loadingStateWrap: {
     paddingHorizontal: Space.xl,
-    gap: Space.xl + 2,
-  },
+    gap: Space.xl + 2 },
   loadingSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   loadingChipRow: {
     flexDirection: 'row',
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   loadingChipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
 
   sectionHeading: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     paddingHorizontal: Space.xl,
     marginBottom: 0,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: Space.xs + 2,
-    flex: 1,
-  },
+    flex: 1 },
   collapsibleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingRight: Space.xl,
     paddingVertical: Space.md,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   sectionCountBadge: {
     minWidth: Space.md + 2,
     height: Space.md + 2,
@@ -1269,25 +1220,21 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   sectionCountBadgeText: {
     fontSize: 11,
     fontFamily: Typography.family.bold,
-    color: colors.textSecondary,
-  },
+    color: colors.textSecondary },
   seeAllRow: {
     paddingHorizontal: Space.xl,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   seeAllBtn: {
     minHeight: Control.chromeCompact,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.sm,
     borderWidth: 0,
-    backgroundColor: 'transparent',
-  },
-  seeAllText: { color: colors.brand, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
+    backgroundColor: 'transparent' },
+  seeAllText: { color: colors.brand, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily },
 
   hScroll: { paddingHorizontal: Space.xl, gap: Space.sm },
 
@@ -1295,16 +1242,14 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.xl,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
 
   emptySectionText: {
     paddingHorizontal: Space.xl,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    fontStyle: 'italic',
-  },
+    fontStyle: 'italic' },
 
   chip: {
     minHeight: Control.chrome,
@@ -1312,54 +1257,45 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     borderRadius: Radius.full,
     backgroundColor: 'transparent',
     borderWidth: Stroke.hairline,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   sizeChip: { minWidth: Space.xxl + Space.sm, alignItems: 'center' },
   mySizeChip: {
     borderColor: colors.brand,
-    borderWidth: Stroke.standard + Stroke.hairline,
-  },
+    borderWidth: Stroke.standard + Stroke.hairline },
   mySizeMarkedChip: {
     borderWidth: Stroke.standard + Stroke.hairline,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   mySizesRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.xl,
     marginBottom: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   mySizesLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   mySizesScroll: {
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   saveSizesRow: {
     paddingHorizontal: Space.md + Space.xs,
     marginTop: Space.sm + 2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   saveSizesBtn: {
     alignSelf: 'flex-start',
     minHeight: Control.chromeCompact,
     borderRadius: Radius.xl,
     borderWidth: Stroke.hairline,
     borderColor: colors.brand,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   saveSizesBtnText: {
     color: colors.brand,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   chipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
 
-  chipText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  chipTextActive: { color: colors.background, fontFamily: Typography.family.bold },
+  chipText: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary },
+  chipTextActive: { color: colors.background, fontFamily: TypographyV2.body.fontFamily },
 
   // ── Sustainability toggle ──
   sustainableRow: {
@@ -1368,47 +1304,39 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     justifyContent: 'space-between',
     paddingHorizontal: Space.md + Space.xs,
     paddingVertical: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   sustainableLabelWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flex: 1,
-  },
+    flex: 1 },
   sustainableTextWrap: {
-    flexDirection: 'column',
-  },
+    flexDirection: 'column' },
   sustainableTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   sustainableCaption: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 4,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs / 4 },
   sustainableToggle: {
     width: Control.hit,
     height: Space.lg + 2,
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
     justifyContent: 'center',
-    padding: Space.xs / 2,
-  },
+    padding: Space.xs / 2 },
   sustainableToggleThumb: {
     width: Space.md + Space.xs,
     height: Space.md + Space.xs,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
 
   sectionDivider: {
     height: Stroke.hairline,
     backgroundColor: colors.border,
     marginVertical: Space.md + Space.xs,
-    marginHorizontal: Space.md + Space.xs,
-  },
+    marginHorizontal: Space.md + Space.xs },
 
   footer: {
     position: 'absolute',
@@ -1421,78 +1349,63 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     paddingBottom: Platform.OS === 'ios' ? Space.xl : Space.lg - 2,
     backgroundColor: colors.background,
     borderTopWidth: Stroke.hairline,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   resetBtn: {
     borderRadius: Radius.xl,
     borderWidth: Stroke.hairline,
     borderColor: colors.border,
     backgroundColor: 'transparent',
     minHeight: Space.xxl + Space.xs,
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   resetBtnDisabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   resetBtnText: {
     color: colors.textSecondary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.wide,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: LetterSpacing.wide },
   resetBtnTextDisabled: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   applyBtn: {
     flex: 1,
     minHeight: Space.xxl + Space.xs,
-    borderRadius: Radius.xl,
-  },
+    borderRadius: Radius.xl },
   applyBtnDisabled: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   applyBtnText: {
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: LetterSpacing.wide,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: LetterSpacing.wide },
   applyBtnTextDisabled: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
 
   // ── Price range ──
   priceRangeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.xl,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   priceInputWrap: {
-    flex: 1,
-  },
+    flex: 1 },
   priceInputLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   priceInput: {
     height: Space.xxl - Space.xs,
     borderWidth: Stroke.hairline,
     borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   priceRangeDash: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
-    marginTop: Space.md + Space.xs,
-  },
-  });
+    marginTop: Space.md + Space.xs } });
 }

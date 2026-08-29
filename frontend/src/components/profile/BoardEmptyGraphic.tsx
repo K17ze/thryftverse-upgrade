@@ -3,7 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
+import { Typography, Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface BoardEmptyGraphicProps {
   title: string;
@@ -16,8 +17,7 @@ export function BoardEmptyGraphic({
   title,
   subtitle,
   icon = 'folder-open-outline',
-  size = 120,
-}: BoardEmptyGraphicProps) {
+  size = 120 }: BoardEmptyGraphicProps) {
   const { colors } = useAppTheme();
 
   const bg: [string, string] = [colors.surfaceAlt, colors.surface];
@@ -49,8 +49,7 @@ export function BoardEmptyGraphic({
                 left: `${(i % 4) * 25 + 10}%`,
                 top: `${Math.floor(i / 4) * 30 + 15}%`,
                 opacity: 0.04 + (i % 3) * 0.02,
-                backgroundColor: dotColor,
-              },
+                backgroundColor: dotColor },
             ]}
           />
         ))}
@@ -72,40 +71,32 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     overflow: 'hidden',
     position: 'relative',
-    alignSelf: 'center',
-  },
+    alignSelf: 'center' },
   dots: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   dot: {
     position: 'absolute',
     width: 4,
     height: 4,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.smMd,
-    padding: Space.md,
-  },
+    padding: Space.md },
   iconRing: {
     width: 56,
     height: 56,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    textAlign: 'center' },
   subtitle: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    textAlign: 'center',
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    textAlign: 'center' } });

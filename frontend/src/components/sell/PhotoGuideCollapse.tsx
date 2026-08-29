@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Control, Type, FontFamily } from '../../theme/designTokens';
+import { Space, Control, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { t } from '../../i18n';
 
 export interface PhotoGuideCollapseProps {
@@ -62,37 +63,30 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   photoGuideTitle: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   photoGuideMin: {
     flex: 1,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   photoGuideTips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm + 2,
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   photoGuideTipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   photoGuideTip: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-});
+    letterSpacing: TypographyV2.meta.letterSpacing } });

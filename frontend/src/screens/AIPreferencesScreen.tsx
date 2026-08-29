@@ -38,7 +38,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { Control, Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Control, Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIPreferences'>;
 
@@ -64,8 +65,7 @@ const DEFAULT_PREFS: AIPrefs = {
   searchAutocomplete: true,
   chatAgents: true,
   smartSell: false,
-  confidenceDisplay: true,
-};
+  confidenceDisplay: true };
 
 export default function AIPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
@@ -120,8 +120,7 @@ export default function AIPreferencesScreen({ navigation }: Props) {
         searchAutocomplete,
         chatAgents,
         smartSell,
-        confidenceDisplay,
-      } satisfies AIPrefs),
+        confidenceDisplay } satisfies AIPrefs),
     ).catch(() => {});
   }, [hydrated, masterEnabled, listingSuggestions, photoEnhancement, searchAutocomplete, chatAgents, smartSell, confidenceDisplay]);
 
@@ -300,79 +299,65 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     demoBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textSecondary,
-      flex: 1,
-    },
+      flex: 1 },
     summaryBlock: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     summaryTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     summarySubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     progressRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     progressTrack: {
       flex: 1,
       height: Space.xs + 2,
       borderRadius: Radius.sm,
       backgroundColor: colors.border,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     progressFill: {
       height: '100%',
       borderRadius: Radius.sm,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     progressLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       minWidth: Control.chrome,
-      textAlign: 'right',
-    },
+      textAlign: 'right' },
     dataUsageBlock: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     dataUsageHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     dataUsageTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     dataUsageBody: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing } });
 }

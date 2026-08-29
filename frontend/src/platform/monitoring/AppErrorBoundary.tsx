@@ -8,7 +8,8 @@ import { trackTelemetryEvent } from '../../lib/telemetry';
 import { Sentry, isSentryAvailable } from './sentry';
 import { resetNavigationToHome, getAppNavigationRef } from './appNavigation';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Typography, Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface AppErrorBoundaryProps {
@@ -75,8 +76,7 @@ class AppErrorBoundaryInner extends React.Component<AppErrorBoundaryProps, AppEr
             Sentry.addBreadcrumb?.({
               category: 'navigation',
               message: `crash on screen: ${currentRoute.name}`,
-              level: 'error',
-            });
+              level: 'error' });
           }
         }
       } catch {
@@ -87,14 +87,11 @@ class AppErrorBoundaryInner extends React.Component<AppErrorBoundaryProps, AppEr
     trackTelemetryEvent('error_boundary_crash', {
       error_name: error.name,
       error_message: error.message,
-      component_stack: errorInfo.componentStack ?? '',
-    });
+      component_stack: errorInfo.componentStack ?? '' });
 
     Sentry.captureException?.(error, {
       contexts: {
-        react: { componentStack: errorInfo.componentStack ?? '' },
-      },
-    });
+        react: { componentStack: errorInfo.componentStack ?? '' } } });
   }
 
   handleRetry = () => {
@@ -116,8 +113,7 @@ class AppErrorBoundaryInner extends React.Component<AppErrorBoundaryProps, AppEr
         Sentry.addBreadcrumb?.({
           category: 'ui.action',
           message: 'crash recovery: user tapped reload',
-          level: 'info',
-        });
+          level: 'info' });
       } catch {
         // Observability must never crash the app.
       }
@@ -132,8 +128,7 @@ class AppErrorBoundaryInner extends React.Component<AppErrorBoundaryProps, AppEr
       // captureMessage with a dedicated level; this is best-effort.
       Sentry.captureMessage?.('User feedback from crash recovery screen', {
         level: 'info',
-        tags: { source: 'crash_recovery_feedback' },
-      });
+        tags: { source: 'crash_recovery_feedback' } });
     } catch {
       // Observability must never crash the app.
     }
@@ -182,8 +177,7 @@ function CrashRecoveryUI({
   onReportFeedback,
   canReportFeedback,
   colors,
-  styles,
-}: CrashRecoveryUIProps) {
+  styles }: CrashRecoveryUIProps) {
   const reducedMotionEnabled = useReducedMotion();
   const enter = reducedMotionEnabled ? undefined : FadeIn.duration(300);
 
@@ -301,23 +295,19 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     content: {
       alignItems: 'center',
       width: '100%',
-      maxWidth: 360,
-    },
+      maxWidth: 360 },
     logoWrap: {
-      marginBottom: Space.xl,
-    },
+      marginBottom: Space.xl },
     logoText: {
       color: colors.textPrimary,
       fontFamily: Typography.family.bold,
       fontSize: 24,
       letterSpacing: -0.4,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     iconBox: {
       width: 96,
       height: 96,
@@ -326,32 +316,28 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       alignItems: 'center',
       marginBottom: Space.lg,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     title: {
-      fontSize: Type.title.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.screenTitle.size,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
       color: colors.textPrimary,
       marginBottom: 12,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     subtext: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
       marginBottom: Space.xl,
-      lineHeight: 21,
-    },
+      lineHeight: 21 },
     devMessage: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.danger,
       textAlign: 'center',
       marginBottom: Space.lg,
       lineHeight: 18,
-      opacity: 0.8,
-    },
+      opacity: 0.8 },
     primaryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -360,13 +346,11 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.md,
       borderRadius: Radius.xl,
       width: '100%',
-      marginBottom: 12,
-    },
+      marginBottom: 12 },
     primaryBtnText: {
       color: colors.background,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     secondaryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -375,40 +359,32 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.md,
       borderRadius: Radius.xl,
       width: '100%',
-      marginBottom: 12,
-    },
+      marginBottom: 12 },
     secondaryBtnText: {
       color: colors.textPrimary,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     tertiaryBtn: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 14,
       borderRadius: Radius.xl,
       width: '100%',
-      marginBottom: 12,
-    },
+      marginBottom: 12 },
     tertiaryBtnText: {
       color: colors.textSecondary,
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     feedbackBtn: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 12,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     feedbackBtnText: {
       color: colors.textSecondary,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      textDecorationLine: 'underline',
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      textDecorationLine: 'underline' },
     btnIcon: {
-      marginRight: Space.sm,
-    },
-  });
+      marginRight: Space.sm } });
 }

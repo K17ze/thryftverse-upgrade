@@ -7,16 +7,15 @@ import {
   NativeScrollEvent,
   ScrollView,
   Pressable,
-  Text,
-} from 'react-native';
+  Text } from 'react-native';
 import {
-  useSharedValue,
-} from 'react-native-reanimated';
+  useSharedValue } from 'react-native-reanimated';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useTaxonomy } from '../../context/TaxonomyContext';
-import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
+import { Space, Radius, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { RefreshIndicator } from '../../components/RefreshIndicator';
 import { EmptyState } from '../../components/EmptyState';
 import { OfflineBanner } from '../../components/OfflineBanner';
@@ -46,8 +45,7 @@ const CATEGORY_FILTERS: Record<string, (listing: Listing) => boolean> = {
   Jewelry: (l) => !!l.subcategory && l.subcategory.includes('jewel'),
   Home: (l) => l.category === 'home',
   // "arts" matches the `hob-arts` (Arts & crafts) subcategory.
-  Art: (l) => !!l.subcategory && l.subcategory.includes('arts'),
-};
+  Art: (l) => !!l.subcategory && l.subcategory.includes('arts') };
 
 // ============================================================================
 // CATEGORY BAR — horizontal scrollable pill bar (filters the feed)
@@ -113,35 +111,28 @@ function createCategoryBarStyles(colors: ThemeColors) {
   return StyleSheet.create({
     bar: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       gap: Space.xs,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     pill: {
       paddingVertical: Space.xs + 2,
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.md,
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     pillActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     pillText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     pillTextActive: {
       fontFamily: FontFamily.bold,
-      color: colors.textPrimary,
-    },
-  });
+      color: colors.textPrimary } });
 }
 
 export interface DiscoverSceneProps {
@@ -191,8 +182,7 @@ export function DiscoverScene({
   onPressItem,
   onBrowseCategories,
   onToggleSave,
-  isSavedListing,
-}: DiscoverSceneProps) {
+  isSavedListing }: DiscoverSceneProps) {
   const { colors } = useAppTheme();
   const { isOffline } = useConnectivity();
   const navigation = useNavigation<DiscoverNavigation>();
@@ -259,8 +249,7 @@ export function DiscoverScene({
     () =>
       StyleSheet.create({
         container: { flex: 1, backgroundColor: colors.background },
-        stateWrap: { flex: 1 },
-      }),
+        stateWrap: { flex: 1 } }),
     [colors],
   );
 
@@ -342,8 +331,7 @@ export function DiscoverScene({
   const handleLookPress = useCallback(
     (lookId: string) => navigation.navigate('MainTabs', {
       screen: 'Home',
-      params: { screen: 'LookDetail', params: { lookId } },
-    }),
+      params: { screen: 'LookDetail', params: { lookId } } }),
     [navigation],
   );
   const handlePosterPress = useCallback(

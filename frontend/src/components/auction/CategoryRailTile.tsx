@@ -3,13 +3,13 @@ import {
   View,
   StyleSheet,
   Pressable,
-  Text,
-} from 'react-native';
+  Text } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
 import { haptics } from '../../utils/haptics';
-import { Space, Radius, Typography, Type, LetterSpacing } from '../../theme/designTokens';
+import { Space, Radius, LetterSpacing } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { CategoryWorld } from '../../services/marketApi';
 
 // ════════════════════════════════════════════════════════════════
@@ -18,8 +18,7 @@ import type { CategoryWorld } from '../../services/marketApi';
 export const CategoryRailTile = memo(function CategoryRailTile({
   world,
   onPress,
-  cardWidth,
-}: {
+  cardWidth }: {
   world: CategoryWorld;
   onPress: () => void;
   cardWidth: number;
@@ -65,22 +64,18 @@ function createStyles(colors: ThemeColors) {
       height: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl - 20,
       borderRadius: Radius.lg,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     categoryTileOverlay: {
       position: 'absolute',
       bottom: 0,
       left: 0,
       right: 0,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     categoryTileName: {
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontWeight: '700',
       color: colors.textInverse,
-      fontFamily: Typography.family.bold,
-      letterSpacing: LetterSpacing.normal - 0.1,
-    },
-  });
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: LetterSpacing.normal - 0.1 } });
 }

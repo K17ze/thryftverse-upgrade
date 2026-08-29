@@ -38,19 +38,17 @@ import {
   useWindowDimensions,
   Animated,
   type TextStyle,
-  type ViewStyle,
-} from 'react-native';
+  type ViewStyle } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Control,
   Stroke,
-  IconGrammar,
-} from '../../../theme/designTokens';
+  IconGrammar } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -60,8 +58,7 @@ import {
   STICKER_CATEGORIES,
   AUTO_STICKER_CATEGORY,
   type StickerDef,
-  type StickerCategory,
-} from './StickerCategories';
+  type StickerCategory } from './StickerCategories';
 import { AutoStickerRail, type AutoStickerInput } from './AutoStickerRail';
 import { StickerPinOverlay } from './StickerPinOverlay';
 import type { StickerPin } from './StickerPinTracker';
@@ -113,8 +110,7 @@ export function StickerBrowserSheet({
   pinStickerCenterPx,
   pinMediaLayerBoxPx,
   onPinAnchorChange,
-  onPinAnchorCommit,
-}: StickerBrowserSheetProps) {
+  onPinAnchorCommit }: StickerBrowserSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
@@ -145,14 +141,12 @@ export function StickerBrowserSheet({
           toValue: layout.x,
           useNativeDriver: false,
           stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping,
-        }),
+          damping: Motion.spring.indicator.damping }),
         Animated.spring(underlineWidth, {
           toValue: layout.width,
           useNativeDriver: false,
           stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping,
-        }),
+          damping: Motion.spring.indicator.damping }),
       ]).start();
     },
     [underlineLeft, underlineWidth],
@@ -348,8 +342,7 @@ export function StickerBrowserSheet({
                   onLayout={(e) => {
                     tabLayouts.current[i] = {
                       x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width,
-                    };
+                      width: e.nativeEvent.layout.width };
                     if (active) animateUnderlineTo(i);
                   }}
                 >
@@ -445,8 +438,7 @@ const StickerCell = React.memo(function StickerCell({
   sticker,
   onPress,
   colors,
-  styles,
-}: StickerCellProps) {
+  styles }: StickerCellProps) {
   const isInteractive = sticker.interactive === true;
   const label = sticker.description ?? sticker.name;
 
@@ -489,19 +481,16 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    } as ViewStyle,
+      paddingVertical: Space.sm } as ViewStyle,
     headerActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    } as ViewStyle,
+      gap: Space.xs } as ViewStyle,
     pinBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -509,41 +498,33 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.full,
       borderWidth: Stroke.hairline,
-      gap: Space.xs,
-    } as ViewStyle,
+      gap: Space.xs } as ViewStyle,
     pinBtnActive: {
       backgroundColor: colors.brand,
-      borderColor: colors.brand,
-    } as ViewStyle,
+      borderColor: colors.brand } as ViewStyle,
     pinBtnInactive: {
       backgroundColor: colors.surfaceAlt,
-      borderColor: colors.borderSubtle,
-    } as ViewStyle,
+      borderColor: colors.borderSubtle } as ViewStyle,
     pinBtnLabel: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-    } as TextStyle,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing } as TextStyle,
     pinBtnLabelActive: {
-      color: colors.textInverse,
-    } as TextStyle,
+      color: colors.textInverse } as TextStyle,
     pinBtnLabelInactive: {
-      color: colors.textSecondary,
-    } as TextStyle,
+      color: colors.textSecondary } as TextStyle,
     title: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    } as TextStyle,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary } as TextStyle,
     closeButton: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    } as ViewStyle,
+      justifyContent: 'center' } as ViewStyle,
     searchRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -552,112 +533,90 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       paddingHorizontal: Space.sm,
       height: 40,
       borderWidth: Stroke.hairline,
-      borderColor: colors.borderSubtle,
-    } as ViewStyle,
+      borderColor: colors.borderSubtle } as ViewStyle,
     searchIcon: {
-      marginRight: Space.xs,
-    } as TextStyle,
+      marginRight: Space.xs } as TextStyle,
     searchInput: {
       flex: 1,
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.inputText,
-      padding: 0,
-    } as TextStyle,
+      padding: 0 } as TextStyle,
     clearButton: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: -Space.xs,
-    } as ViewStyle,
+      marginRight: -Space.xs } as ViewStyle,
     tabs: {
       flexGrow: 0,
-      marginVertical: Space.sm,
-    } as ViewStyle,
+      marginVertical: Space.sm } as ViewStyle,
     tabsContent: {
       paddingRight: Space.md,
-      gap: Space.sm,
-    } as ViewStyle,
+      gap: Space.sm } as ViewStyle,
     tab: {
       flexDirection: 'row',
       alignItems: 'center',
       height: Control.hit,
-      paddingHorizontal: Space.smMd,
-    } as ViewStyle,
+      paddingHorizontal: Space.smMd } as ViewStyle,
     tabIcon: {
-      marginRight: Space.xs,
-    } as TextStyle,
+      marginRight: Space.xs } as TextStyle,
     tabLabel: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textSecondary,
-    } as TextStyle,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textSecondary } as TextStyle,
     tabLabelActive: {
-      color: colors.brand,
-    } as TextStyle,
+      color: colors.brand } as TextStyle,
     tabUnderline: {
       position: 'absolute',
       bottom: 0,
       height: Stroke.emphasis,
       backgroundColor: colors.brand,
-      borderRadius: Stroke.emphasis,
-    } as ViewStyle,
+      borderRadius: Stroke.emphasis } as ViewStyle,
     gridWrap: {
-      flex: 1,
-    } as ViewStyle,
+      flex: 1 } as ViewStyle,
     autoRailWrap: {
       flex: 1,
-      paddingVertical: Space.sm,
-    } as ViewStyle,
+      paddingVertical: Space.sm } as ViewStyle,
     gridContent: {
-      paddingVertical: Space.sm,
-    } as ViewStyle,
+      paddingVertical: Space.sm } as ViewStyle,
     rowSeparator: {
-      height: Space.sm,
-    } as ViewStyle,
+      height: Space.sm } as ViewStyle,
     cell: {
       width: CELL_SIZE,
       height: CELL_TOUCH,
       alignItems: 'center',
-      justifyContent: 'center',
-    } as ViewStyle,
+      justifyContent: 'center' } as ViewStyle,
     cellInner: {
       alignItems: 'center',
       justifyContent: 'center',
-      flex: 1,
-    } as ViewStyle,
+      flex: 1 } as ViewStyle,
     emoji: {
       fontSize: 32,
       lineHeight: 38,
-      color: colors.textPrimary,
-    } as TextStyle,
+      color: colors.textPrimary } as TextStyle,
     cellDescription: {
       marginTop: Space.xxs,
       fontFamily: FontFamily.regular,
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       color: colors.textSecondary,
-      textAlign: 'center',
-    } as TextStyle,
+      textAlign: 'center' } as TextStyle,
     emptyState: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: Space.xl,
-    } as ViewStyle,
+      paddingVertical: Space.xl } as ViewStyle,
     emptyText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textSecondary,
-      textAlign: 'center',
-    } as TextStyle,
-  });
+      textAlign: 'center' } as TextStyle });
 }
 
 // FlatList fallback export for environments without FlashList.

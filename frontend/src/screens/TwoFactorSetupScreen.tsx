@@ -5,13 +5,13 @@ import {
   StyleSheet,
   Image,
   TextInput,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipState } from '../components/flagship/FlagshipState';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -200,8 +200,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
     try {
       await disableTwoFactor({
         code: normalizedCode || undefined,
-        recoveryCode: normalizedRecovery || undefined,
-      });
+        recoveryCode: normalizedRecovery || undefined });
       setTwoFactorEnabled(false);
       haptic.medium();
       show('Two-factor authentication disabled', 'info');
@@ -418,8 +417,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
               {
                 color: colors.textPrimary,
                 borderColor: digit ? colors.brand : colors.border,
-                backgroundColor: colors.surface,
-              },
+                backgroundColor: colors.surface },
             ]}
             value={digit}
             onChangeText={(value) => {
@@ -515,8 +513,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         onPress: () => void handleVerify(),
         variant: 'primary' as const,
         disabled: !canVerify,
-        loading: isVerifying,
-      }];
+        loading: isVerifying }];
     }
     if (phase === 'disable-confirm') {
       return [{
@@ -524,15 +521,13 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
         onPress: () => void handleDisable2FA(),
         variant: 'danger' as const,
         disabled: !canDisable,
-        loading: isDisabling,
-      }];
+        loading: isDisabling }];
     }
     if (phase === 'recovery') {
       return [{
         label: 'I have saved my codes',
         onPress: handleRecoveryDone,
-        variant: 'primary' as const,
-      }];
+        variant: 'primary' as const }];
     }
     return [];
   })();
@@ -576,21 +571,18 @@ function createStyles(colors: ThemeColors) {
   phaseIntro: {
     paddingTop: Space.md,
     paddingBottom: Space.lg,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   phaseTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
-  },
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
+    lineHeight: TypographyV2.screenTitle.lineHeight },
   phaseBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight + 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    letterSpacing: TypographyV2.body.letterSpacing },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -599,125 +591,103 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   statusBadgeText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // Info stack (disable overview)
   infoStack: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   infoText: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   infoLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   infoValue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // Disable confirm form
   disableForm: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   inputLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   textInput: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.md,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     letterSpacing: LetterSpacing.caps + 1.18,
-    minHeight: Space.xxl,
-  },
+    minHeight: Space.xxl },
   inputDivider: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     paddingVertical: Space.xs,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // QR
   qrContainer: {
     alignItems: 'center',
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   qrFrame: {
     padding: Space.sm,
     borderRadius: Radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   qrImage: {
     width: Space.xxl * 5,
     height: Space.xxl * 5,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   qrLoading: {
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xl,
-  },
+    paddingVertical: Space.xl },
   qrLoadingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   qrError: {
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.lg,
-    width: Space.xxl * 5,
-  },
+    width: Space.xxl * 5 },
   qrErrorText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   qrRetry: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   // Manual key
   manualKeySection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   manualKeyToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   manualKeyToggleText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   manualKeyBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -725,69 +695,59 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   manualKeyValue: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: LetterSpacing.caps + 0.18,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: LetterSpacing.caps + 0.18 },
   // OTP cells
   otpRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: Space.sm,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   otpCell: {
     flex: 1,
     aspectRatio: 0.75,
     borderWidth: Stroke.standard + Stroke.hairline,
     borderRadius: Radius.md,
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     textAlign: 'center',
-    textAlignVertical: 'center',
-  },
+    textAlignVertical: 'center' },
   errorText: {
     color: colors.danger,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.sm,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // Recovery codes
   recoveryCodesContainer: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   recoveryCodeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   recoveryCodeIndex: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     width: Space.lg - Space.xs,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   recoveryCodeValue: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.caps + 1.18,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: LetterSpacing.caps + 1.18 },
   recoveryActions: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   recoveryActionBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -797,19 +757,15 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     paddingVertical: Space.sm + 2,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   recoveryActionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   recoveryWarning: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight + 2,
-    letterSpacing: Type.caption.letterSpacing,
-    textAlign: 'center',
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'center' } });
 }

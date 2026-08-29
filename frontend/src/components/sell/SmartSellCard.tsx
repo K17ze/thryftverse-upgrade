@@ -5,8 +5,7 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  Switch,
-} from 'react-native';
+  Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -18,10 +17,8 @@ import {
   Space,
   Radius,
   Stroke,
-  Typography,
-  Type,
-  Control,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   type SmartSellPolicy,
   type NetQuote,
@@ -31,8 +28,7 @@ import {
   enableSmartSell,
   disableSmartSell,
   updateSmartSellPolicy,
-  fetchSmartSellDecisions,
-} from '../../services/smartSellApi';
+  fetchSmartSellDecisions } from '../../services/smartSellApi';
 
 export interface SmartSellCardProps {
   /** Listing id the policy applies to. */
@@ -66,8 +62,7 @@ export function SmartSellCard({
   policy,
   onPolicyChange,
   listingPrice,
-  serverPolicyId,
-}: SmartSellCardProps) {
+  serverPolicyId }: SmartSellCardProps) {
   const { colors } = useAppTheme();
   const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
@@ -155,8 +150,7 @@ export function SmartSellCard({
           onValueChange={handleToggle}
           trackColor={{
             false: colors.surfaceAlt,
-            true: colors.brand,
-          }}
+            true: colors.brand }}
           thumbColor={colors.scrimTextPrimary}
           accessibilityLabel="Toggle Smart Sell"
           accessibilityHint="Enable or disable auto-negotiation"
@@ -201,8 +195,7 @@ function SmartSellSheet({
   colors,
   insets,
   isPreview,
-  policyId,
-}: SmartSellSheetProps) {
+  policyId }: SmartSellSheetProps) {
   const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createSheetStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -300,8 +293,7 @@ function SmartSellSheet({
           {
             backgroundColor: colors.background,
             paddingBottom: insets.bottom + Space.md,
-            borderTopColor: colors.border,
-          },
+            borderTopColor: colors.border },
         ]}
         onPress={(e) => e.stopPropagation()}
         accessibilityRole="button"
@@ -478,8 +470,7 @@ function SmartSellSheet({
                 onValueChange={handleAutoDeclineToggle}
                 trackColor={{
                   false: colors.surfaceAlt,
-                  true: colors.brand,
-                }}
+                  true: colors.brand }}
                 thumbColor={colors.scrimTextPrimary}
                 accessibilityLabel="Toggle auto-decline"
                 accessibilityHint="Enable or disable auto-decline of low offers"
@@ -569,8 +560,7 @@ function SmartSellSheet({
                               ? colors.brand
                               : d.decision === 'escalate'
                                 ? colors.warning
-                                : colors.textMuted,
-                      },
+                                : colors.textMuted },
                     ]}
                   />
                   <View style={styles.decisionText}>
@@ -638,28 +628,22 @@ function createStyles() {
       paddingHorizontal: Space.sm + 2,
       borderWidth: Stroke.hairline,
       borderRadius: Radius.md,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     rowLeft: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      flex: 1,
-    },
+      flex: 1 },
     rowText: {
-      flex: 1,
-    },
+      flex: 1 },
     rowTitle: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: -0.2,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: -0.2 },
     rowSummary: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xxs,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginTop: Space.xxs } });
 }
 
 // ---------------------------------------------------------------------------
@@ -671,105 +655,87 @@ function createSheetStyles(colors: ThemeColors) {
     overlay: {
       ...StyleSheet.absoluteFill,
       backgroundColor: colors.overlay,
-      justifyContent: 'flex-end',
-    },
+      justifyContent: 'flex-end' },
     sheet: {
       borderTopLeftRadius: Radius.xl,
       borderTopRightRadius: Radius.xl,
       paddingTop: Space.sm,
       paddingHorizontal: Space.md,
       borderTopWidth: Stroke.hairline,
-      maxHeight: '85%',
-    },
+      maxHeight: '85%' },
     handle: {
       width: Space.xxl + Space.sm,
       height: Stroke.standard * 3,
       borderRadius: Radius.sm,
       alignSelf: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     title: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       letterSpacing: -0.4,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     subtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
-      marginBottom: Space.lg,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight,
+      marginBottom: Space.lg },
     field: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     fieldLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: 0.1,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     fieldHint: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.meta.lineHeight,
-      marginTop: Space.xs,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs },
     inputWrap: {
       flexDirection: 'row',
       alignItems: 'center',
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
       paddingHorizontal: Space.sm + 2,
-      minHeight: Control.hit + Space.sm,
-    },
+      minHeight: Control.hit + Space.sm },
     inputPrefix: {
-      fontSize: Type.bodyLarge.size,
-      fontFamily: Typography.family.bold,
-      marginRight: Space.xs,
-    },
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
+      marginRight: Space.xs },
     input: {
       flex: 1,
-      fontSize: Type.bodyLarge.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
       paddingVertical: Space.sm,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     // Net proceeds illustration
     quoteCard: {
       borderRadius: Radius.md,
       borderWidth: Stroke.hairline,
       padding: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     quoteRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     quoteLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     quoteValue: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontVariant: ['tabular-nums'] },
     quoteDivider: {
       height: Stroke.hairline,
-      marginVertical: Space.xs,
-    },
+      marginVertical: Space.xs },
     quoteNetLabel: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     quoteNetValue: {
-      fontSize: Type.bodyLarge.size,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
+      fontVariant: ['tabular-nums'] },
     // Advanced disclosure
     advancedToggle: {
       flexDirection: 'row',
@@ -777,27 +743,22 @@ function createSheetStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
       borderTopWidth: Stroke.hairline,
-      borderBottomWidth: Stroke.hairline,
-    },
+      borderBottomWidth: Stroke.hairline },
     advancedToggleText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: 0.15,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
     advancedPanel: {
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
     autoDeclineRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     autoDeclineText: {
-      flex: 1,
-    },
+      flex: 1 },
     // Preview banner
     previewBanner: {
       flexDirection: 'row',
@@ -807,76 +768,62 @@ function createSheetStyles(colors: ThemeColors) {
       borderWidth: Stroke.hairline,
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     previewText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight },
     // Decision history
     decisionsSection: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     decisionsTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: 0.15,
       textTransform: 'uppercase',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     decisionRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
       borderBottomWidth: Stroke.hairline,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     decisionLeft: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.sm,
-      flex: 1,
-    },
+      flex: 1 },
     decisionDot: {
       width: 8,
       height: 8,
       borderRadius: 4,
-      marginTop: 5,
-    },
+      marginTop: 5 },
     decisionText: {
-      flex: 1,
-    },
+      flex: 1 },
     decisionAction: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: -0.2,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: -0.2 },
     decisionReason: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.meta.lineHeight,
-      marginTop: 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: 2 },
     decisionNet: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontVariant: ['tabular-nums'] },
     // Done button
     doneBtn: {
       borderRadius: Radius.md,
       paddingVertical: Space.sm + 4,
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: Control.hit + Space.sm,
-    },
+      minHeight: Control.hit + Space.sm },
     doneBtnText: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.scrimTextPrimary,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.scrimTextPrimary } });
 }

@@ -2,7 +2,8 @@ import React from 'react';
 import { StyleSheet, View, Text, ScrollView } from 'react-native';
 import { FieldErrors } from 'react-hook-form';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Stroke} from '../../theme/designTokens';
+import { Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface FormErrorSummaryProps {
   errors: FieldErrors<any>;
@@ -39,19 +40,15 @@ function createStyles(colors: ThemeColors) {
     padding: 12,
     marginBottom: 12,
     borderWidth: Stroke.standard,
-    borderColor: colors.dangerBorder,
-  },
+    borderColor: colors.dangerBorder },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.danger,
-    marginBottom: 6,
-  },
+    marginBottom: 6 },
   errorItem: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    marginBottom: 2,
-  },
-  });
+    marginBottom: 2 } });
 }

@@ -8,8 +8,7 @@ import Reanimated, {
   withRepeat,
   withTiming,
   Easing,
-  SharedValue,
-} from 'react-native-reanimated';
+  SharedValue } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -53,8 +52,7 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
     if (reducedMotion) {
       return {
         opacity: isRefreshing ? 1 : opacity,
-        transform: [{ rotate: '0deg' }, { scale: 1 }],
-      };
+        transform: [{ rotate: '0deg' }, { scale: 1 }] };
     }
 
     return {
@@ -62,15 +60,14 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
       transform: [
         { rotate: `${isRefreshing ? rotation.value : pullRotation}deg` },
         { scale: isRefreshing ? 1.2 : scale },
-      ],
-    };
+      ] };
   });
 
   return (
     <View style={[styles.container, { top: topInset }]}>
       <Reanimated.View style={animStyle}>
         <View style={styles.circle}>
-          <Text style={{ fontFamily: Typography.family.bold, color: colors.background, fontSize: Type.body.size, marginTop: -2 }}>T</Text>
+          <Text style={{ fontFamily: TypographyV2.body.fontFamily, color: colors.background, fontSize: TypographyV2.body.size, marginTop: -2 }}>T</Text>
         </View>
       </Reanimated.View>
     </View>
@@ -78,7 +75,8 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
 }
 
 import { Text } from 'react-native';
-import { Typography, Radius, Type } from '../theme/designTokens';
+import { Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
@@ -86,8 +84,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     left: 0,
     right: 0,
     alignItems: 'center',
-    zIndex: -1,
-  },
+    zIndex: -1 },
   circle: {
     width: 32,
     height: 32,
@@ -99,6 +96,4 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 10,
-    elevation: 4,
-  },
-});
+    elevation: 4 } });

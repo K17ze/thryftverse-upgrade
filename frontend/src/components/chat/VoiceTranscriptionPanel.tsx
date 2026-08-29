@@ -4,18 +4,17 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
+import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import {
   requestVoiceTranscriptionOnApi,
   fetchVoiceTranscriptionOnApi,
   rateVoiceTranscriptionOnApi,
-  type VoiceTranscriptionReceipt,
-} from '../../services/chatApi';
+  type VoiceTranscriptionReceipt } from '../../services/chatApi';
 
 export interface VoiceTranscriptionPanelProps {
   conversationId: string;
@@ -50,8 +49,7 @@ type PanelState =
 export function VoiceTranscriptionPanel({
   conversationId,
   messageId,
-  defaultExpanded = false,
-}: VoiceTranscriptionPanelProps) {
+  defaultExpanded = false }: VoiceTranscriptionPanelProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -305,13 +303,11 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: 2,
-      alignSelf: 'flex-start',
-    },
+      alignSelf: 'flex-start' },
     triggerText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     container: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -322,72 +318,58 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     row: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs + 1,
-    },
+      gap: Space.xs + 1 },
     textWrap: {
       flex: 1,
-      gap: 2,
-    },
+      gap: 2 },
     transcriptText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       color: colors.textPrimary,
-      lineHeight: Type.caption.lineHeight + 2,
-    },
+      lineHeight: TypographyV2.meta.lineHeight + 2 },
     derivedLabel: {
-      fontSize: Type.meta.size - 1,
+      fontSize: TypographyV2.meta.size - 1,
       fontFamily: TypeStyles.body.fontFamily,
       color: colors.textMuted,
-      fontStyle: 'italic',
-    },
+      fontStyle: 'italic' },
     mutedText: {
       flex: 1,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     errorText: {
       flex: 1,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      color: colors.danger,
-    },
+      color: colors.danger },
     warningText: {
       flex: 1,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      color: colors.warning,
-    },
+      color: colors.warning },
     actions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     retryBtn: {
       paddingHorizontal: Space.sm,
       paddingVertical: 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.surfaceElevated,
-    },
+      backgroundColor: colors.surfaceElevated },
     retryText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textPrimary },
     rateBtn: {
       width: 28,
       height: 28,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     rateBtnActive: {
-      backgroundColor: colors.surfaceElevated,
-    },
-  });
+      backgroundColor: colors.surfaceElevated } });

@@ -33,19 +33,17 @@ import {
   type TextStyle,
   type LayoutChangeEvent,
   type GestureResponderEvent,
-  type PanResponderGestureState,
-} from 'react-native';
+  type PanResponderGestureState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CreatorGlyph, type CreatorGlyphName } from '../../controls/CreatorGlyph';
 import {
   Space,
   Radius,
-  Type,
   Typography,
   Stroke,
   Control,
-  FontFamily,
-} from '../../../theme/designTokens';
+  FontFamily } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -56,8 +54,7 @@ import { FontChooserRail } from './FontChooserRail';
 import { CURATED_FONTS, resolveFontPreviewStyle } from './FontRegistry';
 import {
   DEFAULT_TEXT_STYLE,
-  type TextStyleConfig,
-} from './textStylePresets';
+  type TextStyleConfig } from './textStylePresets';
 import {
   CreatorColorPicker,
   useCreatorColorHistory,
@@ -67,8 +64,7 @@ import {
   BLACK,
   WHITE,
   type CreatorColor,
-  type RecentColor,
-} from '../../color';
+  type RecentColor } from '../../color';
 
 export interface TextEditorSheetProps {
   visible: boolean;
@@ -107,8 +103,7 @@ const ANIMATION_TO_PAYLOAD: Record<AnimationKey, TextStyleConfig['textAnimation'
   rise: 'slide',
   type: 'typewriter',
   pop: 'bounce',
-  slide: 'slide',
-};
+  slide: 'slide' };
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -131,8 +126,7 @@ export function TextEditorSheet({
   onClose,
   initialText,
   initialStyle,
-  onConfirm,
-}: TextEditorSheetProps) {
+  onConfirm }: TextEditorSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useEditorStyles(colors);
@@ -203,14 +197,12 @@ export function TextEditorSheet({
           toValue: layout.x,
           useNativeDriver: false,
           stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping,
-        }),
+          damping: Motion.spring.indicator.damping }),
         Animated.spring(widthVal, {
           toValue: layout.width,
           useNativeDriver: false,
           stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping,
-        }),
+          damping: Motion.spring.indicator.damping }),
       ]).start();
     },
     [],
@@ -364,8 +356,7 @@ export function TextEditorSheet({
         : undefined,
       background: bgEnabled
         ? { color: bgColor, radius: bgRadius, paddingX: bgPaddingX, paddingY: bgPaddingY }
-        : undefined,
-    };
+        : undefined };
 
     haptic.light();
     onConfirm(trimmed, style);
@@ -378,7 +369,7 @@ export function TextEditorSheet({
 
   // ── Preview style ──
   const previewFontStyle = useMemo(
-    () => resolveFontPreviewStyle(fontId, Type.bodyStrong.size + 2),
+    () => resolveFontPreviewStyle(fontId, TypographyV2.bodyStrong.size + 2),
     [fontId],
   );
 
@@ -390,16 +381,14 @@ export function TextEditorSheet({
     fontFamily: previewFontStyle.fontFamily,
     lineHeight: previewFontStyle.lineHeight,
     textAlign: alignment,
-    color: colorToRgba(fillColor),
-  };
+    color: colorToRgba(fillColor) };
 
   // Shadow style for preview
   const previewShadow: TextStyle = shadowEnabled
     ? {
         textShadowColor: colorToRgba(shadowColor),
         textShadowOffset: { width: shadowOffsetX, height: shadowOffsetY },
-        textShadowRadius: shadowBlur,
-      }
+        textShadowRadius: shadowBlur }
     : {};
 
   // Stroke preview: use multi-shadow technique (8 directions)
@@ -451,8 +440,7 @@ export function TextEditorSheet({
                 backgroundColor: colorToRgba(bgColor),
                 borderRadius: bgRadius,
                 paddingHorizontal: bgPaddingX,
-                paddingVertical: bgPaddingY,
-              },
+                paddingVertical: bgPaddingY },
             ]}
           >
             {strokeEnabled && strokeOffsets.length > 0 ? (
@@ -467,8 +455,7 @@ export function TextEditorSheet({
                         color: 'transparent',
                         textShadowColor: colorToRgba(strokeColor),
                         textShadowOffset: offset,
-                        textShadowRadius: 0,
-                      },
+                        textShadowRadius: 0 },
                     ]}
                     numberOfLines={3}
                   >
@@ -543,8 +530,7 @@ export function TextEditorSheet({
                   onLayout={(e) => {
                     alignmentLayouts.current[i] = {
                       x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width,
-                    };
+                      width: e.nativeEvent.layout.width };
                     if (isActive) {
                       animateUnderline(alignmentLayouts.current, alignmentUnderlineLeft, alignmentUnderlineWidth, i);
                     }
@@ -799,8 +785,7 @@ export function TextEditorSheet({
                   onLayout={(e) => {
                     animLayouts.current[i] = {
                       x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width,
-                    };
+                      width: e.nativeEvent.layout.width };
                     if (isActive) {
                       animateUnderline(animLayouts.current, animUnderlineLeft, animUnderlineWidth, i);
                     }
@@ -877,8 +862,7 @@ function MiniSlider({
   step,
   valueFormatter,
   onChange,
-  colors,
-}: MiniSliderProps) {
+  colors }: MiniSliderProps) {
   const trackWidthRef = useRef(0);
   const [trackWidth, setTrackWidth] = useState(0);
   const styles = useEditorStyles(colors);
@@ -914,8 +898,7 @@ function MiniSlider({
           onChange(clamp(next, min, max));
         },
         onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false,
-      }),
+        onPanResponderTerminationRequest: () => false }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [thumbPosition, valueToPosition, onChange],
   );
@@ -940,8 +923,7 @@ function MiniSlider({
           min,
           max,
           now: clamped,
-          text: valueFormatter(clamped),
-        }}
+          text: valueFormatter(clamped) }}
       >
         <View style={[styles.track, { backgroundColor: colors.border }]} />
         <View
@@ -973,24 +955,20 @@ function useEditorStyles(colors: ThemeColors) {
           justifyContent: 'space-between',
           paddingHorizontal: Space.md,
           paddingTop: Space.sm,
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         title: {
           fontFamily: Typography.family.bold,
-          fontSize: Type.subtitle.size,
-          letterSpacing: Type.subtitle.letterSpacing,
-        },
+          fontSize: TypographyV2.sectionTitle.size,
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing },
         closeBtn: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         body: {
           paddingHorizontal: Space.md,
           paddingBottom: Space.lg,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         preview: {
           minHeight: 72,
           borderRadius: Radius.lg,
@@ -1000,126 +978,106 @@ function useEditorStyles(colors: ThemeColors) {
           justifyContent: 'center',
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         strokePreviewWrap: {
           // The multi-shadow stroke technique requires a relative container
           alignItems: 'center',
           justifyContent: 'center',
-          alignSelf: 'stretch',
-        },
+          alignSelf: 'stretch' },
         input: {
           fontFamily: Typography.family.regular,
-          fontSize: Type.body.size,
+          fontSize: TypographyV2.body.size,
           color: colors.textPrimary,
           borderWidth: Stroke.standard,
           borderColor: colors.border,
           borderRadius: Radius.md,
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
-          minHeight: 48,
-        },
+          minHeight: 48 },
         sectionLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.label.size,
-          letterSpacing: Type.label.letterSpacing,
+          fontSize: TypographyV2.label.size,
+          letterSpacing: TypographyV2.label.letterSpacing,
           textTransform: 'uppercase',
           color: colors.textSecondary,
-          marginTop: Space.xs,
-        },
+          marginTop: Space.xs },
         colorPicker: {
           // No extra padding — CreatorColorPicker manages its own layout
         },
         tabBar: {
           flexDirection: 'row',
-          position: 'relative',
-        },
+          position: 'relative' },
         tabItem: {
           flex: 1,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         tabUnderline: {
           position: 'absolute',
           bottom: 0,
           height: Stroke.emphasis,
           backgroundColor: colors.brand,
-          borderRadius: Stroke.emphasis,
-        },
+          borderRadius: Stroke.emphasis },
         // ── Effect section header (label + enable toggle) ──
         effectSectionHeader: {
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
-        },
+          justifyContent: 'space-between' },
         enableToggle: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         enableToggleActive: {},
         effectControls: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         // ── Color section toggle ──
         colorSectionToggle: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.sm,
           paddingVertical: Space.xs,
-          minHeight: 44,
-        },
+          minHeight: 44 },
         colorWell: {
           width: 28,
           height: 28,
           borderRadius: Radius.sm,
           borderWidth: Stroke.hairline,
-          borderColor: 'rgba(0,0,0,0.1)',
-        },
+          borderColor: 'rgba(0,0,0,0.1)' },
         colorWellLabel: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.caption.size,
-          flex: 1,
-        },
+          fontSize: TypographyV2.meta.size,
+          flex: 1 },
         // ── Slider ──
         sliderRow: {
-          paddingVertical: Space.xs,
-        },
+          paddingVertical: Space.xs },
         sliderHeader: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: Space.xxs,
-        },
+          marginBottom: Space.xxs },
         sliderLabel: {
           fontFamily: Typography.family.regular,
-          fontSize: Type.caption.size,
-        },
+          fontSize: TypographyV2.meta.size },
         sliderValue: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.caption.size,
-          fontVariant: ['tabular-nums'],
-        },
+          fontSize: TypographyV2.meta.size,
+          fontVariant: ['tabular-nums'] },
         trackWrap: {
           height: Control.hit,
           justifyContent: 'center',
-          position: 'relative',
-        },
+          position: 'relative' },
         track: {
           position: 'absolute',
           left: 0,
           right: 0,
           height: 3,
-          borderRadius: Radius.full,
-        },
+          borderRadius: Radius.full },
         fill: {
           position: 'absolute',
           left: 0,
           height: 3,
-          borderRadius: Radius.full,
-        },
+          borderRadius: Radius.full },
         thumb: {
           position: 'absolute',
           width: 16,
@@ -1127,25 +1085,21 @@ function useEditorStyles(colors: ThemeColors) {
           borderRadius: Radius.full,
           marginLeft: -8,
           borderWidth: Stroke.standard,
-          borderColor: 'rgba(0,0,0,0)',
-        },
+          borderColor: 'rgba(0,0,0,0)' },
         // ── Animation ──
         animContent: {
           gap: Space.sm,
           paddingRight: Space.md,
-          position: 'relative',
-        },
+          position: 'relative' },
         animTab: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
           paddingHorizontal: Space.smMd,
-          height: Control.hit,
-        },
+          height: Control.hit },
         animTabLabel: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.caption.size,
-        },
+          fontSize: TypographyV2.meta.size },
         // ── Confirm ──
         confirmBtn: {
           backgroundColor: colors.brand,
@@ -1155,17 +1109,13 @@ function useEditorStyles(colors: ThemeColors) {
           alignItems: 'center',
           justifyContent: 'center',
           gap: Space.xs,
-          marginTop: Space.sm,
-        },
+          marginTop: Space.sm },
         confirmBtnDisabled: {
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surfaceAlt },
         confirmBtnText: {
           fontFamily: FontFamily.semibold,
-          fontSize: Type.bodyStrong.size,
-          color: colors.textInverse,
-        },
-      }),
+          fontSize: TypographyV2.bodyStrong.size,
+          color: colors.textInverse } }),
     [colors],
   );
 }

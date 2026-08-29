@@ -5,27 +5,25 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Motion } from '../../theme/motionTokens';
-import { Type, Typography, Space, Radius, Control, Stroke, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Control, Stroke, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type {
   PosterSticker as ApiPosterSticker,
   PollVoteResult,
-  QuizVoteResult,
-} from '../../services/postersApi';
+  QuizVoteResult } from '../../services/postersApi';
 
 // ── Sticker Interaction Panel ──────────────────────────────────────────
 // A bottom-anchored panel that appears when a viewer taps an interactive
@@ -62,8 +60,7 @@ export function StickerInteractionPanel({
   onQuestionSubmit,
   onStyleVote,
   onDismiss,
-  colors,
-}: StickerInteractionPanelProps) {
+  colors }: StickerInteractionPanelProps) {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
@@ -82,8 +79,7 @@ export function StickerInteractionPanel({
 
   const panelStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: panelY.value }],
-    opacity: panelOpacity.value,
-  }));
+    opacity: panelOpacity.value }));
 
   const handleVote = (optionId: string) => {
     if (sticker.type === 'poll' || sticker.type === 'style_vote') {
@@ -267,8 +263,7 @@ function createStickerPanelStyles(colors: ReturnType<typeof useAppTheme>['colors
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
-    zIndex: 50,
-  },
+    zIndex: 50 },
   panel: {
     backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: Radius.xl,
@@ -276,38 +271,32 @@ function createStickerPanelStyles(colors: ReturnType<typeof useAppTheme>['colors
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     // Deliberate elevation to separate the panel from the story content
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   typeLabel: {
     color: colors.textMuted,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   closeBtn: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   questionText: {
     color: colors.textPrimary,
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.subtitle.lineHeight,
-    marginBottom: Space.sm,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    marginBottom: Space.sm },
   optionsList: {
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -316,92 +305,75 @@ function createStickerPanelStyles(colors: ReturnType<typeof useAppTheme>['colors
     backgroundColor: colors.brandSubtle,
     paddingHorizontal: Space.md,
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   optionSelected: {
     backgroundColor: colors.brandSubtle,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   optionCorrect: {
     borderWidth: Stroke.standard,
-    borderColor: colors.success,
-  },
+    borderColor: colors.success },
   optionPressed: {
-    backgroundColor: colors.rowPressed,
-  },
+    backgroundColor: colors.rowPressed },
   optionFill: {
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: colors.brandSubtle,
-  },
+    backgroundColor: colors.brandSubtle },
   optionLabel: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    zIndex: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    zIndex: 1 },
   optionPercentage: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
-    zIndex: 1,
-  },
+    zIndex: 1 },
   optionIcon: {
     marginLeft: Space.xs,
-    zIndex: 1,
-  },
+    zIndex: 1 },
   resultSummary: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.sm,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   // Question sticker input
   questionInputArea: {
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   questionInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   questionInput: {
     flex: 1,
     height: Control.hit,
     borderRadius: Radius.full,
     backgroundColor: colors.input,
     color: colors.inputText,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    paddingHorizontal: Space.md,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    paddingHorizontal: Space.md },
   questionSendBtn: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     backgroundColor: colors.brandSubtle,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   questionSendBtnDisabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   answerSentWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   answerSentText: {
     color: colors.success,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily } });
 }

@@ -7,8 +7,7 @@ import {
   ScrollView,
   Share,
   Platform,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,7 +17,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Type, Radius, FontSize, Stroke, Control } from '../theme/designTokens';
+import { Typography, Space, Radius, FontSize, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { AppStatusPill } from '../components/ui/AppStatusPill';
@@ -100,8 +100,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           message:
             Platform.OS === 'android'
               ? `Check out "${listingTitle}" on Thryftverse\n${url}`
-              : `Check out "${listingTitle}" on Thryftverse`,
-        },
+              : `Check out "${listingTitle}" on Thryftverse` },
         { dialogTitle: 'Share listing' }
       );
     } catch {
@@ -391,41 +390,35 @@ function createStyles(colors: ThemeColors) {
 
   heroSection: {
     alignItems: 'center',
-    marginBottom: Space.xl,
-  },
+    marginBottom: Space.xl },
   heroIcon: {
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   heroBigText: {
     fontSize: FontSize.hero,
     lineHeight: FontSize.hero + 4,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -2.2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   heroSubText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight },
   heroMicroCopy: {
     marginTop: Space.sm,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight },
 
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Space.lg,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -435,24 +428,21 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.successBorder,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   statusText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.success,
     textTransform: 'uppercase',
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   idText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     flexShrink: 1,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   summaryCard: {
     flexDirection: 'row',
@@ -460,8 +450,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xl,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
-    marginBottom: Space.xl,
-  },
+    marginBottom: Space.xl },
   summaryImageWrap: {
     width: Space.xxl + Space.xxl,
     height: Space.xxl + Space.xxl + Space.sm,
@@ -471,42 +460,35 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   summaryImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   summaryImageFallback: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   summaryBody: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   summaryLabel: {
     color: colors.textMuted,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
-    letterSpacing: Type.meta.letterSpacing,
-    lineHeight: Type.meta.lineHeight,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   summaryTitle: {
     marginTop: Space.xs,
     color: colors.textPrimary,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily },
   summaryMeta: {
     marginTop: Space.xs,
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   actionRowBtn: {
     flexDirection: 'row',
@@ -515,27 +497,23 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
     borderBottomWidth: Stroke.standard,
     borderBottomColor: colors.border,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   actionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   actionIconBox: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   actionText: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
 
   tipsCard: {
     marginBottom: Space.md,
@@ -545,54 +523,45 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,
     borderColor: colors.brandBorder,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   tipsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   tipsTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   tipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   tipText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.lineHeight + Space.xs / 2,
-  },
+    lineHeight: TypographyV2.meta.lineHeight + Space.xs / 2 },
 
   smartSellBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
     marginBottom: Space.md,
-    padding: Space.md,
-  },
+    padding: Space.md },
   smartSellBannerBody: {
-    flex: 1,
-  },
+    flex: 1 },
   smartSellBannerTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    marginBottom: Space.xs / 2,
-  },
+    marginBottom: Space.xs / 2 },
   smartSellBannerText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
 
   supportLink: {
     marginTop: Space.lg,
@@ -600,14 +569,11 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   supportLinkText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  });
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing } });
 }

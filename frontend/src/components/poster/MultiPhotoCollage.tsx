@@ -7,13 +7,13 @@ import {
   Modal,
   Text,
   ScrollView,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LayoutType } from './LayoutPicker';
 import { useToast } from '../../context/ToastContext';
-import { Radius, Space, Type, Typography, Stroke } from '../../theme/designTokens';
+import { Radius, Space, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -26,8 +26,7 @@ import Reanimated, {
   withDelay,
   withTiming,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -59,8 +58,7 @@ function CellActionSheet({
   visible,
   onClose,
   onAction,
-  slotIndex,
-}: {
+  slotIndex }: {
   visible: boolean;
   onClose: () => void;
   onAction: (action: CellAction['id'], slotIndex: number) => void;
@@ -112,43 +110,36 @@ function createActionSheetStyles(colors: ThemeColors) {
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   sheet: {
     backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
     paddingBottom: 40,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.sm,
     backgroundColor: colors.borderSubtle,
     alignSelf: 'center',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textInverse,
     textAlign: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.md,
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   actionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textInverse,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse } });
 }
 
 // ── Memoized cell component ──────────────────────────────────────────
@@ -182,8 +173,7 @@ const CollageCell = memo(function CollageCell({
   onPressCell,
   springEntrance,
   springTap,
-  springPress,
-}: CollageCellProps) {
+  springPress }: CollageCellProps) {
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createCollageStyles(colors), [colors]);
@@ -226,8 +216,7 @@ const CollageCell = memo(function CollageCell({
     );
     return {
       transform: [{ scale: scale * pressScale.value }],
-      opacity,
-    };
+      opacity };
   });
 
   // Selection border style
@@ -236,8 +225,7 @@ const CollageCell = memo(function CollageCell({
     return {
       opacity: selectionScale.value,
       borderColor: colors.commerceTrust,
-      borderWidth: Stroke.emphasis,
-    };
+      borderWidth: Stroke.emphasis };
   });
 
   const handlePress = useCallback(() => {
@@ -259,8 +247,7 @@ const CollageCell = memo(function CollageCell({
 
   const cellContainer: ViewStyle = {
     ...cellStyle,
-    borderRadius: cellRadius,
-  };
+    borderRadius: cellRadius };
 
   const content = (
     <Reanimated.View
@@ -319,8 +306,7 @@ export default function MultiPhotoCollage({
   layout,
   photos,
   onPhotosChange,
-  canvasSize,
-}: MultiPhotoCollageProps) {
+  canvasSize }: MultiPhotoCollageProps) {
   const { show } = useToast();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -342,8 +328,7 @@ export default function MultiPhotoCollage({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.92,
-      });
+        quality: 0.92 });
 
       if (!result.canceled && result.assets?.[0]?.uri) {
         const newPhotos = [...photos];
@@ -492,17 +477,14 @@ function createCollageStyles(colors: ThemeColors) {
   return StyleSheet.create({
   slot: {
     overflow: 'hidden',
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   slotEmpty: {
     borderWidth: Stroke.standard,
-    borderColor: colors.borderSubtle,
-  },
+    borderColor: colors.borderSubtle },
   addBtn: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   addCircle: {
     width: 38,
     height: 38,
@@ -510,7 +492,5 @@ function createCollageStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  });
+    justifyContent: 'center' } });
 }

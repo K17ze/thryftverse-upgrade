@@ -4,14 +4,14 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Typography, Radius, Type, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -100,8 +100,7 @@ export default function EditProfileScreen() {
           phone: updated.phone,
           avatar: updated.avatar,
           coverPhoto: updated.coverPhoto,
-          coverVideo: updated.coverVideo,
-        });
+          coverVideo: updated.coverVideo });
       }
 
       await fetchMyProfile();
@@ -129,8 +128,7 @@ export default function EditProfileScreen() {
       message: 'You have unsaved changes. Are you sure you want to discard them?',
       confirmLabel: 'Discard',
       variant: 'danger',
-      onConfirm: () => navigation.goBack(),
-    });
+      onConfirm: () => navigation.goBack() });
   };
 
   if (!user) {
@@ -321,8 +319,7 @@ function ProfileEditField({
   autoCapitalize = 'none',
   keyboardType = 'default',
   returnKeyType = 'next',
-  isLast,
-}: ProfileEditFieldProps) {
+  isLast }: ProfileEditFieldProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [isFocused, setIsFocused] = useState(false);
@@ -386,20 +383,16 @@ function createStyles(colors: ThemeColors) {
       minWidth: Control.hit,
       backgroundColor: colors.surfaceAlt,
       borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     saveBtnActive: {
       backgroundColor: colors.brand,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     saveBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textMuted },
     saveBtnTextActive: {
-      color: colors.textInverse,
-    },
+      color: colors.textInverse },
 
     // ── Identity row — profile preview ──
     identityRow: {
@@ -408,76 +401,64 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
       paddingHorizontal: Space.md,
       paddingTop: Space.md + 2,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     identityAvatar: {
       width: 52,
       height: 52,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     identityAvatarText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
       textAlign: 'center',
-      lineHeight: 52,
-    },
+      lineHeight: 52 },
     identityText: {
       flex: 1,
       minWidth: 0,
-      gap: Space.xs / 4,
-    },
+      gap: Space.xs / 4 },
     identityName: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
-    },
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     identityHandle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     photoHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       paddingHorizontal: Space.md,
       paddingTop: 0,
       paddingBottom: Space.sm,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
 
     // ── Sections — form groups with horizontal padding ──
     sectionGroup: {
       paddingTop: Space.lg,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     sectionLabel: {
-      fontSize: Type.label.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.label.size,
+      fontFamily: TypographyV2.label.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
-      marginBottom: Space.sm,
-    },
+      letterSpacing: TypographyV2.label.letterSpacing,
+      marginBottom: Space.sm },
 
     // ── Fields — premium inputs with clear focus states ──
     fieldGroup: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     fieldGroupLast: {
-      marginBottom: 0,
-    },
+      marginBottom: 0 },
     fieldLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       marginBottom: Space.xs + 2,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     fieldSurface: {
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
@@ -487,58 +468,47 @@ function createStyles(colors: ThemeColors) {
       minHeight: 52,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     fieldSurfaceFocused: {
       borderColor: colors.brand,
-      borderWidth: Stroke.emphasis,
-    },
+      borderWidth: Stroke.emphasis },
     fieldSurfaceError: {
       borderColor: colors.danger,
-      borderWidth: Stroke.emphasis,
-    },
+      borderWidth: Stroke.emphasis },
     fieldSurfaceMultiline: {
       alignItems: 'flex-end',
       paddingVertical: Space.sm,
-      minHeight: 104,
-    },
+      minHeight: 104 },
     fieldInput: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
       paddingVertical: Space.sm,
-      paddingHorizontal: 0,
-    },
+      paddingHorizontal: 0 },
     fieldInputMultiline: {
       flex: 1,
       minHeight: 72,
-      lineHeight: Type.body.lineHeight,
-      paddingVertical: 0,
-    },
+      lineHeight: TypographyV2.body.lineHeight,
+      paddingVertical: 0 },
     fieldCounter: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       paddingBottom: Space.xs / 2,
-      fontVariant: ['tabular-nums'] as ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] as ['tabular-nums'] },
     fieldCounterError: {
-      color: colors.danger,
-    },
+      color: colors.danger },
     fieldHelper: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       marginTop: Space.xs + 2,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     fieldError: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.danger,
       marginTop: Space.xs + 2,
-      lineHeight: Type.caption.lineHeight,
-    },
-  });
+      lineHeight: TypographyV2.meta.lineHeight } });
 }

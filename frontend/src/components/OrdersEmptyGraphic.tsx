@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Stroke} from '../theme/designTokens';
+import { Typography, Space, Radius, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 interface Props {
   title?: string;
@@ -11,8 +12,7 @@ interface Props {
 
 export function OrdersEmptyGraphic({
   title = 'No orders yet',
-  subtitle = 'When you buy or sell, your orders will appear here',
-}: Props) {
+  subtitle = 'When you buy or sell, your orders will appear here' }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -37,8 +37,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 60,
-      gap: 12,
-    },
+      gap: 12 },
     iconRing: {
       width: 72,
       height: 72,
@@ -47,20 +46,16 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       backgroundColor: colors.surfaceAlt,
       borderWidth: Stroke.standard,
-      borderColor: colors.borderSubtle,
-    },
+      borderColor: colors.borderSubtle },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textPrimary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     subtitle: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       textAlign: 'center',
-      maxWidth: 240,
-    },
-  });
+      maxWidth: 240 } });
 }

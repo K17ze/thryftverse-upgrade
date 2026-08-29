@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type, Radius, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface TimelineEntry {
   id: string;
@@ -98,67 +99,52 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   warningText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   entryRow: {
     flexDirection: 'row',
-    gap: Space.md,
-  },
+    gap: Space.md },
   leftCol: {
     alignItems: 'center',
-    width: Space.xl,
-  },
+    width: Space.xl },
   connector: {
     width: Stroke.emphasis,
     flex: 1,
     backgroundColor: colors.border,
     marginVertical: Space.xs,
     minHeight: Space.xl + Space.sm,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   connectorCompleted: {
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   contentCol: {
     flex: 1,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   label: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   labelPending: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   labelActive: {
-    color: colors.brand,
-  },
+    color: colors.brand },
   date: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginLeft: Space.sm,
-  },
+    marginLeft: Space.sm },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: 18,
-  },
+    lineHeight: 18 },
   subtitlePending: {
-    color: colors.textMuted,
-  },
-});
+    color: colors.textMuted } });

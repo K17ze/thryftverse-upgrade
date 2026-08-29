@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type, Radius, Stroke} from '../../theme/designTokens';
+import { Space, Typography, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 type PublicationStage =
   | 'idle'
@@ -71,8 +72,7 @@ export function ListingPublishFooter({
   bottomInset,
   qualityScore,
   qualityTierLabel,
-  qualityColor,
-}: ListingPublishFooterProps) {
+  qualityColor }: ListingPublishFooterProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const stageText = getStageText(publicationStage);
@@ -173,57 +173,47 @@ function createStyles(colors: ThemeColors) {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   feedbackRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   feedbackText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   feedbackTextError: {
     color: colors.danger,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   /* Compact quality indicator — flat, no surface, no border.
      Per AGENTS.md §4: flat canvas, no card containers. */
   qualityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   qualityDot: {
     width: 8,
     height: 8,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   qualityLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   qualityScore: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] },
   qualityTier: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   actionRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   previewBtn: {
     flex: 1,
     height: 50,
@@ -233,17 +223,14 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-  },
+    flexDirection: 'row' },
   previewBtnPressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   previewText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   publishBtn: {
     flex: 1.6,
     height: 50,
@@ -251,25 +238,18 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-  },
+    flexDirection: 'row' },
   publishBtnReady: {
-    height: 52,
-  },
+    height: 52 },
   publishBtnPressed: {
     opacity: 0.9,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   publishBtnDisabled: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   publishText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textInverse },
   publishTextDisabled: {
-    color: colors.textMuted,
-  },
-  });
+    color: colors.textMuted } });
 }

@@ -6,13 +6,13 @@ import {
   Pressable,
   useWindowDimensions,
   ScrollView,
-  Image as RNImage,
-} from 'react-native';
+  Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type, FontFamily, Stroke, Elevation } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -32,8 +32,7 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   Easing,
-  cancelAnimation,
-} from 'react-native-reanimated';
+  cancelAnimation } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 
 
@@ -60,8 +59,7 @@ export function CreatorCropSheet({
   visible,
   imageUri,
   onClose,
-  onCropComplete,
-}: CreatorCropSheetProps) {
+  onCropComplete }: CreatorCropSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -232,8 +230,7 @@ export function CreatorCropSheet({
     setCropRect((prev) => ({
       ...prev,
       x: cropXSV.value,
-      y: cropYSV.value,
-    }));
+      y: cropYSV.value }));
   }, [cropXSV, cropYSV]);
 
   // ── Pinch to zoom within crop frame ──────────────────────────────
@@ -275,8 +272,7 @@ export function CreatorCropSheet({
       x: cropXSV.value,
       y: cropYSV.value,
       width: cropWSV.value,
-      height: cropHSV.value,
-    });
+      height: cropHSV.value });
   }, [cropXSV, cropYSV, cropWSV, cropHSV]);
 
   // Compose pan + pinch
@@ -305,9 +301,7 @@ export function CreatorCropSheet({
           originX: Math.round(cropRect.x),
           originY: Math.round(cropRect.y),
           width: Math.round(cropRect.width),
-          height: Math.round(cropRect.height),
-        },
-      }];
+          height: Math.round(cropRect.height) } }];
       if (rotation !== 0) {
         actions.push({ rotate: rotation });
       }
@@ -327,16 +321,13 @@ export function CreatorCropSheet({
 
   // ── Animated styles ──────────────────────────────────────────────
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetYSV.value }],
-  }));
+    transform: [{ translateY: sheetYSV.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacitySV.value,
-  }));
+    opacity: backdropOpacitySV.value }));
 
   const imageStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotateSV.value}deg` }],
-  }));
+    transform: [{ rotate: `${rotateSV.value}deg` }] }));
 
   // Crop frame animated position/size (display coordinates)
   const scaleToDisplay = imageSize.width > 0 ? displayW / imageSize.width : 1;
@@ -345,8 +336,7 @@ export function CreatorCropSheet({
     left: cropXSV.value * scaleToDisplay,
     top: cropYSV.value * scaleToDisplay,
     width: cropWSV.value * scaleToDisplay,
-    height: cropHSV.value * scaleToDisplay,
-  }));
+    height: cropHSV.value * scaleToDisplay }));
 
   // Grid lines fade in/out — brighter while dragging
   const gridStyle = useAnimatedStyle(() => ({
@@ -355,14 +345,12 @@ export function CreatorCropSheet({
       [1, 1.5],
       [gridOpacitySV.value, gridOpacitySV.value * 1.8],
       Extrapolation.CLAMP
-    ),
-  }));
+    ) }));
 
   // Ratio tab underline indicator (spring-animated on tab change).
   const ratioUnderlineStyle = useAnimatedStyle(() => ({
     left: ratioUnderlineXSV.value,
-    width: ratioUnderlineWSV.value,
-  }));
+    width: ratioUnderlineWSV.value }));
 
   if (!visible && !mountedRef.current) return null;
 
@@ -414,27 +402,23 @@ export function CreatorCropSheet({
               {/* Top */}
               <View style={[styles.dimOverlay, {
                 position: 'absolute', top: 0, left: 0, right: 0,
-                height: cropRect.y * scaleToDisplay,
-              }]} />
+                height: cropRect.y * scaleToDisplay }]} />
               {/* Bottom */}
               <View style={[styles.dimOverlay, {
                 position: 'absolute',
                 top: (cropRect.y + cropRect.height) * scaleToDisplay,
-                left: 0, right: 0, bottom: 0,
-              }]} />
+                left: 0, right: 0, bottom: 0 }]} />
               {/* Left */}
               <View style={[styles.dimOverlay, {
                 position: 'absolute',
                 top: cropRect.y * scaleToDisplay, left: 0,
-                width: cropRect.x * scaleToDisplay, height: cropRect.height * scaleToDisplay,
-              }]} />
+                width: cropRect.x * scaleToDisplay, height: cropRect.height * scaleToDisplay }]} />
               {/* Right */}
               <View style={[styles.dimOverlay, {
                 position: 'absolute',
                 top: cropRect.y * scaleToDisplay,
                 left: (cropRect.x + cropRect.width) * scaleToDisplay,
-                right: 0, height: cropRect.height * scaleToDisplay,
-              }]} />
+                right: 0, height: cropRect.height * scaleToDisplay }]} />
             </View>
 
             {/* Crop rectangle border with drag/pinch handles */}
@@ -484,8 +468,7 @@ export function CreatorCropSheet({
                   onLayout={(e) => {
                     ratioTabLayouts.current.set(preset.label, {
                       x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width,
-                    });
+                      width: e.nativeEvent.layout.width });
                     if (selectedRatio === preset.ratio) {
                       ratioUnderlineXSV.value = e.nativeEvent.layout.x;
                       ratioUnderlineWSV.value = e.nativeEvent.layout.width;
@@ -533,8 +516,7 @@ export function CreatorCropSheet({
               styles.footerConfirm,
               {
                 backgroundColor: colors.brand,
-                opacity: isProcessing ? 0.5 : 1,
-              },
+                opacity: isProcessing ? 0.5 : 1 },
             ]}
             accessibilityLabel="Apply crop"
             accessibilityRole="button"
@@ -553,8 +535,7 @@ const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.7)',
-    zIndex: 300,
-  },
+    zIndex: 300 },
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -564,67 +545,55 @@ const styles = StyleSheet.create({
     borderTopRightRadius: Radius.xxl,
     paddingTop: Space.sm,
     zIndex: 301,
-    elevation: 24,
-  },
+    elevation: 24 },
   handleRow: {
     alignItems: 'center',
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   handle: {
     width: 36,
     height: 4,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   closeBtn: {
     width: 36,
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   previewArea: {
     alignItems: 'center',
     paddingVertical: Space.md,
-    backgroundColor: '#000',
-  },
+    backgroundColor: '#000' },
   previewFrame: {
     overflow: 'hidden',
-    backgroundColor: '#111',
-  },
+    backgroundColor: '#111' },
   dimOverlay: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.55)' },
   cropBorder: {
     position: 'absolute',
     borderWidth: Stroke.emphasis,
-    borderColor: '#fff',
-  },
+    borderColor: '#fff' },
   gridLineV: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.3)' },
   gridLineH: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.3)' },
   // Refined L-shaped corner brackets — Stroke.emphasis (2pt) per stroke
   // grammar (selection/focus). Shadow for visibility over dark preview.
   corner: {
@@ -632,102 +601,84 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderColor: '#fff',
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   cornerTL: {
     top: -1,
     left: -1,
     borderTopWidth: Stroke.emphasis,
     borderLeftWidth: Stroke.emphasis,
-    borderTopLeftRadius: 3,
-  },
+    borderTopLeftRadius: 3 },
   cornerTR: {
     top: -1,
     right: -1,
     borderTopWidth: Stroke.emphasis,
     borderRightWidth: Stroke.emphasis,
-    borderTopRightRadius: 3,
-  },
+    borderTopRightRadius: 3 },
   cornerBL: {
     bottom: -1,
     left: -1,
     borderBottomWidth: Stroke.emphasis,
     borderLeftWidth: Stroke.emphasis,
-    borderBottomLeftRadius: 3,
-  },
+    borderBottomLeftRadius: 3 },
   cornerBR: {
     bottom: -1,
     right: -1,
     borderBottomWidth: Stroke.emphasis,
     borderRightWidth: Stroke.emphasis,
-    borderBottomRightRadius: 3,
-  },
+    borderBottomRightRadius: 3 },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   rotateBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     width: 52,
     height: 44,
-    gap: 2,
-  },
+    gap: 2 },
   rotateLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   ratioRow: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.xs,
-    position: 'relative',
-  },
+    position: 'relative' },
   ratioTab: {
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   ratioUnderline: {
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   ratioText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Footer — premium Cancel / Done buttons ──
   footer: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   footerBtn: {
     flex: 1,
     height: 50,
     borderRadius: Radius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   footerCancel: {
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   footerCancelText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   footerConfirm: {
     // backgroundColor set inline
   },
   footerConfirmText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size } });

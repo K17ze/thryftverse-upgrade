@@ -2,13 +2,13 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Type, FontFamily } from '../theme/designTokens';
+import { Space, FontFamily } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -95,8 +95,7 @@ export default function ChangePasswordScreen() {
               onPress: handleUpdate,
               variant: 'primary',
               disabled: isUpdating,
-              loading: isUpdating,
-            },
+              loading: isUpdating },
           ]}
         />
       }
@@ -232,76 +231,62 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'flex-start',
       gap: Space.sm,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     bannerText: {
-      flex: 1,
-    },
+      flex: 1 },
     bannerTitle: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.semibold,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing },
     bannerSubtitle: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      marginTop: 2,
-    },
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginTop: 2 },
     intro: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     strengthWrap: {
       marginTop: Space.xs,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     matchRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     matchDot: {
       width: Space.sm,
       height: Space.sm,
-      borderRadius: Space.sm / 2,
-    },
+      borderRadius: Space.sm / 2 },
     matchText: {
-      fontSize: Type.meta.size,
-      fontFamily: FontFamily.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium },
     forgotPasswordLink: {
       marginTop: Space.sm,
       alignItems: 'center',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     forgotPasswordText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     sessionsNote: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.sm,
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     sessionsNoteText: {
       flex: 1,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-  });
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing } });
 }

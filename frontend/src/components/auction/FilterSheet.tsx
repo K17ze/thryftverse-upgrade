@@ -3,20 +3,19 @@ import {
   View,
   StyleSheet,
   Pressable,
-  Text,
-} from 'react-native';
+  Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { BottomSheet } from '../BottomSheet';
 import { haptics } from '../../utils/haptics';
-import { Space, Radius, Typography, Type, Stroke, LetterSpacing } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke, LetterSpacing } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   SORT_OPTIONS,
   PRICE_PRESETS,
   type AuctionBrowseState,
-  type AuctionBrowseSort,
-} from '../../utils/auctionHomeLogic';
+  type AuctionBrowseSort } from '../../utils/auctionHomeLogic';
 
 // ════════════════════════════════════════════════════════════════
 // FILTER SHEET — redesigned with hierarchical categories, checkmarked
@@ -33,8 +32,7 @@ export const FilterSheet = memo(function FilterSheet({
   onReset,
   onApply,
   resultCount,
-  facetsLoading,
-}: {
+  facetsLoading }: {
   visible: boolean;
   onDismiss: () => void;
   categoryOptions: string[];
@@ -68,8 +66,7 @@ export const FilterSheet = memo(function FilterSheet({
         ...prev,
         categories: has
           ? prev.categories.filter((c) => c !== cat)
-          : [...prev.categories, cat],
-      };
+          : [...prev.categories, cat] };
     });
   }, [setDraftBrowse]);
 
@@ -259,115 +256,95 @@ export const FilterSheet = memo(function FilterSheet({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     filterSheetContent: {
-      padding: Space.lg,
-    },
+      padding: Space.lg },
     filterSheetTitle: {
-      fontSize: Type.priceList.size,
+      fontSize: TypographyV2.priceList.size,
       fontWeight: '700',
       color: colors.textPrimary,
-      fontFamily: Typography.family.bold,
-      marginBottom: Space.lg,
-    },
+      fontFamily: TypographyV2.priceList.fontFamily,
+      marginBottom: Space.lg },
     filterSectionLabel: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '600',
       letterSpacing: LetterSpacing.wide + 0.08,
       color: colors.textSecondary,
-      fontFamily: Typography.family.semibold,
+      fontFamily: TypographyV2.meta.fontFamily,
       marginBottom: Space.sm,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     filterOptionPressed: {
-      opacity: 0.7,
-    },
+      opacity: 0.7 },
 
     // ── Sort rows (checkmarked) ──
     filterSortRows: {
-      gap: 0,
-    },
+      gap: 0 },
     filterSortRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.sm,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     filterSortRowText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textPrimary,
-      fontFamily: Typography.family.medium,
-    },
+      fontFamily: TypographyV2.body.fontFamily },
     filterSortRowTextActive: {
       fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
 
     // ── Price presets ──
     filterPricePresets: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     filterPriceChip: {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       borderRadius: Radius.full,
       backgroundColor: colors.surface,
       borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     filterPriceChipActive: {
       backgroundColor: colors.brand,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     filterPriceChipText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textPrimary,
-      fontFamily: Typography.family.medium,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
     filterPriceChipTextActive: {
-      color: colors.textInverse,
-    },
+      color: colors.textInverse },
     filterPriceCurrent: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.sm,
-    },
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginTop: Space.sm },
 
     // ── Category rows (hierarchical with checkboxes) ──
     filterCategoryList: {
-      gap: 0,
-    },
+      gap: 0 },
     filterCategoryRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.sm,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     filterCategoryRowText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textPrimary,
-      fontFamily: Typography.family.medium,
-    },
+      fontFamily: TypographyV2.body.fontFamily },
     filterCategoryRowTextActive: {
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     filterCategoryRowLabel: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      flex: 1,
-    },
+      flex: 1 },
     filterCategoryCount: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
-      fontFamily: Typography.family.regular,
-      fontVariant: ['tabular-nums'],
-    },
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontVariant: ['tabular-nums'] },
     filterCheckbox: {
       width: 22,
       height: 22,
@@ -375,39 +352,32 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
 
     // ── Filter actions ──
     filterActionsRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginTop: Space.xl,
-    },
+      marginTop: Space.xl },
     filterResetBtn: {
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.lg,
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     filterResetText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
-      fontFamily: Typography.family.medium,
-    },
+      fontFamily: TypographyV2.body.fontFamily },
     filterApplyBtn: {
       flex: 1,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
       backgroundColor: colors.brand,
       alignItems: 'center',
-      marginLeft: Space.md,
-    },
+      marginLeft: Space.md },
     filterApplyText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textInverse,
-      fontFamily: Typography.family.semibold,
-    },
-  });
+      fontFamily: TypographyV2.body.fontFamily } });
 }

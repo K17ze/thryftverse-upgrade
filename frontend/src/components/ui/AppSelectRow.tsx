@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface AppSelectRowProps {
@@ -25,8 +26,7 @@ export function AppSelectRow({
   helperText,
   errorText,
   disabled = false,
-  onPress,
-}: AppSelectRowProps) {
+  onPress }: AppSelectRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasError = Boolean(errorText);
@@ -90,18 +90,15 @@ export function AppSelectRow({
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   label: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     marginBottom: Space.sm,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   labelError: {
-    color: colors.danger,
-  },
+    color: colors.danger },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -110,35 +107,27 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     paddingHorizontal: Space.md,
     minHeight: 52,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   rowDisabled: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   icon: {
-    marginRight: 2,
-  },
+    marginRight: 2 },
   valueText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   placeholderText: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   helperText: {
     marginTop: Space.sm,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    lineHeight: 17,
-  },
+    lineHeight: 17 },
   errorText: {
     marginTop: Space.sm,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    lineHeight: 17,
-  },
-});
+    lineHeight: 17 } });

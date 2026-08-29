@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-nati
 import { ScrollView } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Type, Radius } from '../../theme/designTokens';
+import { Space, Typography, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -29,8 +30,7 @@ export function AuctionSegmentRail({
   segments,
   activeKey,
   onSelect,
-  accessibilityLabelPrefix = 'Show',
-}: Props) {
+  accessibilityLabelPrefix = 'Show' }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
@@ -58,15 +58,13 @@ export function AuctionSegmentRail({
   const handleLayout = (key: string) => (e: LayoutChangeEvent) => {
     segmentLayouts.current[key] = {
       x: e.nativeEvent.layout.x,
-      width: e.nativeEvent.layout.width,
-    };
+      width: e.nativeEvent.layout.width };
     if (key === activeKey) updateUnderline(key);
   };
 
   const animatedUnderlineStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: underlineX.value }],
-    width: underlineWidth.value,
-  }));
+    width: underlineWidth.value }));
 
   return (
     <View style={styles.container}>
@@ -111,50 +109,40 @@ export function AuctionSegmentRail({
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
-    position: 'relative',
-  },
+    position: 'relative' },
   scroll: {
     flexGrow: 0,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   segmentsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   segment: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 5,
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   label: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: colors.textSecondary,
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.2 },
   labelActive: {
     fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   count: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   countActive: {
-    color: colors.textSecondary,
-  },
+    color: colors.textSecondary },
   underline: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     height: 2,
     borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-  },
-});
+    backgroundColor: colors.brand } });

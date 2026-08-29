@@ -14,13 +14,13 @@ import {
   StyleSheet,
   Pressable,
   useWindowDimensions,
-  Image as RNImage,
-} from 'react-native';
+  Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Space, Radius, Type, FontFamily, Stroke } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -40,8 +40,7 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   Easing,
-  cancelAnimation,
-} from 'react-native-reanimated';
+  cancelAnimation } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 
 
@@ -76,8 +75,7 @@ export function CreatorCutoutSheet({
   visible,
   imageUri,
   onClose,
-  onCutoutComplete,
-}: CreatorCutoutSheetProps) {
+  onCutoutComplete }: CreatorCutoutSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -315,9 +313,7 @@ export function CreatorCutoutSheet({
             originX: cropOriginX,
             originY: cropOriginY,
             width: cropW,
-            height: cropH,
-          },
-        }],
+            height: cropH } }],
         { compress: 1, format: SaveFormat.PNG },
       );
 
@@ -332,20 +328,17 @@ export function CreatorCutoutSheet({
 
   // ── Animated styles ──────────────────────────────────────────────
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetYSV.value }],
-  }));
+    transform: [{ translateY: sheetYSV.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacitySV.value,
-  }));
+    opacity: backdropOpacitySV.value }));
 
   const cutoutTransformStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: cutoutXSV.value },
       { translateY: cutoutYSV.value },
       { scale: cutoutScaleSV.value },
-    ],
-  }));
+    ] }));
 
   const subjectHighlightStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
@@ -354,14 +347,12 @@ export function CreatorCutoutSheet({
       [0, 0.4],
       Extrapolation.CLAMP
     ),
-    transform: [{ scale: interpolate(subjectHighlightSV.value, [0, 1], [1, 1.05], Extrapolation.CLAMP) }],
-  }));
+    transform: [{ scale: interpolate(subjectHighlightSV.value, [0, 1], [1, 1.05], Extrapolation.CLAMP) }] }));
 
   // Tool tab underline indicator (spring-animated, brand color).
   const toolUnderlineStyle = useAnimatedStyle(() => ({
     left: toolUnderlineXSV.value,
-    width: toolUnderlineWSV.value,
-  }));
+    width: toolUnderlineWSV.value }));
 
   // ── Bounding box of all traced paths (for preview crop overlay) ───
   const cropBBox = useMemo(() => {
@@ -425,8 +416,7 @@ export function CreatorCutoutSheet({
                 styles.canvasFrame,
                 {
                   width: displaySize.width,
-                  height: displaySize.height,
-                },
+                  height: displaySize.height },
                 cutoutTransformStyle,
               ]}
             >
@@ -447,8 +437,7 @@ export function CreatorCutoutSheet({
                     height: Math.min(displaySize.height, cropBBox.maxY - cropBBox.minY),
                     borderWidth: 2,
                     borderColor: colors.brand,
-                    backgroundColor: 'transparent',
-                  }}
+                    backgroundColor: 'transparent' }}
                   pointerEvents="none"
                 />
               )}
@@ -479,8 +468,7 @@ export function CreatorCutoutSheet({
             onLayout={(e) => {
               toolTabLayouts.current.set('scissors', {
                 x: e.nativeEvent.layout.x,
-                width: e.nativeEvent.layout.width,
-              });
+                width: e.nativeEvent.layout.width });
               if (tool === 'scissors') {
                 toolUnderlineXSV.value = e.nativeEvent.layout.x;
                 toolUnderlineWSV.value = e.nativeEvent.layout.width;
@@ -505,8 +493,7 @@ export function CreatorCutoutSheet({
             onLayout={(e) => {
               toolTabLayouts.current.set('eraser', {
                 x: e.nativeEvent.layout.x,
-                width: e.nativeEvent.layout.width,
-              });
+                width: e.nativeEvent.layout.width });
               if (tool === 'eraser') {
                 toolUnderlineXSV.value = e.nativeEvent.layout.x;
                 toolUnderlineWSV.value = e.nativeEvent.layout.width;
@@ -606,8 +593,7 @@ export function CreatorCutoutSheet({
               styles.footerConfirm,
               {
                 backgroundColor: colors.brand,
-                opacity: isProcessing || paths.length === 0 ? 0.4 : 1,
-              },
+                opacity: isProcessing || paths.length === 0 ? 0.4 : 1 },
             ]}
             accessibilityLabel="Apply crop"
             accessibilityRole="button"
@@ -639,8 +625,7 @@ function PathOverlay({ path, color, opacity }: { path: Point[]; color: string; o
             height: 40,
             borderRadius: Radius.xxl,
             backgroundColor: color,
-            opacity,
-          }}
+            opacity }}
         />
       ))}
     </>
@@ -650,8 +635,7 @@ function PathOverlay({ path, color, opacity }: { path: Point[]; color: string; o
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
-    zIndex: 300,
-  },
+    zIndex: 300 },
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -661,70 +645,58 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingTop: Space.sm,
     zIndex: 301,
-    elevation: 24,
-  },
+    elevation: 24 },
   handleRow: {
     alignItems: 'center',
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   handle: {
     width: 36,
     height: 4,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   closeBtn: {
     width: 36,
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   instructions: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
-    paddingBottom: 4,
-  },
+    paddingBottom: 4 },
   note: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     paddingBottom: 12,
-    fontStyle: 'italic',
-  },
+    fontStyle: 'italic' },
   canvasArea: {
     alignItems: 'center',
     paddingVertical: Space.sm,
-    backgroundColor: '#000',
-  },
+    backgroundColor: '#000' },
   canvasFrame: {
     overflow: 'hidden',
-    backgroundColor: '#111',
-  },
+    backgroundColor: '#111' },
   toolSelectorRow: {
     flexDirection: 'row',
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    position: 'relative',
-  },
+    position: 'relative' },
   toolUnderline: {
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   toolSelectorBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -732,55 +704,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     height: 44,
-    zIndex: 1,
-  },
+    zIndex: 1 },
   toolSelectorLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   toolRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: Space.md,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   toolBtn: {
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
+    paddingVertical: 10 },
   toolLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Footer — premium Cancel / Crop buttons ──
   footer: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   footerBtn: {
     flex: 1,
     height: 50,
     borderRadius: Radius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   footerCancel: {
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   footerCancelText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   footerConfirm: {
     // backgroundColor set inline
   },
   footerConfirmText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size } });

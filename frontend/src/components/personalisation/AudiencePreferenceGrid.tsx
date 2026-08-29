@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface AudienceOption {
   key: string;
@@ -25,8 +26,7 @@ interface AudiencePreferenceGridProps {
 
 export function AudiencePreferenceGrid({
   selectedGenders,
-  onSelect,
-}: AudiencePreferenceGridProps) {
+  onSelect }: AudiencePreferenceGridProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -82,8 +82,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   tile: {
     width: '48%',
     flexGrow: 1,
@@ -92,31 +91,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    minHeight: 48,
-  },
+    minHeight: 48 },
   tileSelected: {
     borderColor: colors.textPrimary,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   tileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   tileLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   tileLabelSelected: {
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   tileSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    lineHeight: 17,
-  },
-});
+    lineHeight: 17 } });

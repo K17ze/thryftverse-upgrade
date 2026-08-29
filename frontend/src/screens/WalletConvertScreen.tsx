@@ -6,8 +6,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
@@ -32,8 +31,7 @@ import {
   getIzePosition,
   convertIzeToFiat,
   getConvertQuote,
-  type ConvertQuotePayload,
-} from '../services/walletApi';
+  type ConvertQuotePayload } from '../services/walletApi';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import { formatIzeAmount, izeToUsd, formatUsd } from '../utils/currency';
 import { CURRENCIES } from '../constants/currencies';
@@ -45,12 +43,11 @@ import {
   Typography,
   Space,
   Radius,
-  Type,
   Stroke,
   Control,
   LetterSpacing,
-  IconGrammar,
-} from '../theme/designTokens';
+  IconGrammar } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { t } from '../i18n';
 
 type ConvertStep = 'amount' | 'review' | 'authenticating' | 'executing' | 'receipt' | 'error';
@@ -152,8 +149,7 @@ export default function WalletConvertScreen() {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
-      minute: '2-digit',
-    });
+      minute: '2-digit' });
   }, [rateUpdatedAt]);
 
   // -- Rate expiry: rates are valid for 30 minutes from the timestamp --
@@ -208,8 +204,7 @@ export default function WalletConvertScreen() {
         const response = await getConvertQuote({
           userId: currentUser.id,
           izeAmount: izeValue,
-          fiatCurrency: currencyCode,
-        });
+          fiatCurrency: currencyCode });
         if (!isCancelled) {
           setQuote(response.conversion);
         }
@@ -301,8 +296,7 @@ export default function WalletConvertScreen() {
         userId: currentUser.id,
         izeAmount: izeValue,
         fiatCurrency: currencyCode,
-        idempotencyKey,
-      });
+        idempotencyKey });
 
       const conversion = response.conversion;
       const nextAvailable = Math.max(0, availableIze - conversion.izeAmount);
@@ -317,8 +311,7 @@ export default function WalletConvertScreen() {
         principalAmount: conversion.principalAmount,
         netRedemption: conversion.netFiatAmount,
         rateUsed: conversion.rateUsed,
-        timestamp: new Date().toISOString(),
-      });
+        timestamp: new Date().toISOString() });
 
       haptic.success();
       setStep('receipt');
@@ -399,8 +392,7 @@ export default function WalletConvertScreen() {
                   styles.stepDot,
                   {
                     backgroundColor: isComplete || isActive ? colors.brand : colors.surfaceAlt,
-                    borderColor: isComplete || isActive ? colors.brand : colors.border,
-                  },
+                    borderColor: isComplete || isActive ? colors.brand : colors.border },
                 ]}
               >
                 {isComplete ? (
@@ -423,8 +415,7 @@ export default function WalletConvertScreen() {
                     color: isActive ? colors.textPrimary : colors.textMuted,
                     fontFamily: isActive
                       ? Typography.family.semibold
-                      : Typography.family.regular,
-                  },
+                      : Typography.family.regular },
                 ]}
               >
                 {label}
@@ -435,8 +426,7 @@ export default function WalletConvertScreen() {
                 style={[
                   styles.stepConnector,
                   {
-                    backgroundColor: index < activeStepIndex ? colors.brand : colors.border,
-                  },
+                    backgroundColor: index < activeStepIndex ? colors.brand : colors.border },
                 ]}
               />
             )}
@@ -458,8 +448,7 @@ export default function WalletConvertScreen() {
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
           marginTop: Space.xs,
-          paddingTop: Space.xs,
-        },
+          paddingTop: Space.xs },
       ]}
       accessibilityRole="text"
       accessibilityLabel={`${label} ${value}`}
@@ -879,8 +868,7 @@ export default function WalletConvertScreen() {
               <Text style={[styles.receiptSubtitle, { color: colors.textSecondary }]}>
                 Converted {formatIzeAmount(result.izeAmount, 2)} to{' '}
                 {formatFromFiat(result.netRedemption, result.fiatCurrency as any, {
-                  displayMode: 'fiat',
-                })}
+                  displayMode: 'fiat' })}
               </Text>
 
               <View style={styles.receiptBlock}>
@@ -888,20 +876,17 @@ export default function WalletConvertScreen() {
                 {renderSummaryRow(
                   'Principal',
                   formatFromFiat(result.principalAmount, result.fiatCurrency as any, {
-                    displayMode: 'fiat',
-                  })
+                    displayMode: 'fiat' })
                 )}
                 {renderSummaryRow(
                   `Platform fee (${result.feeBps} bps)`,
                   `−${formatFromFiat(result.feeAmount, result.fiatCurrency as any, {
-                    displayMode: 'fiat',
-                  })}`
+                    displayMode: 'fiat' })}`
                 )}
                 {renderSummaryRow(
                   'You received',
                   formatFromFiat(result.netRedemption, result.fiatCurrency as any, {
-                    displayMode: 'fiat',
-                  })
+                    displayMode: 'fiat' })
                 )}
                 {renderSummaryRow(
                   'Currency',
@@ -911,8 +896,7 @@ export default function WalletConvertScreen() {
                   'Timestamp',
                   new Date(result.timestamp).toLocaleString('en-GB', {
                     dateStyle: 'medium',
-                    timeStyle: 'short',
-                  }),
+                    timeStyle: 'short' }),
                   { total: true }
                 )}
               </View>
@@ -969,8 +953,7 @@ function createStyles(colors: ThemeColors) {
 
     skeletonContainer: {
       paddingHorizontal: Space.md + Space.xs,
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
 
     header: {
       flexDirection: 'row',
@@ -979,19 +962,16 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       height: Space.xl + Space.xl + 8,
       borderBottomWidth: Stroke.standard,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     backBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'flex-start',
-    },
+      alignItems: 'flex-start' },
     headerTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      color: colors.textPrimary },
 
     offlineBanner: {
       flexDirection: 'row',
@@ -999,14 +979,12 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      borderBottomWidth: Stroke.standard,
-    },
+      borderBottomWidth: Stroke.standard },
     offlineBannerText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight },
 
     // -- Step indicator --
     stepIndicatorRow: {
@@ -1015,63 +993,53 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md + Space.xs,
       paddingVertical: Space.sm + 2,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     stepItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     stepDot: {
       width: 22,
       height: 22,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     stepDotText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: LetterSpacing.wide,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: LetterSpacing.wide },
     stepLabel: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     stepConnector: {
       flex: 1,
       height: StyleSheet.hairlineWidth,
-      marginHorizontal: Space.xs,
-    },
+      marginHorizontal: Space.xs },
 
     content: {
       flex: 1,
-      paddingHorizontal: Space.md + Space.xs,
-    },
+      paddingHorizontal: Space.md + Space.xs },
 
     // -- Hero balance (flat, no card or decorative icon circle) --
     balanceBlock: {
       marginTop: Space.md,
       marginBottom: Space.lg,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     heroTitle: {
-      fontSize: Type.priceHero.size,
-      lineHeight: Type.priceHero.lineHeight,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.priceHero.letterSpacing,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.priceHero.size,
+      lineHeight: TypographyV2.priceHero.lineHeight,
+      fontFamily: TypographyV2.priceHero.fontFamily,
+      letterSpacing: TypographyV2.priceHero.letterSpacing,
+      fontVariant: ['tabular-nums'] },
     heroSubtitle: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginTop: Space.xs / 2 },
 
     // -- Amount input --
     amountWrap: {
@@ -1079,122 +1047,104 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       marginTop: Space.xl + Space.xl - 8,
-      marginBottom: Space.sm + Space.xs,
-    },
+      marginBottom: Space.sm + Space.xs },
     amountSuffix: {
-      fontSize: Type.priceHero.size + 12,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceHero.size + 12,
+      fontFamily: TypographyV2.priceHero.fontFamily,
       color: colors.textMuted,
       marginRight: Space.sm,
-      letterSpacing: LetterSpacing.wide,
-    },
+      letterSpacing: LetterSpacing.wide },
     amountInput: {
-      fontSize: Type.priceHero.size + 28,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceHero.size + 28,
+      fontFamily: TypographyV2.priceHero.fontFamily,
       color: colors.textPrimary,
       minWidth: Space.xxl * 3 + Space.xs + 2,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     availableText: {
       textAlign: 'center',
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       color: colors.textSecondary,
       marginBottom: Space.sm,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     balanceError: {
       textAlign: 'center',
       marginTop: Space.xs,
       marginBottom: Space.md + 4,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.danger,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.danger },
 
     // -- Calculation / summary (flat, no card wrapper) --
     calcBlock: {
       marginTop: Space.sm,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     quoteLoadingRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     quoteErrorRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     quoteStatusText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     reviewBlock: {
       marginTop: Space.md,
       gap: Space.xs,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     reviewTitle: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     reviewHint: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight + 2,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      marginTop: Space.sm + Space.xs,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginTop: Space.sm + Space.xs },
     rateTimestampRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     rateTimestampText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     rateExpiryText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.meta.letterSpacing,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontVariant: ['tabular-nums'] },
 
     // -- Summary rows --
     summaryRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     summaryLabel: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     summaryValue: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.body.letterSpacing,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      fontVariant: ['tabular-nums'] },
 
     // -- Centered step (auth / executing / error) --
     centeredStep: {
@@ -1202,92 +1152,77 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: Space.lg,
-      paddingTop: Space.xxl,
-    },
+      paddingTop: Space.xxl },
     stepIcon: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     stepTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       textAlign: 'center',
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-      marginBottom: Space.xs,
-    },
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      marginBottom: Space.xs },
     stepSubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       textAlign: 'center',
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
       marginBottom: Space.lg,
-      maxWidth: 320,
-    },
+      maxWidth: 320 },
     authActions: {
       flexDirection: 'column',
       gap: Space.sm,
       width: 280,
-      maxWidth: '100%',
-    },
+      maxWidth: '100%' },
     authActionBtn: {
-      width: '100%',
-    },
+      width: '100%' },
 
     // -- Receipt --
     receiptWrap: {
       alignItems: 'center',
       paddingTop: Space.xl,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     receiptBlock: {
       width: '100%',
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     receiptTitle: {
-      fontSize: Type.title.size,
-      lineHeight: Type.title.lineHeight,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.title.letterSpacing,
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
       textAlign: 'center',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     receiptSubtitle: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
       color: colors.textSecondary,
       textAlign: 'center',
       marginBottom: Space.lg,
-      maxWidth: 320,
-    },
+      maxWidth: 320 },
     footer: {
       paddingVertical: Space.md + 4,
       paddingHorizontal: Space.md + Space.xs,
       borderTopWidth: Stroke.standard,
       borderTopColor: colors.border,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     primaryBtn: {
       backgroundColor: colors.textPrimary,
       height: Space.xl + Space.xl + 8,
       borderRadius: Space.lg + 4,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     primaryBtnDisabled: { opacity: 0.45 },
     primaryText: {
       color: colors.background,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      fontVariant: ['tabular-nums'] },
     secondaryBtn: {
       height: Space.xl + 8,
       borderRadius: Space.lg + 4,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
-  });
+      justifyContent: 'center' } });
 }

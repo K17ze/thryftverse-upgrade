@@ -4,7 +4,8 @@ import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Type, Typography, Radius } from '../../theme/designTokens';
+import { Space, Typography, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useRenderTrace } from '../../performance/renderTrace';
 import { isLookVideo, isLookCarousel, isLookMultiLayer } from '../../utils/lookTemplates';
 import type { LookApiItem } from '../../services/looksApi';
@@ -25,8 +26,7 @@ function LookMasonryTileImpl({
   onPress,
   aspectRatio = 4 / 5,
   testID,
-  variant = 'default',
-}: LookMasonryTileProps) {
+  variant = 'default' }: LookMasonryTileProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, variant), [colors, variant]);
   useRenderTrace('LookMasonryTile', { lookId: look.id, aspectRatio, variant });
@@ -143,41 +143,34 @@ const createStyles = (colors: ThemeColors, variant: 'default' | 'explore') => {
     tile: {
       borderRadius: isExplore ? Radius.md : Radius.lg,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     tilePressed: {
-      opacity: 0.9,
-    },
+      opacity: 0.9 },
     imageWrap: {
       width: '100%',
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
 
     // ── Default variant styles ──
     pricetagBadge: {
       position: 'absolute',
       top: Space.sm,
-      right: Space.sm,
-    },
+      right: Space.sm },
     captionWrap: {
       position: 'absolute',
       left: Space.sm,
       right: Space.sm,
-      bottom: Space.sm,
-    },
+      bottom: Space.sm },
     caption: {
       color: colors.scrimTextPrimary,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight },
     creator: {
       color: colors.scrimTextSecondary,
       fontFamily: Typography.family.regular,
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      marginTop: 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: 2 },
 
     // ── Explore variant styles ──
     // Media badge: bare glyph, top-right. No chip/pill background —
@@ -189,11 +182,9 @@ const createStyles = (colors: ThemeColors, variant: 'default' | 'explore') => {
       right: Space.xs,
       textShadowColor: 'rgba(0,0,0,0.6)',
       textShadowOffset: { width: 0, height: 0 },
-      textShadowRadius: 3,
-    },
+      textShadowRadius: 3 },
     mediaBadgeIcon: {
-      color: 'rgba(255,255,255,0.95)',
-    },
+      color: 'rgba(255,255,255,0.95)' },
     // Pricetag badge for explore: bare glyph, bottom-right.
     pricetagBadgeExplore: {
       position: 'absolute',
@@ -201,10 +192,7 @@ const createStyles = (colors: ThemeColors, variant: 'default' | 'explore') => {
       right: Space.xs,
       textShadowColor: 'rgba(0,0,0,0.6)',
       textShadowOffset: { width: 0, height: 0 },
-      textShadowRadius: 3,
-    },
+      textShadowRadius: 3 },
     pricetagBadgeIcon: {
-      color: 'rgba(255,255,255,0.95)',
-    },
-  });
+      color: 'rgba(255,255,255,0.95)' } });
 };

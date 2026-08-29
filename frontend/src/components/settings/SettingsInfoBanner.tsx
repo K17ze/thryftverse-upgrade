@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography, Radius } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 type BannerTone = 'info' | 'success' | 'warning' | 'error';
 
@@ -26,8 +27,7 @@ export function SettingsInfoBanner({
   description,
   icon = 'information-circle-outline',
   variant,
-  tone,
-}: SettingsInfoBannerProps) {
+  tone }: SettingsInfoBannerProps) {
   const { colors } = useAppTheme();
   const resolvedTone: BannerTone = tone ?? variant ?? 'info';
   const color =
@@ -71,28 +71,22 @@ const styles = StyleSheet.create({
     paddingVertical: Space.smMd,
     borderRadius: Radius.lg,
     marginHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   body: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight },
   description: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   text: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

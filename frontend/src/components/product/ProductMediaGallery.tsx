@@ -5,8 +5,7 @@ import {
   StyleSheet,
   Pressable,
   useWindowDimensions,
-  AccessibilityInfo,
-} from 'react-native';
+  AccessibilityInfo } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,16 +14,15 @@ import Reanimated, {
   withTiming,
   Easing,
   runOnJS,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import {
   GestureDetector,
   Gesture,
-  FlatList,
-} from 'react-native-gesture-handler';
+  FlatList } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -48,13 +46,10 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
 
 const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   image: {
     width: '100%',
-    height: '100%',
-  },
-});
+    height: '100%' } });
 
 interface MediaPageProps {
   uri: string;
@@ -147,8 +142,7 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
 
   const composed = Gesture.Simultaneous(Gesture.Race(doubleTap, pan), pinch);
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
-  }));
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }] }));
 
   return (
     <GestureDetector gesture={composed}>
@@ -227,8 +221,7 @@ export function ProductMediaGallery({
   onZoomStart,
   onOpenFullscreen,
   bigHeartOpacity,
-  bigHeartScale,
-}: ProductMediaGalleryProps) {
+  bigHeartScale }: ProductMediaGalleryProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -247,8 +240,7 @@ export function ProductMediaGallery({
 
   const bigHeartStyle = useAnimatedStyle(() => ({
     opacity: bigHeartOpacity.value,
-    transform: [{ scale: bigHeartScale.value }],
-  }));
+    transform: [{ scale: bigHeartScale.value }] }));
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -440,27 +432,23 @@ function createStyles(colors: ThemeColors) {
   heroContainer: {
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   topScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: 120,
-    backgroundColor: colors.glassBg,
-  },
+    backgroundColor: colors.glassBg },
   bigHeartWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 5,
-  },
+    zIndex: 5 },
   bigHeartIcon: {
     shadowColor: colors.textPrimary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
+    shadowRadius: 10 },
   soldOverlay: {
     position: 'absolute',
     bottom: Space.lg,
@@ -468,14 +456,12 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.success,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   soldText: {
     color: colors.background,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 1 },
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -484,20 +470,17 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   headerRight: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   controlBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   indexBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -505,13 +488,11 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   indexText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   videoBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -522,23 +503,19 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   videoBadgeText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   thumbnailStrip: {
     position: 'absolute',
     bottom: 40,
     left: 0,
-    right: 0,
-  },
+    right: 0 },
   thumbnailContent: {
     paddingHorizontal: Space.md,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   thumbnail: {
     width: 40,
     height: 40,
@@ -546,16 +523,13 @@ function createStyles(colors: ThemeColors) {
     overflow: 'hidden',
     opacity: 0.5,
     borderWidth: Stroke.emphasis,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   thumbnailActive: {
     opacity: 1,
-    borderColor: colors.scrimTextPrimary,
-  },
+    borderColor: colors.scrimTextPrimary },
   thumbnailImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   thumbnailVideoBadge: {
     position: 'absolute',
     bottom: 2,
@@ -565,7 +539,5 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  });
+    justifyContent: 'center' } });
 }

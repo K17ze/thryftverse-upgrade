@@ -7,14 +7,14 @@ import {
   Text,
   Image,
   ActivityIndicator,
-  GestureResponderEvent,
-} from 'react-native';
+  GestureResponderEvent } from 'react-native';
 import { Camera, type CameraRef, useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Radius, Type, Space, Stroke} from '../theme/designTokens';
+import { Typography, Radius, Space, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { Motion } from '../theme/motionTokens';
@@ -34,8 +34,7 @@ export default function VisualSearchCamera({
   onPhotoCapture,
   onGallery,
   onClose,
-  onSavedSearches,
-}: VisualSearchCameraProps) {
+  onSavedSearches }: VisualSearchCameraProps) {
   const { show } = useToast();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
@@ -96,8 +95,7 @@ export default function VisualSearchCamera({
         const page = await MediaLibrary.getAssetsAsync({
           mediaType: 'photo',
           sortBy: [['creationTime', false]],
-          first: 1,
-        });
+          first: 1 });
         if (!cancelled && page.assets[0]?.uri) {
           setLastImageUri(page.assets[0].uri);
         }
@@ -256,8 +254,7 @@ export default function VisualSearchCamera({
               opacity: focusAnim,
               transform: [
                 { scale: focusAnim.interpolate({ inputRange: [0, 1], outputRange: [1.4, 1] }) },
-              ],
-            },
+              ] },
           ]}
         />
       )}
@@ -356,38 +353,32 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.background,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   permissionContent: {
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 40,
-  },
+    paddingHorizontal: 40 },
   permissionTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.heading.size,
+    fontSize: TypographyV2.sectionTitle.size,
     color: colors.scrimTextPrimary,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   permissionText: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    fontSize: TypographyV2.body.size,
     color: colors.scrimTextSecondary,
     textAlign: 'center',
-    lineHeight: 20,
-  },
+    lineHeight: 20 },
   permissionBtn: {
     marginTop: Space.md,
     paddingHorizontal: Space.lg,
     paddingVertical: 12,
     borderRadius: Radius.xxl,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   permissionBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    color: colors.textInverse,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: TypographyV2.body.size,
+    color: colors.textInverse },
   permissionSecondaryBtn: {
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
@@ -395,13 +386,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.xxl,
     borderWidth: Stroke.standard,
     borderColor: colors.scrimTextTertiary,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   permissionSecondaryBtnText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: colors.scrimTextSecondary,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: TypographyV2.body.size,
+    color: colors.scrimTextSecondary },
   focusReticle: {
     position: 'absolute',
     width: 60,
@@ -409,8 +398,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.scrimTextPrimary,
     borderRadius: Radius.sm,
-    pointerEvents: 'none',
-  },
+    pointerEvents: 'none' },
   topBar: {
     position: 'absolute',
     top: 0,
@@ -420,25 +408,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   topRightControls: {
     flexDirection: 'row',
-    gap: 8,
-  },
+    gap: 8 },
   topIconBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
     backgroundColor: 'transparent',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   topIcon: {
     textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
+    textShadowRadius: 2 },
   bottomBar: {
     position: 'absolute',
     left: 0,
@@ -448,31 +432,26 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: Space.lg,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   galleryBtn: {
     alignItems: 'center',
     gap: 6,
-    width: 64,
-  },
+    width: 64 },
   galleryThumb: {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
     borderWidth: 2,
     borderColor: colors.scrimTextPrimary,
-    backgroundColor: colors.glassBorder,
-  },
+    backgroundColor: colors.glassBorder },
   facingBtn: {
     alignItems: 'center',
     gap: 6,
-    width: 64,
-  },
+    width: 64 },
   bottomLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-    color: colors.scrimTextSecondary,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: TypographyV2.meta.size,
+    color: colors.scrimTextSecondary },
   shutterOuter: {
     width: SHUTTER_SIZE,
     height: SHUTTER_SIZE,
@@ -481,17 +460,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.scrimTextPrimary,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   shutterInner: {
     width: SHUTTER_INNER,
     height: SHUTTER_INNER,
     borderRadius: SHUTTER_INNER / 2,
-    backgroundColor: colors.scrimTextPrimary,
-  },
+    backgroundColor: colors.scrimTextPrimary },
   shutterBusy: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   modePill: {
     position: 'absolute',
     bottom: 120,
@@ -499,11 +475,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 6,
     borderRadius: Radius.xl,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   modeText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: colors.scrimTextPrimary,
-  },
-});
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.meta.size,
+    color: colors.scrimTextPrimary } });

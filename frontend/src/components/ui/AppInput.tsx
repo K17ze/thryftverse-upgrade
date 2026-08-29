@@ -8,10 +8,10 @@ import {
   TextInputProps,
   TextStyle,
   View,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Radius, Space, Stroke, Typography, Type } from '../../theme/designTokens';
+import { Radius, Space, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 export type AppInputAppearance = 'filled' | 'outline' | 'underline';
@@ -108,23 +108,20 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
           return {
             backgroundColor: 'transparent',
             borderWidth: Stroke.standard,
-            borderRadius: Radius.lg,
-          };
+            borderRadius: Radius.lg };
         case 'underline':
           return {
             backgroundColor: 'transparent',
             borderWidth: 0,
             borderBottomWidth: isFocused ? Stroke.emphasis : Stroke.standard,
             borderRadius: Radius.none,
-            paddingHorizontal: 0,
-          };
+            paddingHorizontal: 0 };
         case 'filled':
         default:
           return {
             backgroundColor: colors.surfaceAlt,
             borderWidth: isFocused ? Stroke.standard : 0,
-            borderRadius: Radius.lg,
-          };
+            borderRadius: Radius.lg };
       }
     })();
 
@@ -200,23 +197,20 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
         return {
           backgroundColor: 'transparent',
           borderWidth: Stroke.standard,
-          borderRadius: Radius.lg,
-        };
+          borderRadius: Radius.lg };
       case 'underline':
         return {
           backgroundColor: 'transparent',
           borderWidth: 0,
           borderBottomWidth: Stroke.standard,
           borderRadius: Radius.none,
-          paddingHorizontal: 0,
-        };
+          paddingHorizontal: 0 };
       case 'filled':
       default:
         return {
           backgroundColor: colors.input,
           borderWidth: Stroke.standard,
-          borderRadius: Radius.lg,
-        };
+          borderRadius: Radius.lg };
     }
   })();
 
@@ -267,104 +261,82 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
 const styles = StyleSheet.create({
   label: {
     marginBottom: 6,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     lineHeight: 18,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0 },
   inputWrap: {
     paddingHorizontal: 14,
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
+    gap: 8 },
   inputWrapDisabled: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   prefixText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   prefixNode: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   input: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
-    paddingVertical: 10,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    paddingVertical: 10 },
   helperText: {
     marginTop: 7,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     lineHeight: 16,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   errorText: {
     marginTop: 7,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     lineHeight: 16,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontFamily: TypographyV2.meta.fontFamily } });
 
 const sectionStyles = StyleSheet.create({
   container: {
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   label: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginBottom: Space.sm,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   inputRowDisabled: {
-    opacity: 0.55,
-  },
+    opacity: 0.55 },
   leftIcon: {
-    marginRight: 2,
-  },
+    marginRight: 2 },
   prefixText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   prefixNode: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   input: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     paddingVertical: 14,
-    textAlignVertical: 'center',
-  },
+    textAlignVertical: 'center' },
   inputMultiline: {
     textAlignVertical: 'top',
     paddingTop: 14,
-    paddingBottom: 14,
-  },
+    paddingBottom: 14 },
   trailingNode: {
-    marginLeft: 2,
-  },
+    marginLeft: 2 },
   helperText: {
     marginTop: Space.sm,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: 17,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: 17 },
   errorText: {
     marginTop: Space.sm,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: 17,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: 17 } });

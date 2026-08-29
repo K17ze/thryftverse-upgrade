@@ -7,15 +7,15 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
-import { Space, Radius, Type, Typography, IconGrammar, Stroke, Elevation} from '../theme/designTokens';
+import { Space, Radius, Typography, IconGrammar, Stroke, Elevation} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -25,8 +25,7 @@ import {
   fetchUserListingsFromApi,
   fetchListingByIdFromApi,
   type ListingSearchResult,
-  type ListingApiItem,
-} from '../services/listingsApi';
+  type ListingApiItem } from '../services/listingsApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { useStore } from '../store/useStore';
 import { fetchLooksFromApi } from '../services/looksApi';
@@ -51,8 +50,7 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   Easing,
-  cancelAnimation,
-} from 'react-native-reanimated';
+  cancelAnimation } from 'react-native-reanimated';
 
 // ── Extracted sheet components (Phase 2: Asset Picker Decomposition) ──
 // These replace the monolithic inline pickers with dedicated, reusable
@@ -104,16 +102,14 @@ function TextEditorAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () 
     if (isEditing && editingLayer) {
       onAddLayer({
         ...editingLayer,
-        payload: { ...editingLayer.payload, ...payload } as typeof editingLayer.payload,
-      } as CreatorLayer);
+        payload: { ...editingLayer.payload, ...payload } as typeof editingLayer.payload } as CreatorLayer);
     } else {
       onAddLayer({
         ...baseLayer(createStableId('text'), 10),
         type: 'text' as const,
         width: 0.6,
         height: 0.1,
-        payload: payload as never,
-      });
+        payload: payload as never });
     }
     onClose();
   }, [isEditing, editingLayer, onAddLayer, onClose]);
@@ -135,8 +131,7 @@ function TextEditorAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () 
         alignment: existingPayload.alignment,
         opacity: 1,
         textEffect: existingPayload.textEffect,
-        textAnimation: existingPayload.textAnimation,
-      } : undefined}
+        textAnimation: existingPayload.textAnimation } : undefined}
       onConfirm={handleConfirm}
     />
   );
@@ -168,9 +163,7 @@ function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; o
           alignment: 'center',
           opacity: 1,
           textEffect: 'none',
-          textAnimation: 'none',
-        },
-      });
+          textAnimation: 'none' } });
     } else if (sticker.iconRef) {
       // Icon-based sticker → decorative layer
       onAddLayer({
@@ -178,8 +171,7 @@ function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; o
         type: 'decorative',
         width: 0.15,
         height: 0.15,
-        payload: { shape: 'star', color: '#ffffff', opacity: 1 },
-      });
+        payload: { shape: 'star', color: '#ffffff', opacity: 1 } });
     }
     onClose();
   }, [onAddLayer, onClose]);
@@ -220,21 +212,18 @@ function DrawingWorkspaceAdapter({ onClose, onAddLayer, editingLayer, background
       emoji: s.emojiConfig?.emoji,
       emojiSize: s.emojiConfig?.size ?? 32,
       emojiSpacing: s.emojiConfig?.spacing ?? 24,
-      emojiJitter: s.emojiConfig?.jitter ?? 0,
-    }));
+      emojiJitter: s.emojiConfig?.jitter ?? 0 }));
     if (isEditing && editingLayer) {
       onAddLayer({
         ...editingLayer,
-        payload: { ...editingLayer.payload, strokes },
-      } as CreatorLayer);
+        payload: { ...editingLayer.payload, strokes } } as CreatorLayer);
     } else {
       onAddLayer({
         ...baseLayer(createStableId('draw'), 10),
         type: 'draw',
         width: 0.8,
         height: 0.8,
-        payload: { strokes, opacity: 1 },
-      });
+        payload: { strokes, opacity: 1 } });
     }
     onClose();
   }, [isEditing, editingLayer, onAddLayer, onClose]);
@@ -270,9 +259,7 @@ function AudioBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; onA
         opacity: 1,
         volume: 1,
         fadeInMs: 0,
-        fadeOutMs: 0,
-      },
-    });
+        fadeOutMs: 0 } });
     onClose();
   }, [onAddLayer, onClose]);
 
@@ -364,8 +351,7 @@ function baseLayer(id: string, zIndex: number): Omit<CreatorLayer, 'type' | 'pay
     zIndex,
     locked: false,
     hidden: false,
-    opacity: 1,
-  };
+    opacity: 1 };
 }
 
 // ── Media Picker ───────────────────────────────────────────────────
@@ -427,8 +413,7 @@ function MediaGridItem({
   selectionOrder,
   onPress,
   colors,
-  styles,
-}: {
+  styles }: {
   asset: MediaAsset;
   isSelected: boolean;
   selectionOrder: number;
@@ -454,13 +439,11 @@ function MediaGridItem({
   }, [isSelected, reduceMotion, spring, badgeScaleSV]);
 
   const pressStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(pressedSV.value, [0, 1], [1, 0.95], Extrapolation.CLAMP) }],
-  }));
+    transform: [{ scale: interpolate(pressedSV.value, [0, 1], [1, 0.95], Extrapolation.CLAMP) }] }));
 
   const badgeStyle = useAnimatedStyle(() => ({
     transform: [{ scale: badgeScaleSV.value }],
-    opacity: badgeScaleSV.value,
-  }));
+    opacity: badgeScaleSV.value }));
 
   return (
     <Pressable
@@ -517,8 +500,7 @@ function PermissionDeniedState({
   ctaLabel,
   onCta,
   colors,
-  styles,
-}: {
+  styles }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
   message: string;
@@ -539,8 +521,7 @@ function PermissionDeniedState({
 
   const entranceStyle = useAnimatedStyle(() => ({
     opacity: entranceSV.value,
-    transform: [{ translateY: interpolate(entranceSV.value, [0, 1], [20, 0], Extrapolation.CLAMP) }],
-  }));
+    transform: [{ translateY: interpolate(entranceSV.value, [0, 1], [20, 0], Extrapolation.CLAMP) }] }));
 
   return (
     <Reanimated.View style={[styles.mediaPermissionState, entranceStyle]}>
@@ -635,8 +616,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
       const opts: any = {
         first: 60,
         mediaType: ['photo', 'video'],
-        sortBy: [['creationTime', false]],
-      };
+        sortBy: [['creationTime', false]] };
       if (!reset && cursorRef.current) {
         opts.after = cursorRef.current;
       }
@@ -657,8 +637,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
         // Legacy expo-media-library returns duration in seconds; normalize
         // to milliseconds at the boundary so all downstream logic uses one
         // consistent unit.
-        durationMs: a.duration != null ? Math.round(a.duration * 1000) : undefined,
-      }));
+        durationMs: a.duration != null ? Math.round(a.duration * 1000) : undefined }));
 
       setAssets((prev) => reset ? mapped : [...prev, ...mapped]);
       cursorRef.current = page.endCursor;
@@ -750,9 +729,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
           mediaType: asset.mediaType,
           contentFit: 'cover',
           videoDurationMs: asset.durationMs,
-          opacity: 1,
-        },
-      });
+          opacity: 1 } });
     });
     onClose();
   }, [selectedIds, assets, onAddLayer, onClose]);
@@ -779,8 +756,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     if (camStatus !== 'granted') return;
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.9,
-    });
+      quality: 0.9 });
     if (!result.canceled && result.assets[0]) {
       onAddLayer({
         ...baseLayer(createStableId('media'), 0),
@@ -791,9 +767,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
           mediaUri: result.assets[0].uri,
           mediaType: 'image',
           contentFit: 'cover',
-          opacity: 1,
-        },
-      });
+          opacity: 1 } });
       onClose();
     }
   }, [onAddLayer, onClose]);
@@ -802,8 +776,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     haptic.light();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      quality: 0.9,
-    });
+      quality: 0.9 });
     if (!result.canceled && result.assets[0]) {
       onAddLayer({
         ...baseLayer(createStableId('media'), 0),
@@ -816,9 +789,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
           contentFit: 'cover',
           // ImagePicker returns duration in milliseconds.
           videoDurationMs: result.assets[0].duration ?? undefined,
-          opacity: 1,
-        },
-      });
+          opacity: 1 } });
       onClose();
     }
   }, [onAddLayer, onClose]);
@@ -833,8 +804,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
   // ── Tab indicator animated style ─────────────────────────────────
   const tabIndicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tabIndicatorXSV.value }],
-    width: tabIndicatorWidthSV.value,
-  }));
+    width: tabIndicatorWidthSV.value }));
 
   // ── FlashList renderItem ─────────────────────────────────────────
   const renderItem: ListRenderItem<MediaAsset | 'camera' | 'video'> = useCallback(({ item }) => {
@@ -1033,8 +1003,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
               onLayout={(e) => {
                 tabLayoutsRef.current[cat.key] = {
                   x: e.nativeEvent.layout.x,
-                  width: e.nativeEvent.layout.width,
-                };
+                  width: e.nativeEvent.layout.width };
                 if (cat.key === 'recent' && tabIndicatorWidthSV.value === 0) {
                   tabIndicatorWidthSV.value = e.nativeEvent.layout.width;
                 }
@@ -1231,8 +1200,7 @@ async function recordRecentListing(item: ListingSearchResult): Promise<void> {
       title: item.title,
       priceGbp: item.priceGbp,
       imageUrl: item.imageUrl,
-      createdAt: item.createdAt,
-    };
+      createdAt: item.createdAt };
     const filtered = existing.filter((e) => e.id !== entry.id);
     const next = [entry, ...filtered].slice(0, MAX_RECENT);
     await AsyncStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(next));
@@ -1257,8 +1225,7 @@ function listingApiItemToSearchResult(item: ListingApiItem): ListingSearchResult
     brand: item.brand,
     size: item.size,
     condition: item.condition,
-    category: item.category,
-  };
+    category: item.category };
 }
 
 type ProductSourceTab = 'closet' | 'saved' | 'search' | 'recent';
@@ -1419,8 +1386,7 @@ const ProductPicker = React.memo(function ProductPicker({ onClose, onAddLayer }:
             imageUrl: e.imageUrl,
             rank: 0,
             createdAt: e.createdAt,
-            seller: null,
-          }))
+            seller: null }))
         );
       })
       .catch(() => {
@@ -1446,9 +1412,7 @@ const ProductPicker = React.memo(function ProductPicker({ onClose, onAddLayer }:
         snapshotTitle: item.title,
         snapshotImageUrl: item.imageUrl ?? undefined,
         snapshotPriceGbp: item.priceGbp,
-        availability: 'active',
-      },
-    });
+        availability: 'active' } });
     onClose();
   }, [onAddLayer, onClose, haptic]);
 
@@ -1658,8 +1622,7 @@ const MentionPicker = React.memo(function MentionPicker({ onClose, onAddLayer }:
       type: 'mention',
       width: 0.15,
       height: 0.06,
-      payload: { userId: user.id, username: user.username },
-    });
+      payload: { userId: user.id, username: user.username } });
     onClose();
   }, [onAddLayer, onClose]);
 
@@ -1744,8 +1707,7 @@ const LookPicker = React.memo(function LookPicker({ onClose, onAddLayer }: { onC
           id: l.id,
           caption: l.caption || l.title,
           mediaUrl: l.mediaUrl,
-          creatorId: l.creatorId,
-        })));
+          creatorId: l.creatorId })));
     } catch (err) {
       if (!mountedRef.current) return;
       setError((err as Error).message || 'Failed to load looks');
@@ -1771,8 +1733,7 @@ const LookPicker = React.memo(function LookPicker({ onClose, onAddLayer }: { onC
       type: 'look',
       width: 0.2,
       height: 0.08,
-      payload: { lookId: item.id, snapshotCaption: item.caption, snapshotImageUrl: item.mediaUrl },
-    });
+      payload: { lookId: item.id, snapshotCaption: item.caption, snapshotImageUrl: item.mediaUrl } });
     onClose();
   }, [onAddLayer, onClose]);
 
@@ -1875,18 +1836,17 @@ const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: React.Com
 // Instagram 2025-2026: 10 fonts covering clean, bold, editorial,
 // compact, handwritten, bubble, deco, poster, squeeze, signature
 const TEXT_STYLE_PREVIEW: Record<string, { fontFamily: string; fontSize: number; lineHeight: number }> = {
-  clean: { fontFamily: Typography.family.medium, fontSize: Type.body.size, lineHeight: Type.body.size * 1.3 },
-  headline: { fontFamily: Typography.family.bold, fontSize: Type.title.size, lineHeight: Type.title.size * 1.15 },
-  editorial: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size + 2, lineHeight: (Type.bodyStrong.size + 2) * 1.2 },
-  compact: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, lineHeight: Type.caption.size * 1.3 },
-  handwritten: { fontFamily: Typography.family.regular, fontSize: Type.body.size, lineHeight: Type.body.size * 1.35 },
-  bubble: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size + 4, lineHeight: (Type.bodyStrong.size + 4) * 1.2 },
-  deco: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size, lineHeight: Type.bodyStrong.size * 1.3 },
-  poster: { fontFamily: Typography.family.bold, fontSize: Type.title.size - 4, lineHeight: (Type.title.size - 4) * 1.1 },
-  squeeze: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.size * 1.1 },
-  signature: { fontFamily: Typography.family.regular, fontSize: Type.bodyStrong.size, lineHeight: Type.bodyStrong.size * 1.4 },
-  neon: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size + 4, lineHeight: (Type.bodyStrong.size + 4) * 1.2 },
-};
+  clean: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.size * 1.3 },
+  headline: { fontFamily: TypographyV2.screenTitle.fontFamily, fontSize: TypographyV2.screenTitle.size, lineHeight: TypographyV2.screenTitle.size * 1.15 },
+  editorial: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size + 2, lineHeight: (TypographyV2.bodyStrong.size + 2) * 1.2 },
+  compact: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, lineHeight: TypographyV2.meta.size * 1.3 },
+  handwritten: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.size * 1.35 },
+  bubble: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size + 4, lineHeight: (TypographyV2.bodyStrong.size + 4) * 1.2 },
+  deco: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, lineHeight: TypographyV2.bodyStrong.size * 1.3 },
+  poster: { fontFamily: TypographyV2.screenTitle.fontFamily, fontSize: TypographyV2.screenTitle.size - 4, lineHeight: (TypographyV2.screenTitle.size - 4) * 1.1 },
+  squeeze: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.size * 1.1 },
+  signature: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, lineHeight: TypographyV2.bodyStrong.size * 1.4 },
+  neon: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size + 4, lineHeight: (TypographyV2.bodyStrong.size + 4) * 1.2 } };
 
 const TextPicker = React.memo(function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
@@ -1915,24 +1875,20 @@ const TextPicker = React.memo(function TextPicker({ onClose, onAddLayer, editing
       opacity: 1,
       textEffect,
       textAnimation,
-      backgroundColor: textBgColor !== 'transparent' ? textBgColor : undefined,
-    };
+      backgroundColor: textBgColor !== 'transparent' ? textBgColor : undefined };
     if (isEditing && editingLayer) {
       onAddLayer({
         ...editingLayer,
         payload: {
           ...editingLayer.payload,
-          ...payload,
-        },
-      } as CreatorLayer);
+          ...payload } } as CreatorLayer);
     } else {
       onAddLayer({
         ...baseLayer(createStableId('text'), 10),
         type: 'text',
         width: 0.6,
         height: 0.1,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [text, textStyle, textColor, alignment, textEffect, textAnimation, textBgColor, isEditing, editingLayer, onAddLayer, onClose]);
@@ -1950,8 +1906,7 @@ const TextPicker = React.memo(function TextPicker({ onClose, onAddLayer, editing
               textStyle === 'neon' && {
                 textShadowColor: textColor,
                 textShadowOffset: { width: 0, height: 0 },
-                textShadowRadius: 12,
-              },
+                textShadowRadius: 12 },
             ]}
             numberOfLines={3}
           >
@@ -1992,8 +1947,7 @@ const TextPicker = React.memo(function TextPicker({ onClose, onAddLayer, editing
                   s.key === 'neon' && {
                     textShadowColor: textStyle === 'neon' ? colors.brand : textColor,
                     textShadowOffset: { width: 0, height: 0 },
-                    textShadowRadius: 8,
-                  },
+                    textShadowRadius: 8 },
                 ]}
               >
                 {s.label}
@@ -2117,8 +2071,7 @@ const TextPicker = React.memo(function TextPicker({ onClose, onAddLayer, editing
               typewriter: 'keypad-outline',
               bounce: 'arrow-up-circle-outline',
               fade: 'eye-outline',
-              slide: 'arrow-up-outline',
-            };
+              slide: 'arrow-up-outline' };
             return (
               <Pressable
                 key={a.key}
@@ -2248,8 +2201,7 @@ const DrawPicker = React.memo(function DrawPicker({ onClose, onAddLayer, editing
           points: [...currentPoints],
           color: activeTool === 'eraser' ? '#000000' : activeColor,
           width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
-          tool: activeTool,
-        };
+          tool: activeTool };
       })
       .onUpdate((e) => {
         currentPoints.push({ x: e.x / canvasLayout.width, y: e.y / canvasLayout.height });
@@ -2257,8 +2209,7 @@ const DrawPicker = React.memo(function DrawPicker({ onClose, onAddLayer, editing
           points: [...currentPoints],
           color: activeTool === 'eraser' ? '#000000' : activeColor,
           width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
-          tool: activeTool,
-        };
+          tool: activeTool };
         renderTick.value = renderTick.value + 1;
       })
       .onEnd(() => {
@@ -2267,8 +2218,7 @@ const DrawPicker = React.memo(function DrawPicker({ onClose, onAddLayer, editing
             points: [...currentPoints],
             color: activeTool === 'eraser' ? '#000000' : activeColor,
             width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
-            tool: activeTool,
-          });
+            tool: activeTool });
         }
         currentStroke.value = null;
         currentPoints = [];
@@ -2311,21 +2261,18 @@ const DrawPicker = React.memo(function DrawPicker({ onClose, onAddLayer, editing
     haptic.medium();
     const payload: any = {
       strokes,
-      opacity: 1,
-    };
+      opacity: 1 };
     if (isEditing && editingLayer) {
       onAddLayer({
         ...editingLayer,
-        payload: { ...editingLayer.payload, ...payload },
-      } as CreatorLayer);
+        payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
       onAddLayer({
         ...baseLayer(createStableId('draw'), 10),
         type: 'draw',
         width: 0.9,
         height: 0.9,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [strokes, isEditing, editingLayer, onAddLayer, onClose, haptic]);
@@ -2521,8 +2468,7 @@ const DrawPicker = React.memo(function DrawPicker({ onClose, onAddLayer, editing
                 width: Math.max(4, Math.min(28, brushSize)),
                 height: Math.max(4, Math.min(28, brushSize)),
                 borderRadius: Math.max(2, Math.min(14, brushSize / 2)),
-                backgroundColor: activeTool === 'eraser' ? colors.surfaceAlt : activeColor,
-              },
+                backgroundColor: activeTool === 'eraser' ? colors.surfaceAlt : activeColor },
             ]}
           />
           <Text style={styles.brushPreviewLabel}>{brushSize}px</Text>
@@ -2617,8 +2563,7 @@ const GifPicker = React.memo(function GifPicker({ onClose, onAddLayer }: { onClo
         stillUrl: g.images?.fixed_height_still?.url ?? g.images?.original_still?.url,
         altText: g.title?.slice(0, 80) ?? 'GIF',
         width: parseInt(g.images?.fixed_height?.width ?? '200', 10),
-        height: parseInt(g.images?.fixed_height?.height ?? '200', 10),
-      })).filter((g: GifResult) => g.gifUrl);
+        height: parseInt(g.images?.fixed_height?.height ?? '200', 10) })).filter((g: GifResult) => g.gifUrl);
       setResults(gifs);
     } catch (err) {
       if (!mountedRef.current) return;
@@ -2660,9 +2605,7 @@ const GifPicker = React.memo(function GifPicker({ onClose, onAddLayer }: { onClo
         stillUrl: gif.stillUrl,
         altText: gif.altText,
         source: 'giphy',
-        opacity: 1,
-      },
-    });
+        opacity: 1 } });
     onClose();
   }, [onAddLayer, onClose, haptic]);
 
@@ -2794,8 +2737,7 @@ const MusicPicker = React.memo(function MusicPicker({ onClose, onAddLayer }: { o
         trackName: t.trackName ?? t.collectionName ?? 'Unknown Track',
         artistName: t.artistName ?? '',
         artworkUrl: (t.artworkUrl100 ?? t.artworkUrl60 ?? '').replace('100x100', '200x200'),
-        previewUrl: t.previewUrl ?? '',
-      })).filter((t: MusicTrack) => t.trackId && t.artworkUrl);
+        previewUrl: t.previewUrl ?? '' })).filter((t: MusicTrack) => t.trackId && t.artworkUrl);
       setResults(tracks);
       // Default the live preview to the first track so the sticker is never empty
       if (tracks.length > 0) setPreviewTrack((prev) => prev ?? tracks[0]);
@@ -2835,9 +2777,7 @@ const MusicPicker = React.memo(function MusicPicker({ onClose, onAddLayer }: { o
         opacity: 1,
         volume: 1,
         fadeInMs: 0,
-        fadeOutMs: 0,
-      },
-    });
+        fadeOutMs: 0 } });
     onClose();
   }, [onAddLayer, onClose, haptic]);
 
@@ -2973,8 +2913,7 @@ const QuizPicker = React.memo(function QuizPicker({ onClose, onAddLayer, editing
       options: optionObjs,
       correctOptionId: optionObjs[correctIdx]?.id ?? optionObjs[0].id,
       emoji,
-      ...(timerMs ? { timerMs } : {}),
-    };
+      ...(timerMs ? { timerMs } : {}) };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -2983,8 +2922,7 @@ const QuizPicker = React.memo(function QuizPicker({ onClose, onAddLayer, editing
         type: 'quiz',
         width: 0.7,
         height: 0.25,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [question, options, correctIdx, emoji, isEditing, editingLayer, onAddLayer, onClose, haptic]);
@@ -3086,7 +3024,7 @@ const QuizPicker = React.memo(function QuizPicker({ onClose, onAddLayer, editing
               accessibilityState={{ selected: emoji === e }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Text style={{ fontSize: Type.title.size }}>{e}</Text>
+              <Text style={{ fontSize: TypographyV2.screenTitle.size }}>{e}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -3156,8 +3094,7 @@ const QuestionPicker = React.memo(function QuestionPicker({ onClose, onAddLayer,
       prompt: prompt.trim(),
       placeholder: placeholder.trim() || 'Type something...',
       backgroundColor: bgColor,
-      textColor: '#ffffff',
-    };
+      textColor: '#ffffff' };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -3166,8 +3103,7 @@ const QuestionPicker = React.memo(function QuestionPicker({ onClose, onAddLayer,
         type: 'question',
         width: 0.6,
         height: 0.12,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [prompt, placeholder, bgColor, isEditing, editingLayer, onAddLayer, onClose, haptic]);
@@ -3265,8 +3201,7 @@ const EmojiSliderPicker = React.memo(function EmojiSliderPicker({ onClose, onAdd
       question: question.trim(),
       emoji,
       endLabel: endLabel.trim(),
-      sliderColor,
-    };
+      sliderColor };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -3275,8 +3210,7 @@ const EmojiSliderPicker = React.memo(function EmojiSliderPicker({ onClose, onAdd
         type: 'emojiSlider',
         width: 0.6,
         height: 0.1,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [question, emoji, endLabel, sliderColor, isEditing, editingLayer, onAddLayer, onClose, haptic]);
@@ -3330,7 +3264,7 @@ const EmojiSliderPicker = React.memo(function EmojiSliderPicker({ onClose, onAdd
               accessibilityState={{ selected: emoji === e }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Text style={{ fontSize: Type.title.size }}>{e}</Text>
+              <Text style={{ fontSize: TypographyV2.screenTitle.size }}>{e}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -3394,8 +3328,7 @@ const CountdownPicker = React.memo(function CountdownPicker({ onClose, onAddLaye
       label: label.trim(),
       endDateTime: endDate.toISOString(),
       color,
-      textColor: '#ffffff',
-    };
+      textColor: '#ffffff' };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -3404,8 +3337,7 @@ const CountdownPicker = React.memo(function CountdownPicker({ onClose, onAddLaye
         type: 'countdown',
         width: 0.5,
         height: 0.12,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [label, endDate, color, isEditing, editingLayer, onAddLayer, onClose, haptic]);
@@ -3419,10 +3351,10 @@ const CountdownPicker = React.memo(function CountdownPicker({ onClose, onAddLaye
     <PickerShell title={isEditing ? 'Edit Countdown' : 'Countdown'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={[styles.textPreview, { backgroundColor: color }]}>
-          <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size }}>
+          <Text style={{ color: '#fff', fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size }}>
             {label.trim() || 'Event countdown'}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: Typography.family.medium, fontSize: Type.title.size, marginTop: Space.xs }}>
+          <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: TypographyV2.screenTitle.fontFamily, fontSize: TypographyV2.screenTitle.size, marginTop: Space.xs }}>
             {formatDate(endDate)}
           </Text>
         </View>
@@ -3512,8 +3444,7 @@ const ShapePicker = React.memo(function ShapePicker({ onClose, onAddLayer }: { o
       type: 'decorative',
       width: 0.15,
       height: 0.15,
-      payload: { shape: shape.shape, color: activeColor, opacity: 1 },
-    });
+      payload: { shape: shape.shape, color: activeColor, opacity: 1 } });
     onClose();
   }, [onAddLayer, onClose, activeColor, haptic]);
 
@@ -3631,9 +3562,7 @@ const VotePicker = React.memo(function VotePicker({ onClose, onAddLayer }: { onC
       payload: {
         question: question.trim(),
         options: validOptions,
-        ...(timerMs ? { timerMs } : {}),
-      },
-    });
+        ...(timerMs ? { timerMs } : {}) } });
     onClose();
   }, [question, options, timerMs, canSave, onAddLayer, onClose]);
 
@@ -3791,8 +3720,7 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
         { key: 'question', label: 'Ask', icon: 'chatbubble-outline', mode: 'question', description: 'Open Q&A' },
         { key: 'emojiSlider', label: 'Slider', icon: 'happy-outline', mode: 'emojiSlider', description: 'Emoji rating' },
         { key: 'countdown', label: 'Countdown', icon: 'time-outline', mode: 'countdown', description: 'Count to a date' },
-      ],
-    },
+      ] },
     {
       key: 'mentions',
       label: 'Tags',
@@ -3800,8 +3728,7 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
         { key: 'mention', label: '@Mention', icon: 'at-outline', mode: 'mention', description: 'Tag a user' },
         { key: 'location', label: 'Location', icon: 'location-outline', mode: 'location', description: 'Tag a place' },
         { key: 'hashtag', label: 'Hashtag', icon: 'pricetag-outline', mode: 'hashtag', description: 'Topic tag' },
-      ],
-    },
+      ] },
     {
       key: 'media',
       label: 'Media',
@@ -3809,8 +3736,7 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
         { key: 'gif', label: 'GIF', icon: 'image-outline', mode: 'gif', description: 'Animated sticker' },
         { key: 'music', label: 'Music', icon: 'musical-notes-outline', mode: 'music', description: 'Song sticker' },
         { key: 'link', label: 'Link', icon: 'link-outline', mode: 'link', description: 'Clickable URL' },
-      ],
-    },
+      ] },
     {
       key: 'utility',
       label: 'Utility',
@@ -3818,8 +3744,7 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
         { key: 'time', label: 'Time', icon: 'time-outline', mode: 'time', description: 'Current timestamp' },
         { key: 'weather', label: 'Weather', icon: 'partly-sunny-outline', mode: 'weather', description: 'Conditions' },
         { key: 'shape', label: 'Shapes', icon: 'shapes-outline', mode: 'shape', description: 'Decorative shapes' },
-      ],
-    },
+      ] },
   ] as StickerCategoryDef[]
 ).map((cat) => ({
   ...cat,
@@ -3834,8 +3759,7 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
     const capId = getCapabilityForLayerType(layerType);
     if (!capId) return true;
     return isCapabilitySupported(capId);
-  }),
-})).filter((cat) => cat.stickers.length > 0);
+  }) })).filter((cat) => cat.stickers.length > 0);
 
 const StickerTray = React.memo(function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
@@ -3854,8 +3778,7 @@ const StickerTray = React.memo(function StickerTray({ onClose, onAddLayer }: { o
         ...cat,
         stickers: cat.stickers.filter((s) =>
           s.label.toLowerCase().includes(q) || s.description?.toLowerCase().includes(q)
-        ),
-      }))
+        ) }))
       .filter((cat) => cat.stickers.length > 0);
   }, [search]);
 
@@ -3987,8 +3910,7 @@ const LinkPicker = React.memo(function LinkPicker({ onClose, onAddLayer, editing
       url: url.trim(),
       ctaText: ctaText.trim() || 'Link',
       backgroundColor: bgColor,
-      textColor: '#ffffff',
-    };
+      textColor: '#ffffff' };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -3997,8 +3919,7 @@ const LinkPicker = React.memo(function LinkPicker({ onClose, onAddLayer, editing
         type: 'link',
         width: 0.5,
         height: 0.08,
-        payload,
-      });
+        payload });
     }
     haptic.medium();
     onClose();
@@ -4072,8 +3993,7 @@ const LocationPicker = React.memo(function LocationPicker({ onClose, onAddLayer,
   const handleAdd = useCallback(() => {
     if (!canSave) return;
     const payload: any = {
-      placeName: placeName.trim(),
-    };
+      placeName: placeName.trim() };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4082,8 +4002,7 @@ const LocationPicker = React.memo(function LocationPicker({ onClose, onAddLayer,
         type: 'location',
         width: 0.4,
         height: 0.06,
-        payload,
-      });
+        payload });
     }
     haptic.medium();
     onClose();
@@ -4134,8 +4053,7 @@ const HashtagPicker = React.memo(function HashtagPicker({ onClose, onAddLayer, e
     const payload: any = {
       tag: cleanTag,
       backgroundColor: '#C9A46A',
-      textColor: '#ffffff',
-    };
+      textColor: '#ffffff' };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4144,8 +4062,7 @@ const HashtagPicker = React.memo(function HashtagPicker({ onClose, onAddLayer, e
         type: 'hashtag',
         width: 0.4,
         height: 0.06,
-        payload,
-      });
+        payload });
     }
     haptic.medium();
     onClose();
@@ -4200,8 +4117,7 @@ const TimePicker = React.memo(function TimePicker({ onClose, onAddLayer, editing
     const payload: any = {
       displayTime: new Date().toISOString(),
       format,
-      textColor: '#ffffff',
-    };
+      textColor: '#ffffff' };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4210,8 +4126,7 @@ const TimePicker = React.memo(function TimePicker({ onClose, onAddLayer, editing
         type: 'time',
         width: 0.3,
         height: 0.06,
-        payload,
-      });
+        payload });
     }
     haptic.medium();
     onClose();
@@ -4284,8 +4199,7 @@ const WeatherPicker = React.memo(function WeatherPicker({ onClose, onAddLayer, e
       condition,
       emoji,
       locationName: locationName.trim(),
-      textColor: '#ffffff',
-    };
+      textColor: '#ffffff' };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4294,8 +4208,7 @@ const WeatherPicker = React.memo(function WeatherPicker({ onClose, onAddLayer, e
         type: 'weather',
         width: 0.35,
         height: 0.08,
-        payload,
-      });
+        payload });
     }
     haptic.medium();
     onClose();
@@ -4382,44 +4295,39 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   const THUMB_SIZE = Math.floor((screenWidth - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
   return StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, paddingVertical: Space.sm },
-  title: { fontFamily: Typography.family.semibold, fontSize: Type.subtitle.size, color: colors.textPrimary },
+  title: { fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: colors.textPrimary },
   closeBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: Radius.sm },
   mediaOptions: { flexDirection: 'row', justifyContent: 'center', gap: Space.lg, paddingVertical: Space.xl },
   mediaOption: { alignItems: 'center', gap: 8, minWidth: 80 },
-  mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  mediaOptionLabel: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
   // ── Album/source disclosure ──
   albumDisclosure: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   albumDisclosureText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    flex: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    flex: 1 },
   albumPickerDropdown: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.md,
     marginHorizontal: Space.md,
     marginBottom: Space.xs,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   albumPickerItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    minHeight: 40,
-  },
+    minHeight: 40 },
   albumPickerItemText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    flex: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    flex: 1 },
   // ── Category tabs ──
   categoryTabRow: {
     flexDirection: 'row',
@@ -4427,15 +4335,13 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     paddingVertical: Space.xs,
     position: 'relative',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   categoryTabIndicator: {
     position: 'absolute',
     top: Space.xs,
     bottom: 0,
     borderRadius: Radius.md,
-    height: 36,
-  },
+    height: 36 },
   categoryTab: {
     flex: 1,
     flexDirection: 'row',
@@ -4443,12 +4349,10 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     justifyContent: 'center',
     gap: 4,
     paddingVertical: Space.sm,
-    zIndex: 1,
-  },
+    zIndex: 1 },
   categoryTabLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Limited-access banner ──
   limitedAccessBanner: {
     flexDirection: 'row',
@@ -4459,31 +4363,25 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     borderWidth: StyleSheet.hairlineWidth,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   limitedAccessText: {
     flex: 1,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Selection preview rail ──
   selectionPreviewRail: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   selectionPreviewScroll: {
     paddingHorizontal: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   selectionPreviewItem: {
     width: 56,
     height: 56,
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   selectionPreviewThumb: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   selectionPreviewOrder: {
     position: 'absolute',
     top: 4,
@@ -4492,28 +4390,23 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     height: 18,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   selectionPreviewOrderText: {
     fontFamily: Typography.family.bold,
-    fontSize: 10,
-  },
+    fontSize: 10 },
   selectionPreviewRemove: {
     position: 'absolute',
     top: 2,
-    right: 2,
-  },
+    right: 2 },
   selectionPreviewReorderLeft: {
     position: 'absolute',
     left: 2,
     top: '50%',
-    marginTop: -9,
-  },
+    marginTop: -9 },
   selectionPreviewReorderRight: {
     position: 'absolute',
     right: 2,
-    bottom: 2,
-  },
+    bottom: 2 },
   // ── Media grid ──
   mediaGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   mediaGridRow: { gap: Space.xs, marginBottom: Space.xs },
@@ -4523,12 +4416,10 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     borderRadius: Radius.md,
     overflow: 'hidden',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   mediaGridThumb: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   mediaGridVideoBadge: {
     position: 'absolute',
     bottom: Space.xs,
@@ -4539,13 +4430,11 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: Space.xs,
     paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   mediaGridDuration: {
     color: '#fff',
     fontSize: 10,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: Typography.family.medium },
   // Selection overlay — subtle tint + border highlight (iOS Photos pattern).
   // The border communicates selection more clearly than a heavy dark overlay.
   mediaGridSelectedOverlay: {
@@ -4553,8 +4442,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     backgroundColor: 'rgba(0,0,0,0.25)',
     borderWidth: 2,
     borderColor: '#fff',
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   mediaGridSelectionBadge: {
     position: 'absolute',
     top: 6,
@@ -4565,97 +4453,82 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   mediaGridSelectionText: {
     color: '#000',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   addBtn: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   addBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   mediaGridFooter: {
     paddingVertical: Space.md,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   mediaLoadingState: {
     paddingVertical: Space.xxl,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   mediaEmptyState: {
     paddingVertical: Space.xxl,
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   mediaEmptyText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   mediaPermissionState: {
     paddingVertical: Space.xxl,
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.xl,
-  },
+    paddingHorizontal: Space.xl },
   mediaPermissionTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.title.size,
-    marginTop: Space.sm,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    marginTop: Space.sm },
   mediaPermissionText: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     textAlign: 'center',
-    lineHeight: 22,
-  },
+    lineHeight: 22 },
   mediaPermissionBtn: {
     paddingHorizontal: Space.lg,
     height: 44,
     borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   mediaPermissionBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: 8 },
   searchIcon: {},
   searchInput: {
     flex: 1, borderWidth: Stroke.standard, borderColor: colors.border, borderRadius: Radius.md,
-    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: colors.textPrimary,
-  },
+    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: TypographyV2.body.size, color: colors.textPrimary },
   // ── Product picker source tabs ──
   resultList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   resultThumb: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   resultThumbImg: { width: '100%', height: '100%' },
   resultAvatar: { width: 40, height: 40, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  resultAvatarText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
+  resultAvatarText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary },
   resultInfo: { flex: 1, gap: 2 },
-  resultName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
-  resultPrice: { fontFamily: Typography.family.bold, fontSize: Type.caption.size, color: colors.brand },
-  resultSubtext: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textMuted },
+  resultName: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
+  resultPrice: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.brand },
+  resultSubtext: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textMuted },
   loadingBody: { paddingVertical: Space.xl, alignItems: 'center' },
   emptyState: { paddingVertical: Space.xl, alignItems: 'center' },
-  emptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
+  emptyText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textMuted },
   errorBody: { paddingVertical: Space.xl, alignItems: 'center', gap: Space.sm },
-  errorText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
+  errorText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textMuted },
   retryBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  retryBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.brand },
+  retryBtnText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.brand },
   textPickerBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.sm },
   // Live preview area — dark canvas mimicking the poster/look background
   textPreview: {
@@ -4667,25 +4540,22 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     paddingVertical: Space.md + 2,
     paddingHorizontal: Space.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
+    borderColor: 'rgba(255,255,255,0.06)' },
   textPreviewText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
-  sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+    fontSize: TypographyV2.body.size },
+  sectionLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   textInput: {
     borderWidth: Stroke.standard, borderColor: colors.border, borderRadius: Radius.lg,
-    paddingHorizontal: Space.md, paddingVertical: Space.md, fontSize: Type.body.size, color: colors.textPrimary, minHeight: 52,
-  },
+    paddingHorizontal: Space.md, paddingVertical: Space.md, fontSize: TypographyV2.body.size, color: colors.textPrimary, minHeight: 52 },
   saveBtn: { height: 48, borderRadius: Radius.lg, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
   saveBtnDisabled: { opacity: 0.35 },
-  saveBtnText: { color: colors.textInverse, fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, letterSpacing: 0.3 },
-  pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
+  saveBtnText: { color: colors.textInverse, fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, letterSpacing: 0.3 },
+  pickerSectionLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
   styleScroll: { marginHorizontal: -Space.md, paddingHorizontal: Space.md },
   styleOption: { paddingHorizontal: Space.md + 2, paddingVertical: Space.sm + 2, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt },
   styleOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
-  styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  styleOptionText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
   styleOptionTextActive: { color: colors.brand },
   colorRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
   colorOption: { width: 44, height: 44, borderRadius: Radius.full, borderWidth: 2, borderColor: 'transparent', ...Elevation.card },
@@ -4696,7 +4566,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   alignmentOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.08) },
   shapeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Space.md, paddingVertical: Space.lg, paddingHorizontal: Space.md },
   shapeOption: { alignItems: 'center', gap: 6, width: 80, paddingVertical: Space.sm },
-  shapeLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  shapeLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   // ── Draw picker ──
   drawBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.xs },
   drawCanvasWrap: {
@@ -4707,34 +4577,31 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   drawCanvasHint: {
     position: 'absolute',
     bottom: Space.sm,
     left: 0,
     right: 0,
     alignItems: 'center',
-    pointerEvents: 'none',
-  },
+    pointerEvents: 'none' },
   drawCanvasHintText: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: 'rgba(255,255,255,0.28)',
-    letterSpacing: 0.3,
-  },
+    letterSpacing: 0.3 },
   brushSizeRow: { flexDirection: 'row', gap: Space.md, alignItems: 'center', paddingVertical: Space.xs },
   brushSizeOption: { width: 44, height: 44, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   brushSizeOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.08) },
   brushSizeDot: { borderRadius: Radius.full },
   brushPreviewWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs },
   brushPreviewDot: { ...Elevation.floating },
-  brushPreviewLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  brushPreviewLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   drawActions: { flexDirection: 'row', alignItems: 'center', gap: Space.md, marginTop: Space.md },
   drawActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  drawActionLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  drawActionLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   drawDoneBtn: { paddingHorizontal: Space.xl, paddingVertical: Space.sm, borderRadius: Radius.full, marginLeft: 'auto' },
-  drawDoneBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: '#fff' },
+  drawDoneBtnText: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: '#fff' },
   // ── GIF picker ──
   gifList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   gifRow: { gap: Space.xs, marginBottom: Space.xs },
@@ -4743,71 +4610,70 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     aspectRatio: 1,
     borderRadius: Radius.sm,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   gifThumb: { width: '100%', height: '100%' },
   // ── Music picker ──
   musicPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginHorizontal: Space.md, marginBottom: Space.sm, ...Elevation.card },
   musicPreviewArt: { width: 48, height: 48, borderRadius: Radius.md },
   musicPreviewInfo: { flex: 1, gap: 2 },
-  musicPreviewTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary },
-  musicPreviewArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
+  musicPreviewTrackName: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textPrimary },
+  musicPreviewArtistName: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   musicPreviewPlayBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   musicLoadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.sm },
-  musicLoadingText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  musicLoadingText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   musicRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   musicArtwork: { width: 56, height: 56, borderRadius: Radius.md, ...Elevation.floating },
   musicInfo: { flex: 1, gap: 2 },
-  musicTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary },
-  musicArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
+  musicTrackName: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textPrimary },
+  musicArtistName: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   musicAddBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   // ── Quiz picker ──
   quizOptionRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
   quizCorrectDot: { width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   quizRemoveBtn: { padding: Space.xs },
   quizAddOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm },
-  quizAddOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.brand },
+  quizAddOptionText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.brand },
   // ── Countdown picker ──
   countdownDateBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.md, borderWidth: Stroke.standard, borderColor: colors.border },
-  countdownDateText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  countdownDateText: { flex: 1, fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
   // ── Sticker tray ──
   stickerSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt, borderRadius: Radius.lg, marginHorizontal: Space.md, marginBottom: Space.sm },
-  stickerSearchInput: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: Space.xs },
+  stickerSearchInput: { flex: 1, fontSize: TypographyV2.body.size, color: colors.textPrimary, fontFamily: TypographyV2.body.fontFamily, paddingVertical: Space.xs },
   stickerSearchClear: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
   stickerCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.xs },
   stickerCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
   stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  stickerCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
+  stickerCategoryChipText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   stickerGridScroll: { flex: 1 },
   stickerGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   stickerCategorySection: { marginBottom: Space.lg },
-  stickerCategoryTitle: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
+  stickerCategoryTitle: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
   stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
   stickerCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: Stroke.standard, borderColor: colors.borderSubtle },
-  stickerCellLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  stickerCellLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textPrimary },
   stickerEmptyState: { paddingVertical: Space.xxl, alignItems: 'center', gap: Space.md },
-  stickerEmptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
+  stickerEmptyText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textMuted },
   // ── Sticker preview pill (shared by Link/Location/Hashtag/Time/Weather) ──
   stickerPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.lg, backgroundColor: 'rgba(201,164,106,0.9)', alignSelf: 'center', marginBottom: Space.sm },
-  stickerPreviewPillText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: '#fff' },
-  stickerPreviewPillEmoji: { fontSize: Type.priceList.size },
+  stickerPreviewPillText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: '#fff' },
+  stickerPreviewPillEmoji: { fontSize: TypographyV2.priceList.size },
   // ── Weather picker ──
   weatherPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.xl, backgroundColor: 'rgba(201,164,106,0.95)', alignSelf: 'center', marginBottom: Space.sm, ...Elevation.floating, minWidth: 180 },
-  weatherPreviewEmoji: { fontSize: Type.display.size },
+  weatherPreviewEmoji: { fontSize: TypographyV2.display.size },
   weatherPreviewInfo: { gap: 0 },
-  weatherPreviewTemp: { fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, color: '#fff' },
-  weatherPreviewCondition: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.85)' },
+  weatherPreviewTemp: { fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: '#fff' },
+  weatherPreviewCondition: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: 'rgba(255,255,255,0.85)' },
   weatherPreviewLocation: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
-  weatherPreviewLocationText: { fontFamily: Typography.family.medium, fontSize: Type.meta.size, color: 'rgba(255,255,255,0.7)' },
+  weatherPreviewLocationText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: 'rgba(255,255,255,0.7)' },
   weatherGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   weatherCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
   weatherCellActive: { backgroundColor: colors.brand },
-  weatherCellEmoji: { fontSize: Type.priceHero.size },
-  weatherCellLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
-  inputCardLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, marginBottom: 6, marginTop: Space.sm },
+  weatherCellEmoji: { fontSize: TypographyV2.priceHero.size },
+  weatherCellLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textAlign: 'center' },
+  inputCardLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, marginBottom: 6, marginTop: Space.sm },
   inputCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.xs },
-  inputCardText: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: 2 },
-  inputCardSuffix: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
+  inputCardText: { flex: 1, fontSize: TypographyV2.body.size, color: colors.textPrimary, fontFamily: TypographyV2.body.fontFamily, paddingVertical: 2 },
+  inputCardSuffix: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary },
   // ── Spectrum color picker ──
   spectrumWrap: { marginTop: Space.sm, gap: Space.xs },
   spectrumBar: { height: 36, borderRadius: Radius.full, overflow: 'hidden', position: 'relative', ...Elevation.floating },
@@ -4823,13 +4689,13 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   // ── Text effect chips (visual preview) ──
   effectChip: { width: 56, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
   effectChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
-  effectChipSample: { fontFamily: Typography.family.bold, fontSize: Type.priceList.size, lineHeight: 24 },
-  effectChipLabel: { fontFamily: Typography.family.medium, fontSize: Type.meta.size, color: colors.textSecondary },
+  effectChipSample: { fontFamily: TypographyV2.priceList.fontFamily, fontSize: TypographyV2.priceList.size, lineHeight: 24 },
+  effectChipLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   effectChipLabelActive: { color: colors.brand },
   // ── Text animation chips (visual preview) ──
   animChip: { width: 48, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
   animChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
-  animChipLabel: { fontFamily: Typography.family.medium, fontSize: Type.meta.size, color: colors.textSecondary, textAlign: 'center' },
+  animChipLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textAlign: 'center' },
   animChipLabelActive: { color: colors.brand },
   // ── Draw brush chips (premium tool selection) ──
   brushChipScroll: { gap: Space.sm, paddingVertical: Space.xs },
@@ -4841,46 +4707,45 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   gifCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.sm },
   gifCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
   gifCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  gifCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
+  gifCategoryChipText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   // ── Vote preview ──
   votePreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  votePreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, marginBottom: Space.sm, textAlign: 'center' },
+  votePreviewQuestion: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary, marginBottom: Space.sm, textAlign: 'center' },
   votePreviewOptions: { flexDirection: 'row', gap: Space.sm },
   votePreviewOption: { flex: 1, paddingVertical: Space.sm, paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: Stroke.standard, alignItems: 'center' },
-  votePreviewOptionText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  votePreviewOptionText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textPrimary },
   addOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm, marginBottom: Space.xs },
-  addOptionBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.brand },
+  addOptionBtnText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.brand },
   timerChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm },
-  timerChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
+  timerChipText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   // ── Quiz preview ──
   quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },
   quizPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
-  quizPreviewEmoji: { fontSize: Type.title.size },
-  quizPreviewQuestion: { flex: 1, fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary },
+  quizPreviewEmoji: { fontSize: TypographyV2.screenTitle.size },
+  quizPreviewQuestion: { flex: 1, fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
   quizPreviewOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: Space.sm, paddingHorizontal: Space.md, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   quizPreviewOptionCorrect: { borderColor: colors.success, backgroundColor: withAlpha(colors.success, 0.08) },
-  quizPreviewOptionText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  quizPreviewOptionText: { flex: 1, fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textPrimary },
   // ── Question preview (improved) ──
   questionPreviewWrap: { borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, ...Elevation.floating },
   questionPreviewIconRow: { marginBottom: Space.xs },
-  questionPreviewPrompt: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: '#fff', lineHeight: Type.bodyStrong.size * 1.3 },
+  questionPreviewPrompt: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: '#fff', lineHeight: TypographyV2.bodyStrong.size * 1.3 },
   questionPreviewInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.md, paddingVertical: Space.sm, paddingHorizontal: Space.md },
-  questionPreviewPlaceholder: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.6)' },
+  questionPreviewPlaceholder: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: 'rgba(255,255,255,0.6)' },
   questionPreviewSendDot: { width: 24, height: 24, borderRadius: Radius.full, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
   // ── Emoji slider preview (improved) ──
   sliderPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, ...Elevation.card },
-  sliderPreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, textAlign: 'center' },
+  sliderPreviewQuestion: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary, textAlign: 'center' },
   sliderPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  sliderPreviewEmoji: { fontSize: Type.display.size },
+  sliderPreviewEmoji: { fontSize: TypographyV2.display.size },
   sliderPreviewTrack: { flex: 1, height: 8, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, position: 'relative' },
   sliderPreviewFill: { height: '100%', borderRadius: Radius.sm },
   sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: '#fff', ...Elevation.modal },
-  sliderPreviewEndLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
+  sliderPreviewEndLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textAlign: 'center' },
   // ── Product source tabs ──
   productTabBar: { flexDirection: 'row', paddingHorizontal: Space.md, paddingVertical: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   productTabBarContent: { gap: Space.xs, paddingVertical: Space.xs },
   productTab: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingVertical: Space.sm - 2, paddingHorizontal: Space.md, borderRadius: Radius.full, borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
   productTabActive: { borderColor: colors.brand, backgroundColor: colors.brandSubtle },
-  productTabLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
-  });
+  productTabLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary } });
 }

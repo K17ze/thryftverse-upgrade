@@ -28,9 +28,8 @@ import {
   Stroke,
   FontFamily,
   FontSize,
-  Type,
-  IconGrammar,
-} from '../../../theme/designTokens';
+  IconGrammar } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { CreatorSlider } from '../../controls/CreatorSlider';
@@ -42,8 +41,7 @@ import {
   getAllEffects,
   getEffect,
   getEffectCapabilityLabel,
-  isMLAvailable,
-} from './AIEffectRegistry';
+  isMLAvailable } from './AIEffectRegistry';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -88,8 +86,7 @@ export function AIEffectBrowserSheet({
   sourceImageUri,
   initialEffectId = null,
   initialIntensity = DEFAULT_INTENSITY,
-  onRemove,
-}: AIEffectBrowserSheetProps): React.ReactElement {
+  onRemove }: AIEffectBrowserSheetProps): React.ReactElement {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -283,101 +280,82 @@ function useSheetStyles(colors: ThemeColors) {
       StyleSheet.create({
         content: {
           flex: 1,
-          paddingTop: Space.sm,
-        } as ViewStyle,
+          paddingTop: Space.sm } as ViewStyle,
         header: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: Space.md,
-          paddingBottom: Space.sm,
-        } as ViewStyle,
+          paddingBottom: Space.sm } as ViewStyle,
         title: {
           fontFamily: FontFamily.semibold,
-          fontSize: Type.title.size,
-          lineHeight: Type.title.lineHeight,
-          letterSpacing: Type.title.letterSpacing,
-        } as ViewStyle,
+          fontSize: TypographyV2.screenTitle.size,
+          lineHeight: TypographyV2.screenTitle.lineHeight,
+          letterSpacing: TypographyV2.screenTitle.letterSpacing } as ViewStyle,
         closeBtn: {
           width: 44,
           height: 44,
           alignItems: 'center',
-          justifyContent: 'center',
-        } as ViewStyle,
+          justifyContent: 'center' } as ViewStyle,
         selectionMeta: {
           paddingHorizontal: Space.md,
           paddingBottom: Space.sm,
-          gap: 2,
-        } as ViewStyle,
+          gap: 2 } as ViewStyle,
         selectionHeading: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: Space.sm,
-        } as ViewStyle,
+          gap: Space.sm } as ViewStyle,
         selectionName: {
           flex: 1,
           fontFamily: FontFamily.medium,
-          fontSize: FontSize.bodyLarge,
-        } as ViewStyle,
+          fontSize: FontSize.bodyLarge } as ViewStyle,
         capabilityBadge: {
           paddingHorizontal: Space.sm,
           paddingVertical: 2,
           borderRadius: Radius.sm,
-          borderWidth: Stroke.hairline,
-        } as ViewStyle,
+          borderWidth: Stroke.hairline } as ViewStyle,
         capabilityBadgeText: {
           fontFamily: FontFamily.medium,
-          fontSize: FontSize.caption,
-        } as ViewStyle,
+          fontSize: FontSize.caption } as ViewStyle,
         selectionDesc: {
           fontFamily: FontFamily.regular,
           fontSize: FontSize.caption,
-          lineHeight: FontSize.caption + 4,
-        } as ViewStyle,
+          lineHeight: FontSize.caption + 4 } as ViewStyle,
         selectionNote: {
           fontFamily: FontFamily.regular,
           fontSize: FontSize.caption,
-          lineHeight: FontSize.caption + 4,
-        } as ViewStyle,
+          lineHeight: FontSize.caption + 4 } as ViewStyle,
         gridWrap: {
-          flex: 1,
-        } as ViewStyle,
+          flex: 1 } as ViewStyle,
         footer: {
           paddingHorizontal: Space.md,
           paddingTop: Space.sm,
           paddingBottom: Space.md,
           gap: Space.md,
           borderTopWidth: Stroke.hairline,
-          borderTopColor: colors.border,
-        } as ViewStyle,
+          borderTopColor: colors.border } as ViewStyle,
         actionRow: {
           flexDirection: 'row',
-          gap: Space.sm,
-        } as ViewStyle,
+          gap: Space.sm } as ViewStyle,
         removeBtn: {
           height: 50,
           paddingHorizontal: Space.md,
           borderRadius: Radius.lg,
           alignItems: 'center',
           justifyContent: 'center',
-          borderWidth: Stroke.standard,
-        } as ViewStyle,
+          borderWidth: Stroke.standard } as ViewStyle,
         removeBtnText: {
           fontFamily: FontFamily.medium,
-          fontSize: Type.bodyStrong.size,
-        } as ViewStyle,
+          fontSize: TypographyV2.bodyStrong.size } as ViewStyle,
         applyBtn: {
           height: 50,
           borderRadius: Radius.lg,
           alignItems: 'center',
-          justifyContent: 'center',
-        } as ViewStyle,
+          justifyContent: 'center' } as ViewStyle,
         applyBtnText: {
           fontFamily: FontFamily.semibold,
-          fontSize: Type.bodyStrong.size,
-        } as ViewStyle,
-      }),
+          fontSize: TypographyV2.bodyStrong.size } as ViewStyle }),
     [colors],
   );
 }

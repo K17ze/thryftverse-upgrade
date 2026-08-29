@@ -6,14 +6,12 @@ import {
   ScrollView,
   StatusBar,
   Pressable,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import Reanimated, {
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -53,7 +51,8 @@ import { buildAffinitySet, getRecencyBoost, getBroadenedSuggestions } from '../u
 
 /* ΓöÇΓöÇ New Discover Components ΓöÇΓöÇ */
 import { EditorialSection } from '../components/discover/EditorialSection';
-import { FontFamily, Space, Control, Radius, Type, Stroke } from '../theme/designTokens';
+import { FontFamily, Space, Control, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
@@ -88,8 +87,7 @@ const CATEGORY_ICON_MAP: Record<string, string> = {
   electronics: 'phone-portrait-outline',
   entertainment: 'book-outline',
   hobbies: 'color-palette-outline',
-  sports: 'basketball-outline',
-};
+  sports: 'basketball-outline' };
 
 // Editorial seed data has been removed. The discover landing now relies
 // entirely on real backend listings, real recent/saved searches, and the
@@ -117,8 +115,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
     peopleResults,
     isSearchingPeople,
     peopleSearchError,
-    setPeopleSearchRetryVersion,
-  } = useGlobalSearch(route.params?.initialQuery);
+    setPeopleSearchRetryVersion } = useGlobalSearch(route.params?.initialQuery);
   const inputRef = useRef<any>(null);
   const currentUser = useStore((state) => state.currentUser);
   const browseFilters = useStore((state) => state.browseFilters);
@@ -147,15 +144,13 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
         .map((cat) => ({
           label: cat.name,
           icon: CATEGORY_ICON_MAP[cat.id] ?? 'pricetag-outline',
-          query: cat.id,
-        })),
+          query: cat.id })),
     [categories],
   );
 
   const { scrollRef, onScroll, captureScroll, restoreScroll } = useScrollRestoration<ScrollView>({
     storageKey: 'global_search_results',
-    persistToStorage: true,
-  });
+    persistToStorage: true });
   const discoverLenRef = useRef(0);
 
   // Apply initial query passed from Explore search to browse filters so
@@ -195,8 +190,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
         wishlistListings
           .map((listing) => listing.subcategory)
           .filter((subcategory): subcategory is string => !!subcategory)
-      ),
-    }),
+      ) }),
     [wishlistListings],
   );
 
@@ -209,8 +203,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
       return backendSearchResults.map((listing, index) => ({
         ...listing,
         score: Math.max(0, 100 - index),
-        reason: listing.reason || 'Search match',
-      }));
+        reason: listing.reason || 'Search match' }));
     }
     return listings
       .filter((listing) => !(wishlistIds?.includes(listing.id) ?? false))
@@ -267,8 +260,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
           createdAt: listing.createdAt,
           score,
           reason: reasons[0] ?? 'Recommended',
-          mediaHeightRatio: resolveListingMediaHeightRatio(listing),
-        };
+          mediaHeightRatio: resolveListingMediaHeightRatio(listing) };
       })
       .filter((listing) => {
         if (!queryTokens.length) return true;
@@ -304,8 +296,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
       createdAt: listing.createdAt,
       score: 0,
       reason: '',
-      mediaHeightRatio: resolveListingMediaHeightRatio(listing),
-    }));
+      mediaHeightRatio: resolveListingMediaHeightRatio(listing) }));
 
     const filtered = sourceListings.filter((listing) => {
       // Null/unknown commerce facts must not match any active filter —
@@ -394,8 +385,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
     );
     return {
       backgroundColor,
-      transform: [{ scale: 1 + focusProgress.value * 0.008 }],
-    };
+      transform: [{ scale: 1 + focusProgress.value * 0.008 }] };
   });
 
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -511,8 +501,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
     updateBrowseFilters({ query: '' });
     navigation.navigate('Browse', {
       categoryId: normalizedId,
-      title: label,
-    });
+      title: label });
   };
 
   const searchStatus = React.useMemo(
@@ -525,9 +514,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
           syncing: 'Refreshing index',
           live: 'Live index',
           error: 'Offline index',
-          fallback: 'Cached index',
-        },
-      }),
+          fallback: 'Cached index' } }),
     [isSyncing, lastError, searchError, source],
   );
 
@@ -542,8 +529,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
     updateBrowseFilters({ query: normalizedQuery });
     navigation.navigate('Filter', {
       categoryId: 'search',
-      title: 'Discover',
-    });
+      title: 'Discover' });
   };
 
   const handleClearDiscoverFilters = () => {
@@ -566,10 +552,8 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
         brands: browseFilters.brands,
         sizes: browseFilters.sizes,
         condition: browseFilters.condition,
-        sort: browseFilters.sort,
-      },
-      alertsEnabled: true,
-    });
+        sort: browseFilters.sort },
+      alertsEnabled: true });
   };
 
   const handleRemoveSavedSearch = (id: string) => {
@@ -602,8 +586,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
       conversationId: `${sellerId}_${listingId}`,
       focusQuery: sellerId,
       partnerUserId: sellerId,
-      itemId: listingId,
-    });
+      itemId: listingId });
   };
 
   const renderSearchLoadingState = () => (
@@ -674,8 +657,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
     sortSheetTitle: { color: colors.textPrimary },
     sortSheetRow: { borderBottomColor: colors.border },
     resultOverlay: { backgroundColor: colors.overlay },
-    resultPrice: { color: colors.surface },
-  });
+    resultPrice: { color: colors.surface } });
 
   return (
     <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
@@ -706,8 +688,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
               onBlur: () => setIsSearchFocused(false),
               returnKeyType: 'search',
               autoCapitalize: 'none',
-              selectionColor: colors.brand,
-            }}
+              selectionColor: colors.brand }}
           />
         </Reanimated.View>
       </View>
@@ -1549,8 +1530,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
 
   // Conversational AI Search pill — additive entry point gated by the
   // conversational_search feature flag. A hairline-bordered pill with a
@@ -1559,8 +1539,7 @@ const styles = StyleSheet.create({
   aiSearchPillWrap: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   aiSearchPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1568,13 +1547,11 @@ const styles = StyleSheet.create({
     height: Control.hit,
     paddingHorizontal: Space.md,
     borderRadius: Radius.xl,
-    borderWidth: Stroke.hairline,
-  },
+    borderWidth: Stroke.hairline },
   aiSearchPillText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold },
 
   // Header — geometry matches Explore's search field for smooth transition.
   // Explore uses: surfaceAlt background, Radius.lg, Control.hit minHeight,
@@ -1586,14 +1563,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.smMd,
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   backBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   inputContainer: {
     flex: 1,
     flexDirection: 'row',
@@ -1603,114 +1578,91 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     paddingHorizontal: Space.md,
     paddingVertical: 0,
-    minHeight: 48,
-  },
+    minHeight: 48 },
   statusPillWrap: {
     paddingHorizontal: 20,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
 
   // Focused typeahead is part of the page, not a floating card. The flat
   // rows keep the search field as the only persistent contained surface.
   typeaheadSurface: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   typeaheadRow: {
     minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   typeaheadSubmitRow: {
-    minHeight: 58,
-  },
+    minHeight: 58 },
   typeaheadSubmitText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold },
   typeaheadText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: FontFamily.regular,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.regular },
   typeaheadKind: {
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
   typeaheadLoading: {
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   typeaheadLoadingRow: {
     minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   typeaheadStatus: {
     paddingTop: Space.md,
-    fontSize: Type.captionElevated.size,
+    fontSize: TypographyV2.meta.size,
     lineHeight: 19,
-    fontFamily: FontFamily.regular,
-  },
+    fontFamily: FontFamily.regular },
 
   // Loading
   loadingStateWrap: {
     paddingTop: Space.md,
-    paddingHorizontal: 20,
-  },
+    paddingHorizontal: 20 },
   loadingSection: {
-    marginBottom: 28,
-  },
+    marginBottom: 28 },
   loadingTagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-  },
+    gap: 10 },
   loadingRecentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Space.smMd,
-  },
+    marginBottom: Space.smMd },
 
   // Sections
   sectionWrap: {
     paddingHorizontal: 20,
-    marginBottom: 28,
-  },
+    marginBottom: 28 },
 
   // Recent searches — tappable chips (focus state)
   focusLanding: {
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   focusIntentList: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   focusIntentRow: {
     minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   focusIntentText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: FontFamily.regular,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.regular },
   focusClearRow: {
     minHeight: Control.hit,
     justifyContent: 'center',
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   recentChipsWrap: {
     paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   recentChipsScroll: {
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   recentChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1718,58 +1670,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.full,
-    minHeight: Control.chrome,
-  },
+    minHeight: Control.chrome },
   recentChipText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
   clearRecentBtn: {
     alignSelf: 'flex-start',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   clearRecentText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
 
   // Recent searches — compact rows (resting state)
   recentRowsWrap: {
     paddingHorizontal: Space.md,
-    gap: 0,
-  },
+    gap: 0 },
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   recentRowText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: FontFamily.regular,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.regular },
 
   // Empty search prompt
   emptySearchPrompt: {
     alignItems: 'center',
     paddingVertical: Space.xxl,
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   emptySearchPromptText: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.regular,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
 
   // Category visual grid — 2-column
   categoryGridWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    columnGap: Space.md,
-  },
+    columnGap: Space.md },
   categoryGridCard: {
     width: '46%',
     flexGrow: 1,
@@ -1777,19 +1719,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
     minHeight: 48,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   categoryGridLabel: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.medium },
 
   // Focus state — trending pills (horizontal scroll with category icons)
   trendingFocusScroll: {
     paddingHorizontal: Space.md,
-    gap: 10,
-  },
+    gap: 10 },
   trendingFocusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1797,12 +1736,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: RadiusRoleValue.compactControl,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   trendingFocusText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
 
   // Filter bar — single icons, not a wall of chips
   filterBar: {
@@ -1811,27 +1748,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.smMd,
-  },
+    paddingBottom: Space.smMd },
   filterBarCount: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   filterBarActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   filterIconBtn: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-  },
+    position: 'relative' },
   filterIconBadge: {
     position: 'absolute',
     top: 6,
@@ -1841,13 +1774,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   filterIconBadgeText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.bold,
-    lineHeight: Type.meta.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
 
   // Sort chip — labeled, always shows current sort
   sortChip: {
@@ -1856,19 +1787,16 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   sortChipText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
 
   // Active filter chips — removable
   activeFilterChipsRow: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   activeFilterChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1876,93 +1804,75 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 1,
     borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   activeFilterChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
 
   // Sort sheet
   sortSheetContent: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   sortSheetTitle: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.bold,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   sortSheetRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   sortSheetRowText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: FontFamily.regular,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.regular },
   savedSearchListWrap: {
-    paddingHorizontal: 20,
-  },
+    paddingHorizontal: 20 },
   savedSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     minHeight: 52,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   savedSearchMain: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
+    gap: 10 },
   savedSearchTextWrap: {
     flex: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   savedSearchQuery: {
-    fontSize: Type.body.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold },
   savedSearchMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: FontFamily.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular },
   savedSearchToggle: {
     width: Control.chrome,
     height: Control.chrome,
     borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   savedSearchRemove: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   masonryGrid: {
     flexDirection: 'row',
     gap: Space.sm,
-    paddingHorizontal: 20,
-  },
+    paddingHorizontal: 20 },
   masonryColumn: {
     flex: 1,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   masonryItemWrap: {
     borderRadius: RadiusRoleValue.standalonePanel,
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   masonryImg: {
     width: '100%',
-    borderRadius: RadiusRoleValue.standalonePanel,
-  },
+    borderRadius: RadiusRoleValue.standalonePanel },
   resultOverlay: {
     position: 'absolute',
     bottom: 0,
@@ -1971,13 +1881,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: Space.sm,
     borderBottomLeftRadius: Radius.xl,
-    borderBottomRightRadius: Radius.xl,
-  },
+    borderBottomRightRadius: Radius.xl },
   resultPrice: {
     fontFamily: FontFamily.bold,
-    fontSize: Type.body.size,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.body.size,
+    fontVariant: ['tabular-nums'] },
   recoEmptyState: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: RadiusRoleValue.standalonePanel,
@@ -1987,24 +1895,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
     marginHorizontal: 20,
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   recoEmptyText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    flex: 1,
-  },
+    flex: 1 },
   recoEmptyCta: {
     borderWidth: Stroke.standard,
     borderRadius: RadiusRoleValue.mediaThumbnail,
     paddingVertical: 6,
     paddingHorizontal: Space.smMd,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   recoEmptyCtaText: {
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold },
 
   // Contextual no-results state (search results surface)
   noResultsState: {
@@ -2014,64 +1918,53 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     borderRadius: RadiusRoleValue.standalonePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   noResultsTitle: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
     textAlign: 'center',
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.2 },
   noResultsSubtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     textAlign: 'center',
-    lineHeight: Type.captionElevated.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   noResultsActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   noResultsPrimaryCta: {
     borderRadius: RadiusRoleValue.pillAvatar,
     paddingVertical: 10,
-    paddingHorizontal: 18,
-  },
+    paddingHorizontal: 18 },
   noResultsPrimaryCtaText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold },
   noResultsSecondaryCta: {
     borderRadius: RadiusRoleValue.pillAvatar,
     paddingVertical: 10,
     paddingHorizontal: 18,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   noResultsSecondaryCtaText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold },
 
   // Suggested categories in no-results state
   noResultsCategories: {
     marginTop: Space.md + 2,
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   noResultsCategoriesLabel: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   noResultsCategoryChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
 
   // Scope tabs (Items | People)
   scopeTabBar: {
@@ -2079,38 +1972,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: Space.xs,
     gap: Space.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   scopeTab: {
     paddingVertical: 10,
     alignItems: 'center',
-    position: 'relative',
-  },
+    position: 'relative' },
   scopeTabLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   scopeTabText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.medium },
   scopeTabCount: {
-    fontSize: Type.captionElevated.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   scopeTabIndicator: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     height: 2,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
 
   // People results
   peopleResultsList: {
-    gap: 0,
-  },
-});
+    gap: 0 } });

@@ -7,10 +7,10 @@ import {
   ActivityIndicator,
   Text,
   ScrollView,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
+import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { VoiceMessageRecorder } from './VoiceMessageRecorder';
@@ -79,8 +79,7 @@ export function ChatComposerBar({
   onDismissCautionWarning,
   onVoiceRecord,
   isVoiceRecording = false,
-  onVoiceRecordingChange,
-}: ChatComposerBarProps) {
+  onVoiceRecordingChange }: ChatComposerBarProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const inputRef = useRef<TextInput>(null);
@@ -275,8 +274,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   safetyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -285,15 +283,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.xs + 1,
     backgroundColor: colors.dangerSubtle,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.dangerBorder,
-  },
+    borderBottomColor: colors.dangerBorder },
   safetyBannerText: {
     flex: 1,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textMuted,
-    lineHeight: Type.meta.lineHeight + 1,
-  },
+    lineHeight: TypographyV2.meta.lineHeight + 1 },
   dangerBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -302,22 +298,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm,
     backgroundColor: colors.dangerSubtle,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.dangerBorder,
-  },
+    borderBottomColor: colors.dangerBorder },
   dangerBannerContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs + 2,
     flex: 1,
-    paddingRight: Space.sm,
-  },
+    paddingRight: Space.sm },
   dangerBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    lineHeight: 16,
-  },
+    lineHeight: 16 },
   cautionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -326,31 +319,26 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm,
     backgroundColor: colors.warningSubtle,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.warningBorder,
-  },
+    borderBottomColor: colors.warningBorder },
   cautionBannerContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs + 2,
     flex: 1,
-    paddingRight: Space.sm,
-  },
+    paddingRight: Space.sm },
   cautionBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.warning,
-    lineHeight: 16,
-  },
+    lineHeight: 16 },
   attachmentStrip: {
-    maxHeight: 48,
-  },
+    maxHeight: 48 },
   attachmentStripContent: {
     flexDirection: 'row',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 1,
-  },
+    paddingVertical: Space.xs + 1 },
   attachmentChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -360,22 +348,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   attachmentChipText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: colors.textSecondary,
-  },
+    color: colors.textSecondary },
   quickReplyStrip: {
-    maxHeight: 48,
-  },
+    maxHeight: 48 },
   quickReplyContent: {
     flexDirection: 'row',
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 1,
-  },
+    paddingVertical: Space.xs + 1 },
   quickReplyChip: {
     maxWidth: 200,
     minHeight: 36,
@@ -385,30 +369,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   quickReplyChipPressed: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   quickReplyText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: colors.textSecondary,
-  },
+    color: colors.textSecondary },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Platform.OS === 'ios' ? Space.sm : 6,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   actionBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   inputWrap: {
     flex: 1,
     flexDirection: 'column',
@@ -418,28 +397,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     maxHeight: MAX_INPUT_HEIGHT + 24,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.xl,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'right',
     paddingTop: 2,
-    paddingBottom: 2,
-  },
+    paddingBottom: 2 },
   input: {
     flex: 1,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight,
     padding: 0,
     margin: 0,
     paddingTop: Platform.OS === 'ios' ? 4 : 6,
     paddingBottom: Platform.OS === 'ios' ? 4 : 6,
-    maxHeight: MAX_INPUT_HEIGHT,
-  },
+    maxHeight: MAX_INPUT_HEIGHT },
   sendBtn: {
     width: 44,
     height: 44,
@@ -447,9 +423,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'flex-end',
-  },
+    alignSelf: 'flex-end' },
   sendBtnActive: {
-    backgroundColor: colors.brand,
-  },
-});
+    backgroundColor: colors.brand } });

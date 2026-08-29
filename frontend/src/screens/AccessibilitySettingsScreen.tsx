@@ -15,12 +15,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import type { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -62,14 +62,13 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
     setReducedMotion: setContextReducedMotion,
     setHighContrast: setContextHighContrast,
     setBoldText: setContextBoldText,
-    setScreenReaderHints: setContextScreenReaderHints,
-  } = useAccessibilityPreferences();
+    setScreenReaderHints: setContextScreenReaderHints } = useAccessibilityPreferences();
 
   // Live preview text — shows the user exactly how their selected text size
   // and bold setting will look in context.
   // immediate feedback on settings reduces uncertainty and builds confidence
   // that the change is real.
-  const previewFontSize = TEXT_SIZES.find((t) => t.value === textSize)?.sample ?? Type.body.size;
+  const previewFontSize = TEXT_SIZES.find((t) => t.value === textSize)?.sample ?? TypographyV2.body.size;
 
   const motionToggles: ToggleConfig[] = [
     {
@@ -79,8 +78,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       icon: 'pause-outline',
       iconColor: colors.commerceTrust,
       value: reducedMotion,
-      onToggle: (v) => { haptic.selection(); setContextReducedMotion(v); },
-    },
+      onToggle: (v) => { haptic.selection(); setContextReducedMotion(v); } },
   ];
 
   const displayToggles: ToggleConfig[] = [
@@ -91,8 +89,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       icon: 'contrast-outline',
       iconColor: colors.antiqueGold,
       value: highContrast,
-      onToggle: (v) => { haptic.selection(); setContextHighContrast(v); },
-    },
+      onToggle: (v) => { haptic.selection(); setContextHighContrast(v); } },
     {
       key: 'boldText',
       label: 'Bold text',
@@ -100,8 +97,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       icon: 'text-outline',
       iconColor: colors.brand,
       value: boldText,
-      onToggle: (v) => { haptic.selection(); setContextBoldText(v); },
-    },
+      onToggle: (v) => { haptic.selection(); setContextBoldText(v); } },
   ];
 
   const readerToggles: ToggleConfig[] = [
@@ -112,8 +108,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       icon: 'volume-medium-outline',
       iconColor: colors.bronze,
       value: screenReaderHints,
-      onToggle: (v) => { haptic.selection(); setContextScreenReaderHints(v); },
-    },
+      onToggle: (v) => { haptic.selection(); setContextScreenReaderHints(v); } },
   ];
 
   const renderToggleRow = (config: ToggleConfig, index: number, total: number) => (
@@ -188,8 +183,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
                 fontSize: previewFontSize,
                 fontFamily: boldText ? Typography.family.bold : Typography.family.regular,
                 color: colors.textPrimary,
-                lineHeight: previewFontSize + 6,
-              },
+                lineHeight: previewFontSize + 6 },
             ]}
           >
             Browse curated fashion from independent sellers. Every piece is hand-listed — no mass-market noise, just the good stuff.
@@ -235,8 +229,7 @@ function createStyles(colors: ThemeColors) {
     // Text size selector
     textSizeOptions: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     textSizeOption: {
       flex: 1,
       alignItems: 'center',
@@ -245,28 +238,22 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
       borderColor: colors.border,
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     textSizeSample: {
       fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     textSizeLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     previewLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: LetterSpacing.caps,
       marginTop: Space.md,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     previewText: {
-      letterSpacing: -0.2,
-    },
-  });
+      letterSpacing: -0.2 } });
 }

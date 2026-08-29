@@ -6,8 +6,7 @@ import {
   Pressable,
   useWindowDimensions,
   AccessibilityInfo,
-  AppState,
-} from 'react-native';
+  AppState } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,19 +15,18 @@ import Reanimated, {
   withSpring,
   withTiming,
   runOnJS,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import {
   GestureDetector,
   Gesture,
-  FlatList,
-} from 'react-native-gesture-handler';
+  FlatList } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Control, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Control, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri, getCategoryFocalPoint } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -52,12 +50,10 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
 
 const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   image: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -66,14 +62,11 @@ const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   retryText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary } });
 
 interface MediaPageProps {
   item: ProductMediaItem;
@@ -92,8 +85,7 @@ function MediaPage({
   onDoubleTap,
   sharedTransitionTag,
   onZoomStart,
-  onOpenFullscreen,
-}: MediaPageProps) {
+  onOpenFullscreen }: MediaPageProps) {
   const reducedMotion = useReducedMotion();
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
@@ -201,8 +193,7 @@ function MediaPage({
     pinch,
   );
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
-  }));
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }] }));
 
   return (
     <GestureDetector gesture={composed}>
@@ -271,8 +262,7 @@ function VideoPage({
   width,
   height,
   isActive,
-  onOpenFullscreen,
-}: {
+  onOpenFullscreen }: {
   item: ProductMediaItem;
   width: number;
   height: number;
@@ -569,8 +559,7 @@ function VideoPage({
                   accessibilityValue={{
                     min: 0,
                     max: Math.round(duration),
-                    now: Math.round(currentTime),
-                  }}
+                    now: Math.round(currentTime) }}
                   hitSlop={{ top: 12, bottom: 12 }}
                 >
                   <View style={videoControlStyles.scrubTrackBg}>
@@ -618,8 +607,7 @@ const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80,
-  },
+    height: 80 },
   centerPlayBtn: {
     position: 'absolute',
     top: '50%',
@@ -631,8 +619,7 @@ const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   controlBar: {
     position: 'absolute',
     bottom: 0,
@@ -642,31 +629,26 @@ const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     paddingBottom: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   controlBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   scrubTrack: {
     flex: 1,
     height: Control.hit,
     justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   scrubTrackBg: {
     height: 3,
     borderRadius: Radius.full,
     backgroundColor: colors.scrimTextTertiary,
-    overflow: 'visible',
-  },
+    overflow: 'visible' },
   scrubTrackFill: {
     height: '100%',
     borderRadius: Radius.full,
-    backgroundColor: colors.scrimTextPrimary,
-  },
+    backgroundColor: colors.scrimTextPrimary },
   scrubThumb: {
     position: 'absolute',
     top: -5,
@@ -674,17 +656,14 @@ const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
     height: 13,
     borderRadius: Radius.full,
     backgroundColor: colors.scrimTextPrimary,
-    marginLeft: -6.5,
-  },
+    marginLeft: -6.5 },
   timeText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
     minWidth: 32,
-    textAlign: 'center',
-  },
-});
+    textAlign: 'center' } });
 
 export interface CommerceMediaStageProps {
   images?: string[];
@@ -775,8 +754,7 @@ export function CommerceMediaStage({
   onActiveIndexChange,
   initialIndex = 0,
   showPageIndicator = true,
-  category,
-}: CommerceMediaStageProps) {
+  category }: CommerceMediaStageProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -808,8 +786,7 @@ export function CommerceMediaStage({
         uri,
         kind: videoUriSet.has(uri) || isVideoUri(uri) ? 'video' : 'image',
         fit: videoUriSet.has(uri) || isVideoUri(uri) ? 'contain' : 'cover',
-        focalPoint: videoUriSet.has(uri) || isVideoUri(uri) ? null : defaultFocalPoint,
-      }));
+        focalPoint: videoUriSet.has(uri) || isVideoUri(uri) ? null : defaultFocalPoint }));
   }, [images, media, videoUris, category]);
   React.useEffect(() => {
     if (reducedMotion || mediaItems.length === 0) return;
@@ -864,11 +841,9 @@ export function CommerceMediaStage({
 
   const bigHeartStyle = useAnimatedStyle(() => ({
     opacity: bigHeartOpacity?.value ?? 0,
-    transform: [{ scale: bigHeartScale?.value ?? 0 }],
-  }));
+    transform: [{ scale: bigHeartScale?.value ?? 0 }] }));
   const zoomHintStyle = useAnimatedStyle(() => ({
-    opacity: zoomHintOpacity.value,
-  }));
+    opacity: zoomHintOpacity.value }));
   const bottomScrimStyle = useAnimatedStyle(() => {
     // Clear the editorial caption before the collapsed navigation title
     // begins to appear. Overlapping two copies of a long product title makes
@@ -877,8 +852,7 @@ export function CommerceMediaStage({
     const hidden = scrollY.value >= 128;
     return {
       opacity: reducedMotion ? (scrollY.value < 112 ? 1 : 0) : opacity,
-      display: hidden ? 'none' : 'flex',
-    };
+      display: hidden ? 'none' : 'flex' };
   });
   // Reanimated styles are view-bound; the scrim and caption need separate
   // animated style instances even though they follow the same curve.
@@ -887,8 +861,7 @@ export function CommerceMediaStage({
     const hidden = scrollY.value >= 128;
     return {
       opacity: reducedMotion ? (scrollY.value < 112 ? 1 : 0) : opacity,
-      display: hidden ? 'none' : 'flex',
-    };
+      display: hidden ? 'none' : 'flex' };
   });
 
   // FlatList requires onViewableItemsChanged to have a stable identity —
@@ -1173,21 +1146,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   heroContainer: {
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   emptyHero: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   topScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 132,
-  },
+    height: 132 },
   // Image count badge — top-right pill (e.g. "1/8").
   // Semi-transparent dark pill with white tabular-nums text.
   countBadge: {
@@ -1198,25 +1168,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    zIndex: 9,
-  },
+    zIndex: 9 },
   countBadgeText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   bigHeartWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 5,
-  },
+    zIndex: 5 },
   bigHeartIcon: {
     shadowColor: colors.textPrimary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
+    shadowRadius: 10 },
   soldOverlay: {
     position: 'absolute',
     bottom: Space.lg,
@@ -1224,14 +1190,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.success,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   soldText: {
     color: colors.background,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 1 },
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -1240,26 +1204,22 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   headerRight: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   controlBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Subtle media-contrast scrim behind control glyphs. Functional
   // (legibility over arbitrary imagery), not decorative chrome.
   controlIcon: {
     textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   overlayTopZone: {
     position: 'absolute',
     top: 0,
@@ -1267,8 +1227,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 0,
     paddingTop: 100,
     paddingHorizontal: Space.md,
-    zIndex: 8,
-  },
+    zIndex: 8 },
   overlayBottomZone: {
     position: 'absolute',
     bottom: 0,
@@ -1276,8 +1235,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 0,
     paddingHorizontal: Space.md,
     paddingBottom: Space.md,
-    zIndex: 8,
-  },
+    zIndex: 8 },
   indexBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -1285,36 +1243,30 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   indexBadgePressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.95 }],
-  },
+    transform: [{ scale: 0.95 }] },
   // Dot indicators — quiet position signal (Depop/Vinted pattern).
   // Inactive dots are small and translucent; active dot is wider and opaque.
   dotRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   dot: {
     width: 5,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: colors.scrimTextTertiary,
-  },
+    backgroundColor: colors.scrimTextTertiary },
   dotActive: {
     width: 14,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: colors.scrimTextPrimary,
-  },
+    backgroundColor: colors.scrimTextPrimary },
   indexText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   videoBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -1325,13 +1277,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   videoBadgeText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   // Zoom hint — bottom-center pill, fades out after 2.8s or on first
   // zoom interaction. Quiet, one-time cue (Airbnb pattern).
   zoomHint: {
@@ -1344,35 +1294,29 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   zoomHintIcon: {
     textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+    textShadowRadius: 3 },
   zoomHintText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   bottomScrim: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '48%',
-  },
+    height: '48%' },
   thumbnailStrip: {
     position: 'absolute',
     bottom: 40,
     left: 0,
-    right: 0,
-  },
+    right: 0 },
   thumbnailContent: {
     paddingHorizontal: Space.md,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   thumbnail: {
     width: 40,
     height: 40,
@@ -1380,26 +1324,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     overflow: 'hidden',
     opacity: 0.5,
     borderWidth: Stroke.standard,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   thumbnailActive: {
     opacity: 1,
     borderWidth: 2,
-    borderColor: colors.scrimTextPrimary,
-  },
+    borderColor: colors.scrimTextPrimary },
   thumbnailPressed: {
     opacity: 0.8,
-    transform: [{ scale: 0.92 }],
-  },
+    transform: [{ scale: 0.92 }] },
   thumbnailImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   thumbnailVideoFallback: {
     backgroundColor: colors.background,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   thumbnailVideoBadge: {
     position: 'absolute',
     bottom: 2,
@@ -1409,6 +1348,4 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.md,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });

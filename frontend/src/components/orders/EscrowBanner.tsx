@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { CommerceOrder } from '../../services/commerceApi';
 
 interface Props {
@@ -20,8 +21,7 @@ export function EscrowBanner({ order, normalisedStatus }: Props) {
     escrowBanner: { backgroundColor: colors.successSubtle, borderColor: colors.successBorder },
     escrowTitle: { color: colors.textPrimary },
     escrowSub: { color: colors.textSecondary },
-    escrowCountdown: { color: colors.textMuted },
-  }), [colors]);
+    escrowCountdown: { color: colors.textMuted } }), [colors]);
 
   return (
     <View style={[styles.escrowBanner, themed.escrowBanner]}>
@@ -62,30 +62,24 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   escrowTextWrap: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   escrowTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   escrowSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   escrowCountdown: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginTop: Space.xs / 2,
-    fontVariant: ['tabular-nums'],
-  },
-});
+    fontVariant: ['tabular-nums'] } });

@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type, Control, ZIndex } from '../../theme/designTokens';
+import { Space, Radius, Control, ZIndex } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 import { t } from '../../i18n';
 
@@ -29,8 +30,7 @@ const ISSUE_CATEGORIES: IssueCategory[] = [
 export function IssueCategorySelector({
   onSelect,
   onClose,
-  contextualIssues,
-}: {
+  contextualIssues }: {
   onSelect: (category: IssueCategory) => void;
   onClose: () => void;
   contextualIssues?: IssueCategory[];
@@ -45,8 +45,7 @@ export function IssueCategorySelector({
     rowLabel: { color: colors.textPrimary },
     rowDesc: { color: colors.textMuted },
     cancelBtn: { color: colors.textMuted },
-    contextHeader: { color: colors.textMuted },
-  }), [colors]);
+    contextHeader: { color: colors.textMuted } }), [colors]);
 
   const hasContextual = contextualIssues && contextualIssues.length > 0;
 
@@ -114,79 +113,64 @@ const styles = StyleSheet.create({
   issueSheetBackdrop: {
     ...StyleSheet.absoluteFill,
     zIndex: ZIndex.modal,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   issueSheetBackdropPress: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   issueSheet: {
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
     paddingBottom: Space.xl,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   issueSheetTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   issueSheetSub: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.sm,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    marginBottom: Space.sm },
   issueContextHeader: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.size + 4,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.size + 4,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
     marginTop: Space.sm,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   issueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   issueRowPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   issueRowText: {
     flex: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   issueRowLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   issueRowDesc: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   issueCancelBtn: {
     paddingVertical: Space.sm + 2,
     marginTop: Space.sm,
     alignItems: 'center',
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   issueCancelBtnPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   issueCancelBtnText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing } });

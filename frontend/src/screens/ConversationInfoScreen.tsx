@@ -16,7 +16,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
-import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
+import { Radius, Space, TypeStyles } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { deleteConversationOnApi, archiveConversationOnApi } from '../services/chatApi';
 import { blockUser, unblockUser } from '../services/profileApi';
 
@@ -31,8 +32,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     avatarText: { color: colors.textPrimary },
     displayName: { color: colors.textPrimary },
     handle: { color: colors.textMuted },
-    quickActions: { borderColor: colors.border },
-  }), [colors]);
+    quickActions: { borderColor: colors.border } }), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
@@ -175,8 +175,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
         } catch {
           show('Could not delete this conversation. Check your connection and try again.', 'error');
         }
-      },
-    });
+      } });
   };
 
   return (
@@ -301,8 +300,7 @@ function QuickAction({
   icon,
   label,
   onPress,
-  busy,
-}: {
+  busy }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
@@ -310,8 +308,7 @@ function QuickAction({
 }) {
   const { colors } = useAppTheme();
   const quickThemed = useMemo(() => ({
-    quickActionLabel: { color: colors.textSecondary },
-  }), [colors]);
+    quickActionLabel: { color: colors.textSecondary } }), [colors]);
   return (
     <AnimatedPressable
       style={styles.quickAction}
@@ -338,18 +335,15 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   center: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   identity: {
     alignItems: 'center',
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   avatar: {
     width: Space.xxl + Space.xl - Space.xs,
     height: Space.xxl + Space.xl - Space.xs,
@@ -357,44 +351,35 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   avatarImage: {
     width: Space.xxl + Space.xl - Space.xs,
     height: Space.xxl + Space.xl - Space.xs,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   avatarText: {
     fontFamily: TypeStyles.title.fontFamily,
-    fontSize: Type.title.size + 3,
-  },
+    fontSize: TypographyV2.screenTitle.size + 3 },
   displayName: {
     maxWidth: '88%',
     fontFamily: TypeStyles.title.fontFamily,
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   handle: {
     fontFamily: TypeStyles.body.fontFamily,
-    fontSize: Type.caption.size,
-    marginTop: Space.xs / 2 + 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    marginTop: Space.xs / 2 + 1 },
   quickActions: {
     minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   quickAction: {
     flex: 1,
     minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs / 2 + 1,
-  },
+    gap: Space.xs / 2 + 1 },
   quickActionLabel: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    fontSize: Type.caption.size,
-  },
-});
+    fontSize: TypographyV2.meta.size } });

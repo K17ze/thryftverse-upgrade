@@ -5,20 +5,19 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  Switch,
-} from 'react-native';
+  Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
 import { AppButton } from './AppButton';
 import { AppInput } from './AppInput';
 import { CachedImage } from '../CachedImage';
 import { Meta, Headline } from './Text';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   sanitizeDecimalInput,
-  convertDisplayToGbpAmount,
-} from '../../utils/currencyAuthoringFlows';
+  convertDisplayToGbpAmount } from '../../utils/currencyAuthoringFlows';
 import { toIze, formatIzeAmount } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
 import { haptics } from '../../utils/haptics';
@@ -35,8 +34,7 @@ import {
   shouldCloseSheetDueToLifecycle,
   isSheetStateStale,
   type BidSheetStage,
-  type TransactionError,
-} from '../../utils/transactionSheetLogic';
+  type TransactionError } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
 import { useUnknownOutcomeReconciliation } from '../../hooks/useUnknownOutcomeReconciliation';
 import { lookupAuctionBidByIdempotencyKey, type MarketAuctionBid } from '../../services/marketApi';
@@ -80,8 +78,7 @@ export function BidSheet({
   onRefreshDetail,
   onReviewBuyNow,
   serverClockMs,
-  initialBidAmount,
-}: BidSheetProps) {
+  initialBidAmount }: BidSheetProps) {
   const { colors } = useAppTheme();
   // Map theme colors to the legacy Colors interface so the static
   // StyleSheet can use themed values. This is a migration bridge �
@@ -101,8 +98,7 @@ export function BidSheet({
     success: colors.success,
     warning: colors.warning,
     background: colors.background,
-    textInverse: colors.textInverse,
-  };
+    textInverse: colors.textInverse };
   const styles = React.useMemo(() => createStyles(themed), [themed]);
   const [stage, setStage] = React.useState<BidSheetStage>('entry');
   const [bidInput, setBidInput] = React.useState('');
@@ -133,8 +129,7 @@ export function BidSheet({
     if (!isSheetStateStale(sheetOpenedAtMs, Date.now())) {
       return {
         minimumNextBidGbp: currentMinimum,
-        effectiveState: auction.effectiveState,
-      };
+        effectiveState: auction.effectiveState };
     }
     const snapshot = await onRefreshDetail();
     if (!snapshot) {
@@ -183,8 +178,7 @@ export function BidSheet({
             : 'This auction has ended. Bidding is no longer available.',
         canRetry: false,
         transactionPossible: false,
-        isAmbiguous: false,
-      });
+        isAmbiguous: false });
       setStage('error');
     }
   }, [visible, auction.effectiveState]);
@@ -222,9 +216,7 @@ export function BidSheet({
           message: 'Enter a maximum bid.',
           canRetry: true,
           transactionPossible: true,
-          isAmbiguous: false,
-        },
-      };
+          isAmbiguous: false } };
     }
     const maxGbp = convertDisplayToGbpAmount(raw, currencyCode, fxRates);
     if (!Number.isFinite(maxGbp) || maxGbp <= 0) {
@@ -235,9 +227,7 @@ export function BidSheet({
           message: 'Couldn\'t convert maximum bid to this currency.',
           canRetry: true,
           transactionPossible: true,
-          isAmbiguous: false,
-        },
-      };
+          isAmbiguous: false } };
     }
     if (maxGbp < bidGbp) {
       return {
@@ -247,9 +237,7 @@ export function BidSheet({
           message: 'Maximum bid must be at least your bid amount.',
           canRetry: true,
           transactionPossible: true,
-          isAmbiguous: false,
-        },
-      };
+          isAmbiguous: false } };
     }
     if (maxGbp < minGbp) {
       return {
@@ -259,9 +247,7 @@ export function BidSheet({
           message: 'Maximum bid is below the minimum to lead.',
           canRetry: true,
           transactionPossible: true,
-          isAmbiguous: false,
-        },
-      };
+          isAmbiguous: false } };
     }
     return { gbp: maxGbp, error: null };
   };
@@ -281,8 +267,7 @@ export function BidSheet({
           message: 'Unable to verify current auction state. Check your connection and try again.',
           canRetry: true,
           transactionPossible: true,
-          isAmbiguous: true,
-        });
+          isAmbiguous: true });
         return;
       }
 
@@ -290,8 +275,7 @@ export function BidSheet({
         minimumNextBidGbp: snapshot.minimumNextBidGbp,
         isSeller: auction.isSeller,
         effectiveState: snapshot.effectiveState,
-        isSubmitting,
-      });
+        isSubmitting });
 
       if (!result.valid || !result.gbpAmount) {
         setError(result.error);
@@ -335,8 +319,7 @@ export function BidSheet({
           message: 'Unable to verify current auction state. Check your connection and try again.',
           canRetry: true,
           transactionPossible: true,
-          isAmbiguous: true,
-        });
+          isAmbiguous: true });
         setStage('entry');
         return;
       }
@@ -346,8 +329,7 @@ export function BidSheet({
         minimumNextBidGbp: snapshot.minimumNextBidGbp,
         isSeller: auction.isSeller,
         effectiveState: snapshot.effectiveState,
-        isSubmitting,
-      });
+        isSubmitting });
       if (!result.valid || !result.gbpAmount) {
         setError(result.error);
         setStage('entry');
@@ -437,8 +419,7 @@ export function BidSheet({
             setError(txError);
             setStage('error');
           },
-          shouldContinue: () => isMountedRef.current && visible,
-        });
+          shouldContinue: () => isMountedRef.current && visible });
         if (result.outcome === 'acknowledged' || result.outcome === 'safe_to_retry') {
           return;
         }
@@ -903,216 +884,179 @@ const createStyles = (themed: {
 }) => StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   itemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   itemThumb: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemThumbContainer: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemThumbPlaceholder: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
     backgroundColor: themed.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemHeaderText: {
-    flex: 1,
-  },
+    flex: 1 },
   itemTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: themed.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.textPrimary },
   itemSeller: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textSecondary,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: themed.border,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   stageContent: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   // ── Entry stage — large centered amount ──
   entryHeading: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.8,
     textAlign: 'center',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   amountContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   amountCurrency: {
-    fontSize: Type.priceList.size,
+    fontSize: TypographyV2.priceList.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: TypographyV2.priceList.fontFamily },
   amountInput: {
-    flex: 1,
-  },
+    flex: 1 },
   amountIzeEquivalent: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.brand,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     marginBottom: Space.sm,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   bidContextStack: {
     gap: Space.xs + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: themed.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: themed.border,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   bidContextRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   bidContextLabel: {
-    fontSize: Type.meta.size - 2,
+    fontSize: TypographyV2.meta.size - 2,
     color: themed.textMuted,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   bidContextValue: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: themed.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] },
   bidContextValueSecondary: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.textSecondary,
-    fontFamily: Typography.family.medium,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   dominantAction: {
     width: '100%',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   dismissLink: {
     alignItems: 'center',
     paddingVertical: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   dismissLinkText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   // ── Review stage — receipt ──
   reviewHeading: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: themed.textMuted,
     letterSpacing: 0.8,
     textAlign: 'center',
     marginBottom: Space.sm,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   reviewAmountBlock: {
     alignItems: 'center',
     paddingVertical: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   reviewAmountValue: {
-    fontSize: Type.display.size + 4,
-    lineHeight: Type.display.lineHeight + 4,
+    fontSize: TypographyV2.display.size + 4,
+    lineHeight: TypographyV2.display.lineHeight + 4,
     fontWeight: '700',
-    letterSpacing: Type.display.letterSpacing,
+    letterSpacing: TypographyV2.display.letterSpacing,
     color: themed.textPrimary,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.display.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewAmountIze: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.brand,
-    fontFamily: Typography.family.medium,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewGbpEquivalent: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewReceipt: {
     gap: Space.xs + 2,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: themed.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: themed.border,
-  },
+    borderBottomColor: themed.border },
   reviewReceiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   reviewReceiptLabel: {
-    fontSize: Type.meta.size - 2,
+    fontSize: TypographyV2.meta.size - 2,
     color: themed.textMuted,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.5,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.5 },
   reviewReceiptValue: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.textPrimary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   countdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   izeEquivalentText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.xs,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs },
   countdownText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   input: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   incrementRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   incrementChip: {
     flex: 1,
     paddingVertical: Space.sm,
@@ -1123,28 +1067,23 @@ const createStyles = (themed: {
     borderColor: themed.border,
     alignItems: 'center',
     minHeight: 44,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   incrementChipPressed: {
     backgroundColor: themed.border,
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   incrementText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: themed.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: themed.textPrimary },
   proxyToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   proxyToggleLabel: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.textPrimary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   confidenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1152,14 +1091,12 @@ const createStyles = (themed: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   confidenceText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1168,111 +1105,89 @@ const createStyles = (themed: {
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: themed.dangerSubtle,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   errorText: {
     flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.danger,
-    fontFamily: Typography.family.medium,
-    lineHeight: 18,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: 18 },
   actions: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   actionBtn: {
-    flex: 1,
-  },
+    flex: 1 },
   primaryBtn: {},
   reviewDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: themed.border,
-    marginVertical: Space.xs,
-  },
+    marginVertical: Space.xs },
   commitmentBlock: {
     gap: Space.xs / 2,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   commitmentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.xs / 2,
-  },
+    paddingVertical: Space.xs / 2 },
   commitmentText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   centerStage: {
     alignItems: 'center',
     paddingVertical: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   submittingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: themed.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.textPrimary },
   submittingSpinnerWrap: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   submittingDetail: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   successIcon: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   successTitle: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.semibold,
-    color: themed.textPrimary,
-  },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    color: themed.textPrimary },
   successDetail: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   doneBtn: {
     minWidth: 160,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   errorIcon: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   errorIconSmall: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   errorTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: themed.textPrimary,
     textAlign: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   conflictIconRow: {
     alignItems: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   conflictHeading: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
     color: themed.textPrimary,
     textAlign: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   conflictExplanation: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: themed.textSecondary,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     textAlign: 'center',
     paddingHorizontal: Space.sm,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   conflictPriceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1281,16 +1196,12 @@ const createStyles = (themed: {
     paddingHorizontal: Space.md,
     backgroundColor: themed.surfaceAlt,
     borderRadius: Radius.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   conflictPriceLabel: {
-    fontSize: Type.body.size,
-    color: themed.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    color: themed.textSecondary },
   conflictPriceValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: themed.textPrimary,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.textPrimary } });
 

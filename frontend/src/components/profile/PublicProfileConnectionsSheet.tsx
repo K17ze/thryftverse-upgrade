@@ -5,15 +5,15 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 // FlashList v2 measures actual item heights — no estimatedItemSize needed.
 import { Ionicons } from '@expo/vector-icons';
 import { NativeSheet } from '../../platform/native';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { SegmentedControl } from './ProfileTabRail';
 import { useFollowersInfinite, useFollowingInfinite } from '../../platform/server';
 import type { FollowListUser } from '../../services/profileApi';
@@ -44,8 +44,7 @@ export function PublicProfileConnectionsSheet({
   initialSegment,
   followerCount,
   followingCount,
-  onOpenProfile,
-}: PublicProfileConnectionsSheetProps) {
+  onOpenProfile }: PublicProfileConnectionsSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
@@ -219,7 +218,7 @@ export function PublicProfileConnectionsSheet({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flex: 1 },
-  title: { fontSize: Type.priceList.size, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: -0.4, marginBottom: Space.sm },
+  title: { fontSize: TypographyV2.priceList.size, fontFamily: TypographyV2.priceList.fontFamily, color: colors.textPrimary, letterSpacing: -0.4, marginBottom: Space.sm },
   // Rows ΓÇö no chevron, pressed feedback, divider rhythm
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, minHeight: Space.xxl + Space.xxl + Space.xs },
   rowPressed: { opacity: 0.6 },
@@ -227,20 +226,19 @@ function createStyles(colors: ThemeColors) {
   avatarWrap: {},
   avatar: { width: 44, height: 44, borderRadius: Radius.xxl },
   avatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  avatarInitials: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
+  avatarInitials: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textSecondary },
   identityCol: { flex: 1 },
-  displayName: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  handle: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
+  displayName: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary },
+  handle: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary, marginTop: 1 },
   // Skeleton rows
   skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, minHeight: Space.xxl + Space.xxl + Space.xs },
   skeletonAvatar: { width: Space.xl + Space.smMd, height: Space.xl + Space.smMd, borderRadius: Radius.xxl, backgroundColor: colors.surfaceAlt },
   skeletonIdentity: { flex: 1, gap: Space.xs },
-  skeletonName: { width: Space.xxl + Space.xxl + Space.xs + Space.xs, height: Type.body.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
-  skeletonHandle: { width: Space.xxl + Space.xxl - Space.xs, height: Type.caption.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
+  skeletonName: { width: Space.xxl + Space.xxl + Space.xs + Space.xs, height: TypographyV2.body.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
+  skeletonHandle: { width: Space.xxl + Space.xxl - Space.xs, height: TypographyV2.meta.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
   // States
   stateWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl * 2, gap: Space.sm, paddingHorizontal: Space.md },
-  stateTitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  stateSub: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center' },
-  footerIndicator: { paddingVertical: Space.md, alignItems: 'center' },
-  });
+  stateTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary },
+  stateSub: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textMuted, textAlign: 'center' },
+  footerIndicator: { paddingVertical: Space.md, alignItems: 'center' } });
 }

@@ -2,7 +2,8 @@ import React from 'react';
 import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Space, Type, Stroke } from '../../theme/designTokens';
+import { Radius, Space, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 /**
  * Unified status pill taxonomy. The former `PremiumStatusPill` is now
@@ -60,8 +61,7 @@ function resolveTone(tone: AppStatusTone, colors: ThemeColors, variant: AppStatu
         backgroundColor: colors.brandSubtle,
         borderColor: colors.brandBorder,
         textColor: colors.brand,
-        dotColor: colors.brand,
-      };
+        dotColor: colors.brand };
     case 'sold':
     case 'delivered':
     case 'success':
@@ -69,59 +69,51 @@ function resolveTone(tone: AppStatusTone, colors: ThemeColors, variant: AppStatu
         backgroundColor: colors.successSubtle,
         borderColor: colors.successBorder,
         textColor: colors.success,
-        dotColor: colors.success,
-      };
+        dotColor: colors.success };
     case 'shipped':
       return {
         backgroundColor: colors.brandSubtle,
         borderColor: colors.brandBorder,
         textColor: colors.textPrimary,
-        dotColor: colors.brand,
-      };
+        dotColor: colors.brand };
     case 'refunded':
     case 'error':
       return {
         backgroundColor: colors.dangerSubtle,
         borderColor: colors.dangerBorder,
         textColor: colors.danger,
-        dotColor: colors.danger,
-      };
+        dotColor: colors.danger };
     case 'pending':
       return {
         backgroundColor: colors.surfaceAlt,
         borderColor: colors.border,
         textColor: colors.textSecondary,
-        dotColor: colors.textMuted,
-      };
+        dotColor: colors.textMuted };
     // Core tones
     case 'accent':
       return {
         backgroundColor: colors.brandSubtle,
         borderColor: colors.borderSubtle,
         textColor: colors.brand,
-        dotColor: colors.brand,
-      };
+        dotColor: colors.brand };
     case 'positive':
       return {
         backgroundColor: colors.successSubtle,
         borderColor: colors.successBorder,
         textColor: colors.success,
-        dotColor: colors.success,
-      };
+        dotColor: colors.success };
     case 'negative':
       return {
         backgroundColor: colors.dangerSubtle,
         borderColor: colors.dangerBorder,
         textColor: colors.danger,
-        dotColor: colors.danger,
-      };
+        dotColor: colors.danger };
     case 'warning':
       return {
         backgroundColor: colors.warningSubtle,
         borderColor: colors.warningBorder,
         textColor: colors.warning,
-        dotColor: colors.warning,
-      };
+        dotColor: colors.warning };
     case 'neutral':
     default:
       // The block variant (formerly PremiumStatusPill) uses a muted neutral
@@ -131,15 +123,13 @@ function resolveTone(tone: AppStatusTone, colors: ThemeColors, variant: AppStatu
           backgroundColor: colors.surfaceAlt,
           borderColor: colors.borderSubtle,
           textColor: colors.textMuted,
-          dotColor: colors.textMuted,
-        };
+          dotColor: colors.textMuted };
       }
       return {
         backgroundColor: colors.surfaceAlt,
         borderColor: colors.border,
         textColor: colors.textSecondary,
-        dotColor: colors.textMuted,
-      };
+        dotColor: colors.textMuted };
   }
 }
 
@@ -152,8 +142,7 @@ export function AppStatusPill({
   icon,
   compact = false,
   style,
-  textStyle,
-}: AppStatusPillProps) {
+  textStyle }: AppStatusPillProps) {
   const { colors } = useAppTheme();
   const tokens = resolveTone(tone, colors, variant);
   const resolvedIcon = icon ?? iconName;
@@ -169,8 +158,7 @@ export function AppStatusPill({
           resolvedSize === 'md' ? styles.blockSizeMd : styles.blockSizeSm,
           {
             backgroundColor: tokens.backgroundColor,
-            borderColor: tokens.borderColor,
-          },
+            borderColor: tokens.borderColor },
           style,
         ]}
       >
@@ -200,8 +188,7 @@ export function AppStatusPill({
         resolvedSize === 'md' ? styles.pillSizeMd : styles.pillSizeSm,
         {
           backgroundColor: tokens.backgroundColor,
-          borderColor: tokens.borderColor,
-        },
+          borderColor: tokens.borderColor },
         style,
       ]}
     >
@@ -227,24 +214,19 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   pillSizeSm: {
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   pillSizeMd: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
+    paddingVertical: 6 },
   pillLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.25,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.25 },
   pillLabelMd: {
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Block variant (formerly PremiumStatusPill) ─────────────────────
   blockBase: {
     flexDirection: 'row',
@@ -254,34 +236,26 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   blockSizeSm: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   blockSizeMd: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   dot: {
     width: 6,
     height: 6,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   blockIcon: {
-    marginRight: 0,
-  },
+    marginRight: 0 },
   blockLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.3,
-    textTransform: 'capitalize',
-  },
+    textTransform: 'capitalize' },
   blockLabelSm: {
-    fontSize: Type.meta.size,
-    letterSpacing: 0.2,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: 0.2 } });

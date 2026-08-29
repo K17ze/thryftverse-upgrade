@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -199,38 +200,31 @@ function createStyles(colors: ThemeColors) {
   heroWrap: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   heroText: { flex: 1 },
   heroTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs / 2 },
   loadingBody: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   body: {
-    flex: 1,
-  },
+    flex: 1 },
   list: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     gap: Space.sm,
-    paddingBottom: 300,
-  },
+    paddingBottom: 300 },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -240,12 +234,10 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   itemRowSelected: {
     borderColor: colors.brand,
-    backgroundColor: colors.brandSubtle,
-  },
+    backgroundColor: colors.brandSubtle },
   checkbox: {
     width: Space.lg,
     height: Space.lg,
@@ -253,41 +245,33 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.emphasis,
     borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   checkboxChecked: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   itemImage: {
     width: Space.xxl + Space.sm,
     height: Space.xxl + Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   itemImagePlaceholder: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemInfo: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   itemTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   itemPrice: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textPrimary },
   itemMeta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -298,43 +282,34 @@ function createStyles(colors: ThemeColors) {
     borderTopColor: colors.border,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Space.xs / 2,
-  },
+    paddingVertical: Space.xs / 2 },
   summaryLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   summaryValue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   totalRow: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     marginTop: Space.xs,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   totalLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   totalValue: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textPrimary },
   checkoutBtn: {
     marginTop: Space.sm,
-    width: '100%',
-  },
-  });
+    width: '100%' } });
 }

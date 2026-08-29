@@ -7,8 +7,7 @@ import Reanimated, {
   withTiming,
   cancelAnimation,
   Easing,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -22,9 +21,8 @@ import {
   LetterSpacing,
   Elevation,
   Stroke,
-  Control,
-  Type,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { triggerHaptic, HapticType } from '../../utils/haptics';
 import type { InAppNotification, NotificationType } from '../../services/inAppNotificationsApi';
@@ -55,8 +53,7 @@ const TYPE_CONFIG: Record<NotificationType, TypeConfig> = {
   offer: { icon: 'pricetag', accentKey: 'discovery' },
   message: { icon: 'chatbubble', accentKey: 'social' },
   listing: { icon: 'cube', accentKey: 'commerceTrust' },
-  order: { icon: 'cube', accentKey: 'commerceTrust' },
-};
+  order: { icon: 'cube', accentKey: 'commerceTrust' } };
 
 // ---------------------------------------------------------------------------
 // Props
@@ -77,8 +74,7 @@ export interface InAppNotificationBannerProps {
 export function InAppNotificationBanner({
   notification,
   onDismiss,
-  index = 0,
-}: InAppNotificationBannerProps) {
+  index = 0 }: InAppNotificationBannerProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -128,8 +124,7 @@ export function InAppNotificationBanner({
     } else {
       translateY.value = withTiming(0, {
         duration: Motion.duration.slow,
-        easing: Easing.out(Easing.quad),
-      });
+        easing: Easing.out(Easing.quad) });
       opacity.value = withTiming(1, { duration: Motion.duration.normal });
     }
 
@@ -173,13 +168,11 @@ export function InAppNotificationBanner({
 
   const bannerStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
-    opacity: opacity.value,
-  }));
+    opacity: opacity.value }));
 
   const progressStyle = useAnimatedStyle(() => ({
     // Width shrinks from 100% → 0% as time elapses.
-    transform: [{ scaleX: Math.max(0, 1 - progress.value) }],
-  }));
+    transform: [{ scaleX: Math.max(0, 1 - progress.value) }] }));
 
   const handleTapDismiss = () => {
     triggerHaptic(HapticType.LIGHT);
@@ -194,8 +187,7 @@ export function InAppNotificationBanner({
           {
             backgroundColor: colors.surfaceElevated,
             borderColor: colors.borderSubtle,
-            marginTop: index === 0 ? insets.top + Space.sm : 0,
-          },
+            marginTop: index === 0 ? insets.top + Space.sm : 0 },
           Elevation.floating,
           bannerStyle,
         ]}
@@ -275,55 +267,44 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: Stroke.hairline,
     overflow: 'hidden',
-    marginHorizontal: Space.md,
-  },
+    marginHorizontal: Space.md },
   content: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingHorizontal: Space.sm + 2,
     paddingTop: Space.sm + 2,
     paddingBottom: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   typeIcon: {
-    marginTop: 1,
-  },
+    marginTop: 1 },
   textColumn: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   title: {
     flexShrink: 1,
     fontFamily: FontFamily.semibold,
     fontSize: FontSize.body,
     letterSpacing: LetterSpacing.normal,
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   body: {
     fontFamily: FontFamily.regular,
     fontSize: FontSize.caption,
     letterSpacing: LetterSpacing.normal,
-    lineHeight: Type.caption.lineHeight,
-    opacity: 0.8,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    opacity: 0.8 },
   actionsColumn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   dismissBtn: {
-    padding: Space.xs,
-  },
+    padding: Space.xs },
   progressTrack: {
     height: 1.5,
     backgroundColor: 'transparent',
-    width: '100%',
-  },
+    width: '100%' },
   progressFill: {
     height: '100%',
     width: '100%',
     transformOrigin: 'left',
-    opacity: 0.5,
-  },
-});
+    opacity: 0.5 } });

@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Typography, Radius } from '../../../theme/designTokens';
+import { Space, Radius } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 
@@ -39,8 +40,7 @@ export function CommerceDetailDisclosureRow({
   onPress,
   leadingIcon,
   critical = false,
-  accessibilityLabel,
-}: CommerceDetailDisclosureRowProps) {
+  accessibilityLabel }: CommerceDetailDisclosureRowProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
@@ -116,58 +116,47 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     minHeight: 44,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   pressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.985 }],
-  },
+    transform: [{ scale: 0.985 }] },
   labelCluster: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     flex: 1,
     minWidth: 0,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   leadingIcon: {
-    marginRight: -2,
-  },
+    marginRight: -2 },
   label: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    flexShrink: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    flexShrink: 1 },
   trailingCluster: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     maxWidth: '52%',
-    minWidth: 18,
-  },
+    minWidth: 18 },
   summary: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     flexShrink: 1,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   countBadge: {
     minWidth: 22,
     height: 22,
     paddingHorizontal: Space.xs + 2,
     borderRadius: Radius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   countText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   chevron: {
-    marginLeft: -2,
-  },
-});
+    marginLeft: -2 } });

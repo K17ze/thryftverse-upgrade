@@ -2,7 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { haptics } from '../../utils/haptics';
@@ -28,8 +29,7 @@ export function SellerResponseComposer({
   reviewerName,
   rating,
   onClose,
-  onSubmit,
-}: SellerResponseComposerProps) {
+  onSubmit }: SellerResponseComposerProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [text, setText] = useState('');
@@ -147,14 +147,12 @@ function createStyles(colors: ThemeColors) {
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   sheet: {
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   handle: {
     width: 36,
     height: 4,
@@ -162,22 +160,19 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.border,
     alignSelf: 'center',
     marginTop: Space.sm,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
     flex: 1,
-    paddingRight: Space.sm,
-  },
+    paddingRight: Space.sm },
   headerIcon: {
     width: 36,
     height: 36,
@@ -185,21 +180,18 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brandSubtle,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
-  },
+    marginTop: 2 },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.3,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   guidanceBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -208,41 +200,34 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   guidanceText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   inputCard: {
     marginHorizontal: Space.md,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    padding: Space.md,
-  },
+    padding: Space.md },
   input: {
     minHeight: 100,
     maxHeight: 200,
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    textAlignVertical: 'top',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    textAlignVertical: 'top' },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textAlign: 'right',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   actions: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
-  });
+    paddingTop: Space.md } });
 }

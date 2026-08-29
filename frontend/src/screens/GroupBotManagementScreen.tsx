@@ -3,8 +3,7 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
-  View,
-} from 'react-native';
+  View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -19,10 +18,10 @@ import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import {
   deployBotToConversationOnApi,
-  undeployBotFromConversationOnApi,
-} from '../services/chatApi';
+  undeployBotFromConversationOnApi } from '../services/chatApi';
 import { useStore } from '../store/useStore';
-import { Space, Type, Radius, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupBotManagement'>;
 
@@ -100,8 +99,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
         } finally {
           setPendingBotId(null);
         }
-      },
-    });
+      } });
   };
 
   const handleDeploy = async (botId: string) => {
@@ -195,8 +193,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
 function AgentSection({
   title,
   agents,
-  renderAgent,
-}: {
+  renderAgent }: {
   title: string;
   agents: AgentRowModel[];
   renderAgent: (bot: AgentRowModel) => React.ReactNode;
@@ -226,8 +223,7 @@ function AgentRow({
   pending,
   onRemove,
   onDeploy,
-  onView,
-}: {
+  onView }: {
   bot: AgentRowModel;
   deployed: boolean;
   pending: boolean;
@@ -315,69 +311,55 @@ function createStyles(colors: ThemeColors) {
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   section: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   sectionLabel: {
-    fontSize: Type.meta.size,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   agentRow: {
     minHeight: Space.xxl + Space.xxl + Space.xxl + 10,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.smMd,
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   agentIcon: {
     width: Space.xl + Space.xs,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   agentText: {
     flex: 1,
     justifyContent: 'center',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   detailLine: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   detailText: {
-    fontSize: Type.meta.size,
-    flexShrink: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    flexShrink: 1 },
   metaDot: {
     width: Space.xs / 2 - 1,
     height: Space.xs / 2 - 1,
     borderRadius: Radius.sm,
-    backgroundColor: colors.textMuted,
-  },
+    backgroundColor: colors.textMuted },
   statusText: {
-    fontSize: Type.meta.size,
-    flexShrink: 0,
-  },
+    fontSize: TypographyV2.meta.size,
+    flexShrink: 0 },
   rowAction: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: Control.hit,
-  },
+    marginLeft: Control.hit },
   headerAction: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  });
+    alignItems: 'center' } });
 }

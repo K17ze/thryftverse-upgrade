@@ -7,11 +7,11 @@ import {
   TextInput,
   ScrollView,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, FontFamily, Control, Stroke} from '../theme/designTokens';
+import { Space, Radius, Typography, FontFamily, Control, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
@@ -39,8 +39,7 @@ export function CreatorFolderOrganizeSheet({
   drafts,
   folders,
   onFoldersChanged,
-  onDraftsChanged,
-}: CreatorFolderOrganizeSheetProps) {
+  onDraftsChanged }: CreatorFolderOrganizeSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
@@ -552,32 +551,27 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     sheetInner: {
       flex: 1,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     sheetHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     sheetTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      color: colors.textPrimary },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     sheetHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
       marginBottom: Space.md,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     newFolderBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -586,33 +580,27 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.md,
       borderRadius: Radius.lg,
       backgroundColor: colors.brandSubtle,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     newFolderText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.brand },
     scrollArea: {
-      flex: 1,
-    },
+      flex: 1 },
     scrollContent: {
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     sectionLabel: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.label.size,
-      letterSpacing: Type.label.letterSpacing,
+      fontSize: TypographyV2.label.size,
+      letterSpacing: TypographyV2.label.letterSpacing,
       color: colors.textMuted,
       marginTop: Space.sm,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     emptyHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     folderRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -620,74 +608,60 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.md,
       paddingHorizontal: Space.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     folderRowSelected: {
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     folderInfo: {
       flex: 1,
-      gap: 2,
-    },
+      gap: 2 },
     folderName: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textPrimary },
     folderNameSelected: {
-      color: colors.brand,
-    },
+      color: colors.brand },
     folderCount: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      color: colors.textSecondary },
     folderActions: {
       flexDirection: 'row',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     folderActionBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     assignSection: {
       marginTop: Space.lg,
       paddingTop: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     assignHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     assignTitle: {
       flex: 1,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textPrimary },
     assignConfirmBtn: {
       backgroundColor: colors.brand,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     assignConfirmText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.textInverse },
     assignHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
       marginTop: Space.xs,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     draftPickRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -695,158 +669,126 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     draftPickRowSelected: {
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     draftPickInfo: {
       flex: 1,
-      gap: 2,
-    },
+      gap: 2 },
     draftPickTitle: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.textPrimary },
     draftPickMeta: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      color: colors.textSecondary },
     draftPickRemove: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     quickMoveSection: {
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     quickMoveRow: {
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     quickMoveInfo: {
       gap: 2,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     quickMoveTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.textPrimary },
     quickMoveFolder: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      color: colors.textSecondary },
     quickChip: {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
       marginRight: Space.xs,
       minHeight: Control.hit,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     quickChipActive: {
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     quickChipInactive: {
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     quickChipUnfile: {
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     quickChipText: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     quickChipTextActive: {
       color: colors.brand,
-      textDecorationLine: 'underline',
-    },
+      textDecorationLine: 'underline' },
     quickChipTextInactive: {
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     quickChipTextUnfile: {
       color: colors.danger,
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     footerHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       textAlign: 'center',
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     // ── Manage mode ──
     managePanel: {
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     manageTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
+      fontSize: TypographyV2.sectionTitle.size,
       color: colors.textPrimary,
       textAlign: 'center',
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     manageBody: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
       textAlign: 'center',
       marginTop: Space.xs,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     nameInput: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textPrimary,
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     manageConfirmBtn: {
       backgroundColor: colors.brand,
       paddingVertical: Space.md,
       borderRadius: Radius.lg,
       alignItems: 'center',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     manageConfirmDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     manageConfirmText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textInverse },
     manageDangerBtn: {
       backgroundColor: colors.danger,
       paddingVertical: Space.md,
       borderRadius: Radius.lg,
       alignItems: 'center',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     manageDangerText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textInverse },
     manageCancelBtn: {
       paddingVertical: Space.md,
       borderRadius: Radius.lg,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     manageCancelText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-      color: colors.textSecondary,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      color: colors.textSecondary } });
 }

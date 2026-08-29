@@ -13,12 +13,12 @@ import { CachedImage } from './CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type, FontFamily, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
   fetchMoodboardMembers, fetchMoodboardInvites, createMoodboardInvite,
   revokeMoodboardInvite, updateMoodboardMemberRole, removeMoodboardMember,
-  type MoodboardMember, type MoodboardInvite, type MoodboardInviteRole,
-} from '../services/moodboardApi';
+  type MoodboardMember, type MoodboardInvite, type MoodboardInviteRole } from '../services/moodboardApi';
 
 interface Props {
   visible: boolean;
@@ -29,8 +29,7 @@ interface Props {
 
 const ROLE_ORDER: MoodboardInviteRole[] = ['editor', 'commenter', 'viewer'];
 const ROLE_LABEL: Record<string, string> = {
-  owner: 'Owner', editor: 'Editor', commenter: 'Commenter', viewer: 'Viewer',
-};
+  owner: 'Owner', editor: 'Editor', commenter: 'Commenter', viewer: 'Viewer' };
 
 export function MoodboardCollaboratorSheet({ visible, onDismiss, moodboardId, isOwner }: Props) {
   const { colors } = useAppTheme();
@@ -225,62 +224,51 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.lg },
     center: { paddingVertical: Space.xl, alignItems: 'center', justifyContent: 'center' },
     emptyText: {
-      fontFamily: FontFamily.regular, fontSize: Type.body.size, lineHeight: Type.body.lineHeight,
-      color: colors.textSecondary, textAlign: 'center',
-    },
+      fontFamily: FontFamily.regular, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary, textAlign: 'center' },
     row: { flexDirection: 'row', alignItems: 'center', paddingVertical: Space.smMd, gap: Space.sm },
     rowSeparator: { borderTopWidth: Stroke.hairline, borderTopColor: colors.borderSubtle },
     avatar: { width: 32, height: 32, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt },
     rowBody: { flex: 1, gap: Space.xs },
     inviteBody: { flex: 1, gap: Space.xxs },
     name: {
-      fontFamily: FontFamily.semibold, fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight, color: colors.textPrimary,
-    },
+      fontFamily: FontFamily.semibold, fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight, color: colors.textPrimary },
     roleText: {
-      fontFamily: FontFamily.regular, fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight, color: colors.textSecondary,
-    },
+      fontFamily: FontFamily.regular, fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight, color: colors.textSecondary },
     caption: {
-      fontFamily: FontFamily.regular, fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight, color: colors.textMuted,
-    },
+      fontFamily: FontFamily.regular, fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight, color: colors.textMuted },
     rolePicker: { flexDirection: 'row', gap: Space.xs, flexWrap: 'wrap' },
     rolePill: {
       paddingVertical: Space.xs, paddingHorizontal: Space.sm, borderRadius: Radius.full,
       borderWidth: Stroke.hairline, borderColor: colors.borderSubtle,
-      minHeight: Control.chromeCompact, justifyContent: 'center',
-    },
+      minHeight: Control.chromeCompact, justifyContent: 'center' },
     rolePillSelected: { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder },
-    rolePillText: { fontFamily: FontFamily.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+    rolePillText: { fontFamily: FontFamily.medium, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
     rolePillTextSelected: { color: colors.brand },
     removeButton: { minHeight: Control.hit, justifyContent: 'center', paddingHorizontal: Space.xs },
-    removeText: { fontFamily: FontFamily.medium, fontSize: Type.caption.size, color: colors.danger },
+    removeText: { fontFamily: FontFamily.medium, fontSize: TypographyV2.meta.size, color: colors.danger },
     sectionLabel: {
-      fontFamily: FontFamily.semibold, fontSize: Type.metaElevated.size,
-      lineHeight: Type.metaElevated.lineHeight, letterSpacing: Type.metaElevated.letterSpacing,
+      fontFamily: FontFamily.semibold, fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight, letterSpacing: TypographyV2.label.letterSpacing,
       color: colors.textMuted, textTransform: 'uppercase',
-      marginTop: Space.lg, marginBottom: Space.sm,
-    },
+      marginTop: Space.lg, marginBottom: Space.sm },
     inviteButton: {
       minHeight: Control.hit, borderRadius: Radius.sm, backgroundColor: colors.brand,
-      alignItems: 'center', justifyContent: 'center', marginTop: Space.sm,
-    },
-    inviteButtonText: { fontFamily: FontFamily.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textInverse },
+      alignItems: 'center', justifyContent: 'center', marginTop: Space.sm },
+    inviteButtonText: { fontFamily: FontFamily.semibold, fontSize: TypographyV2.bodyStrong.size, color: colors.textInverse },
     tokenBox: { marginTop: Space.md, padding: Space.md, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, gap: Space.sm },
-    tokenLabel: { fontFamily: FontFamily.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+    tokenLabel: { fontFamily: FontFamily.medium, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
     tokenValue: {
-      fontFamily: FontFamily.regular, fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight, color: colors.textPrimary,
-    },
+      fontFamily: FontFamily.regular, fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight, color: colors.textPrimary },
     copyButton: {
       alignSelf: 'flex-start', minHeight: Control.chromeCompact, paddingHorizontal: Space.md,
-      justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: colors.brandSubtle,
-    },
-    copyButtonText: { fontFamily: FontFamily.semibold, fontSize: Type.caption.size, color: colors.brand },
+      justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: colors.brandSubtle },
+    copyButtonText: { fontFamily: FontFamily.semibold, fontSize: TypographyV2.meta.size, color: colors.brand },
     retryButton: {
       minHeight: Control.hit, paddingHorizontal: Space.lg, justifyContent: 'center',
-      borderRadius: Radius.sm, backgroundColor: colors.brandSubtle, marginTop: Space.md,
-    },
-    retryText: { fontFamily: FontFamily.semibold, fontSize: Type.bodyEmphasis.size, color: colors.brand },
-  });
+      borderRadius: Radius.sm, backgroundColor: colors.brandSubtle, marginTop: Space.md },
+    retryText: { fontFamily: FontFamily.semibold, fontSize: TypographyV2.bodyStrong.size, color: colors.brand } });

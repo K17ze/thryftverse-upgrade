@@ -5,13 +5,13 @@ import {
   StyleSheet,
   FlatList,
   Pressable,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useBackendData } from '../../context/BackendDataContext';
@@ -209,125 +209,104 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   emptyWrap: {
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.lg,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   emptyText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 20,
-  },
+    lineHeight: 20 },
   pieceCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     padding: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   pieceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   pieceDot: {
     width: 10,
     height: 10,
     borderRadius: Radius.sm,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   labelInput: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   linkedListing: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   listingThumb: {
     width: 40,
     height: 40,
     borderRadius: Radius.md,
-    backgroundColor: colors.surface,
-  },
+    backgroundColor: colors.surface },
   listingTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   listingPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
   linkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.xs + 2,
-  },
+    paddingVertical: Space.xs + 2 },
   linkBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   searchSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   searchInput: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   searchResult: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xs + 2,
-  },
+    paddingVertical: Space.xs + 2 },
   searchResultThumb: {
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   searchResultTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   searchResultPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
   noResults: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textAlign: 'center',
-    paddingVertical: Space.sm,
-  },
-});
+    paddingVertical: Space.sm } });

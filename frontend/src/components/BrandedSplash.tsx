@@ -7,9 +7,9 @@ import Reanimated, {
   withRepeat,
   withSequence,
   withTiming,
-  Easing,
-} from 'react-native-reanimated';
-import { Typography, Type, Space } from '../theme/designTokens';
+  Easing } from 'react-native-reanimated';
+import { Typography, Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { Motion } from '../theme/motionTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
@@ -48,8 +48,7 @@ export function BrandedSplash({ onFinish }: BrandedSplashProps) {
   }, [onFinish, pulse, reducedMotionEnabled]);
 
   const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulse.value }],
-  }));
+    transform: [{ scale: pulse.value }] }));
 
   const wrapperEnterAnimation = reducedMotionEnabled ? undefined : FadeIn.duration(Motion.duration.slow);
   const taglineEnterAnimation = reducedMotionEnabled ? undefined : FadeIn.delay(520).duration(Motion.duration.slower);
@@ -81,31 +80,25 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     backgroundColor: colors.background,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   centerWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   brandRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 2,
-  },
+    gap: 2 },
   brandLetter: {
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: Type.hero.size,
-    letterSpacing: 0.42,
-  },
+    fontSize: TypographyV2.display.size,
+    letterSpacing: 0.42 },
   tagline: {
     marginTop: 14,
     color: colors.brand,
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    letterSpacing: 0.22,
-  },
-  });
+    fontFamily: TypographyV2.display.fontFamily,
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: 0.22 } });
 }

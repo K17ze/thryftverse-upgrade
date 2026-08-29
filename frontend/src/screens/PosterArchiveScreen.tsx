@@ -7,15 +7,15 @@ import {
   RefreshControl,
   Dimensions,
   AccessibilityInfo,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -147,8 +147,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
           haptic.error();
           show('Failed to delete story', 'error');
         }
-      },
-    });
+      } });
   };
 
   const renderItem = ({ item }: { item: PosterStory }) => {
@@ -310,7 +309,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
               <View key={i} style={styles.skeletonCard}>
                 <SkeletonLoader width="100%" height={CARD_H} borderRadius={Radius.lg} />
                 <View style={styles.skeletonFooter}>
-                  <SkeletonLoader width={40} height={Type.caption.size} borderRadius={Radius.sm} />
+                  <SkeletonLoader width={40} height={TypographyV2.meta.size} borderRadius={Radius.sm} />
                   <View style={{ width: 18 }} />
                 </View>
               </View>
@@ -514,76 +513,62 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.sm,
-      paddingVertical: Space.sm + 2,
-    },
+      paddingVertical: Space.sm + 2 },
     topTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   iconBtn: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   skeletonCard: {
-    width: CARD_W,
-  },
+    width: CARD_W },
   skeletonFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   listContent: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   // Filter segmented control — flat, no card-on-card. Inactive is plain text,
   // active is a filled brand pill (Instagram-style).
   filterRow: {
     flexDirection: 'row',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   filterChip: {
     paddingVertical: Space.xs + 1,
     paddingHorizontal: Space.sm + 2,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   filterChipActive: {
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   filterChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   filterChipTextActive: {
     color: colors.textInverse,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   // Search bar — flat, hairline border, no card-on-card.
   searchRow: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -593,62 +578,52 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   searchInput: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    padding: 0,
-  },
+    padding: 0 },
   searchClear: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   columnWrapper: {
     gap: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   card: {
     width: CARD_W,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    ...Elevation.card,
-  },
+    ...Elevation.card },
   cardMedia: {
     width: CARD_W,
     aspectRatio: 9 / 16,
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   cardPlaceholder: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   cardPlaceholderText: {
     color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    textAlign: 'center' },
   cardOverlay: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
-    padding: Space.xs,
-  },
+    padding: Space.xs },
   cardOverlayRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs - 2,
-    alignSelf: 'flex-end',
-  },
+    alignSelf: 'flex-end' },
   viewCountPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -656,42 +631,34 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs / 2,
-  },
+    paddingVertical: Space.xs / 2 },
   viewCountText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   statusHighlight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(244,240,232,0.85)',
-  },
+    backgroundColor: 'rgba(244,240,232,0.85)' },
   cardTitle: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   statusPill: {
     alignSelf: 'flex-start',
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
-    paddingVertical: 3,
-  },
+    paddingVertical: 3 },
   statusActive: {
-    backgroundColor: 'rgba(76, 217, 100, 0.85)',
-  },
+    backgroundColor: 'rgba(76, 217, 100, 0.85)' },
   statusArchived: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.6)' },
   statusText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   frameCountPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -700,39 +667,33 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs / 2,
-  },
+    paddingVertical: Space.xs / 2 },
   frameCountText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   deleteBtn: {
     width: 28,
     height: 28,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   cardDate: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   emptyBody: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Space.xxl,
     gap: Space.sm,
-    paddingHorizontal: Space.xl,
-  },
+    paddingHorizontal: Space.xl },
   emptyIconWrap: {
     width: Space.xxl + Space.sm,
     height: Space.xxl + Space.sm,
@@ -740,27 +701,23 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   emptyTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textSecondary,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   emptySubtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   errorBody: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.xl,
-  },
+    paddingHorizontal: Space.xl },
   errorIconWrap: {
     width: Space.xxl + Space.sm,
     height: Space.xxl + Space.sm,
@@ -768,19 +725,16 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   errorTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   errorHint: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -789,12 +743,9 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   retryBtnText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
-  });
+    fontSize: TypographyV2.body.size } });
 }

@@ -26,8 +26,7 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -41,7 +40,8 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useForYouFeed } from '../hooks/useForYouFeed';
 import { useBackendData } from '../context/BackendDataContext';
 
-import { Space, Radius, Type, FontFamily, Control } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
@@ -62,8 +62,7 @@ import {
   fetchFeaturedAssets,
   type GalleriaCollection,
   type GalleriaEditorial,
-  type GalleriaFeaturedAsset,
-} from '../services/galleriaApi';
+  type GalleriaFeaturedAsset } from '../services/galleriaApi';
 import { searchListingsFromApi } from '../services/feedApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { buildListingFeedUnit, type DiscoveryFeedUnit } from '../contracts/discoveryFeedUnit';
@@ -187,8 +186,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
                 likes: 0,
                 sellerId: item.sellerId,
                 category: item.category ?? '',
-                createdAt: item.createdAt,
-              },
+                createdAt: item.createdAt },
               item.imageUrl ?? '',
               1, // Search API doesn't return aspect ratio; default to square
             )));
@@ -277,8 +275,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const handleLookPress = useCallback((lookId: string) => {
     navigation.navigate('MainTabs', {
       screen: 'Home',
-      params: { screen: 'LookDetail', params: { lookId } },
-    });
+      params: { screen: 'LookDetail', params: { lookId } } });
   }, [navigation]);
 
   const handlePosterPress = useCallback((storyId: string) => {
@@ -338,8 +335,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             returnKeyType: 'search',
             onFocus: () => setIsSearchFocused(true),
             onBlur: () => setIsSearchFocused(false),
-            onSubmitEditing: handleSubmitSearch,
-          }}
+            onSubmitEditing: handleSubmitSearch }}
         />
       </View>
     </View>
@@ -425,8 +421,7 @@ function DiscoveryFeedView({
   scrollRef,
   colors,
   styles,
-  windowWidth,
-}: {
+  windowWidth }: {
   units: DiscoveryFeedUnit[];
   isLoading: boolean;
   showError: boolean;
@@ -629,8 +624,7 @@ function SearchResultsView({
   onMoodboardPress,
   colors,
   styles,
-  navigation,
-}: {
+  navigation }: {
   units: DiscoveryFeedUnit[];
   isSearching: boolean;
   isSearchingPeople: boolean;
@@ -738,8 +732,7 @@ function SearchResultsView({
 
 function CollectionRailCard({
   collection,
-  onPress,
-}: {
+  onPress }: {
   collection: GalleriaCollection;
   onPress: () => void;
 }) {
@@ -765,13 +758,13 @@ function CollectionRailCard({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.sm, right: Space.sm, bottom: Space.sm }} pointerEvents="none">
-          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.semibold, fontSize: Type.meta.size, letterSpacing: 0.5 }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.semibold, fontSize: TypographyV2.meta.size, letterSpacing: 0.5 }} numberOfLines={1}>
             {collection.theme.toUpperCase()}
           </Text>
-          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.bold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.bold, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight }} numberOfLines={2}>
             {collection.title}
           </Text>
-          <Text style={{ color: colors.scrimTextSecondary, fontFamily: FontFamily.regular, fontSize: Type.caption.size }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextSecondary, fontFamily: FontFamily.regular, fontSize: TypographyV2.meta.size }} numberOfLines={1}>
             {collection.curator}
           </Text>
         </View>
@@ -788,8 +781,7 @@ function PeopleResultRow({
   user,
   onPress,
   colors,
-  styles,
-}: {
+  styles }: {
   user: UserSearchResult;
   onPress: () => void;
   colors: ThemeColors;
@@ -838,182 +830,148 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     stateWrap: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: Space.lg,
-    },
+      paddingHorizontal: Space.lg },
     searchingWrap: {
       flex: 1,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     headerBtn: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     // Header search bar — sits right below the back/camera row
     headerWrap: {
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     headerSearchWrap: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     searchBar: {
-      flex: 1,
-    },
+      flex: 1 },
     // Greeting
     greetingWrap: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     greetingText: {
-      fontSize: Type.title.size,
+      fontSize: TypographyV2.screenTitle.size,
       fontFamily: FontFamily.bold,
       color: colors.textPrimary,
-      lineHeight: Type.title.lineHeight,
-    },
+      lineHeight: TypographyV2.screenTitle.lineHeight },
     // Category pills
     categoryBar: {
       flexDirection: 'row',
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     categoryPill: {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     categoryPillActive: {
-      backgroundColor: colors.textPrimary,
-    },
+      backgroundColor: colors.textPrimary },
     categoryPillText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     categoryPillTextActive: {
-      color: colors.textInverse,
-    },
+      color: colors.textInverse },
     // Hero editorial
     heroWrap: {
       width: '100%',
       height: 280,
       marginVertical: Space.sm,
-      position: 'relative',
-    },
+      position: 'relative' },
     heroImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     heroGradient: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
-      height: '60%',
-    },
+      height: '60%' },
     heroOverlay: {
       position: 'absolute',
       left: Space.md,
       right: Space.md,
-      bottom: Space.md,
-    },
+      bottom: Space.md },
     heroEyebrow: {
       color: colors.scrimTextPrimary,
       fontFamily: FontFamily.semibold,
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       letterSpacing: 1,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     heroTitle: {
       color: colors.scrimTextPrimary,
       fontFamily: FontFamily.bold,
-      fontSize: Type.subtitle.size + 2,
-      lineHeight: Type.subtitle.lineHeight + 4,
-      marginBottom: Space.xs / 2,
-    },
+      fontSize: TypographyV2.sectionTitle.size + 2,
+      lineHeight: TypographyV2.sectionTitle.lineHeight + 4,
+      marginBottom: Space.xs / 2 },
     heroMeta: {
       color: colors.scrimTextSecondary,
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     // Collections rail
     collectionsSection: {
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     sectionTitle: {
       paddingHorizontal: Space.md,
-      fontSize: Type.body.size + 2,
+      fontSize: TypographyV2.body.size + 2,
       fontFamily: FontFamily.bold,
       color: colors.textPrimary,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     railContent: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     // Feed label
     feedLabelWrap: {
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     feedLabel: {
-      fontSize: Type.body.size + 2,
+      fontSize: TypographyV2.body.size + 2,
       fontFamily: FontFamily.bold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     // Skeleton
     skeletonWrap: {
       flex: 1,
       paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     skeletonRail: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     skeletonMasonry: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.sm,
-      justifyContent: 'space-between',
-    },
+      justifyContent: 'space-between' },
     // Search results
     searchResultsWrap: {
-      flex: 1,
-    },
+      flex: 1 },
     scopeBar: {
       flexDirection: 'row',
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     scopeTab: {
       flex: 1,
       paddingVertical: Space.sm + 2,
       alignItems: 'center',
-      position: 'relative',
-    },
+      position: 'relative' },
     scopeTabActive: {},
     scopeTabText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     scopeTabTextActive: {
       color: colors.textPrimary,
-      fontFamily: FontFamily.semibold,
-    },
+      fontFamily: FontFamily.semibold },
     scopeIndicator: {
       position: 'absolute',
       bottom: 0,
@@ -1021,46 +979,37 @@ function createStyles(colors: ThemeColors) {
       right: '25%',
       height: 2,
       backgroundColor: colors.textPrimary,
-      borderRadius: 1,
-    },
+      borderRadius: 1 },
     // People results
     peopleList: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     peopleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     peopleAvatar: {
       width: 44,
       height: 44,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     peopleAvatarFallback: {
       width: 44,
       height: 44,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     peopleInfo: {
       flex: 1,
-      gap: 2,
-    },
+      gap: 2 },
     peopleName: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.semibold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     peopleUsername: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
-      color: colors.textMuted,
-    },
-  });
+      color: colors.textMuted } });
 }

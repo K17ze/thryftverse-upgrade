@@ -23,20 +23,18 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
   Space,
   Radius,
-  Type,
   Typography,
   FontFamily,
   Control,
   Stroke,
-  IconGrammar,
-} from '../../../theme/designTokens';
+  IconGrammar } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -99,8 +97,7 @@ function extractAudioTracks(layers: CreatorLayer[]): AudioTrackInfo[] {
     tracks.push({
       layer,
       type: isVoiceover ? 'voiceover' : 'music',
-      name: payload.trackName,
-    });
+      name: payload.trackName });
   }
   return tracks;
 }
@@ -113,8 +110,7 @@ export function AudioMixPanel({
   masterVolume = 1,
   onMasterVolumeChange,
   ducking,
-  onDuckingChange,
-}: AudioMixPanelProps): React.ReactElement {
+  onDuckingChange }: AudioMixPanelProps): React.ReactElement {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -161,9 +157,7 @@ export function AudioMixPanel({
       updateLayer(layerId, {
         payload: {
           ...tracks.find((t) => t.layer.id === layerId)!.layer.payload,
-          volume: clamp(volume, 0, 1),
-        },
-      } as Partial<CreatorLayer>, 'Adjust volume');
+          volume: clamp(volume, 0, 1) } } as Partial<CreatorLayer>, 'Adjust volume');
     },
     [tracks, updateLayer],
   );
@@ -175,9 +169,7 @@ export function AudioMixPanel({
       updateLayer(layerId, {
         payload: {
           ...track.layer.payload,
-          fadeInMs: clamp(fadeInMs, 0, 3000),
-        },
-      } as Partial<CreatorLayer>, 'Adjust fade in');
+          fadeInMs: clamp(fadeInMs, 0, 3000) } } as Partial<CreatorLayer>, 'Adjust fade in');
     },
     [tracks, updateLayer],
   );
@@ -189,9 +181,7 @@ export function AudioMixPanel({
       updateLayer(layerId, {
         payload: {
           ...track.layer.payload,
-          fadeOutMs: clamp(fadeOutMs, 0, 3000),
-        },
-      } as Partial<CreatorLayer>, 'Adjust fade out');
+          fadeOutMs: clamp(fadeOutMs, 0, 3000) } } as Partial<CreatorLayer>, 'Adjust fade out');
     },
     [tracks, updateLayer],
   );
@@ -211,9 +201,7 @@ export function AudioMixPanel({
             updateLayer(layerId, {
               payload: {
                 ...track.layer.payload,
-                volume: prevVol,
-              },
-            } as Partial<CreatorLayer>, 'Unmute track');
+                volume: prevVol } } as Partial<CreatorLayer>, 'Unmute track');
           }
         } else {
           // Mute — save current volume, set to 0
@@ -226,9 +214,7 @@ export function AudioMixPanel({
           updateLayer(layerId, {
             payload: {
               ...track.layer.payload,
-              volume: 0,
-            },
-          } as Partial<CreatorLayer>, 'Mute track');
+              volume: 0 } } as Partial<CreatorLayer>, 'Mute track');
         }
         return next;
       });
@@ -270,8 +256,7 @@ export function AudioMixPanel({
         enabled: newEnabled,
         level: 0.3,
         priorityTrackId: null,
-        fadeMs: 300,
-      });
+        fadeMs: 300 });
     }
   }, [localDuckingEnabled, onDuckingChange, ducking, haptic, reducedMotion]);
 
@@ -375,8 +360,7 @@ export function AudioMixPanel({
                       borderColor: localDuckingEnabled
                         ? colors.brand
                         : colors.border,
-                      opacity: hasVoiceover ? 1 : 0.4,
-                    },
+                      opacity: hasVoiceover ? 1 : 0.4 },
                   ]}
                 >
                   <View
@@ -388,8 +372,7 @@ export function AudioMixPanel({
                           : colors.textSecondary,
                         transform: [
                           { translateX: localDuckingEnabled ? 22 : 2 },
-                        ],
-                      },
+                        ] },
                     ]}
                   />
                 </View>
@@ -460,8 +443,7 @@ function TrackRow({
   onFadeOutChange,
   onMuteToggle,
   onSoloToggle,
-  onDelete,
-}: TrackRowProps): React.ReactElement {
+  onDelete }: TrackRowProps): React.ReactElement {
   const payload = track.layer.payload;
   const iconName: React.ComponentProps<typeof Ionicons>['name'] =
     track.type === 'voiceover' ? 'mic' : 'musical-notes';
@@ -568,137 +550,110 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     content: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     // ── Track list ──
     trackList: {
       gap: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     trackRow: {
       gap: Space.sm,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     trackHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-    },
+      justifyContent: 'space-between' },
     trackInfo: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       flex: 1,
-      paddingRight: Space.sm,
-    },
+      paddingRight: Space.sm },
     trackMeta: {
       flex: 1,
-      gap: 1,
-    },
+      gap: 1 },
     trackName: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     trackType: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     trackActions: {
       flexDirection: 'row',
       gap: Space.xxs,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     // ── Fade row ──
     fadeRow: {
       flexDirection: 'row',
-      gap: Space.md,
-    },
+      gap: Space.md },
     fadeColumn: {
-      flex: 1,
-    },
+      flex: 1 },
     // ── Sections ──
     sectionDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginVertical: Space.md,
-    },
+      marginVertical: Space.md },
     section: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     sectionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     // ── Toggle ──
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     toggleTextWrap: {
       flex: 1,
       paddingRight: Space.md,
-      gap: 2,
-    },
+      gap: 2 },
     toggleTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     toggleHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     switchTrack: {
       width: 46,
       height: 28,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     switchThumb: {
       position: 'absolute',
       width: 22,
       height: 22,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     // ── Empty state ──
     emptyBody: {
       paddingVertical: Space.xl,
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     emptySubtitle: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       textAlign: 'center',
-      paddingHorizontal: Space.lg,
-    },
-  });
+      paddingHorizontal: Space.lg } });
 }
 
 // ── Memoised style factory ────────────────────────────────────────────

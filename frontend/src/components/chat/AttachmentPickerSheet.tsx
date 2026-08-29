@@ -5,11 +5,11 @@ import Reanimated, {
   useAnimatedStyle,
   withTiming,
   runOnJS,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Elevation, Type } from '../../theme/designTokens';
+import { Space, Radius, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
@@ -81,12 +81,10 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
   }, [visible, rendered, opacity, translateY, reducedMotion]);
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
+    opacity: opacity.value }));
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   const gesture = Gesture.Pan()
     .onUpdate((e) => {
@@ -165,49 +163,40 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 900,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   backdrop: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   sheet: {
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
     paddingTop: Space.smMd,
     paddingBottom: Space.xl + 20,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   handle: {
     width: 40,
     height: 4,
     borderRadius: Radius.full,
     alignSelf: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   optionBtn: {
     width: '31%',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   optionLabel: {
-    fontSize: Type.meta.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    textAlign: 'center' },
   cancelBtn: {
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     alignItems: 'center',
     marginTop: Space.sm,
     minHeight: 44,
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });

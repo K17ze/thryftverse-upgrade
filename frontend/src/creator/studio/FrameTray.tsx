@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, FontFamily, Stroke, Type} from '../../theme/designTokens';
+import { Space, FontFamily, Stroke } from '../../theme/designTokens';
 import { IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
@@ -46,8 +46,7 @@ export function FrameTray({
   onCollapse,
   bottomOffset,
   onVideoBadgePress,
-  videoInfoFrameIndex,
-}: FrameTrayProps) {
+  videoInfoFrameIndex }: FrameTrayProps) {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
 
@@ -170,19 +169,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    zIndex: 96,
-  },
+    zIndex: 96 },
   scrollContent: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: THUMB_GAP,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   thumbTarget: {
     alignItems: 'center',
-    gap: 2,
-  },
+    gap: 2 },
   thumb: {
     width: THUMB_WIDTH,
     height: THUMB_HEIGHT,
@@ -190,21 +186,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: Stroke.emphasis,
     borderColor: 'transparent',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.08)' },
   thumbActive: {
     borderColor: '#fff',
-    borderWidth: 2,
-  },
+    borderWidth: 2 },
   thumbImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   thumbPlaceholder: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   durationBadge: {
     position: 'absolute',
     bottom: 2,
@@ -215,13 +207,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
     paddingHorizontal: 3,
     paddingVertical: 1,
-    borderRadius: RadiusRoleValue.compactControl,
-  },
+    borderRadius: RadiusRoleValue.compactControl },
   durationText: {
     color: '#fff',
-    fontSize: Type.meta.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
   videoInfoLabel: {
     position: 'absolute',
     top: 2,
@@ -230,24 +220,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.85)',
     borderRadius: RadiusRoleValue.compactControl,
     paddingHorizontal: 4,
-    paddingVertical: 3,
-  },
+    paddingVertical: 3 },
   videoInfoText: {
     color: '#fff',
     fontSize: 7,
     fontFamily: FontFamily.regular,
     lineHeight: 9,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   thumbLabel: {
     color: 'rgba(255,255,255,0.5)',
-    fontSize: Type.meta.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
   thumbLabelActive: {
     color: '#fff',
-    fontFamily: FontFamily.semibold,
-  },
+    fontFamily: FontFamily.semibold },
   addBtn: {
     width: THUMB_WIDTH,
     height: THUMB_HEIGHT,
@@ -256,6 +242,4 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)',
     borderStyle: 'dashed',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });

@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Typography, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
@@ -137,8 +138,7 @@ export function MyProfileIdentityHero({
   onShare,
   onPressSold,
   onPressFollowers,
-  onPressFollowing,
-}: MyProfileIdentityHeroProps) {
+  onPressFollowing }: MyProfileIdentityHeroProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -370,28 +370,24 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   heroRoot: {
     position: 'relative',
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
 
   // Avatar — absolutely positioned at the cover/canvas seam
   avatarAbsolute: {
     position: 'absolute',
     top: -AVATAR_OVERLAP,
     left: Space.md,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   avatar: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     borderWidth: 3,
-    borderColor: colors.background,
-  },
+    borderColor: colors.background },
   avatarMonogram: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   editAvatarHit: {
     position: 'absolute',
     right: -10,
@@ -399,8 +395,7 @@ function createStyles(colors: ThemeColors) {
     width: 44,
     height: 44,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   editAvatarVisible: {
     width: 24,
     height: 24,
@@ -409,158 +404,131 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     backgroundColor: colors.textPrimary,
     borderWidth: 2,
-    borderColor: colors.background,
-  },
+    borderColor: colors.background },
 
   // Identity canvas — no top padding; seamRow reserves avatar overlap space
   identityCanvas: {
     paddingHorizontal: Space.md,
     paddingTop: 0,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
 
   // Seam row — begins immediately at canvas boundary, reserves avatar overlap height
   seamRow: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: AVATAR_OVERLAP + Space.sm,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   seamSpacer: {
-    width: AVATAR_SIZE + Space.sm,
-  },
+    width: AVATAR_SIZE + Space.sm },
   seamStats: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-  },
+    justifyContent: 'space-around' },
   seamStat: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   seamStatValue: {
-    fontSize: Type.sectionTitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.3,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   seamStatLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: 1,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   seamStatDivider: {
     width: StyleSheet.hairlineWidth,
     height: Space.lg,
-    backgroundColor: colors.borderSubtle,
-  },
+    backgroundColor: colors.borderSubtle },
 
   // Identity — full-width, left-aligned
   displayNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   displayName: {
     flexShrink: 1,
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: Type.priceList.size,
+    fontSize: TypographyV2.priceList.size,
     letterSpacing: -0.4,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   username: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.body.size,
+    marginBottom: Space.xs },
   bio: {
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    marginBottom: Space.xs },
   bioLink: {
     color: colors.brand,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: Typography.family.medium },
   bioSeeMore: {
     color: colors.textSecondary,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   contextLine: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    marginBottom: Space.xs },
   websiteLink: {
     paddingVertical: 2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   websiteText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
 
   // Trust header — rating row + joined caption on separate lines
   trustBlock: {
     paddingVertical: 2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   trustRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 3,
-  },
+    gap: 3 },
   trustRating: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: -0.1,
-  },
+    letterSpacing: -0.1 },
   trustReviewCount: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   trustNoReviews: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   trustSold: {
-    fontSize: Type.numericMeta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.numericMeta.size,
+    fontFamily: TypographyV2.numericMeta.fontFamily,
     color: colors.textPrimary,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   trustJoined: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   trustResponse: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   trustDot: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
 
   // Actions — flat, single row
   actionRow: {
@@ -569,8 +537,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   action: {
     flex: 1,
     flexDirection: 'row',
@@ -578,25 +545,19 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     gap: Space.xs + 3,
     height: ACTION_HEIGHT,
-    borderRadius: ACTION_RADIUS,
-  },
+    borderRadius: ACTION_RADIUS },
   editAction: {
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   editActionText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   shareAction: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   shareActionText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
-  });
+    fontSize: TypographyV2.bodyStrong.size } });
 }

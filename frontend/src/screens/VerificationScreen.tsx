@@ -8,13 +8,13 @@ import {
   ActivityIndicator,
   ScrollView,
   Linking,
-  Image,
-} from 'react-native';
+  Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -26,16 +26,14 @@ import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import {
   VERIFICATION_TIERS,
-  VerificationTier,
-} from '../platform/product/listingDetailContract';
+  VerificationTier } from '../platform/product/listingDetailContract';
 import {
   createKycSession,
   fetchKycStatus,
   fetchDac7TaxInfo,
   saveDac7TaxInfo,
   type Dac7TaxInfo,
-  type KycStatus,
-} from '../services/complianceApi';
+  type KycStatus } from '../services/complianceApi';
 import { parseApiError } from '../lib/apiClient';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -145,8 +143,7 @@ export default function VerificationScreen({ navigation }: Props) {
         label: 'Unverified',
         icon: 'alert-circle-outline',
         color: 'textSecondary',
-        description: 'Verify your identity with a government document to get the trust badge',
-      };
+        description: 'Verify your identity with a government document to get the trust badge' };
 
   const handleStartKyc = () => {
     if (effectiveKycVerified) {
@@ -171,8 +168,7 @@ export default function VerificationScreen({ navigation }: Props) {
       const result = await createKycSession({
         legalName: kycFullName.trim(),
         dateOfBirth: kycDob.trim(),
-        countryCode: kycCountry,
-      });
+        countryCode: kycCountry });
 
       // Update local compliance state
       updateCoOwnCompliance({ kycVerified: false });
@@ -219,8 +215,7 @@ export default function VerificationScreen({ navigation }: Props) {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: false,
-        quality: 0.85,
-      });
+        quality: 0.85 });
       if (result.canceled || !result.assets?.[0]?.uri) return;
       await uploadKycDocument(result.assets[0].uri);
     } catch {
@@ -238,8 +233,7 @@ export default function VerificationScreen({ navigation }: Props) {
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.85,
-      });
+        quality: 0.85 });
       if (result.canceled || !result.assets?.[0]?.uri) return;
       await uploadKycDocument(result.assets[0].uri);
     } catch {
@@ -282,15 +276,13 @@ export default function VerificationScreen({ navigation }: Props) {
         tin: dac7Tin.trim(),
         taxResidenceCountry: dac7Country,
         isEuResident: dac7IsEuResident,
-        selfDeclared: true,
-      });
+        selfDeclared: true });
 
       // Update local compliance state
       updateCoOwnCompliance({
         dac7Completed: true,
         dac7Tin: dac7Tin.trim(),
-        dac7Country: dac7Country,
-      });
+        dac7Country: dac7Country });
 
       // Update backend status state
       setBackendDac7Info(result.taxInfo);
@@ -467,8 +459,7 @@ export default function VerificationScreen({ navigation }: Props) {
                     styles.docOption,
                     {
                       borderColor: kycDocumentType === doc ? colors.brand : colors.border,
-                      backgroundColor: kycDocumentType === doc ? colors.brandSubtle : colors.surfaceAlt,
-                    },
+                      backgroundColor: kycDocumentType === doc ? colors.brandSubtle : colors.surfaceAlt },
                   ]}
                   onPress={() => setKycDocumentType(doc)}
                   accessibilityRole="button"
@@ -722,8 +713,7 @@ export default function VerificationScreen({ navigation }: Props) {
                       styles.countryChip,
                       {
                         borderColor: dac7Country === code ? colors.brand : colors.border,
-                        backgroundColor: dac7Country === code ? colors.brandSubtle : colors.surfaceAlt,
-                      },
+                        backgroundColor: dac7Country === code ? colors.brandSubtle : colors.surfaceAlt },
                     ]}
                     onPress={() => {
                       setDac7Country(code);
@@ -810,41 +800,34 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     marginBottom: Space.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   flowHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   flowTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   flowBody: {
     padding: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   fieldLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs },
   input: {
     height: Control.hit,
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     paddingHorizontal: Space.sm,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   fieldRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   fieldHalf: { flex: 1 },
   docOption: {
     flexDirection: 'row',
@@ -852,13 +835,11 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     padding: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   docOptionText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   uploadPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -867,14 +848,12 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
-    borderStyle: 'dashed',
-  },
+    borderStyle: 'dashed' },
   uploadText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   uploadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -884,71 +863,58 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   uploadBtnRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   uploadBtnText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   uploadPreview: {
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   previewImage: {
     width: '100%',
     height: 180,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   previewActions: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   previewActionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   previewActionDivider: {
     width: 1,
-    height: 16,
-  },
+    height: 16 },
   reviewDocumentPreview: {
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     overflow: 'hidden',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   reviewDocumentImage: {
     width: '100%',
     height: 120,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   reviewDocumentInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   reviewDocumentText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   flowNavRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   flowBackBtn: {
     flex: 1,
     height: Control.hit,
@@ -956,29 +922,24 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   flowBackBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   flowPrimaryBtn: {
     flex: 1,
     height: Control.hit,
     borderRadius: Radius.md,
     backgroundColor: colors.brand,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   flowPrimaryBtnDisabled: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   flowPrimaryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse },
   reviewRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -986,58 +947,46 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
-    gap: Space.md,
-  },
+    gap: Space.md },
   reviewLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   reviewValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     flex: 1,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   countryScroll: {
-    marginVertical: -Space.xs,
-  },
+    marginVertical: -Space.xs },
   countryScrollContent: {
     gap: Space.xs + 2,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   countryChip: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.sm,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   countryChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   checkboxText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   footerNote: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     paddingHorizontal: Space.lg,
     paddingTop: Space.sm,
-    paddingBottom: Space.lg,
-  },
+    paddingBottom: Space.lg },
   footerLink: {
     color: colors.brand,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontFamily: Typography.family.semibold } });
 }

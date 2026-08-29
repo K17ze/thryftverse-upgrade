@@ -5,7 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
+import { Typography, Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -42,8 +43,7 @@ export function LookPreviewCard({
   onPress,
   onLike,
   onSave,
-  index = 0,
-}: LookPreviewCardProps) {
+  index = 0 }: LookPreviewCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
@@ -70,8 +70,7 @@ export function LookPreviewCard({
                 styles.hotspot,
                 {
                   left: `${Math.min(Math.max(item.x * 100, 5), 90)}%`,
-                  top: `${Math.min(Math.max(item.y * 100, 5), 90)}%`,
-                },
+                  top: `${Math.min(Math.max(item.y * 100, 5), 90)}%` },
               ]}
             >
               <View style={styles.hotspotDot} />
@@ -110,19 +109,16 @@ function createStyles(colors: ThemeColors) {
     overflow: 'hidden',
     marginBottom: Space.md,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   coverWrap: {
     width: '100%',
     aspectRatio: 0.85,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   coverImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   hotspot: {
     position: 'absolute',
     width: 20,
@@ -130,46 +126,40 @@ function createStyles(colors: ThemeColors) {
     marginLeft: -10,
     marginTop: -10,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   hotspotDot: {
     width: 10,
     height: 10,
     borderRadius: Radius.sm,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.3)',
-  },
+    borderColor: 'rgba(0,0,0,0.3)' },
   coverInfo: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     padding: Space.md,
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   coverTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+    textShadowRadius: 3 },
   coverMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   creatorName: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: 'rgba(255,255,255,0.85)',
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
+    textShadowRadius: 2 },
   actionBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -177,17 +167,13 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   actionText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: colors.textSecondary,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    color: colors.textSecondary } });
 }

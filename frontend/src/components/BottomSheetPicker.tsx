@@ -4,11 +4,11 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   runOnJS,
-  withTiming,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Radius, Type, Space, Elevation } from '../theme/designTokens';
+import { Radius, Space, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -76,14 +76,12 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
     });
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   const overlayStyle = useAnimatedStyle(() => {
     return {
       opacity: visible ? 0.6 : 0,
-      display: visible ? 'flex' : 'none',
-    };
+      display: visible ? 'flex' : 'none' };
   });
 
   if (!shouldRender) {
@@ -156,12 +154,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   handleContainer: { alignItems: 'center', paddingVertical: 14 },
   handle: { width: 44, height: 5, borderRadius: Radius.sm, backgroundColor: colors.border },
   header: { alignItems: 'center', marginBottom: 12 },
-  headerTitle: { fontSize: Type.priceList.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, letterSpacing: 0.08 },
+  headerTitle: { fontSize: TypographyV2.priceList.size, fontFamily: TypographyV2.priceList.fontFamily, color: colors.textPrimary, letterSpacing: 0.08 },
 
   searchContainer: {
     flexDirection: 'row',
@@ -173,9 +170,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
     height: 50,
     borderRadius: Radius.full,
-    marginBottom: Space.md,
-  },
-  searchInput: { flex: 1, marginLeft: 10, color: colors.textPrimary, fontFamily: Typography.family.medium, fontSize: Type.body.size, letterSpacing: 0.08 },
+    marginBottom: Space.md },
+  searchInput: { flex: 1, marginLeft: 10, color: colors.textPrimary, fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, letterSpacing: 0.08 },
 
   scrollList: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
@@ -186,10 +182,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.md,
     borderBottomWidth: 0.5,
-    borderBottomColor: colors.border,
-  },
-  optionText: { fontSize: Type.body.size, fontFamily: Typography.family.medium, color: colors.textPrimary, letterSpacing: 0.08 },
-  optionTextActive: { fontFamily: Typography.family.semibold, color: colors.brand },
+    borderBottomColor: colors.border },
+  optionText: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary, letterSpacing: 0.08 },
+  optionTextActive: { fontFamily: TypographyV2.body.fontFamily, color: colors.brand },
 
-  noResultsText: { textAlign: 'center', color: colors.textMuted, marginTop: 40, fontFamily: Typography.family.medium },
-});
+  noResultsText: { textAlign: 'center', color: colors.textMuted, marginTop: 40, fontFamily: TypographyV2.body.fontFamily } });

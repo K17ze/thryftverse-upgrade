@@ -26,16 +26,14 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
-  Control,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
@@ -44,8 +42,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import {
   CAMERA_EFFECTS,
   CameraEffectBar,
-  type CameraEffectId,
-} from './CameraEffectBar';
+  type CameraEffectId } from './CameraEffectBar';
 import { isCapabilitySupported } from '../capabilities/registry';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -137,8 +134,7 @@ export function CaptureToolsSheet({
   hasCapturedUri,
   isVisualSearch,
   isRecording,
-  videoCaptureEnabled = true,
-}: CaptureToolsSheetProps): React.ReactElement {
+  videoCaptureEnabled = true }: CaptureToolsSheetProps): React.ReactElement {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useSheetStyles(colors);
@@ -231,8 +227,7 @@ export function CaptureToolsSheet({
                     styles.chip,
                     ...(isActive ? [{
                       backgroundColor: colors.brandSubtle,
-                      borderRadius: Radius.full,
-                    }] : []),
+                      borderRadius: Radius.full }] : []),
                   ]}
                   accessibilityLabel={`Timer ${opt.label}`}
                   accessibilityRole="button"
@@ -242,8 +237,7 @@ export function CaptureToolsSheet({
                     style={[
                       styles.chipText,
                       {
-                        color: isActive ? colors.brand : colors.textSecondary,
-                      },
+                        color: isActive ? colors.brand : colors.textSecondary },
                     ]}
                   >
                     {opt.label}
@@ -389,8 +383,7 @@ function ToggleRow({
   onPress,
   colors,
   styles,
-  disabled,
-}: ToggleRowProps): React.ReactElement {
+  disabled }: ToggleRowProps): React.ReactElement {
   return (
     <PressScale
       onPress={onPress}
@@ -456,8 +449,7 @@ function NavRow({
   onPress,
   colors,
   styles,
-  disabled,
-}: NavRowProps): React.ReactElement {
+  disabled }: NavRowProps): React.ReactElement {
   return (
     <PressScale
       onPress={onPress}
@@ -493,130 +485,105 @@ function useSheetStyles(colors: ThemeColors) {
       StyleSheet.create({
         content: {
           paddingHorizontal: Space.md,
-          paddingBottom: Space.lg,
-        },
+          paddingBottom: Space.lg },
         header: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingVertical: Space.sm,
-          marginBottom: Space.xs,
-        },
+          marginBottom: Space.xs },
         title: {
           fontFamily: FontFamily.semibold,
-          fontSize: Type.title.size,
-        },
+          fontSize: TypographyV2.screenTitle.size },
         closeBtn: {
           width: Control.hit,
           height: Control.hit,
           borderRadius: Radius.full,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         // ── Sections ──
         section: {
-          paddingVertical: Space.sm,
-        },
+          paddingVertical: Space.sm },
         effectSection: {
           paddingTop: Space.sm,
-          paddingBottom: Space.xs,
-        },
+          paddingBottom: Space.xs },
         effectHeader: {
           minHeight: ROW_HEIGHT,
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
-        },
+          justifyContent: 'space-between' },
         effectValue: {
           fontFamily: FontFamily.medium,
-          fontSize: Type.caption.size,
-        },
+          fontSize: TypographyV2.meta.size },
         // ── Toggle rows ──
         toggleRow: {
           minHeight: ROW_HEIGHT,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          paddingVertical: Space.sm,
-        },
+          paddingVertical: Space.sm },
         navRow: {
           minHeight: ROW_HEIGHT,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          paddingVertical: Space.sm,
-        },
+          paddingVertical: Space.sm },
         rowLabelWrap: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.sm,
-          flex: 1,
-        },
+          flex: 1 },
         rowTextWrap: {
           flex: 1,
-          gap: 2,
-        },
+          gap: 2 },
         rowLabel: {
           fontFamily: FontFamily.medium,
-          fontSize: Type.body.size,
-        },
+          fontSize: TypographyV2.body.size },
         rowHint: {
           fontFamily: FontFamily.regular,
-          fontSize: Type.caption.size,
-        },
+          fontSize: TypographyV2.meta.size },
         // ── Toggle switch ──
         toggleTrack: {
           width: 44,
           height: 26,
           borderRadius: Radius.full,
           padding: 2,
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         toggleThumb: {
           width: 22,
           height: 22,
-          borderRadius: Radius.full,
-        },
+          borderRadius: Radius.full },
         toggleThumbActive: {
-          alignSelf: 'flex-end',
-        },
+          alignSelf: 'flex-end' },
         // ── Nav row right side ──
         navRight: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         navValue: {
           fontFamily: FontFamily.regular,
-          fontSize: Type.caption.size,
-        },
+          fontSize: TypographyV2.meta.size },
         // ── Timer chips ──
         chipRow: {
           flexDirection: 'row',
           gap: Space.sm,
-          marginTop: Space.sm,
-        },
+          marginTop: Space.sm },
         chip: {
           paddingHorizontal: Space.sm,
           paddingVertical: Space.xs,
           alignItems: 'center',
           justifyContent: 'center',
-          minHeight: Control.hit,
-        },
+          minHeight: Control.hit },
         chipText: {
           fontFamily: FontFamily.medium,
-          fontSize: Type.caption.size,
-        },
+          fontSize: TypographyV2.meta.size },
         // ── Speed segment ──
         segmentWrap: {
-          marginTop: Space.sm,
-        },
+          marginTop: Space.sm },
         // ── Divider ──
         divider: {
           height: StyleSheet.hairlineWidth,
-          marginVertical: Space.xs,
-        },
-      }),
+          marginVertical: Space.xs } }),
     [colors],
   );
 }

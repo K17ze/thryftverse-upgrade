@@ -14,10 +14,10 @@ import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import {
   deployBotToConversationOnApi,
-  undeployBotFromConversationOnApi,
-} from '../services/chatApi';
+  undeployBotFromConversationOnApi } from '../services/chatApi';
 import { useStore } from '../store/useStore';
-import { Radius, Space, Type, Typography, Control } from '../theme/designTokens';
+import { Radius, Space, Typography, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BotDetail'>;
@@ -82,8 +82,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
             role: 'assistant',
             content: result.response,
             usage: result.usage,
-            confidence: result.confidence,
-          },
+            confidence: result.confidence },
         ]);
         // Scroll to bottom after the response arrives.
         requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
@@ -158,8 +157,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         } finally {
           setRollingBackId(null);
         }
-      },
-    });
+      } });
   };
 
   if (!bot) {
@@ -241,8 +239,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         } finally {
           setIsDeploying(false);
         }
-      },
-    });
+      } });
   };
 
   return (
@@ -495,8 +492,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
                           {new Date(version.createdAt).toLocaleDateString(undefined, {
                             month: 'short',
                             day: 'numeric',
-                            year: 'numeric',
-                          })}
+                            year: 'numeric' })}
                         </Text>
                         {version.publishNotes ? (
                           <Text style={styles.versionNotes} numberOfLines={2}>
@@ -563,109 +559,89 @@ function createStyles(colors: ThemeColors) {
   center: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   headerAction: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + Space.xs,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   identityIcon: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   identityCopy: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   agentName: {
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: Type.title.size,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   identityMeta: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    textTransform: 'capitalize',
-  },
+    fontSize: TypographyV2.meta.size,
+    textTransform: 'capitalize' },
   description: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 2 },
   chatAction: {
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   versionsSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   versionsTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   versionsLoading: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   versionsLoadingText: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   versionsEmpty: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   versionList: {},
   versionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   versionCopy: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   versionNumber: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   versionDate: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   versionNotes: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   rollbackButton: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
@@ -674,31 +650,25 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     minHeight: Control.icon,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   rollbackText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   versionDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
   // Playground
   playgroundSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   playgroundHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   playgroundTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   clearButton: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
@@ -707,108 +677,91 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     minHeight: Control.icon,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   clearText: {
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   transcript: {
-    maxHeight: 280,
-  },
+    maxHeight: 280 },
   transcriptContent: {
     gap: Space.sm,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   bubbleMeWrap: {
     alignSelf: 'flex-end',
     maxWidth: '82%',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   bubbleAgentWrap: {
     alignSelf: 'flex-start',
     maxWidth: '82%',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   bubbleMe: {
     backgroundColor: colors.brand,
     borderRadius: Radius.chat,
     borderTopRightRadius: Radius.sm,
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.sm - 1,
-  },
+    paddingVertical: Space.sm - 1 },
   bubbleAgent: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.chat,
     borderTopLeftRadius: Radius.sm,
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.sm - 1,
-  },
+    paddingVertical: Space.sm - 1 },
   bubbleMeText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    letterSpacing: TypographyV2.body.letterSpacing },
   bubbleAgentText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    letterSpacing: TypographyV2.body.letterSpacing },
   bubbleMeta: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.xs,
-    paddingLeft: Space.xs,
-  },
+    paddingLeft: Space.xs },
   bubbleMetaText: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   runningRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingLeft: Space.xs,
-    paddingVertical: Space.xs / 2,
-  },
+    paddingVertical: Space.xs / 2 },
   runningText: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   playgroundError: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   playgroundErrorText: {
     color: colors.danger,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    flex: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    flex: 1 },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Space.sm,
     paddingTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   composerInput: {
     flex: 1,
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 2,
     minHeight: Control.hit,
     maxHeight: 120,
     paddingHorizontal: Space.sm,
@@ -817,18 +770,14 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
-    textAlignVertical: 'top',
-  },
+    textAlignVertical: 'top' },
   sendButton: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   sendButtonDisabled: {
-    opacity: 0.4,
-  },
-  });
+    opacity: 0.4 } });
 }

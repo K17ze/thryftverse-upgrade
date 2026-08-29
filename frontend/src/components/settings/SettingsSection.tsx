@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography, FontFamily } from '../../theme/designTokens';
+import { Space, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface SettingsSectionProps {
   title: string;
@@ -26,8 +27,7 @@ export function SettingsSection({
   children,
   style,
   noCard: _noCard,
-  grouped: _grouped,
-}: SettingsSectionProps) {
+  grouped: _grouped }: SettingsSectionProps) {
   const { colors } = useAppTheme();
   return (
     <View style={[styles.wrapper, style]}>
@@ -49,40 +49,35 @@ export function SettingsSection({
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   eyebrow: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginBottom: Space.xs * 0.5,
     marginTop: Space.lg,
     paddingHorizontal: Space.md,
-    letterSpacing: Type.label.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    lineHeight: Type.meta.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   // Small uppercase header label — muted, caps, compact.
   // This is the group category label per 2026 mobile UX research.
   headerLabel: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
     marginBottom: Space.sm,
-    letterSpacing: Type.label.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    lineHeight: Type.meta.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   description: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginBottom: Space.sm + Space.xs,
     paddingHorizontal: Space.md,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   flatCanvas: {
     // Flat — no background, no border, no radius, no shadow.
     // Hairline separators between rows are handled by SettingsRow.
-  },
-});
+  } });

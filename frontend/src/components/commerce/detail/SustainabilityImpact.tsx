@@ -13,7 +13,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { fetchListingImpact, type ListingImpactResponse } from '../../../services/impactApi';
 
 export interface SustainabilityImpactProps {
@@ -116,8 +117,7 @@ export function SustainabilityImpact({ listingId }: SustainabilityImpactProps) {
             styles.methodology,
             {
               borderTopColor: colors.borderSubtle,
-              borderBottomColor: colors.borderSubtle,
-            },
+              borderBottomColor: colors.borderSubtle },
           ]}
         >
           <MethodRow label="Production avoided" value={`${data.co2eProductionAvoidedKg} kg CO₂e`} colors={colors} styles={styles} />
@@ -160,8 +160,7 @@ function MethodRow({
   value,
   hint,
   colors,
-  styles,
-}: {
+  styles }: {
   label: string;
   value: string;
   hint?: string;
@@ -190,75 +189,61 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
       paddingBottom: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     loadingRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     loadingText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily },
     header: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     summary: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight + 2,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      fontFamily: TypographyV2.body.fontFamily },
     disclosureTrigger: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     disclosureLabel: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily },
     methodology: {
       borderTopWidth: Stroke.hairline,
       borderBottomWidth: Stroke.hairline,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     methodRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
       gap: Space.sm,
       paddingVertical: Space.sm - 2,
-      borderBottomWidth: Stroke.hairline,
-    },
+      borderBottomWidth: Stroke.hairline },
     methodLabel: {
       flexShrink: 1,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily },
     methodHint: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     methodValue: {
       flexShrink: 0,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       textAlign: 'right',
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     disclaimer: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight + 2,
-      fontFamily: Typography.family.regular,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      fontFamily: TypographyV2.meta.fontFamily } });
 }

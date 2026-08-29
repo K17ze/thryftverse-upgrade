@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -115,44 +116,36 @@ function createStyles(colors: ThemeColors) {
     container: {
       paddingVertical: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     header: {
       paddingHorizontal: Space.md,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     title: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: -0.2,
-    },
+      letterSpacing: -0.2 },
     scrollContent: {
       paddingHorizontal: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     card: {
-      width: CARD_WIDTH,
-    },
+      width: CARD_WIDTH },
     imageWrap: {
       width: CARD_WIDTH,
       height: CARD_IMAGE_HEIGHT,
       borderRadius: Radius.md,
       overflow: 'hidden',
       position: 'relative',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     image: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     imagePlaceholder: {
       width: '100%',
       height: '100%',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     pinnedBadge: {
       position: 'absolute',
       top: 6,
@@ -162,31 +155,25 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       backgroundColor: colors.overlay,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     soldOverlay: {
       ...StyleSheet.absoluteFill,
       backgroundColor: colors.overlay,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     soldText: {
       color: colors.scrimTextPrimary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     price: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textPrimary,
       marginTop: Space.xs + 1,
-      fontVariant: ['tabular-nums'] as ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] as ['tabular-nums'] },
     brand: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      marginTop: 1,
-    },
-  });
+      marginTop: 1 } });
 }

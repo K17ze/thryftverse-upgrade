@@ -11,8 +11,7 @@ import {
   AppState,
   Platform,
   ScrollView,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import Reanimated, {
   useSharedValue,
@@ -20,8 +19,7 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  withTiming,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -60,7 +58,7 @@ import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, FontFamily, Stroke, Type, Typography, Elevation, Control, AvatarSize } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Elevation, Control, AvatarSize } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
@@ -253,13 +251,11 @@ export default function HomeScreen() {
     activeIndex: activePlaybackIndex,
     viewabilityConfig: playbackViewabilityConfig,
     onViewableItemsChanged: onPlaybackViewableItemsChanged,
-    reset: resetPlayback,
-  } = useViewabilityPlayback(350);
+    reset: resetPlayback } = useViewabilityPlayback(350);
 
   const {
     onViewableItemsChanged: onImpressionViewableItemsChanged,
-    reset: resetImpressions,
-  } = useRecommendationImpressions(
+    reset: resetImpressions } = useRecommendationImpressions(
     React.useCallback(
       (entries) => void forYouFeed.confirmImpressions(entries),
       [forYouFeed.confirmImpressions],
@@ -312,8 +308,7 @@ export default function HomeScreen() {
       }
 
       lastScrollY.value = e.contentOffset.y;
-    },
-  });
+    } });
 
   // Web fallback: plain JS scroll handler (Reanimated worklets not supported
   // on web with createAnimatedComponent). LIST_RENDERING_POLICY.md §2.5.
@@ -349,8 +344,7 @@ export default function HomeScreen() {
     const translateY = interpolate(scrollY.value, [0, 90], [0, -10], Extrapolation.CLAMP);
     return {
       opacity,
-      transform: [{ translateY }],
-    };
+      transform: [{ translateY }] };
   });
 
   const headerShadowStyle = useAnimatedStyle(() => {
@@ -359,8 +353,7 @@ export default function HomeScreen() {
     return {
       shadowOpacity,
       shadowRadius,
-      elevation: interpolate(scrollY.value, [0, 60], [0, 6], Extrapolation.CLAMP),
-    };
+      elevation: interpolate(scrollY.value, [0, 60], [0, 6], Extrapolation.CLAMP) };
   });
 
   React.useEffect(() => {
@@ -485,8 +478,7 @@ export default function HomeScreen() {
           title: l.title,
           sellerUsername: l.creator.username ?? undefined,
           sellerAvatar: l.creator.avatar ?? undefined,
-          taggedCount: l.tags?.length ?? 0,
-        }));
+          taggedCount: l.tags?.length ?? 0 }));
         setFeedLooks(lookItems);
       })
       .catch(() => { /* silent fail — looks are optional enrichment */ });
@@ -511,8 +503,7 @@ export default function HomeScreen() {
       getBackendSyncStatus({
         isSyncing,
         source,
-        hasError: Boolean(lastError),
-      }),
+        hasError: Boolean(lastError) }),
     [isSyncing, lastError, source],
   );
 
@@ -561,12 +552,10 @@ export default function HomeScreen() {
       toHomeDiscoveryItemVM(listing, {
         isSaved: wishlist.includes(listing.id),
         currency: currencyCode,
-        followedSellerIds: followedSellerIdsSet,
-      }),
+        followedSellerIds: followedSellerIdsSet }),
     ).map((vm, index) => ({
       ...vm,
-      featured: computeFeatured(index),
-    }));
+      featured: computeFeatured(index) }));
   }, [followingFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
 
   // For You feed: transform personalised recommendations into discovery VMs
@@ -575,12 +564,10 @@ export default function HomeScreen() {
       toHomeDiscoveryItemVM(listing, {
         isSaved: wishlist.includes(listing.id),
         currency: currencyCode,
-        followedSellerIds: followedSellerIdsSet,
-      }),
+        followedSellerIds: followedSellerIdsSet }),
     ).map((vm, index) => ({
       ...vm,
-      featured: computeFeatured(index),
-    }));
+      featured: computeFeatured(index) }));
   }, [forYouFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
 
   // For You mode uses personalised recommendations. When the feed is empty
@@ -617,8 +604,7 @@ export default function HomeScreen() {
       result.splice(LOOKS_INJECT_INDEX, 0, {
         id: 'feed-looks-rail',
         type: 'looks',
-        looks: feedLooks,
-      } as LookFeedMarker);
+        looks: feedLooks } as LookFeedMarker);
     }
     return result;
   }, [activeFeedData, feedLooks, showFeedLoadingSkeleton, showFollowingLoading, showForYouLoading]);
@@ -645,8 +631,7 @@ export default function HomeScreen() {
   React.useEffect(() => {
     feedOpacity.value = 0;
     feedOpacity.value = withTiming(1, {
-      duration: reducedMotionEnabled ? 0 : Motion.duration.fast,
-    });
+      duration: reducedMotionEnabled ? 0 : Motion.duration.fast });
     // Reset viewability playback when the feed content swaps so a stale
     // activeIndex does not cause a now-offscreen video to keep playing.
     resetPlayback();
@@ -654,8 +639,7 @@ export default function HomeScreen() {
   }, [feedMode]);
 
   const feedOpacityStyle = useAnimatedStyle(() => ({
-    opacity: feedOpacity.value,
-  }));
+    opacity: feedOpacity.value }));
 
   const closePeek = React.useCallback(() => {
     setPeekItem(null);
@@ -863,7 +847,7 @@ export default function HomeScreen() {
           <View style={[styles.flashListItem, { width: SCREEN_WIDTH }]}>
             <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Space.xs }}>
-                <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textPrimary }} maxFontSizeMultiplier={1.4}>
+                <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textPrimary }} maxFontSizeMultiplier={1.4}>
                   Looks to shop
                 </Text>
               </View>
@@ -885,7 +869,7 @@ export default function HomeScreen() {
                     />
                     {look.taggedCount && look.taggedCount > 0 ? (
                       <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.overlay, borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: Space.xxs }}>
-                        <Text style={{ color: colors.scrimTextPrimary, fontSize: Type.meta.size, fontFamily: Typography.family.semibold }}>
+                        <Text style={{ color: colors.scrimTextPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily }}>
                           {look.taggedCount} items
                         </Text>
                       </View>
@@ -1109,7 +1093,7 @@ export default function HomeScreen() {
             {forYouIsDegraded ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: Space.xs }}>
                 <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-                <Text style={{ flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary }} maxFontSizeMultiplier={1.5}>
+                <Text style={{ flex: 1, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary }} maxFontSizeMultiplier={1.5}>
                   Showing baseline listings — personalised feed is temporarily unavailable.
                 </Text>
               </View>
@@ -1183,12 +1167,12 @@ export default function HomeScreen() {
         ListFooterComponent={
           isLoadingMore ? (
             <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-              <Text style={{ color: colors.textMuted, fontSize: Type.captionElevated.size }} maxFontSizeMultiplier={1.8}>Loading more...</Text>
+              <Text style={{ color: colors.textMuted, fontSize: TypographyV2.meta.size }} maxFontSizeMultiplier={1.8}>Loading more...</Text>
             </View>
           ) : !hasMore && feedGridData.length > 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: Space.lg, gap: Space.sm }}>
               <View style={{ width: 40, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
-              <Text style={{ color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.regular }} maxFontSizeMultiplier={1.8}>
+              <Text style={{ color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily }} maxFontSizeMultiplier={1.8}>
                 You've reached the end
               </Text>
             </View>
@@ -1287,11 +1271,9 @@ export default function HomeScreen() {
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   feedShell: {
-    flex: 1,
-  },
+    flex: 1 },
   floatingHeaderShell: {
     position: 'absolute',
     top: 0,
@@ -1300,41 +1282,35 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     zIndex: 20,
     overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
+    borderBottomColor: colors.borderSubtle },
   headerForeground: {
     flex: 1,
     paddingHorizontal: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   headerTitleWrap: {
     flex: 1,
-    paddingRight: Space.sm,
-  },
+    paddingRight: Space.sm },
   // Brand title: subtitle token (17/24/600) — lighter header chrome per AGENTS.md §4.
   brandTitle: {
     fontSize: TypographyV2.sectionTitle.size,
     lineHeight: TypographyV2.sectionTitle.lineHeight,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   // Guest indicator — a small, restrained text label below the brand title.
   // Not a banner; communicates state and provides a sign-in entry point.
   guestLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
     letterSpacing: 0.1,
     color: colors.textMuted,
-    marginTop: 1,
-  },
+    marginTop: 1 },
   headerRight: {
     flexDirection: 'row',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   // Live shopping badge — additive entry point gated by the
   // live_shopping_enabled feature flag. A compact pill with a live dot so
   // it reads as a status indicator, not decorative chrome.
@@ -1347,50 +1323,43 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginRight: Space.xxs,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: colors.dangerSubtle,
-    alignSelf: 'center',
-  },
+    alignSelf: 'center' },
   liveDot: {
     width: 6,
     height: 6,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: colors.danger,
-  },
+    backgroundColor: colors.danger },
   liveBadgeText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.danger,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   // New home feed editorial header — additive section gated by the
   // new_home_feed feature flag. An eyebrow + title pair that introduces the
   // feed with an authored, curated voice.
   editorialHeader: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   editorialEyebrow: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.brand,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   editorialTitle: {
     fontSize: TypographyV2.sectionTitle.size,
     lineHeight: TypographyV2.sectionTitle.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.textPrimary,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-  },
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   headerBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   notificationBadge: {
     position: 'absolute',
     top: -2,
@@ -1403,18 +1372,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Space.xs,
     borderWidth: Stroke.standard,
-    borderColor: colors.background,
-  },
+    borderColor: colors.background },
   notificationBadgeText: {
     color: colors.textInverse,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: 'Inter_700Bold',
-    lineHeight: Type.meta.lineHeight,
-    fontVariant: ['tabular-nums'],
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontVariant: ['tabular-nums'] },
   feedContent: {
-    paddingBottom: 120,
-  },
+    paddingBottom: 120 },
   feedTabBar: {
     minHeight: Control.hit,
     marginHorizontal: Space.md,
@@ -1423,8 +1389,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'stretch',
     gap: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   feedTab: {
     minWidth: 76,
     minHeight: Control.hit,
@@ -1433,17 +1398,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs + Space.xxs,
-    position: 'relative',
-  },
+    position: 'relative' },
   feedTabLabel: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.medium,
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   feedTabLabelActive: {
     fontFamily: FontFamily.semibold,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   feedTabCount: {
     minWidth: 20,
     height: 20,
@@ -1457,12 +1419,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: FontFamily.semibold,
     color: colors.textSecondary,
     backgroundColor: colors.surfaceAlt,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   feedTabCountActive: {
     color: colors.textInverse,
-    backgroundColor: colors.textPrimary,
-  },
+    backgroundColor: colors.textPrimary },
   feedTabIndicator: {
     position: 'absolute',
     left: 0,
@@ -1470,13 +1430,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: -1,
     height: 2,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: colors.textPrimary,
-  },
+    backgroundColor: colors.textPrimary },
   newListingsBannerWrap: {
     marginTop: Space.xs,
     marginBottom: Space.sm + Space.xs,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   newListingsBanner: {
     alignSelf: 'center',
     minHeight: 40,
@@ -1484,50 +1442,41 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.xs + Space.xs,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: colors.brand,
-    borderWidth: 0,
-  },
+    borderWidth: 0 },
   newListingsBannerContent: {
-    gap: Space.xs - Space.xxs,
-  },
+    gap: Space.xs - Space.xxs },
   newListingsBannerIconWrap: {
     width: 16,
     height: 16,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   newListingsBannerText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.background,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
 
   postersSection: {
     marginTop: 0,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   postersScroll: {
     paddingHorizontal: Space.md,
     paddingBottom: 2,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   feedStatusBanner: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    marginBottom: Space.xxs,
-  },
+    marginBottom: Space.xxs },
   posterCard: {
-    width: POSTER_CARD_WIDTH,
-  },
+    width: POSTER_CARD_WIDTH },
   posterTile: {
     width: POSTER_CARD_WIDTH,
     height: POSTER_CARD_HEIGHT,
     borderRadius: RadiusRoleValue.sheetDialog,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   // Solid brand-color ring for unwatched stories — replaces the former
   // decorative gradient ring. Per AGENTS.md §4: "decorative chrome over
   // composition" is an AI tell. A solid 2pt brand border communicates
@@ -1538,42 +1487,35 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     height: POSTER_CARD_HEIGHT,
     borderRadius: RadiusRoleValue.sheetDialog + Stroke.emphasis,
     borderWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   posterTileInner: {
     flex: 1,
     borderRadius: RadiusRoleValue.sheetDialog,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   posterTileSeen: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   posterImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   posterTextArtwork: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   posterTextArtworkCopy: {
     color: colors.scrimTextPrimary,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.bold,
     textAlign: 'center',
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.2 },
   posterShade: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   posterAvatarOverlay: {
     position: 'absolute',
     top: 5,
@@ -1584,18 +1526,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     overflow: 'hidden',
     borderWidth: Stroke.emphasis,
     borderColor: colors.scrimTextPrimary,
-    ...Elevation.floating,
-  },
+    ...Elevation.floating },
   posterAvatarOverlayWrap: {
     width: AvatarSize.inline,
     height: AvatarSize.inline,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   posterAvatarOverlayImage: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   posterTopRow: {
     position: 'absolute',
     top: 5,
@@ -1604,8 +1543,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   posterOwnerPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1614,24 +1552,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 3,
     borderRadius: Radius.lg,
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   posterOwnerAvatarWrap: {
     width: 14,
     height: 14,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   posterOwnerAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   posterOwnerName: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    flex: 1,
-  },
+    flex: 1 },
   posterExpiryPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1639,13 +1573,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
+    paddingVertical: 3 },
   posterExpiryText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    fontFamily: FontFamily.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold },
   posterBottomOverlay: {
     position: 'absolute',
     left: 0,
@@ -1653,14 +1585,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 0,
     paddingHorizontal: Space.sm,
     paddingVertical: 7,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   posterCaption: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium },
   posterCreatorOverlay: {
     position: 'absolute',
     left: 5,
@@ -1672,15 +1602,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
     paddingHorizontal: 6,
     borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   posterCreatorName: {
     flex: 1,
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold },
   frameCountBadge: {
     position: 'absolute',
     top: 6,
@@ -1691,13 +1619,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.overlay,
     borderRadius: Radius.md,
     paddingHorizontal: 5,
-    paddingVertical: Space.xxs,
-  },
+    paddingVertical: Space.xxs },
   frameCountBadgeText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    fontFamily: FontFamily.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold },
   unwatchedBadge: {
     position: 'absolute',
     bottom: 6,
@@ -1705,50 +1631,41 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.brand,
     borderRadius: Radius.md,
     paddingHorizontal: 6,
-    paddingVertical: Space.xxs,
-  },
+    paddingVertical: Space.xxs },
   unwatchedBadgeText: {
     color: colors.textInverse,
-    fontSize: Type.meta.size,
-    fontFamily: FontFamily.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold },
   posterFreshDot: {
     width: 7,
     height: 7,
     borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   posterSeenDot: {
     width: 7,
     height: 7,
     borderRadius: Radius.full,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
 
   flashListItem: {
     paddingHorizontal: Space.xs,
-    paddingBottom: GRID_GAP,
-  },
+    paddingBottom: GRID_GAP },
   exploreLoadingGrid: {
     flexDirection: 'row',
     paddingHorizontal: Space.xs,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   exploreLoadingColumn: {
     flex: 1,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   // Skeleton tile wrapper: media-only silhouette matching the reduced tile.
   skeletonTileWrap: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
 
   peekBackdrop: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   peekCard: {
     width: '100%',
     maxWidth: 420,
@@ -1756,58 +1673,46 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   peekMediaWrap: {
     width: '100%',
     height: 340,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   peekMedia: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   peekMeta: {
     paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
+    paddingVertical: 14 },
   peekTitle: {
-    fontSize: Type.heading.size,
+    fontSize: TypographyV2.sectionTitle.size,
     fontFamily: FontFamily.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.2 },
   peekActionsRow: {
     marginTop: 14,
     flexDirection: 'row',
-    gap: 10,
-  },
+    gap: 10 },
   peekGhostBtn: {
     flex: 1,
     height: Control.hit,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   peekGhostText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   peekPrimaryBtn: {
     flex: 1,
     height: Control.hit,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   peekPrimaryIconWrap: {
     width: 16,
     height: 16,
     borderRadius: Radius.full,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   peekPrimaryText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.bold,
-    color: colors.background,
-  },
-});
+    color: colors.background } });

@@ -6,8 +6,7 @@ import {
   TextInput,
   ScrollView,
   Dimensions,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
@@ -15,13 +14,13 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  withDelay,
-} from 'react-native-reanimated';
+  withDelay } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
-import { Typography, Radius, Type, Space, Stroke, Control } from '../../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { KeyboardAwareScrollView } from '../../platform/keyboard/KeyboardProvider';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -64,8 +63,7 @@ export default function DetailsDrawer({
   listings,
   onPublish,
   isPublishing,
-  currentUserId,
-}: DetailsDrawerProps) {
+  currentUserId }: DetailsDrawerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -102,17 +100,14 @@ export default function DetailsDrawer({
   }, [visible, translateYSV, backdropOpacitySV, closeBtnOpacitySV, spring]);
 
   const drawerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateYSV.value }],
-  }));
+    transform: [{ translateY: translateYSV.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacitySV.value,
-  }));
+    opacity: backdropOpacitySV.value }));
 
   const closeBtnStyle = useAnimatedStyle(() => ({
     opacity: closeBtnOpacitySV.value,
-    transform: [{ scale: closeBtnScaleSV.value }],
-  }));
+    transform: [{ scale: closeBtnScaleSV.value }] }));
 
   const handleClosePressIn = () => {
     if (isEnabled) {
@@ -328,8 +323,7 @@ export default function DetailsDrawer({
 function createStyles(colors: any) {
   return StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   drawer: {
     position: 'absolute',
     bottom: 0,
@@ -339,79 +333,64 @@ function createStyles(colors: any) {
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   keyboardWrap: {
-    flex: 1,
-  },
+    flex: 1 },
   handleRow: {
     alignItems: 'center',
     paddingTop: 10,
-    paddingBottom: 6,
-  },
+    paddingBottom: 6 },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.sm,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
   // Close button — positioned top-right, transparent 44pt hit target
   closeBtnWrap: {
     position: 'absolute',
     top: 8,
     right: Space.sm,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   closeBtn: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   section: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   sectionLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+    letterSpacing: 0.5 },
   listingRow: {
     gap: 10,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   listingCard: {
     width: 100,
     borderRadius: Radius.xl,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   listingCardSelected: {
     borderColor: colors.brand,
-    borderWidth: 2,
-  },
+    borderWidth: 2 },
   listingImage: {
     width: '100%',
-    height: 90,
-  },
+    height: 90 },
   listingMeta: {
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   listingTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   selectedBadge: {
     position: 'absolute',
     top: 6,
@@ -421,18 +400,15 @@ function createStyles(colors: any) {
     borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   emptyText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    paddingVertical: 20,
-  },
+    paddingVertical: 20 },
   expiryRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   expiryPill: {
     flex: 1,
     borderRadius: Radius.lg,
@@ -440,21 +416,17 @@ function createStyles(colors: any) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     paddingVertical: 10,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   expiryPillActive: {
     borderColor: colors.brand,
-    backgroundColor: colors.brandSubtle,
-  },
+    backgroundColor: colors.brandSubtle },
   expiryPillText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   expiryPillTextActive: {
     color: colors.brand,
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   captionInput: {
     minHeight: 80,
     borderRadius: Radius.xl,
@@ -462,17 +434,15 @@ function createStyles(colors: any) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     paddingHorizontal: Space.smMd,
-    paddingTop: Space.smMd,
-  },
+    paddingTop: Space.smMd },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   publishBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -481,15 +451,11 @@ function createStyles(colors: any) {
     backgroundColor: colors.brand,
     borderRadius: Radius.xl,
     paddingVertical: 14,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   publishBtnDisabled: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   publishBtnText: {
     color: '#fff',
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily } });
 }

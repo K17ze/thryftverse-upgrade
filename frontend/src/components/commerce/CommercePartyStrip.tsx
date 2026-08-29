@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
@@ -47,8 +48,7 @@ export function CommercePartyStrip({
   followLabel = 'Follow',
   followingLabel = 'Following',
   showFollow = false,
-  facts = [],
-}: CommercePartyStripProps) {
+  facts = [] }: CommercePartyStripProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const showSellerVerified = party.sellerAccountVerified === true;
@@ -164,105 +164,85 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginHorizontal: Space.md,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    padding: Space.md,
-  },
+    padding: Space.md },
   sectionTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     marginBottom: Space.sm,
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   headerRow: {
     flexDirection: 'column',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   avatarWrap: {
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   avatar: {
     width: 48,
     height: 48,
-    borderRadius: Radius.xxl,
-  },
+    borderRadius: Radius.xxl },
   avatarFallback: {
     width: 48,
     height: 48,
     borderRadius: Radius.xxl,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarFallbackText: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    color: colors.textSecondary },
   profileInfo: {
-    flex: 1,
-  },
+    flex: 1 },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   username: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   location: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   badgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.xs,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   badge: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   badgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   actionRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   followBtn: {
     flex: 1,
     paddingVertical: 10,
     backgroundColor: colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   followingBtn: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   followText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse },
   followingText: {
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   messageBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -271,35 +251,27 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   messageText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   factsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     marginTop: Space.sm,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   factItem: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   factLabel: {
     fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   factValue: {
     fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   factsSeparator: {
-    fontSize: Type.caption.size,
-    color: colors.textMuted,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted } });

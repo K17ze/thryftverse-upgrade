@@ -7,7 +7,8 @@ import { CachedImage } from '../CachedImage';
 import { Collection } from '../../store/useStore';
 import type { Listing } from '../../domain';
 import { useBackendData } from '../../context/BackendDataContext';
-import { Type, Space, Radius, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = SCREEN_W - Space.md * 2;
 const COVER_SIZE = (CARD_W - 8) / 3; // 3-up collage with 4px gaps
@@ -103,42 +104,34 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     marginBottom: Space.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   collage: {
     flexDirection: 'row',
     gap: 4,
     padding: Space.xs,
-    height: COVER_SIZE * 2 + 4,
-  },
+    height: COVER_SIZE * 2 + 4 },
   mainCover: {
     width: COVER_SIZE * 2,
     height: '100%',
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   mainCoverSingle: {
-    width: '100%',
-  },
+    width: '100%' },
   sideColumn: {
     flex: 1,
-    gap: 4,
-  },
+    gap: 4 },
   sideCover: {
     flex: 1,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   sideEmpty: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverImg: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   // Empty cover — dashed-outline creation prompt, not a status label
   emptyCover: {
     flex: 1,
@@ -149,38 +142,30 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     borderStyle: 'dashed',
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   emptyCoverText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   info: {
     padding: Space.sm,
     paddingHorizontal: Space.md,
     borderTopWidth: Stroke.hairline,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   privacyGlyph: {
-    marginTop: 1,
-  },
+    marginTop: 1 },
   name: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    flex: 1,
-  },
+    flex: 1 },
   meta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: 2,
-  },
-});
+    marginTop: 2 } });

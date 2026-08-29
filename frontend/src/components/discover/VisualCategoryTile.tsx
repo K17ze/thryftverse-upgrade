@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -19,10 +20,9 @@ interface Props {
 }
 
 const SIZE_MAP = {
-  large: { width: SCREEN_W - Space.md * 2, height: 180, titleSize: Type.title.size, radius: Radius.xl },
-  medium: { width: (SCREEN_W - Space.md * 2 - Space.sm) / 2, height: 140, titleSize: Type.itemTitle.size, radius: Radius.lg },
-  small: { width: (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3, height: 110, titleSize: Type.body.size, radius: Radius.md },
-};
+  large: { width: SCREEN_W - Space.md * 2, height: 180, titleSize: TypographyV2.screenTitle.size, radius: Radius.xl },
+  medium: { width: (SCREEN_W - Space.md * 2 - Space.sm) / 2, height: 140, titleSize: TypographyV2.itemTitle.size, radius: Radius.lg },
+  small: { width: (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3, height: 110, titleSize: TypographyV2.body.size, radius: Radius.md } };
 
 export function VisualCategoryTile({
   title,
@@ -30,8 +30,7 @@ export function VisualCategoryTile({
   imageUri,
   count,
   onPress,
-  size = 'medium',
-}: Props) {
+  size = 'medium' }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const dims = SIZE_MAP[size];
@@ -85,43 +84,36 @@ function createStyles(colors: ThemeColors) {
   card: {
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   textOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 14,
-  },
+    padding: 14 },
   title: {
     fontFamily: Typography.family.bold,
     color: colors.scrimTextPrimary,
     letterSpacing: -0.3,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+    textShadowRadius: 3 },
   subtitle: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.scrimTextSecondary,
     marginTop: Space.xxs,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
+    textShadowRadius: 2 },
   countRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginTop: 6,
-  },
+    marginTop: 6 },
   countText: {
     fontFamily: Typography.family.medium,
     fontSize: 10,
     color: colors.scrimTextSecondary,
-    letterSpacing: 0.2,
-  },
-  });
+    letterSpacing: 0.2 } });
 }

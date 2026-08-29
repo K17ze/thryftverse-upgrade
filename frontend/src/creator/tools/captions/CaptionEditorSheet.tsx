@@ -47,18 +47,16 @@ import {
   type LayoutChangeEvent,
   type GestureResponderEvent,
   type PanResponderGestureState,
-  PanResponder,
-} from 'react-native';
+  PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
   Radius,
-  Type,
   Typography,
   FontFamily,
   Control,
-  Stroke,
-} from '../../../theme/designTokens';
+  Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -71,8 +69,7 @@ import {
   type CaptionSegment,
   type CaptionStatus,
   type CaptionStyle,
-  type CaptionTrack,
-} from '../../core/captions';
+  type CaptionTrack } from '../../core/captions';
 import { DEFAULT_CAPTION_STYLE } from '../../core/captions';
 import { TEXT_STYLE_PRESETS } from '../text/textStylePresets';
 
@@ -117,8 +114,7 @@ export function CaptionEditorSheet({
   initialTrack,
   initialStyle,
   mediaUri,
-  totalDurationMs = 30000,
-}: CaptionEditorSheetProps) {
+  totalDurationMs = 30000 }: CaptionEditorSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -155,14 +151,12 @@ export function CaptionEditorSheet({
           toValue: layout.x,
           useNativeDriver: false,
           stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping,
-        }),
+          damping: Motion.spring.indicator.damping }),
         Animated.spring(fontUnderlineWidth, {
           toValue: layout.width,
           useNativeDriver: false,
           stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping,
-        }),
+          damping: Motion.spring.indicator.damping }),
       ]).start();
     },
     [fontUnderlineLeft, fontUnderlineWidth],
@@ -346,15 +340,13 @@ export function CaptionEditorSheet({
             style={[
               styles.autoBtn,
               {
-                backgroundColor: sttAvailable ? colors.brand : colors.surfaceAlt,
-              },
+                backgroundColor: sttAvailable ? colors.brand : colors.surfaceAlt },
             ]}
             accessibilityLabel="Auto-generate captions"
             accessibilityRole="button"
             accessibilityState={{
               disabled: !sttAvailable,
-              busy: autoStatus === 'transcribing',
-            }}
+              busy: autoStatus === 'transcribing' }}
             accessibilityHint={
               sttAvailable
                 ? 'Transcribes the video audio into captions'
@@ -472,8 +464,7 @@ export function CaptionEditorSheet({
             style={[
               styles.addBtn,
               {
-                backgroundColor: entryText.trim() ? colors.brand : colors.surfaceAlt,
-              },
+                backgroundColor: entryText.trim() ? colors.brand : colors.surfaceAlt },
             ]}
             accessibilityLabel="Add caption"
             accessibilityRole="button"
@@ -569,8 +560,7 @@ export function CaptionEditorSheet({
                   onLayout={(e) => {
                     fontLayouts.current[i] = {
                       x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width,
-                    };
+                      width: e.nativeEvent.layout.width };
                     if (isSelected) animateFontUnderline(i);
                   }}
                 >
@@ -586,8 +576,7 @@ export function CaptionEditorSheet({
                         styles.fontTabText,
                         {
                           color: isSelected ? colors.brand : colors.textSecondary,
-                          fontFamily: preset.fontFamily,
-                        },
+                          fontFamily: preset.fontFamily },
                       ]}
                     >
                       {preset.name}
@@ -643,8 +632,7 @@ export function CaptionEditorSheet({
           <Pressable
             onPress={() =>
               handleStyleChange({
-                backgroundColor: style.backgroundColor ? undefined : 'rgba(0,0,0,0.5)',
-              })
+                backgroundColor: style.backgroundColor ? undefined : 'rgba(0,0,0,0.5)' })
             }
             style={styles.toggleRow}
             accessibilityLabel="Caption background"
@@ -665,8 +653,7 @@ export function CaptionEditorSheet({
                 styles.switchTrack,
                 {
                   backgroundColor: style.backgroundColor ? colors.brand : colors.surfaceAlt,
-                  borderColor: style.backgroundColor ? colors.brand : colors.border,
-                },
+                  borderColor: style.backgroundColor ? colors.brand : colors.border },
               ]}
             >
               <View
@@ -674,8 +661,7 @@ export function CaptionEditorSheet({
                   styles.switchThumb,
                   {
                     backgroundColor: style.backgroundColor ? colors.textInverse : colors.textSecondary,
-                    transform: [{ translateX: style.backgroundColor ? 22 : 2 }],
-                  },
+                    transform: [{ translateX: style.backgroundColor ? 22 : 2 }] },
                 ]}
               />
             </View>
@@ -731,8 +717,7 @@ const CaptionRow = React.memo(function CaptionRow({
   onSaveEdit,
   onDelete,
   colors,
-  styles,
-}: CaptionRowProps) {
+  styles }: CaptionRowProps) {
   const hasWords = Boolean(segment.words && segment.words.length > 0);
 
   if (isEditing) {
@@ -917,8 +902,7 @@ function SliderRow({
   labelColor,
   valueColor,
   onChange,
-  disabled = false,
-}: SliderRowProps) {
+  disabled = false }: SliderRowProps) {
   const { colors } = useAppTheme();
   const styles = useSheetStyles(colors);
   const trackWidthRef = useRef(0);
@@ -953,8 +937,7 @@ function SliderRow({
           onChange(Math.round(next * 10) / 10);
         },
         onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false,
-      }),
+        onPanResponderTerminationRequest: () => false }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [thumbPosition, valueToPosition, onChange, disabled],
   );
@@ -986,43 +969,35 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     content: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     // ── Sections ──
     section: {
       gap: Space.sm,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     sectionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     sectionDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginVertical: Space.md,
-    },
+      marginVertical: Space.md },
     subLabel: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     // ── Auto-generate ──
     autoBtn: {
       flexDirection: 'row',
@@ -1030,151 +1005,125 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       gap: Space.xs,
       height: 50,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     autoBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     noticeBox: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.xs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     noticeText: {
       flex: 1,
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.size * 1.4,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.size * 1.4 },
     // ── Input ──
     input: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       borderWidth: Stroke.standard,
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     timeRow: {
       flexDirection: 'row',
-      gap: Space.md,
-    },
+      gap: Space.md },
     timeField: {
       flex: 1,
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     timeLabel: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     timeInput: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       borderWidth: Stroke.standard,
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       minHeight: Control.hit,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     addBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
       height: 50,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     addBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     // ── List ──
     listHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     countBadge: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontVariant: ['tabular-nums'] },
     emptyState: {
       paddingVertical: Space.lg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     emptyText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      textAlign: 'center',
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      textAlign: 'center' },
     captionRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     captionContent: {
       flex: 1,
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     captionText: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     captionMeta: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     captionTime: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontVariant: ['tabular-nums'] },
     wordBadge: {
       paddingHorizontal: Space.xs,
       paddingVertical: Space.xxs,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     wordBadgeText: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.meta.size,
-    },
+      fontSize: TypographyV2.meta.size },
     deleteBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     // ── Edit row ──
     editRow: {
       gap: Space.sm,
       paddingVertical: Space.sm,
       paddingHorizontal: Space.sm,
       borderRadius: Radius.md,
-      borderWidth: Stroke.emphasis,
-    },
+      borderWidth: Stroke.emphasis },
     editInput: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       borderWidth: Stroke.standard,
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     editActions: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     editActionBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1183,121 +1132,99 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       borderRadius: Radius.md,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     editActionText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     // ── Font rail ──
     fontRail: {
       gap: Space.sm,
       paddingVertical: Space.xxs,
-      position: 'relative',
-    },
+      position: 'relative' },
     fontTab: {
       height: Control.hit,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.smMd,
-    },
+      paddingHorizontal: Space.smMd },
     fontTabText: {
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     tabUnderline: {
       position: 'absolute',
       bottom: 0,
       height: Stroke.emphasis,
       backgroundColor: colors.brand,
-      borderRadius: Stroke.emphasis,
-    },
+      borderRadius: Stroke.emphasis },
     rowSeparator: {
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     // ── Toggle ──
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     toggleTextWrap: {
       flex: 1,
       paddingRight: Space.md,
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     toggleTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     toggleHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     switchTrack: {
       width: 46,
       height: 28,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     switchThumb: {
       position: 'absolute',
       width: 22,
       height: 22,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     // ── Swatches ──
     swatchRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.sm,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     swatch: {
       width: 36,
       height: 36,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     // ── Slider ──
     sliderRow: {
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     sliderHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     sliderLabel: {
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     sliderValue: {
-      fontSize: Type.caption.size,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontVariant: ['tabular-nums'] },
     trackWrap: {
       height: Control.hit,
       justifyContent: 'center',
-      position: 'relative',
-    },
+      position: 'relative' },
     track: {
       position: 'absolute',
       left: 0,
       right: 0,
       height: 3,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     fill: {
       position: 'absolute',
       left: 0,
       height: 3,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     thumb: {
       position: 'absolute',
       width: 16,
@@ -1305,25 +1232,20 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       marginLeft: -8,
       borderWidth: Stroke.standard,
-      borderColor: 'rgba(0,0,0,0)',
-    },
+      borderColor: 'rgba(0,0,0,0)' },
     // ── Footer ──
     footer: {
-      paddingTop: Space.lg,
-    },
+      paddingTop: Space.lg },
     doneBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
       height: 50,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     doneBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size } });
 }
 
 // Memoised style factory keyed to colors.

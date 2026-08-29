@@ -2,8 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -15,7 +14,8 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Space, Radius, Typography, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
@@ -50,15 +50,13 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
     auction_live: 'flame-outline',
     fresh_drop: 'cube-outline',
     price_drop: 'trending-down-outline',
-    sold: 'checkmark-circle-outline',
-  };
+    sold: 'checkmark-circle-outline' };
   const accentMap: Record<ActivityType, string> = {
     auction_live: colors.danger,
     fresh_drop: colors.brand,
     // Price-drop orange — mapped to warning token
     price_drop: colors.warning,
-    sold: colors.success,
-  };
+    sold: colors.success };
 
   const handlePress = () => {
     haptic.light();
@@ -108,8 +106,7 @@ function PulseFeedSkeleton({ count = 5 }: { count?: number }) {
             paddingVertical: Space.md,
             gap: Space.md,
             borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: colors.border,
-          }}
+            borderBottomColor: colors.border }}
         >
           <SkeletonLoader
             width={thumbSize}
@@ -117,10 +114,10 @@ function PulseFeedSkeleton({ count = 5 }: { count?: number }) {
             borderRadius={Radius.md}
           />
           <View style={{ flex: 1, gap: Space.xs }}>
-            <SkeletonLoader width="35%" height={Type.meta.size} borderRadius={Radius.sm} />
-            <SkeletonLoader width="80%" height={Type.body.size} borderRadius={Radius.sm} />
-            <SkeletonLoader width="55%" height={Type.caption.size} borderRadius={Radius.sm} />
-            <SkeletonLoader width="40%" height={Type.meta.size} borderRadius={Radius.sm} />
+            <SkeletonLoader width="35%" height={TypographyV2.meta.size} borderRadius={Radius.sm} />
+            <SkeletonLoader width="80%" height={TypographyV2.body.size} borderRadius={Radius.sm} />
+            <SkeletonLoader width="55%" height={TypographyV2.meta.size} borderRadius={Radius.sm} />
+            <SkeletonLoader width="40%" height={TypographyV2.meta.size} borderRadius={Radius.sm} />
           </View>
         </View>
       ))}
@@ -156,8 +153,7 @@ export default function PulseFeedScreen() {
           meta: `Ends ${formatCountdown(Math.max(0, endsAtMs - now))}`,
           metaAccent: true,
           routeId: a.listingId,
-          timestamp: endsAtMs,
-        });
+          timestamp: endsAtMs });
       }
     });
 
@@ -178,8 +174,7 @@ export default function PulseFeedScreen() {
         image: l.images?.[0] ?? '',
         meta: formatFromFiat(l.price, currencyCode),
         routeId: l.id,
-        timestamp: l.createdAt ? Date.parse(l.createdAt) : now,
-      });
+        timestamp: l.createdAt ? Date.parse(l.createdAt) : now });
     });
 
     // Real price drops
@@ -267,59 +262,48 @@ function createStyles(colors: ThemeColors) {
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     card: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.md,
       gap: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     cardImage: {
       width: Space.xxl + Space.xl,
       height: Space.xxl + Space.xl,
       borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     cardContent: {
       flex: 1,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     cardHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     cardTypeLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: LetterSpacing.caps,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: LetterSpacing.caps },
     cardTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
     cardSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     cardMeta: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.meta.letterSpacing,
-      marginTop: Space.xs / 2,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginTop: Space.xs / 2 },
     cardMetaAccent: {
       color: colors.danger,
-      fontFamily: Typography.family.semibold,
-    },
-  });
+      fontFamily: Typography.family.semibold } });
 }

@@ -3,9 +3,9 @@ import { StyleSheet, Pressable, View } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
-import { Typography, Type } from '../../theme/designTokens';
+  withSpring } from 'react-native-reanimated';
+import { Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -77,8 +77,7 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
   };
 
   const dotStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: dotX.value }],
-  }));
+    transform: [{ translateX: dotX.value }] }));
 
   return (
     <View style={styles.container} pointerEvents="box-none">
@@ -119,37 +118,31 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Fixed-width slot; 44pt minHeight satisfies the touch-target minimum
   // while the visible text remains compact.
   labelBtn: {
     width: SLOT_WIDTH,
     minHeight: 44,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   label: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.55)',
-  },
+    fontSize: TypographyV2.body.size,
+    color: 'rgba(255,255,255,0.55)' },
   labelActive: {
     color: '#fff',
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   // The dot track is exactly the row width (3 × SLOT_WIDTH).
   indicatorTrack: {
     position: 'relative',
     height: DOT_SIZE + 4,
     width: SLOT_WIDTH * MODES.length,
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   dot: {
     position: 'absolute',
     top: 0,
@@ -157,8 +150,6 @@ const styles = StyleSheet.create({
     width: DOT_SIZE,
     height: DOT_SIZE,
     borderRadius: DOT_SIZE / 2,
-    backgroundColor: '#fff',
-  },
-});
+    backgroundColor: '#fff' } });
 
 export default CreatorModeSwitch;

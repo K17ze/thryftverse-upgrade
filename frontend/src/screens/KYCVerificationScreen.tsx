@@ -6,13 +6,13 @@ import {
   ScrollView,
   Pressable,
   Linking,
-  AppState,
-} from 'react-native';
+  AppState } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
@@ -23,8 +23,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import {
   createKycSession,
   fetchKycStatus,
-  type KycStatus,
-} from '../services/complianceApi';
+  type KycStatus } from '../services/complianceApi';
 import { parseApiError } from '../lib/apiClient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'KYCVerification'>;
@@ -175,8 +174,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       const result = await createKycSession({
         legalName: legalName.trim(),
         dateOfBirth: isoDob,
-        countryCode: 'GB',
-      });
+        countryCode: 'GB' });
 
       // Mark compliance as not-yet-verified locally (truthful — no instant
       // approval claim).
@@ -548,108 +546,91 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       paddingHorizontal: Space.lg,
       paddingVertical: Space.xl,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     stateIconWrap: {
       width: Space.xxl + Space.xl,
       height: Space.xxl + Space.xl,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     stateTitle: {
-      fontSize: Type.title.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.title.letterSpacing,
-      lineHeight: Type.title.lineHeight,
+      fontSize: TypographyV2.screenTitle.size,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
       color: colors.textPrimary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     stateBody: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textSecondary,
       textAlign: 'center',
-      maxWidth: 320,
-    },
+      maxWidth: 320 },
     stateAction: {
       marginTop: Space.md,
-      minWidth: 240,
-    },
+      minWidth: 240 },
     stateSecondary: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       color: colors.textSecondary,
       marginTop: Space.sm,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
 
     // Entry form
     scroll: {
-      flex: 1,
-    },
+      flex: 1 },
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     entryTitle: {
-      fontSize: Type.title.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.title.letterSpacing,
-      lineHeight: Type.title.lineHeight,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.screenTitle.size,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      color: colors.textPrimary },
     entryBody: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textSecondary,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     fieldGroup: {
       gap: Space.md,
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     countryRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingVertical: Space.sm + 2,
       marginTop: Space.md,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     countryLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textSecondary },
     countryValue: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     privacyNote: {
       marginTop: Space.lg,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     privacyText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight + 2,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      color: colors.textMuted },
     privacyLink: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       color: colors.brand,
-      paddingVertical: Space.xs / 2,
-    },
+      paddingVertical: Space.xs / 2 },
 
     // Footer
     footer: {
@@ -657,22 +638,17 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
       paddingBottom: Space.md,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     footerPrimary: {
-      flex: 0,
-    },
+      flex: 0 },
     footerSecondary: {
       alignItems: 'center',
       paddingVertical: Space.xs,
       minHeight: Control.hit,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     footerSecondaryText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textSecondary,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textSecondary } });
 }

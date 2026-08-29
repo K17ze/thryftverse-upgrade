@@ -3,7 +3,8 @@ import { View, Pressable, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { LookTagApiItem } from '../../services/looksApi';
 import type { ProductReferenceKind } from '../../platform/product/openProductDetail';
 
@@ -35,8 +36,7 @@ function LookHotspotsImpl({
   tags,
   onTagTap,
   formatPrice,
-  currencyCode,
-}: LookHotspotsProps) {
+  currencyCode }: LookHotspotsProps) {
   const { colors } = useAppTheme();
   const styles = useHotspotStyles(colors);
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
@@ -108,27 +108,23 @@ const useHotspotStyles = (colors: ThemeColors) => {
       marginTop: -(Space.lg - 2),
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 3,
-    },
+      zIndex: 3 },
     hotspotHalo: {
       position: 'absolute',
       width: Space.xl - Space.xs,
       height: Space.xl - Space.xs,
       borderRadius: Radius.xl,
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     hotspotDot: {
       width: Space.sm + Space.xs,
       height: Space.sm + Space.xs,
       borderRadius: Radius.md,
       backgroundColor: colors.scrimTextPrimary,
       borderWidth: Stroke.emphasis,
-      borderColor: colors.overlay,
-    },
+      borderColor: colors.overlay },
     hotspotDotActive: {
       backgroundColor: colors.brand,
-      borderColor: colors.scrimTextPrimary,
-    },
+      borderColor: colors.scrimTextPrimary },
     tagTooltip: {
       position: 'absolute',
       top: Space.lg + 4,
@@ -139,12 +135,10 @@ const useHotspotStyles = (colors: ThemeColors) => {
       gap: Space.sm,
       backgroundColor: colors.overlay,
       borderRadius: Radius.lg,
-      padding: Space.sm,
-    },
+      padding: Space.sm },
     tagTooltipImg: { width: Space.xl + 4, height: Space.xl + 4, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt },
     tagTooltipText: { flex: 1, gap: Space.xxs },
-    tagTooltipTitle: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: colors.scrimTextPrimary },
-    tagTooltipPrice: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.medium, color: colors.scrimTextSecondary },
-    tagTooltipSold: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.semibold, color: colors.danger },
-  });
+    tagTooltipTitle: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.scrimTextPrimary },
+    tagTooltipPrice: { fontSize: TypographyV2.meta.size - 1, fontFamily: TypographyV2.meta.fontFamily, color: colors.scrimTextSecondary },
+    tagTooltipSold: { fontSize: TypographyV2.meta.size - 1, fontFamily: TypographyV2.meta.fontFamily, color: colors.danger } });
 };

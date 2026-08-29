@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Control, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface PublicProfileActionRowProps {
@@ -25,8 +26,7 @@ export function PublicProfileActionRow({
   onMessage,
   onShare,
   onMore,
-  messageLabel = 'Message',
-}: PublicProfileActionRowProps) {
+  messageLabel = 'Message' }: PublicProfileActionRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
@@ -80,8 +80,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.sm + 2,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   messageBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -90,17 +89,14 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     height: Control.hit,
     borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   messageBtnText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textInverse },
   secondaryRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   secondaryBtn: {
     width: Control.hit,
     height: Control.hit,
@@ -109,7 +105,5 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.background,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  });
+    justifyContent: 'center' } });
 }

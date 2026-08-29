@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Space, Type, Typography, Radius, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
-  AnimatedPressable,
-} from '../components/AnimatedPressable';
+  AnimatedPressable } from '../components/AnimatedPressable';
 import {
   View,
   Text,
@@ -11,8 +11,7 @@ import {
   ScrollView,
   Platform,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -26,8 +25,7 @@ import { useA11yAudit } from '../hooks/useA11yAudit';
 import {
   calculateOfferSummaryFromDisplay,
   convertGbpToDisplayAmount,
-  sanitizeDecimalInput,
-} from '../utils/currencyAuthoringFlows';
+  sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
@@ -36,8 +34,7 @@ import {
   counterListingOfferOnApi,
   createListingOfferOnApi,
   lookupOfferByIdempotencyKey,
-  type ListingOffer,
-} from '../services/listingOffersApi';
+  type ListingOffer } from '../services/listingOffersApi';
 import { haptics } from '../utils/haptics';
 import { createStableId } from '../utils/createStableId';
 import { useUnknownOutcomeReconciliation } from '../hooks/useUnknownOutcomeReconciliation';
@@ -101,8 +98,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const {
     offerGbp: numericOfferGbp,
     platformChargeGbp,
-    totalGbp: total,
-  } = calculateOfferSummaryFromDisplay(numericOffer, currencyCode, fxRates);
+    totalGbp: total } = calculateOfferSummaryFromDisplay(numericOffer, currencyCode, fxRates);
 
   // Discount percentage relative to listing price — key trust signal
   // shown dynamically as the buyer adjusts their offer. Depop/Vinted/
@@ -173,8 +169,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         ? await counterListingOfferOnApi(parentOfferId!, {
           offerPriceGbp: numericOfferGbp,
           expiryHours,
-          idempotencyKey: idempotencyKeyRef.current,
-        })
+          idempotencyKey: idempotencyKeyRef.current })
         : await createListingOfferOnApi({
           listingId: itemId,
           offerPriceGbp: numericOfferGbp,
@@ -182,9 +177,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           idempotencyKey: idempotencyKeyRef.current,
           metadata: {
             originalPriceGbp: price,
-            source: 'initial',
-          },
-        });
+            source: 'initial' } });
 
       track('offer_submitted', { item_id: itemId, offer_amount: numericOfferGbp });
 
@@ -201,9 +194,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           price: numericOfferGbp,
           originalPrice: price,
           expiresAt: offer.expiresAt,
-          counterRound: offer.counterRound,
-        },
-      });
+          counterRound: offer.counterRound } });
       show(t('makeOffer.toast.openingChat'), 'info');
     } catch (err) {
       const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
@@ -230,9 +221,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
                 price: numericOfferGbp,
                 originalPrice: price,
                 expiresAt: offer.expiresAt,
-                counterRound: offer.counterRound,
-              },
-            });
+                counterRound: offer.counterRound } });
             show(t('makeOffer.toast.openingChat') as string, 'info');
           },
           onSafeToRetry: () => {
@@ -243,8 +232,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           onUnresolved: () => {
             setErrorMsg(t('makeOffer.error.checkHistory'));
           },
-          shouldContinue: () => isMountedRef.current,
-        });
+          shouldContinue: () => isMountedRef.current });
         if (result.outcome === 'acknowledged' || result.outcome === 'safe_to_retry' || result.outcome === 'unresolved') {
           return;
         }
@@ -276,8 +264,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     navigation.navigate('Chat', {
       conversationId: `offer_${listing.sellerId}_${itemId}`,
       focusQuery: title,
-      partnerUserId: listing.sellerId,
-    });
+      partnerUserId: listing.sellerId });
     show(t('makeOffer.toast.openingSellerChat'), 'info');
   }, [itemId, navigation, listing?.sellerId, show, title]);
 
@@ -764,133 +751,111 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   // ── Item summary ──
   itemSummary: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   itemThumb: {
     width: Space.xxl + Space.sm,
     height: Space.xxl + Space.sm,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   itemThumbImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   itemInfo: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   itemTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   itemListingPrice: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Message seller action ──
   messageAction: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm + Space.xs,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   messageActionText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   // ── Price input section ──
   priceSection: {
     paddingTop: Space.lg,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   sectionLabel: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   priceInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: Stroke.emphasis,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   currencySymbol: {
-    fontSize: Type.display.size,
-    fontFamily: Typography.family.bold,
-    marginRight: Space.sm,
-  },
+    fontSize: TypographyV2.display.size,
+    fontFamily: TypographyV2.display.fontFamily,
+    marginRight: Space.sm },
   priceInput: {
     flex: 1,
-    fontSize: Type.display.size + 8,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing * 2,
-    paddingVertical: Space.sm,
-  },
+    fontSize: TypographyV2.display.size + 8,
+    fontFamily: TypographyV2.display.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing * 2,
+    paddingVertical: Space.sm },
   discountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   discountText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Quick offer chips ──
   quickOfferRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   quickOfferChip: {
     flex: 1,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     alignItems: 'center',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   quickOfferChipLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   quickOfferChipSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Context rows (counter-offer, seller minimum) ──
   contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   contextText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Counter-offer side-by-side compare ──
   counterCompareBox: {
     flexDirection: 'row',
@@ -899,124 +864,103 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   counterCompareCol: {
     flex: 1,
     alignItems: 'center',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   counterCompareLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.meta.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'uppercase' },
   counterCompareValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] },
   // ── Expiry section ──
   expirySection: {
     paddingTop: Space.lg,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   expiryRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   expiryChip: {
     flex: 1,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   expiryChipText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   expiryHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.sm,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.sm },
   // ── Summary section ──
   summarySection: {
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   summaryLabelCluster: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   summaryLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   summaryValue: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] },
   totalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: Space.md,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   totalLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   totalValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   // ── Trust signal ──
   trustRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs + 2,
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   trustText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Error ──
   errorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   errorBlock: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: Space.sm + 2,
-  },
+    marginTop: Space.sm + 2 },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1025,42 +969,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   retryBtnText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Footer ──
   footer: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     paddingBottom: Platform.OS === 'ios' ? Space.lg : Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   sendBtn: {
-    width: '100%',
-  },
+    width: '100%' },
   footerLoading: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   footerLoadingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   // ── Review overlay ──
   reviewOverlay: {
     ...StyleSheet.absoluteFill,
-    zIndex: 100,
-  },
+    zIndex: 100 },
   reviewBackdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   reviewSheet: {
     position: 'absolute',
     bottom: 0,
@@ -1071,59 +1007,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Platform.OS === 'ios' ? Space.xl : Space.lg,
-    maxHeight: '85%',
-  },
+    maxHeight: '85%' },
   reviewHandle: {
     width: 36,
     height: 4,
     borderRadius: Radius.full,
     alignSelf: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   reviewTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    marginBottom: Space.md,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    marginBottom: Space.md },
   reviewItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   reviewItemInfo: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   reviewItemTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   reviewItemPrice: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   reviewAmountBox: {
     borderRadius: Radius.lg,
     padding: Space.md,
     alignItems: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   reviewAmountLabel: {
-    fontSize: Type.label.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   reviewAmountValue: {
-    fontSize: Type.display.size,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.display.size,
+    fontFamily: TypographyV2.display.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewCompareRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1131,66 +1057,54 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'transparent',
-  },
+    borderTopColor: 'transparent' },
   reviewCompareItem: {
     alignItems: 'center',
-    flex: 1,
-  },
+    flex: 1 },
   reviewCompareLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.xs / 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs / 2 },
   reviewCompareValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewExpiry: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.sm,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   reviewSummaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   reviewSummaryLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   reviewSummaryValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewTotalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: Space.md,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   reviewTotalLabel: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   reviewTotalValue: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewActions: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   reviewCancelBtn: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -1198,13 +1112,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   reviewCancelText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   reviewConfirmBtn: {
-    flex: 1,
-  },
-});
+    flex: 1 } });

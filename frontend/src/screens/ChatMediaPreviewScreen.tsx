@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -14,7 +13,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen } from '../components/flagship';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Control, Type, TypeStyles, Radius, Elevation, Space } from '../theme/designTokens';
+import { Control, TypeStyles, Radius, Elevation, Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ChatMediaPreview'>;
@@ -133,8 +133,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       backgroundColor: colors.background,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     closeBtn: {
       position: 'absolute',
       left: 12,
@@ -147,40 +146,33 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.glassBorder,
-      ...Elevation.subtle,
-    },
+      ...Elevation.subtle },
     mediaWrap: {
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     errorWrap: {
       justifyContent: 'center',
       alignItems: 'center',
-      gap: Space.sm + Space.xs,
-    },
+      gap: Space.sm + Space.xs },
     errorText: {
-      fontSize: Type.subtitle.size,
+      fontSize: TypographyV2.sectionTitle.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.scrimTextSecondary,
-    },
+      color: colors.scrimTextSecondary },
     errorSub: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      color: colors.scrimTextTertiary,
-    },
+      color: colors.scrimTextTertiary },
     retryBtn: {
       marginTop: Space.sm,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
       backgroundColor: colors.glassBorder,
-      ...Elevation.subtle,
-    },
+      ...Elevation.subtle },
     retryText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.scrimTextPrimary,
-    },
+      color: colors.scrimTextPrimary },
     contextOverlay: {
       position: 'absolute',
       left: 0,
@@ -189,23 +181,19 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
       paddingVertical: Space.md,
       paddingHorizontal: Space.md,
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     contextSender: {
-      fontSize: Type.subtitle.size,
+      fontSize: TypographyV2.sectionTitle.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.scrimTextPrimary,
       textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 3,
-    },
+      textShadowRadius: 3 },
     contextTime: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       color: colors.scrimTextSecondary,
       textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 3,
-    },
-  });
+      textShadowRadius: 3 } });
 }

@@ -5,14 +5,12 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   NotificationRowBase,
   NotificationThumbnail,
-  NotificationStatusIcon,
-} from './NotificationRowBase';
+  NotificationStatusIcon } from './NotificationRowBase';
 import {
   Space,
   Radius,
-  Type,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
@@ -76,8 +74,7 @@ const LIFECYCLE_LABELS: Record<LifecycleStep, string> = {
   placed: 'Placed',
   paid: 'Paid',
   shipped: 'Shipped',
-  delivered: 'Delivered',
-};
+  delivered: 'Delivered' };
 
 /** Resolve the current lifecycle step for an event. Terminal/cancelled states return null. */
 function resolveLifecycleStep(eventType: NotificationEventV2['eventType']): LifecycleStep | null {
@@ -103,8 +100,7 @@ function resolveLifecycleStep(eventType: NotificationEventV2['eventType']): Life
 function OrderLifecycleStrip({
   currentStep,
   accentColor,
-  colors,
-}: {
+  colors }: {
   currentStep: LifecycleStep;
   accentColor: string;
   colors: ThemeColors;
@@ -146,8 +142,7 @@ export function CommerceNotificationRow({
   time,
   aggregatedCount,
   inAttentionSection = false,
-  onPress,
-}: CommerceNotificationRowProps) {
+  onPress }: CommerceNotificationRowProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -212,23 +207,19 @@ export function CommerceNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyStrong.lineHeight,
-      flexShrink: 1,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      flexShrink: 1 },
     titleUnread: {
       color: colors.textPrimary,
-      fontFamily: FontFamily.semibold,
-    },
+      fontFamily: FontFamily.semibold },
     body: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      lineHeight: TypographyV2.body.lineHeight } });
 }
 
 function createStripStyles(colors: ThemeColors) {
@@ -237,26 +228,20 @@ function createStripStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       marginTop: Space.xs + 1,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     segment: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     bar: {
       height: 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     barComplete: {
-      backgroundColor: colors.textMuted,
-    },
+      backgroundColor: colors.textMuted },
     label: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       letterSpacing: 0.1,
-      marginTop: Space.xs / 2,
-    },
-  });
+      marginTop: Space.xs / 2 } });
 }

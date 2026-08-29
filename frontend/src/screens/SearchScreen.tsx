@@ -8,8 +8,7 @@ import {
   StatusBar,
   TextInput,
   Pressable,
-  Keyboard,
-} from 'react-native';
+  Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -20,7 +19,8 @@ import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
-import { Type, Typography, Space, Radius, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useHaptic } from '../hooks/useHaptic';
 import { DiscoveryModeNav, type DiscoveryMode } from '../components/discovery/DiscoveryModeNav';
@@ -122,8 +122,7 @@ export default function SearchScreen() {
     paddingBottom: Space.smMd,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   searchBar: {
     flex: 1,
     minHeight: Control.hit,
@@ -134,39 +133,33 @@ export default function SearchScreen() {
     borderRadius: Radius.lg,
     borderWidth: Stroke.hairline,
     borderColor: colors.borderSubtle,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   searchBarFocused: {
     backgroundColor: colors.surface,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   searchInput: {
     flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     color: colors.textPrimary,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: LetterSpacing.wide,
-    padding: 0,
-  },
+    padding: 0 },
   searchPlaceholder: {
     flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-    letterSpacing: LetterSpacing.wide,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: LetterSpacing.wide },
   autocompleteOverlay: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
     backgroundColor: colors.background,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   autocompleteDropdown: {
     flex: 1,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   visualSearchButton: {
     width: Control.hit,
     height: Control.hit,
@@ -175,17 +168,14 @@ export default function SearchScreen() {
     borderWidth: 0,
     borderColor: 'transparent',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
 
   syncRetryBanner: {
     marginHorizontal: Space.md,
-    marginBottom: Space.smMd,
-  },
+    marginBottom: Space.smMd },
 
   // Scene container — each scene owns its own scroll surface.
-  sceneHost: { flex: 1 },
-  }), [colors]);
+  sceneHost: { flex: 1 } }), [colors]);
 
   const handleTabChange = (next: ExploreTab) => {
     setActiveTab(next);
@@ -216,8 +206,7 @@ export default function SearchScreen() {
       conversationId: `${item.sellerId}_${item.id}`,
       focusQuery: '',
       partnerUserId: item.sellerId,
-      itemId: item.id,
-    }),
+      itemId: item.id }),
     onBrowseCategories: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' }),
     // Quick-save: bookmark button on each discovery tile (Pinterest/Depop
     // pattern). The store owns the saved state; the tile reflects it.
@@ -225,8 +214,7 @@ export default function SearchScreen() {
       haptic.light();
       toggleSavedProduct(item.id);
     },
-    isSavedListing: (listingId: string) => isSavedProduct(listingId),
-  };
+    isSavedListing: (listingId: string) => isSavedProduct(listingId) };
 
   const renderScene = (tab: ExploreTab) => {
     switch (tab) {

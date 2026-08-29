@@ -5,8 +5,7 @@ import {
   StyleSheet,
   Dimensions,
   RefreshControl,
-  ImageStyle,
-} from 'react-native';
+  ImageStyle } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +14,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -34,8 +34,7 @@ import {
   GALLERIA_DEMO_MODE,
   type GalleriaCollection,
   type GalleriaEditorial,
-  type GalleriaFeaturedAsset,
-} from '../services/galleriaApi';
+  type GalleriaFeaturedAsset } from '../services/galleriaApi';
 import { openProductDetail } from '../platform/product/openProductDetail';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -63,8 +62,7 @@ const SKELETON_ASPECT_RATIOS = [1.25, 1.0, 1.32, 0.92] as const;
 // Hero editorial card — full-width, 16:10, title overlaid on image
 // ---------------------------------------------------------------------------
 const HeroEditorialCard = React.memo(function HeroEditorialCard({
-  editorial,
-}: {
+  editorial }: {
   editorial: GalleriaEditorial;
 }) {
   const styles = useStyles();
@@ -106,8 +104,7 @@ const HeroEditorialCard = React.memo(function HeroEditorialCard({
 // ---------------------------------------------------------------------------
 const CollectionRailCard = React.memo(function CollectionRailCard({
   collection,
-  onPress,
-}: {
+  onPress }: {
   collection: GalleriaCollection;
   onPress: () => void;
 }) {
@@ -160,8 +157,7 @@ const CollectionRailCard = React.memo(function CollectionRailCard({
 // ---------------------------------------------------------------------------
 const FeaturedCollectionCard = React.memo(function FeaturedCollectionCard({
   collection,
-  onPress,
-}: {
+  onPress }: {
   collection: GalleriaCollection;
   onPress: () => void;
 }) {
@@ -213,8 +209,7 @@ const FeaturedCollectionCard = React.memo(function FeaturedCollectionCard({
 const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
   asset,
   onPress,
-  testID,
-}: {
+  testID }: {
   asset: GalleriaFeaturedAsset;
   onPress: () => void;
   testID?: string;
@@ -264,8 +259,7 @@ const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
 const EditorialListItem = React.memo(function EditorialListItem({
   editorial,
   isLast,
-  size = 'standard',
-}: {
+  size = 'standard' }: {
   editorial: GalleriaEditorial;
   isLast: boolean;
   size?: 'large' | 'standard';
@@ -387,8 +381,7 @@ function FeaturedMasonrySkeleton() {
   const styles = useStyles();
   const skeletonItems = Array.from({ length: 6 }).map((_, i) => ({
     id: `skel-${i}`,
-    aspectRatio: SKELETON_ASPECT_RATIOS[i % SKELETON_ASPECT_RATIOS.length],
-  }));
+    aspectRatio: SKELETON_ASPECT_RATIOS[i % SKELETON_ASPECT_RATIOS.length] }));
   const columns = buildMasonryColumns(skeletonItems as GalleriaFeaturedAsset[]);
 
   return (
@@ -513,8 +506,7 @@ export default function GalleriaScreen() {
         referenceKind: 'co_own',
         canonicalId: asset.id,
         sourceSurface: 'Galleria',
-        sourceItemId: asset.id,
-      });
+        sourceItemId: asset.id });
     },
     [haptic, navigation],
   );
@@ -748,8 +740,7 @@ export default function GalleriaScreen() {
         contentContainerStyle={{
           paddingHorizontal: Math.max(MASONRY_PADDING - MASONRY_GAP / 2, 0),
           paddingTop: insets.top + Space.sm,
-          paddingBottom: Space.xxl,
-        }}
+          paddingBottom: Space.xxl }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -775,18 +766,15 @@ function useStyles() {
       StyleSheet.create({
         container: {
           flex: 1,
-          backgroundColor: colors.background,
-        },
+          backgroundColor: colors.background },
         stateContainer: {
           flex: 1,
           backgroundColor: colors.background,
           justifyContent: 'center',
           alignItems: 'center',
-          paddingHorizontal: Space.lg,
-        },
+          paddingHorizontal: Space.lg },
         listContent: {
-          paddingBottom: Space.xxl,
-        },
+          paddingBottom: Space.xxl },
         // ── Offline banner ──
         offlineBanner: {
           flexDirection: 'row',
@@ -796,369 +784,306 @@ function useStyles() {
           paddingVertical: Space.sm,
           backgroundColor: colors.surfaceAlt,
           borderBottomWidth: Stroke.hairline,
-          borderBottomColor: colors.border,
-        },
+          borderBottomColor: colors.border },
         offlineBannerText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textSecondary },
         // ── Honest demo indicator (AGENTS.md §11) ──
         demoBadgeRow: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
           paddingHorizontal: Space.md,
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         demoBadgeDot: {
           width: Space.xs,
           height: Space.xs,
           borderRadius: Radius.full,
-          backgroundColor: colors.textMuted,
-        },
+          backgroundColor: colors.textMuted },
         demoBadgeText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          letterSpacing: Type.label.letterSpacing,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing },
         // ── Hero — full-bleed, no card chrome ──
         heroContainer: {
           width: '100%',
           marginBottom: Space.lg,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         heroImage: {
           width: '100%',
-          height: HERO_HEIGHT,
-        } as ImageStyle,
+          height: HERO_HEIGHT } as ImageStyle,
         heroGradient: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: '65%',
-        },
+          height: '65%' },
         heroOverlay: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
           padding: Space.lg,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         heroEyebrowRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         heroEyebrowDot: {
           width: Space.xs + 2,
           height: Space.xs + 2,
           borderRadius: Radius.full,
-          backgroundColor: colors.scrimTextPrimary,
-        },
+          backgroundColor: colors.scrimTextPrimary },
         heroEyebrow: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: Type.label.letterSpacing,
-          opacity: 0.9,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing,
+          opacity: 0.9 },
         heroTitle: {
-          fontSize: Type.priceList.size,
-          lineHeight: Type.priceList.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.priceList.size,
+          lineHeight: TypographyV2.priceList.lineHeight,
+          fontFamily: TypographyV2.priceList.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: -0.5,
-        },
+          letterSpacing: -0.5 },
         heroMeta: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.medium,
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
           color: colors.scrimTextPrimary,
-          opacity: 0.75,
-        },
+          opacity: 0.75 },
         // ── Section wrappers ──
         sectionWrap: {
-          marginBottom: Space.lg,
-        },
+          marginBottom: Space.lg },
         sectionHeaderWrap: {
           paddingHorizontal: Space.md,
           paddingTop: Space.lg,
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         sectionEyebrow: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          letterSpacing: Type.label.letterSpacing,
-          marginBottom: Space.xs,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing,
+          marginBottom: Space.xs },
         sectionTitle: {
-          fontSize: Type.priceList.size,
-          lineHeight: Type.priceList.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.priceList.size,
+          lineHeight: TypographyV2.priceList.lineHeight,
+          fontFamily: TypographyV2.priceList.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: -0.4,
-        },
+          letterSpacing: -0.4 },
         // ── Collections rail ──
         railContent: {
           paddingHorizontal: Space.md,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         // ── Featured collection ──
         featuredCollectionContainer: {
           marginHorizontal: Space.md,
           marginBottom: Space.md,
           borderRadius: Radius.xl,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         featuredCollectionImage: {
           width: '100%',
-          height: FEATURED_COLLECTION_HEIGHT,
-        } as ImageStyle,
+          height: FEATURED_COLLECTION_HEIGHT } as ImageStyle,
         featuredCollectionGradient: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: '70%',
-        },
+          height: '70%' },
         featuredCollectionOverlay: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
           padding: Space.lg,
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         featuredCollectionTheme: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: Type.label.letterSpacing,
-          opacity: 0.85,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing,
+          opacity: 0.85 },
         featuredCollectionTitle: {
-          fontSize: Type.priceList.size,
-          lineHeight: Type.priceList.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.priceList.size,
+          lineHeight: TypographyV2.priceList.lineHeight,
+          fontFamily: TypographyV2.priceList.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: -0.5,
-        },
+          letterSpacing: -0.5 },
         featuredCollectionCuratorRow: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
-          marginTop: Space.xs,
-        },
+          marginTop: Space.xs },
         featuredCollectionAvatar: {
           width: Space.smMd,
           height: Space.smMd,
-          borderRadius: Radius.full,
-        } as ImageStyle,
+          borderRadius: Radius.full } as ImageStyle,
         featuredCollectionCurator: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
-          opacity: 0.8,
-        },
+          opacity: 0.8 },
         collectionCard: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         collectionImageWrap: {
           width: '100%',
           height: COLLECTION_CARD_HEIGHT - 40,
           borderRadius: Radius.lg,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         collectionImage: {
           width: '100%',
-          height: '100%',
-        } as ImageStyle,
+          height: '100%' } as ImageStyle,
         collectionGradient: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: '55%',
-        },
+          height: '55%' },
         collectionOverlay: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
           padding: Space.sm,
-          gap: Space.xs / 2,
-        },
+          gap: Space.xs / 2 },
         collectionTheme: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
           opacity: 0.85,
-          letterSpacing: Type.label.letterSpacing - 0.1,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing - 0.1 },
         collectionTitle: {
-          fontSize: Type.subtitle.size,
-          lineHeight: Type.subtitle.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.sectionTitle.size,
+          lineHeight: TypographyV2.sectionTitle.lineHeight,
+          fontFamily: TypographyV2.sectionTitle.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: Type.subtitle.letterSpacing,
-        },
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing },
         collectionMeta: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         collectionAvatar: {
           width: Space.smMd,
           height: Space.smMd,
-          borderRadius: Radius.full,
-        } as ImageStyle,
+          borderRadius: Radius.full } as ImageStyle,
         collectionCurator: {
           flex: 1,
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textSecondary },
         // ── Featured assets masonry ──
         masonryGrid: {
           flexDirection: 'row',
           justifyContent: 'center',
           paddingHorizontal: MASONRY_PADDING,
-          gap: MASONRY_GAP,
-        },
+          gap: MASONRY_GAP },
         masonryColumn: {
           flexDirection: 'column',
-          gap: MASONRY_GAP,
-        },
+          gap: MASONRY_GAP },
         assetCard: {
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         assetImageWrap: {
           width: '100%',
           borderRadius: Radius.lg,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         assetImage: {
           width: '100%',
-          height: '100%',
-        } as ImageStyle,
+          height: '100%' } as ImageStyle,
         assetMeta: {
-          gap: Space.xs / 2,
-        },
+          gap: Space.xs / 2 },
         assetCollection: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          letterSpacing: Type.label.letterSpacing - 0.2,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing - 0.2 },
         assetTitle: {
-          fontSize: Type.bodyStrong.size,
-          lineHeight: Type.bodyStrong.lineHeight,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size,
+          lineHeight: TypographyV2.bodyStrong.lineHeight,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.body.letterSpacing,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing },
         assetValuation: {
-          fontSize: Type.body.size,
-          lineHeight: Type.body.size - 2,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.body.size,
+          lineHeight: TypographyV2.body.size - 2,
+          fontFamily: TypographyV2.body.fontFamily,
           color: colors.textPrimary,
           fontVariant: ['tabular-nums'],
-          letterSpacing: Type.body.letterSpacing,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing },
         // ── Editorial list ──
         editorialItem: {
           paddingHorizontal: Space.md,
-          marginBottom: Space.lg,
-        },
+          marginBottom: Space.lg },
         editorialItemLast: {
-          marginBottom: Radius.none,
-        },
+          marginBottom: Radius.none },
         editorialHeroWrap: {
           width: '100%',
           borderRadius: Radius.lg,
           overflow: 'hidden',
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surfaceAlt },
         editorialHero: {
           width: '100%',
-          height: '100%',
-        } as ImageStyle,
+          height: '100%' } as ImageStyle,
         editorialHeroGradient: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: '40%',
-        },
+          height: '40%' },
         editorialHeroOverlay: {
           position: 'absolute',
           bottom: Space.sm,
-          right: Space.sm,
-        },
+          right: Space.sm },
         editorialReadTime: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: Type.label.letterSpacing - 0.2,
+          letterSpacing: TypographyV2.label.letterSpacing - 0.2,
           backgroundColor: colors.overlay,
           paddingHorizontal: Space.xs + 2,
           paddingVertical: Space.xs / 2,
           borderRadius: Radius.sm,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         editorialContent: {
           paddingTop: Space.sm,
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         editorialTitle: {
-          fontSize: Type.subtitle.size,
-          lineHeight: Type.subtitle.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.sectionTitle.size,
+          lineHeight: TypographyV2.sectionTitle.lineHeight,
+          fontFamily: TypographyV2.sectionTitle.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.subtitle.letterSpacing,
-        },
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing },
         editorialTitleLarge: {
-          fontSize: Type.priceList.size,
-          lineHeight: Type.priceList.lineHeight,
-          letterSpacing: -0.4,
-        },
+          fontSize: TypographyV2.priceList.size,
+          lineHeight: TypographyV2.priceList.lineHeight,
+          letterSpacing: -0.4 },
         editorialExcerpt: {
-          fontSize: Type.body.size,
-          lineHeight: Type.body.lineHeight,
-          fontFamily: Typography.family.regular,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.body.size,
+          lineHeight: TypographyV2.body.lineHeight,
+          fontFamily: TypographyV2.body.fontFamily,
+          color: colors.textSecondary },
         editorialAuthorRow: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
-          marginTop: Space.xs / 2,
-        },
+          marginTop: Space.xs / 2 },
         editorialAvatar: {
           width: 18,
           height: 18,
-          borderRadius: Radius.full,
-        } as ImageStyle,
+          borderRadius: Radius.full } as ImageStyle,
         editorialAuthor: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textSecondary },
         editorialSeparator: {
           height: StyleSheet.hairlineWidth,
           backgroundColor: colors.border,
-          marginTop: Space.lg,
-        },
+          marginTop: Space.lg },
         // ── Styling Tools — Moodboard CTA ──
         stylingToolsWrap: {
           paddingHorizontal: Space.md,
           marginTop: Space.lg,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         moodboardCtaCard: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -1168,26 +1093,21 @@ function useStyles() {
           borderRadius: Radius.lg,
           borderWidth: Stroke.hairline,
           borderColor: colors.border,
-          backgroundColor: colors.surface,
-        },
+          backgroundColor: colors.surface },
         moodboardCtaCopy: {
           flex: 1,
-          gap: Space.xs / 2,
-        },
+          gap: Space.xs / 2 },
         moodboardCtaTitle: {
-          fontSize: Type.bodyStrong.size,
-          lineHeight: Type.bodyStrong.lineHeight,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size,
+          lineHeight: TypographyV2.bodyStrong.lineHeight,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.body.letterSpacing,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing },
         moodboardCtaSubtitle: {
-          fontSize: Type.caption.size,
-          lineHeight: Type.caption.lineHeight,
-          fontFamily: Typography.family.regular,
-          color: colors.textSecondary,
-        },
-      }),
+          fontSize: TypographyV2.meta.size,
+          lineHeight: TypographyV2.meta.lineHeight,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textSecondary } }),
     [colors],
   );
 }

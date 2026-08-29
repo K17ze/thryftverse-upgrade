@@ -5,8 +5,7 @@ import {
   StyleSheet,
   RefreshControl,
   Pressable,
-  Animated,
-} from 'react-native';
+  Animated } from 'react-native';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -32,8 +31,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotificationEvent,
-  upgradeToV2,
-} from '../services/notificationsApi';
+  upgradeToV2 } from '../services/notificationsApi';
 import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { haptics } from '../utils/haptics';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -47,10 +45,10 @@ import {
   CommerceNotificationRow,
   AuctionNotificationRow,
   FinancialNotificationRow,
-  SystemNotificationRow,
-} from '../components/notifications';
+  SystemNotificationRow } from '../components/notifications';
 
-import { Typography, Radius, Type, Space, Stroke, Control } from '../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type NotificationCardType = 'new_item' | 'like' | 'review' | 'order' | 'price' | 'resolution' | 'auction' | 'generic';
@@ -225,8 +223,7 @@ function formatRelativeTime(value: string): string {
 
   return parsed.toLocaleDateString(undefined, {
     month: 'short',
-    day: 'numeric',
-  });
+    day: 'numeric' });
 }
 
 function mapEventToCard(event: NotificationEvent): NotificationCard {
@@ -255,8 +252,7 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     attention: v2.attention,
     objectRef: v2.objectRef,
     v2Event: v2,
-    deliveryStatus: event.status,
-  };
+    deliveryStatus: event.status };
 }
 
 /**
@@ -318,8 +314,7 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
     const actionVerbByType: Record<string, string> = {
       like: 'liked',
       price: 'dropped the price on',
-      new_item: 'listed',
-    };
+      new_item: 'listed' };
     const action = actionVerbByType[primary.type] ?? 'interacted with';
 
     // Use the V2 registry's structured object label — never regex-parse body text.
@@ -336,9 +331,7 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
       read: group.every((n) => n.read),
       v2Event: {
         ...primary.v2Event,
-        readAt: group.every((n) => n.read) ? primary.v2Event.readAt : null,
-      },
-    });
+        readAt: group.every((n) => n.read) ? primary.v2Event.readAt : null } });
   }
 
   result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -354,8 +347,7 @@ const NOTIFICATION_GROUP_LABELS: Record<NotificationGroupKey, string> = {
   attention: 'Needs attention',
   today: 'Today',
   yesterday: 'Yesterday',
-  earlier: 'Earlier',
-};
+  earlier: 'Earlier' };
 
 function getNotificationGroupKey(createdAt: string): NotificationGroupKey {
   const now = new Date();
@@ -375,8 +367,7 @@ function groupNotifications(notifications: NotificationCard[]) {
     attention: [],
     today: [],
     yesterday: [],
-    earlier: [],
-  };
+    earlier: [] };
 
   notifications.forEach((notification) => {
     // Action-required events go into the "Needs attention" section,
@@ -530,8 +521,7 @@ export default function NotificationsScreen() {
         sectionTitle: section.title,
         unreadCount: section.unreadCount,
         isAttention: !!section.isAttention,
-        itemCount: section.data.length,
-      });
+        itemCount: section.data.length });
       for (const card of section.data) {
         items.push({ type: 'item', card });
       }
@@ -595,8 +585,7 @@ export default function NotificationsScreen() {
         : progress.interpolate({
             inputRange: [0, 1],
             outputRange: [0.8, 1.0],
-            extrapolate: 'clamp',
-          });
+            extrapolate: 'clamp' });
       return (
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeReadAction}>
@@ -620,8 +609,7 @@ export default function NotificationsScreen() {
         : progress.interpolate({
             inputRange: [0, 1],
             outputRange: [0.8, 1.0],
-            extrapolate: 'clamp',
-          });
+            extrapolate: 'clamp' });
       return (
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeDeleteAction}>
@@ -1138,14 +1126,12 @@ function createStyles(colors: ThemeColors) {
 
   headerActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   headerAction: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
 
   filterTabRow: {
     flexDirection: 'row',
@@ -1153,8 +1139,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm + 2,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1163,42 +1148,35 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm + 4,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   // Active filter tab uses a solid brand fill, not brandSubtle (a 6% grey
   // wash). A solid fill creates a clear visual anchor at the top of the
   // screen and makes the selected state unmistakable at thumbnail scale.
   filterTabActive: {
     backgroundColor: colors.brand,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   filterTabText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   filterTabTextActive: {
     fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
   filterTabCount: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   filterTabCountActive: {
     color: colors.textInverse,
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
 
   swipeActionContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     width: Space.xxl + Space.xl,
-    marginBottom: Space.sm + 2,
-  },
+    marginBottom: Space.sm + 2 },
   swipeReadAction: {
     flex: 1,
     width: Space.xxl + Space.xl,
@@ -1208,25 +1186,21 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.successBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   swipeReadText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.success,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.success },
   swipeDeleteAction: {
     alignItems: 'center',
     justifyContent: 'center',
     width: Space.xxl + Space.xxl + Space.xs,
     height: '100%',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   swipeDeleteText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
 
   // No horizontal padding on the list content — each row already has its
   // own paddingHorizontal: Space.md in NotificationRowBase. Adding list-level
@@ -1241,29 +1215,24 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm + 2,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   unreadSummaryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
-    minHeight: Control.chromeCompact,
-  },
+    minHeight: Control.chromeCompact },
   unreadSummaryText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
   quietHoursBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   quietHoursText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
 
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -1274,34 +1243,28 @@ function createStyles(colors: ThemeColors) {
     marginLeft: Space.xs,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   sectionHeaderRowAttention: {
-    marginLeft: 0,
-  },
+    marginLeft: 0 },
   sectionAttentionLeading: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   sectionAttentionHint: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginLeft: Space.xs,
-  },
+    marginLeft: Space.xs },
   sectionTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   sectionTitleAttention: {
     color: colors.danger,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   sectionCountBadge: {
     minWidth: Space.md + 4,
     height: Space.md + 4,
@@ -1311,31 +1274,25 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: 'transparent',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   sectionCountBadgeAttention: {
     backgroundColor: colors.danger,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   sectionCountText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   sectionCountTextAttention: {
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
 
   caughtUpGraphic: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
 
   notificationSkeletonList: {
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   notificationSkeletonRow: {
     minHeight: 64,
     flexDirection: 'row',
@@ -1343,41 +1300,32 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm + 2,
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   notificationSkeletonCopy: {
-    flex: 1,
-  },
+    flex: 1 },
   overflowSheetContent: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   overflowSheetTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   overflowRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   overflowRowText: {
-    fontSize: Type.body.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    color: colors.textPrimary },
   overflowRowRight: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   overflowRowCount: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    marginRight: Space.sm,
-  },
-  });
+    marginRight: Space.sm } });
 }

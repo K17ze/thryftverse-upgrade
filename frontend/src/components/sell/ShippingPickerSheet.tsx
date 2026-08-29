@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, Control, Stroke } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Control, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 
 export interface ShippingPickerSheetProps {
@@ -27,8 +28,7 @@ function ShippingPickerSheet({
   shippingMethod,
   shippingPayer,
   onSetShippingMethod,
-  onSetShippingPayer,
-}: ShippingPickerSheetProps) {
+  onSetShippingPayer }: ShippingPickerSheetProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
 
@@ -120,58 +120,49 @@ const styles = StyleSheet.create({
   shippingSheetBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   shippingSheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingTop: Space.xs,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   shippingSheetHeader: {
     alignItems: 'center',
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   shippingSheetHandle: {
     width: 36,
     height: 4,
     borderRadius: Radius.full,
     backgroundColor: '#00000033',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   shippingSheetTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    width: '100%',
-  },
+    width: '100%' },
   shippingSheetTitle: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   shippingSheetSectionLabel: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   shippingSheetRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.sm + Space.xs,
     minHeight: Control.hit,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#00000000',
-  },
+    borderBottomColor: '#00000000' },
   shippingSheetRowLabel: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.regular,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   shippingSheetRadioOuter: {
     width: 20,
     height: 20,
@@ -179,11 +170,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#00000033',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   shippingSheetRadioInner: {
     width: 10,
     height: 10,
-    borderRadius: Radius.full,
-  },
-});
+    borderRadius: Radius.full } });

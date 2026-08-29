@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -23,7 +22,8 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { SettingsSection } from '../components/settings/SettingsSection';
 
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 type Props = NativeStackScreenProps<RootStackParamList, 'AccountControl'>;
 
 type Phase = 'overview' | 'export' | 'delete-info' | 'delete-confirm';
@@ -306,7 +306,7 @@ function ConsequenceRow({ icon, text, isFirst, isLast }: { icon: React.Component
       !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
     ]}>
       <Ionicons name={icon} size={20} color={colors.textMuted} accessible={false} />
-      <Text style={{ flex: 1, fontSize: Type.body.size, fontFamily: Typography.family.regular, lineHeight: Type.body.lineHeight + 2, letterSpacing: Type.body.letterSpacing, color: colors.textSecondary }}>{text}</Text>
+      <Text style={{ flex: 1, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, lineHeight: TypographyV2.body.lineHeight + 2, letterSpacing: TypographyV2.body.letterSpacing, color: colors.textSecondary }}>{text}</Text>
     </View>
   );
 }
@@ -316,56 +316,47 @@ function createStyles(colors: ThemeColors) {
   introBlock: {
     paddingTop: Space.md,
     paddingBottom: Space.lg,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   introTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
-  },
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
+    lineHeight: TypographyV2.screenTitle.lineHeight },
   introBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight + 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    letterSpacing: TypographyV2.body.letterSpacing },
   optionActionWrap: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   optionBtn: {
     borderRadius: Radius.md,
     paddingVertical: Space.sm + 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   optionBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   consequenceFootnote: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight + 2,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginBottom: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   deleteInfoActions: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   deleteConfirmActions: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   secondaryBtn: {
     flex: 1,
     borderRadius: Radius.md,
@@ -373,13 +364,11 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: Space.xxl,
-  },
+    minHeight: Space.xxl },
   secondaryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   dangerBtn: {
     flex: 1,
     borderRadius: Radius.md,
@@ -387,50 +376,41 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: Space.xxl,
-  },
+    minHeight: Space.xxl },
   dangerBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   confirmFieldWrap: {
-    marginBottom: Space.xl,
-  },
+    marginBottom: Space.xl },
   confirmLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     marginBottom: Space.sm,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   confirmInput: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.md,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     letterSpacing: Space.xs / 2,
-    minHeight: Space.xxl,
-  },
+    minHeight: Space.xxl },
   confirmAccountLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.sm,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   deleteErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   deleteErrorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  });
+    letterSpacing: TypographyV2.meta.letterSpacing } });
 }

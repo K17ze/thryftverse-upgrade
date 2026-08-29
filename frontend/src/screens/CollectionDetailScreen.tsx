@@ -6,8 +6,7 @@ import {
   StatusBar,
   RefreshControl,
   Dimensions,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, {
@@ -15,8 +14,7 @@ import Reanimated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -40,7 +38,8 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import { Type, Space, Radius, DockConstants, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, DockConstants, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COVER_H = 220;
 
@@ -151,8 +150,7 @@ export default function CollectionDetailScreen() {
             show('Unable to delete collection. Try again.', 'error');
           }
         }
-      },
-    });
+      } });
   }, [collection, collectionId, deleteCollectionOnApi, haptic, show, handleGoBack]);
 
   const handleShare = useCallback(() => {
@@ -163,8 +161,7 @@ export default function CollectionDetailScreen() {
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollY.value = event.contentOffset.y;
-    },
-  });
+    } });
 
   const headerBgStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
@@ -172,8 +169,7 @@ export default function CollectionDetailScreen() {
       [0, COVER_H - 60],
       [0, 1],
       Extrapolation.CLAMP
-    ),
-  }));
+    ) }));
 
   if (!collection) {
     return (
@@ -441,8 +437,7 @@ function MoreLikeThisRow({
   listings,
   navigation,
   formatFromFiat,
-  currencyCode,
-}: {
+  currencyCode }: {
   collectionItems: any[];
   listings: any[];
   navigation: any;
@@ -497,8 +492,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -507,29 +501,25 @@ function createStyles(colors: ThemeColors) {
     zIndex: 50,
     backgroundColor: colors.background,
     borderBottomWidth: Stroke.standard,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   headerInner: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingTop: Control.hit,
     paddingBottom: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   floatingTitle: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   absoluteBack: {
     position: 'absolute',
     top: Control.hit,
     left: Space.md,
-    zIndex: 60,
-  },
+    zIndex: 60 },
   backBtn: {
     width: Space.xl + Space.xs + 4,
     height: Space.xl + Space.xs + 4,
@@ -538,82 +528,68 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   backBtnOverlay: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   backBtnGlyph: {
     textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   coverWrap: {
     width: SCREEN_W,
     height: COVER_H,
     position: 'relative',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   coverImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   coverMosaic: {
     width: '100%',
     height: '100%',
     flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   coverMosaicTile: {
     width: '50%',
-    height: '50%',
-  },
+    height: '50%' },
   coverGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: '65%',
-  },
+    height: '65%' },
   coverInfo: {
     position: 'absolute',
     bottom: Space.md,
     left: Space.md,
-    right: Space.md,
-  },
+    right: Space.md },
   coverTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.scrimTextPrimary,
     textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   coverMeta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.scrimTextSecondary,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   coverMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   coverMetaDot: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.scrimTextTertiary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextTertiary },
   coverMetaUpdated: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.scrimTextSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextSecondary },
   coverActions: {
     position: 'absolute',
     top: Control.hit,
@@ -621,70 +597,58 @@ function createStyles(colors: ThemeColors) {
     right: Space.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   actionRow: {
     flexDirection: 'row',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   actionBtnOverlay: {
     width: Space.xl + 4,
     height: Space.xl + 4,
     borderRadius: Radius.md,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   noCoverHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   noCoverTitle: {
-    fontSize: Type.title.size - 2,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.screenTitle.size - 2,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    color: colors.textPrimary },
   noCoverMeta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   noCoverMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   noCoverMetaDot: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   noCoverMetaUpdated: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   coverTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   coverDesc: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.scrimTextSecondary,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   noCoverDesc: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   privacyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -692,13 +656,11 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2,
     borderRadius: Radius.full,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   privacyText: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.bold,
-    color: colors.scrimTextPrimary,
-  },
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextPrimary },
   privacyBadgeOutline: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -708,13 +670,11 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   privacyTextOutline: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.bold,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   actionBtn: {
     width: Space.xl + Space.xs + 4,
     height: Space.xl + Space.xs + 4,
@@ -723,8 +683,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   manageRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -737,42 +696,33 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     backgroundColor: 'transparent',
     borderWidth: Stroke.hairline,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   manageRowText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   listContent: {
-    paddingBottom: Space.xxl * 2 + Space.xl,
-  },
+    paddingBottom: Space.xxl * 2 + Space.xl },
   moreTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     marginBottom: Space.md - 2,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   moreCard: {
-    width: Space.xxl * 2 + Control.hit,
-  },
+    width: Space.xxl * 2 + Control.hit },
   moreMediaWrap: {
     width: Space.xxl * 2 + Control.hit,
     height: Space.xxl * 3 + Control.chrome,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   moreImg: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   morePrice: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary } });
 }

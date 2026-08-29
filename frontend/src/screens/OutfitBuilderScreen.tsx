@@ -15,14 +15,12 @@ import {
   Dimensions,
   Platform,
   Share,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -40,7 +38,8 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import { Typography, DockConstants, Radius, Type, Space, Stroke, LetterSpacing, Control, OutfitColors } from '../theme/designTokens';
+import { Typography, DockConstants, Radius, Space, Stroke, LetterSpacing, Control, OutfitColors } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
   OutfitSlot,
   StyleItem,
@@ -49,8 +48,7 @@ import {
   suggestCompletion,
   createOutfit,
   getSlotLabel,
-  getSlotIcon,
-} from '../services/styleGraph';
+  getSlotIcon } from '../services/styleGraph';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -67,8 +65,7 @@ function SlotCircle({
   slot,
   item,
   isActive,
-  onPress,
-}: {
+  onPress }: {
   slot: OutfitSlot;
   item?: StyleItem;
   isActive: boolean;
@@ -115,37 +112,30 @@ function createSlotStyles(colors: ThemeColors) {
     borderColor: colors.border,
     overflow: 'hidden',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   circleActive: {
     borderColor: colors.brand,
-    borderWidth: Stroke.emphasis,
-  },
+    borderWidth: Stroke.emphasis },
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   empty: {
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   activeRing: {
     position: 'absolute',
     bottom: Space.xs,
     width: Space.xs + 2,
     height: Space.xs + 2,
     borderRadius: Radius.sm,
-    backgroundColor: colors.brand,
-  },
-  });
+    backgroundColor: colors.brand } });
 }
 
 function ItemThumb({
   item,
   onPress,
-  isSelected,
-}: {
+  isSelected }: {
   item: StyleItem;
   onPress: () => void;
   isSelected: boolean;
@@ -199,34 +189,27 @@ function createThumbStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
     borderBottomWidth: Stroke.hairline,
     borderBottomColor: colors.border,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   cardSelected: {
     borderBottomWidth: Stroke.hairline,
     borderBottomColor: colors.border,
     borderWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   image: {
     width: '100%',
     height: Space.xxl * 3 - Space.xs,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   placeholder: {
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   meta: {
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   check: {
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
     backgroundColor: colors.background,
-    borderRadius: Radius.full,
-  },
-  });
+    borderRadius: Radius.full } });
 }
 
 function ScoreBadge({ score }: { score: number }) {
@@ -247,8 +230,7 @@ function ScoreBadge({ score }: { score: number }) {
   }, [score, reducedMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+    transform: [{ scale: scale.value }] }));
 
   const scoreColor = score >= 80 ? colors.success : score >= 50 ? colors.brand : colors.danger;
 
@@ -270,9 +252,7 @@ function createScoreStyles(colors: ThemeColors) {
     borderWidth: Stroke.emphasis,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-  },
-  });
+    backgroundColor: colors.surface } });
 }
 
 // ── Main Screen ──
@@ -301,8 +281,7 @@ export default function OutfitBuilderScreen() {
     bottom: undefined,
     shoes: undefined,
     outerwear: undefined,
-    accessory: undefined,
-  });
+    accessory: undefined });
   const [backgroundColor, setBackgroundColor] = useState<string | undefined>(undefined);
 
   // ── Undo / Redo history ──
@@ -328,8 +307,7 @@ export default function OutfitBuilderScreen() {
     (items: Record<OutfitSlot, StyleItem | undefined>, bg: string | undefined) => {
       const snapshot: OutfitSnapshot = {
         items: { ...items },
-        bg,
-      };
+        bg };
       // Truncate any redo tail before pushing.
       historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
       historyRef.current.push(snapshot);
@@ -371,8 +349,7 @@ export default function OutfitBuilderScreen() {
       condition: l.condition,
       imageUri: l.images?.[0] ?? l.imageUri,
       price: l.price,
-      styleTags: l.styleTags,
-    }));
+      styleTags: l.styleTags }));
   }, [listings]);
 
   const slotItems = useMemo(() => {
@@ -407,8 +384,7 @@ export default function OutfitBuilderScreen() {
         title: 'Need more items',
         message: 'Select at least 2 items to save an outfit.',
         confirmLabel: 'OK',
-        onConfirm: () => {},
-      });
+        onConfirm: () => {} });
       return;
     }
 
@@ -428,8 +404,7 @@ export default function OutfitBuilderScreen() {
       itemIds,
       backgroundColor,
       createdAt: outfit.createdAt,
-      updatedAt: outfit.createdAt,
-    });
+      updatedAt: outfit.createdAt });
 
     haptics.success();
     setConfirmSheet({
@@ -437,8 +412,7 @@ export default function OutfitBuilderScreen() {
       title: 'Outfit Saved',
       message: `"${collectionName}" added to your outfits.`,
       confirmLabel: 'OK',
-      onConfirm: () => navigation.goBack(),
-    });
+      onConfirm: () => navigation.goBack() });
   };
 
   const handleShare = async () => {
@@ -448,8 +422,7 @@ export default function OutfitBuilderScreen() {
         title: 'No items',
         message: 'Add at least one item to share your outfit.',
         confirmLabel: 'OK',
-        onConfirm: () => {},
-      });
+        onConfirm: () => {} });
       return;
     }
     const outfit = createOutfit(outfitItems);
@@ -459,8 +432,7 @@ export default function OutfitBuilderScreen() {
       .join(', ');
     try {
       await Share.share({
-        message: `Check out my outfit "${outfit.name}" on Thryftverse — ${itemNames}`,
-      });
+        message: `Check out my outfit "${outfit.name}" on Thryftverse — ${itemNames}` });
     } catch { /* user cancelled */ }
   };
 
@@ -477,8 +449,7 @@ export default function OutfitBuilderScreen() {
         setBackgroundColor(undefined);
         pushHistory(cleared, undefined);
         haptics.error();
-      },
-    });
+      } });
   };
 
   const handleAiSuggest = () => {
@@ -772,15 +743,13 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   iconBtn: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
@@ -789,13 +758,11 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   headerTitle: {
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   undoRedoBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -804,8 +771,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs,
     paddingHorizontal: Space.md,
     borderBottomWidth: Stroke.hairline,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   undoRedoBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -813,55 +779,44 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   undoRedoBtnDisabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   undoRedoLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: LetterSpacing.wide,
-  },
+    letterSpacing: LetterSpacing.wide },
   undoRedoLabelDisabled: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   scrollContent: {
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   stateContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   previewWrap: {
     marginHorizontal: Space.md,
     marginBottom: Space.md,
-    padding: Space.md,
-  },
+    padding: Space.md },
   slotRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   slotWrap: {
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   slotLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   scoreRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: Stroke.standard,
     borderTopColor: colors.border,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   bgRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -869,13 +824,11 @@ function createStyles(colors: ThemeColors) {
     borderTopWidth: Stroke.hairline,
     borderTopColor: colors.border,
     paddingTop: Space.md,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   bgSwatches: {
     flexDirection: 'row',
     gap: Space.xs,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   swatch: {
     width: Space.lg + Space.xs,
     height: Space.lg + Space.xs,
@@ -883,36 +836,30 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   swatchActive: {
     borderWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   aiCard: {
     paddingVertical: Space.md,
     borderTopWidth: Stroke.hairline,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   aiRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -923,13 +870,11 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Platform.OS === 'ios' ? Space.md : Space.sm,
     backgroundColor: colors.background,
     borderTopWidth: Stroke.standard,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   shareBtn: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
@@ -938,7 +883,5 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  });
+    alignItems: 'center' } });
 }

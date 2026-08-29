@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
@@ -13,7 +12,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useHaptic } from '../hooks/useHaptic';
@@ -116,8 +116,7 @@ export default function MessageRequestsScreen() {
           setPendingId(null);
           setPendingAction(null);
         }
-      },
-    });
+      } });
   };
 
   const handleBlock = (id: string, name: string) => {
@@ -148,8 +147,7 @@ export default function MessageRequestsScreen() {
           setPendingId(null);
           setPendingAction(null);
         }
-      },
-    });
+      } });
   };
 
   const handleReport = (id: string, _name: string) => {
@@ -318,8 +316,7 @@ export default function MessageRequestsScreen() {
         onBack={() => navigation.goBack()}
         style={{
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        }}
+          borderBottomColor: colors.border }}
       />
       {showLoading ? (
         <ConversationListSkeleton count={5} />
@@ -354,8 +351,7 @@ export default function MessageRequestsScreen() {
 function BodyEmphasisLine({
   title,
   time,
-  colors,
-}: {
+  colors }: {
   title: string;
   time?: string;
   colors: ThemeColors;
@@ -380,54 +376,43 @@ const styles$inline = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   requestName: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: undefined,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   requestTime: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.body.fontFamily,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypeStyles.body.fontFamily } });
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screenRoot: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     listContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
     requestRow: {
       paddingVertical: Space.md,
       paddingHorizontal: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     requestIdentity: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.sm + 2,
-    },
+      gap: Space.sm + 2 },
     requestText: {
       flex: 1,
       justifyContent: 'center',
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     requestHandle: {
-      marginTop: -Space.xs / 2,
-    },
+      marginTop: -Space.xs / 2 },
     requestPreview: {
-      lineHeight: Type.caption.lineHeight + 2,
-      marginTop: Space.xs / 2,
-    },
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      marginTop: Space.xs / 2 },
     // ── Marketplace context — flat hairline row, not a nested card ──
     listingContext: {
       flexDirection: 'row',
@@ -435,37 +420,31 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
       paddingTop: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     listingThumb: {
       width: Space.xl + 4,
       height: Space.xl + 4,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     listingThumbPlaceholder: {
       width: Space.xl + 4,
       height: Space.xl + 4,
       borderRadius: Radius.sm,
       backgroundColor: colors.surface,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     listingTitle: {
       flex: 1,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     listingPrice: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     // ── Primary actions ──
     requestActions: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     requestDecline: {
       flex: 1,
       alignItems: 'center',
@@ -474,67 +453,54 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     requestDeclineText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     requestAccept: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       minHeight: Control.hit,
       borderRadius: Radius.md,
-      backgroundColor: colors.textPrimary,
-    },
+      backgroundColor: colors.textPrimary },
     requestAcceptText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textInverse,
-    },
+      color: colors.textInverse },
     actionDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     actionDisabledBg: {
-      opacity: 0.5,
-    },
+      opacity: 0.5 },
     // ── Safety actions — quiet text links, not equal buttons ──
     safetyActions: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     safetyLink: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: Space.xs,
       paddingHorizontal: Space.sm,
-      minHeight: 36,
-    },
+      minHeight: 36 },
     safetyLinkTextDanger: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.danger,
-    },
+      color: colors.danger },
     safetyLinkText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     safetyDivider: {
       width: 1,
       height: 14,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     requestSeparator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
       marginLeft: Space.md,
-      marginRight: Space.md,
-    },
-  });
+      marginRight: Space.md } });
 }

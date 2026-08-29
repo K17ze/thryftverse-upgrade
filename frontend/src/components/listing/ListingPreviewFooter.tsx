@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 
 interface ListingPreviewFooterProps {
@@ -15,8 +16,7 @@ interface ListingPreviewFooterProps {
 export function ListingPreviewFooter({
   origin,
   onBack,
-  bottomInset,
-}: ListingPreviewFooterProps) {
+  bottomInset }: ListingPreviewFooterProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const secondaryLabel = origin === 'sell'
@@ -67,8 +67,7 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.md,
     backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   secondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -79,13 +78,11 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    minHeight: 48,
-  },
+    minHeight: 48 },
   secondaryText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   primaryBtn: {
     flex: 1,
     alignItems: 'center',
@@ -93,12 +90,9 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: 14,
     borderRadius: Radius.lg,
     backgroundColor: colors.brand,
-    minHeight: 48,
-  },
+    minHeight: 48 },
   primaryText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textInverse,
-  },
-  });
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textInverse } });
 }

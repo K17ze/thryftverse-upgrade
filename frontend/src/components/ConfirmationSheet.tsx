@@ -3,7 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { BottomSheet } from './BottomSheet';
 import { AppButton } from './ui/AppButton';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Typography, Space, Radius } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 export type ConfirmationSheetVariant = 'default' | 'danger';
 
@@ -37,8 +38,7 @@ export function ConfirmationSheet({
   cancelLabel = 'Cancel',
   onConfirm,
   onCancel,
-  variant = 'default',
-}: ConfirmationSheetProps) {
+  variant = 'default' }: ConfirmationSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -106,29 +106,23 @@ const createStyles = (colors: ThemeColors) =>
     container: {
       flex: 1,
       justifyContent: 'center',
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     title: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.subtitle.letterSpacing,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
       color: colors.textPrimary,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     message: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
       color: colors.textSecondary,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     actions: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     confirmButton: {
       borderRadius: Radius.lg,
-      marginBottom: Space.xs,
-    },
-  });
+      marginBottom: Space.xs } });

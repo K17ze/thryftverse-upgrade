@@ -40,20 +40,17 @@ import {
   Pressable,
   useWindowDimensions,
   AccessibilityInfo,
-  AppState,
-} from 'react-native';
+  AppState } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withTiming,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import {
   GestureDetector,
   Gesture,
-  FlatList,
-} from 'react-native-gesture-handler';
+  FlatList } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -62,12 +59,11 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   Control,
   AspectRatio,
   CommerceLayout,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -192,8 +188,7 @@ function ImagePage({
   maxZoom,
   onDoubleTap,
   onOpenFullscreen,
-  reducedMotion,
-}: ImagePageProps) {
+  reducedMotion }: ImagePageProps) {
   const { colors } = useAppTheme();
   const [failed, setFailed] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -290,8 +285,7 @@ function ImagePage({
       { translateX: translateX.value },
       { translateY: translateY.value },
       { scale: scale.value },
-    ],
-  }));
+    ] }));
 
   return (
     <GestureDetector gesture={composed}>
@@ -516,8 +510,7 @@ const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80,
-  },
+    height: 80 },
   centerPlayBtn: {
     position: 'absolute',
     top: '50%',
@@ -529,8 +522,7 @@ const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   controlBar: {
     position: 'absolute',
     bottom: 0,
@@ -540,15 +532,12 @@ const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     paddingBottom: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   controlBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });
 
 // ---------------------------------------------------------------------------
 // MediaStage
@@ -567,8 +556,7 @@ export function MediaStage({
   showPageIndicator = true,
   showControls = true,
   maxZoom = CommerceLayout.mediaMaxZoom,
-  style,
-}: MediaStageProps) {
+  style }: MediaStageProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
@@ -584,8 +572,7 @@ export function MediaStage({
       .filter((item) => !!item.uri)
       .map((item) => ({
         ...item,
-        kind: item.kind ?? (isVideoUri(item.uri) ? 'video' : 'image'),
-      }));
+        kind: item.kind ?? (isVideoUri(item.uri) ? 'video' : 'image') }));
   }, [media]);
 
   useEffect(() => {
@@ -760,15 +747,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   stage: {
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   topScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 132,
-  },
+    height: 132 },
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -778,25 +763,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: Space.md,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   headerRight: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   controlBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Subtle media-contrast scrim behind control glyphs — functional
   // (legibility over arbitrary imagery), not decorative chrome.
   controlIcon: {
     textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   indexBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -804,34 +785,28 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   indexBadgePressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.95 }],
-  },
+    transform: [{ scale: 0.95 }] },
   dotRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   dot: {
     width: 5,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: colors.scrimTextTertiary,
-  },
+    backgroundColor: colors.scrimTextTertiary },
   dotActive: {
     width: 14,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: colors.scrimTextPrimary,
-  },
+    backgroundColor: colors.scrimTextPrimary },
   indexText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
   videoBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -842,11 +817,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   videoBadgeText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.medium,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium } });

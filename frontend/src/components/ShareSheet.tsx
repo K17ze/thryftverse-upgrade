@@ -15,7 +15,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Share, Pressable, Platform } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Typography, Type } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import { BottomSheet } from './BottomSheet';
 import { AnimatedPressable } from './AnimatedPressable';
@@ -58,10 +59,8 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
     try {
       await Share.share({
         url: Platform.OS === 'ios' ? url : undefined,
-        message: Platform.OS === 'android' ? `${title}\n${url}` : title,
-      }, {
-        dialogTitle: title,
-      });
+        message: Platform.OS === 'android' ? `${title}\n${url}` : title }, {
+        dialogTitle: title });
     } catch {
       // User cancelled share
     }
@@ -73,14 +72,12 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
       id: 'copy',
       label: 'Copy Link',
       icon: 'link-outline',
-      action: handleCopyLink,
-    },
+      action: handleCopyLink },
     {
       id: 'share',
       label: 'Share via...',
       icon: 'share-social-outline',
-      action: handleNativeShare,
-    },
+      action: handleNativeShare },
     {
       id: 'remind',
       label: 'Set reminder',
@@ -89,8 +86,7 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
         haptic.light();
         show('Reminder set for this item', 'success');
         onDismiss();
-      },
-    },
+      } },
   ], [handleCopyLink, handleNativeShare, haptic, show, onDismiss]);
 
   return (
@@ -160,95 +156,78 @@ const styles = StyleSheet.create({
   container: {
     paddingTop: Space.sm,
     paddingHorizontal: Space.md,
-    gap: Space.md,
-  },
+    gap: Space.md },
   sheetTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     textAlign: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   // ── Preview — flat, no card ──
   previewRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   previewImageWrap: {
     width: 48,
     height: 48,
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   previewImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   previewIconFallback: {
     width: '100%',
     height: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   previewTextCol: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   previewTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   previewSubtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   previewUrl: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Share options grid ──
   optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.md,
     justifyContent: 'center',
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   optionBtn: {
     alignItems: 'center',
     gap: Space.xs + 2,
-    width: 72,
-  },
+    width: 72 },
   optionIconWrap: {
     width: 56,
     height: 56,
     borderRadius: Radius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   optionLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'center' },
   // ── Cancel — quiet text action ──
   cancelBtn: {
     marginTop: Space.xs,
     paddingVertical: Space.md,
     alignItems: 'center',
     minHeight: 44,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   cancelText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily } });

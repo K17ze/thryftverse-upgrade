@@ -4,7 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -146,11 +147,9 @@ export default function PersonalisationScreen() {
           genderFilter: DEFAULT_GENDER_FILTER,
           categoriesAndSizesPref: DEFAULT_CATEGORIES_PREF,
           brandsPref: DEFAULT_BRANDS_PREF,
-          membersPref: DEFAULT_MEMBERS_PREF,
-        });
+          membersPref: DEFAULT_MEMBERS_PREF });
         show('Preferences reset to defaults.', 'success');
-      },
-    });
+      } });
   };
 
   return (
@@ -269,8 +268,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     // Scroll
     scrollContent: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
 
     // Reset
     resetBtn: {
@@ -280,12 +278,10 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
       paddingVertical: Space.md,
       marginTop: Space.sm,
-      minHeight: Space.xxl,
-    },
+      minHeight: Space.xxl },
     resetBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
 
     // Onboarding footer
     onboardingFooter: {
@@ -295,15 +291,11 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.lg,
       paddingTop: Space.md,
       paddingBottom: Space.md,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
+      borderTopWidth: StyleSheet.hairlineWidth },
     skipText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     continueBtn: {
       flex: 1,
-      marginLeft: Space.md,
-    },
-  });
+      marginLeft: Space.md } });
 }

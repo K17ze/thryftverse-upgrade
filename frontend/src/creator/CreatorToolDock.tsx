@@ -8,10 +8,10 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  withSequence,
-} from 'react-native-reanimated';
+  withSequence } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -71,8 +71,7 @@ export function CreatorToolDock({
   onLayoutPresets,
   onCropLayer,
   onCutoutLayer,
-  documentType,
-}: CreatorToolDockProps) {
+  documentType }: CreatorToolDockProps) {
   const { document } = useCreator();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -235,19 +234,16 @@ export function CreatorToolDock({
     maxWidth: secondaryWidth > 0 ? secondaryWidth * secondaryExpandSV.value : 999 * secondaryExpandSV.value,
     opacity: secondaryExpandSV.value,
     transform: [{ translateX: -16 * (1 - secondaryExpandSV.value) }],
-    overflow: 'hidden' as const,
-  }));
+    overflow: 'hidden' as const }));
 
   // ── Dock style (refined mount fade-in + static translate) ─────────
   const dockStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: dockTranslateY.value }],
-    opacity: dockOpacity.value,
-  }));
+    opacity: dockOpacity.value }));
 
   // ── Tool list opacity — context transition refresh ────────────────
   const toolListAnimStyle = useAnimatedStyle(() => ({
-    opacity: toolListOpacity.value,
-  }));
+    opacity: toolListOpacity.value }));
 
   const handleSecondaryLayout = useCallback((e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -316,8 +312,7 @@ export function CreatorToolDock({
               backgroundColor: colors.surface,
               borderTopColor: colors.border,
               paddingTop: Space.md,
-              paddingBottom: Math.max(insets.bottom, Space.sm),
-            },
+              paddingBottom: Math.max(insets.bottom, Space.sm) },
         dockStyle,
       ]}
     >
@@ -337,8 +332,7 @@ export function CreatorToolDock({
               shadowOffset: { width: 0, height: 4 },
               elevation: 6,
               minHeight: 64,
-              paddingHorizontal: Space.sm,
-            },
+              paddingHorizontal: Space.sm },
           ]}
         >
           <ScrollView
@@ -498,18 +492,15 @@ function buildSelectionTools(
       tools.push({
         icon: 'swap-horizontal-outline',
         label: 'Swap',
-        action: () => onEditLayer(layer),
-      });
+        action: () => onEditLayer(layer) });
       tools.push({
         icon: 'crop-outline',
         label: 'Crop',
-        action: () => (onCutoutLayer ? onCutoutLayer(layer) : onEditLayer(layer)),
-      });
+        action: () => (onCutoutLayer ? onCutoutLayer(layer) : onEditLayer(layer)) });
       tools.push({
         icon: 'crop-outline',
         label: 'Refine',
-        action: () => (onCropLayer ? onCropLayer(layer) : onEditLayer(layer)),
-      });
+        action: () => (onCropLayer ? onCropLayer(layer) : onEditLayer(layer)) });
     } else {
       // Poster media: replace + trim (story-specific)
       tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer) });
@@ -574,45 +565,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   containerFloating: {
     borderTopWidth: 0,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   blurPill: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: Radius.xl,
     overflow: 'hidden',
-    marginHorizontal: Space.xs,
-  },
+    marginHorizontal: Space.xs },
   // Wraps the horizontal ScrollView so a right-edge fade can overlay it.
   scrollWrap: {
     flex: 1,
     position: 'relative',
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   // Subtle gradient fade on the right edge signalling horizontal overflow.
   fadeRight: {
     position: 'absolute',
     top: 0,
     right: 0,
     bottom: 0,
-    width: 28,
-  },
+    width: 28 },
   scrollContent: {
     alignItems: 'center',
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   // ── Tool list wrapper — carries the context transition opacity ──
   // A row container so the gap applies between tools, not between the
   // wrapper and the ScrollView content container.
   toolListWrap: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   // ── Expand/collapse toggle for secondary tools ──
   // 44pt hit target showing only a 20pt chevron — transparent by default
   // per the containment rule (ordinary controls default to transparent).
@@ -621,27 +605,23 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   // ── Secondary tools container ──
   // Wraps secondary tools with animated maxWidth + opacity for spring expand.
   secondaryContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   secondaryInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   // Subtle vertical separator between primary and secondary tool groups —
   // a short hairline (20pt tall) rather than a full-height divider line.
   groupDivider: {
     width: StyleSheet.hairlineWidth,
     height: 20,
-    marginHorizontal: Space.xs,
-  },
+    marginHorizontal: Space.xs },
   // Long-press tooltip label — centered below the dock (legacy fallback).
   hoverLabel: {
     position: 'absolute',
@@ -649,34 +629,28 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     textAlign: 'center',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.1 },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     marginLeft: 'auto',
     paddingLeft: Space.sm,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-  },
+    borderLeftWidth: StyleSheet.hairlineWidth },
   actionBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   publishBtn: {
     paddingHorizontal: 20,
     height: 40,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   publishBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size } });

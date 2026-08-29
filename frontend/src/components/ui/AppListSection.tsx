@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface AppListSectionProps {
   title?: string;
@@ -16,8 +17,7 @@ export function AppListSection({
   subtitle,
   children,
   style,
-  cardStyle,
-}: AppListSectionProps) {
+  cardStyle }: AppListSectionProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -39,29 +39,23 @@ export function AppListSection({
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrapper: {
     marginBottom: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   header: {
     marginBottom: Space.smMd,
-    gap: 2,
-  },
+    gap: 2 },
   title: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    lineHeight: 17,
-  },
+    lineHeight: 17 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    overflow: 'hidden',
-  },
-});
+    overflow: 'hidden' } });

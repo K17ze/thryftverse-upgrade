@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 export interface PaymentWarningCardProps {
@@ -75,43 +76,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md + 2,
     paddingVertical: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   containerMe: {
     marginHorizontal: 0,
     alignSelf: 'flex-end',
-    maxWidth: '85%',
-  },
+    maxWidth: '85%' },
   textCol: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   title: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   body: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily },
   reportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     marginTop: Space.xs + 2,
     alignSelf: 'flex-start',
-    minHeight: 32,
-  },
+    minHeight: 32 },
   reportBtnText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   closeBtn: {
     paddingTop: 2,
     flexShrink: 0,
-    minHeight: 32,
-  },
-});
+    minHeight: 32 } });

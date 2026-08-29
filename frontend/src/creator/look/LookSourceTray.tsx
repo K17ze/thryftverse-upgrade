@@ -7,8 +7,7 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  Image,
-} from 'react-native';
+  Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -17,9 +16,9 @@ import Reanimated, {
   withSpring,
   withTiming,
   runOnJS,
-  type SharedValue,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Elevation, Stroke} from '../../theme/designTokens';
+  type SharedValue } from 'react-native-reanimated';
+import { Space, Radius, Typography, Elevation, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -139,8 +138,7 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
   previewVisible,
   trayYSV,
   colors,
-  onCanvas,
-}: DraggableProductCardProps) {
+  onCanvas }: DraggableProductCardProps) {
   const { currencySymbol } = useFormattedPrice();
   const tapGesture = useMemo(
     () =>
@@ -228,8 +226,7 @@ export function LookSourceTray({
   expanded,
   onToggle,
   onDropProduct,
-  onCanvasListingIds,
-}: LookSourceTrayProps) {
+  onCanvasListingIds }: LookSourceTrayProps) {
   const { colors } = useAppTheme();
   const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
@@ -264,8 +261,7 @@ export function LookSourceTray({
         title: l.title ?? 'Untitled',
         imageUrl: l.images?.[0] ?? null,
         priceGbp: l.price ?? undefined,
-        brand: l.brand,
-      }));
+        brand: l.brand }));
   }, [listings]);
 
   // ── Closet items: saved products filtered against available listings ──
@@ -278,8 +274,7 @@ export function LookSourceTray({
         title: l.title ?? 'Untitled',
         imageUrl: l.images?.[0] ?? null,
         priceGbp: l.price ?? undefined,
-        brand: l.brand,
-      }));
+        brand: l.brand }));
   }, [listings, savedProductIds]);
 
   // ── Listings: the user's own active listings ──
@@ -293,8 +288,7 @@ export function LookSourceTray({
         title: l.title ?? 'Untitled',
         imageUrl: l.images?.[0] ?? null,
         priceGbp: l.price ?? undefined,
-        brand: l.brand,
-      }));
+        brand: l.brand }));
   }, [listings, currentUser?.id]);
 
   // ── Search: debounced query against the API ──
@@ -325,8 +319,7 @@ export function LookSourceTray({
       title: r.title,
       imageUrl: r.imageUrl,
       priceGbp: r.priceGbp,
-      brand: r.brand,
-    }));
+      brand: r.brand }));
   }, [searchResults]);
 
   // ── Refs for reading latest expanded state in callbacks ──
@@ -403,11 +396,9 @@ export function LookSourceTray({
             listingId: item.id,
             snapshotTitle: item.title,
             snapshotImageUrl: item.imageUrl ?? undefined,
-            snapshotPriceGbp: item.priceGbp,
-          });
+            snapshotPriceGbp: item.priceGbp });
           if (expandedRef.current) onToggle();
-        },
-      });
+        } });
       return;
     }
     haptic.selection();
@@ -415,8 +406,7 @@ export function LookSourceTray({
       listingId: item.id,
       snapshotTitle: item.title,
       snapshotImageUrl: item.imageUrl ?? undefined,
-      snapshotPriceGbp: item.priceGbp,
-    });
+      snapshotPriceGbp: item.priceGbp });
     // Auto-collapse after adding so the canvas remains dominant
     if (expandedRef.current) {
       onToggle();
@@ -438,8 +428,7 @@ export function LookSourceTray({
         listingId: item.id,
         snapshotTitle: item.title,
         snapshotImageUrl: item.imageUrl ?? undefined,
-        snapshotPriceGbp: item.priceGbp,
-      };
+        snapshotPriceGbp: item.priceGbp };
       if (onDropProduct) {
         onDropProduct(itemPayload, { x, y });
       } else {
@@ -478,29 +467,24 @@ export function LookSourceTray({
 
   // ── Animated styles ──
   const containerAnimStyle = useAnimatedStyle(() => ({
-    height: heightSV.value,
-  }));
+    height: heightSV.value }));
 
   const contentAnimStyle = useAnimatedStyle(() => ({
     opacity: contentOpacitySV.value,
-    transform: [{ translateY: (1 - contentOpacitySV.value) * 16 }],
-  }));
+    transform: [{ translateY: (1 - contentOpacitySV.value) * 16 }] }));
 
   const chevronAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${chevronSV.value * 180}deg` }],
-  }));
+    transform: [{ rotate: `${chevronSV.value * 180}deg` }] }));
 
   const sheetBgAnimStyle = useAnimatedStyle(() => ({
-    opacity: sheetBgSV.value,
-  }));
+    opacity: sheetBgSV.value }));
 
   const previewAnimStyle = useAnimatedStyle(() => ({
     opacity: previewVisible.value,
     transform: [
       { translateX: previewX.value - trayXSV.value - PREVIEW_SIZE / 2 },
       { translateY: previewY.value - trayYSV.value - PREVIEW_SIZE / 2 },
-    ],
-  }));
+    ] }));
 
   return (
     <View onLayout={measureTray} ref={trayRef} style={styles.wrapper}>
@@ -512,8 +496,7 @@ export function LookSourceTray({
             styles.scrim,
             {
               backgroundColor: colors.surface,
-              borderTopColor: colors.borderSubtle,
-            },
+              borderTopColor: colors.borderSubtle },
           ]}
           pointerEvents="none"
         />
@@ -525,8 +508,7 @@ export function LookSourceTray({
             styles.sheetBg,
             {
               backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-            },
+              borderTopColor: colors.border },
             sheetBgAnimStyle,
           ]}
           pointerEvents="none"
@@ -732,72 +714,60 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
     borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-  },
+    borderTopRightRadius: Radius.xl },
   // ── Scrim — always visible, subtle so peek bar is readable ──
   scrim: {
     opacity: 0.5,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-  },
+    borderTopRightRadius: Radius.xl },
   // ── Sheet background — fades in when expanded ──
   sheetBg: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    ...Elevation.floating,
-  },
+    ...Elevation.floating },
   // ── Peek bar (48pt — always visible) ──
   peekBar: {
     height: PEEK_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   peekBarPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   peekLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   // ── Expanded content ──
   content: {
-    height: CONTENT_HEIGHT,
-  },
+    height: CONTENT_HEIGHT },
   // ── Tab bar ──
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    height: 44,
-  },
+    height: 44 },
   tabBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: Space.sm,
     height: 44,
-    position: 'relative',
-  },
+    position: 'relative' },
   tabBtnPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   tabLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   tabIndicator: {
     position: 'absolute',
     bottom: 0,
     left: Space.sm,
     right: Space.sm,
     height: 2,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   // ── Search row ──
   searchRow: {
     flexDirection: 'row',
@@ -805,14 +775,12 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   searchInput: {
     flex: 1,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    paddingVertical: 4,
-  },
+    fontSize: TypographyV2.body.size,
+    paddingVertical: 4 },
   // ── State container (loading/empty) ──
   stateContainer: {
     flexDirection: 'row',
@@ -820,32 +788,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.sm,
     paddingVertical: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   stateText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Item scroll ──
   itemScroll: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
     alignItems: 'center',
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   // ── Item card — flat, no card-on-card. Image + title + price. ──
   // 44pt touch target via the GestureDetector wrapper.
   itemCard: {
     width: 76,
     alignItems: 'center',
-    gap: 2,
-  },
+    gap: 2 },
   itemImage: {
     width: 72,
     height: 72,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.05)' },
   // ── Dedup indicator — subtle dot on items already on canvas ──
   onCanvasDot: {
     position: 'absolute',
@@ -855,69 +818,57 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
-    borderColor: '#fff',
-  },
+    borderColor: '#fff' },
   itemImagePlaceholder: {
     width: 72,
     height: 72,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemTitle: {
     fontFamily: Typography.family.medium,
     fontSize: 10.5,
     marginTop: 2,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   itemPrice: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10.5,
-  },
+    fontSize: 10.5 },
   // ── Floating drag preview ──
   dragPreview: {
     position: 'absolute',
     width: PREVIEW_SIZE,
     alignItems: 'center',
     gap: 2,
-    zIndex: 1000,
-  },
+    zIndex: 1000 },
   previewImage: {
     width: PREVIEW_SIZE,
     height: PREVIEW_SIZE,
     borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.05)',
-    ...Elevation.floating,
-  },
+    ...Elevation.floating },
   previewTitle: {
     fontFamily: Typography.family.medium,
     fontSize: 10.5,
     marginTop: 2,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   previewPrice: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10.5,
-  },
+    fontSize: 10.5 },
   // ── Source tray peek strip ──
   peekStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   peekThumb: {
     width: 32,
     height: 32,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.05)' },
   peekMore: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-  },
-});
+    fontSize: TypographyV2.meta.size } });
 
 // ───────────────────────────────────────────────────────────────────────────
 // SourceTrayPeek — a thin strip of item thumbnails that sits above the

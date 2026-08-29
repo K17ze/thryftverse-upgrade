@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface BuyerProtectionStripProps {
   /** Optional policy label from server (e.g. "Thryftverse Buyer Protection") */
@@ -27,8 +28,7 @@ export interface BuyerProtectionStripProps {
 export function BuyerProtectionStrip({
   policyLabel,
   compact = false,
-  message,
-}: BuyerProtectionStripProps) {
+  message }: BuyerProtectionStripProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const text = message ?? 'Your money is held safely until you confirm receipt';
@@ -72,31 +72,25 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     backgroundColor: colors.successSubtle,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.successBorder,
-  },
+    borderColor: colors.successBorder },
   startIcon: {
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   textWrap: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   title: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: 0.1,
-  },
+    letterSpacing: 0.1 },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: 16,
-  },
+    lineHeight: 16 },
   endIcon: {
     flexShrink: 0,
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   compactContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -106,13 +100,10 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.successSubtle,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.successBorder,
-  },
+    borderColor: colors.successBorder },
   compactText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary } });
 }

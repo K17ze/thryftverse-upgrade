@@ -6,7 +6,8 @@
 
 import React from 'react';
 import { Text as RNText, TextProps as RNTextProps, StyleSheet, StyleProp, TextStyle } from 'react-native';
-import { Type, Typography } from '../../theme/designTokens';
+import {} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useAccessibilityPreferences } from '../../context/AccessibilityPreferencesContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -48,7 +49,7 @@ export const Caption: React.FC<TextComponentProps> = ({
       style={[
         styles.caption,
         { color: color ?? colors.textSecondary },
-        scale !== 1 ? { fontSize: Math.round(Type.caption.size * scale), lineHeight: Math.round(Type.caption.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.meta.size * scale), lineHeight: Math.round(TypographyV2.meta.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -72,7 +73,7 @@ export const CaptionEmphasis: React.FC<TextComponentProps> = ({
       style={[
         styles.captionEmphasis,
         { color: color ?? colors.textPrimary },
-        scale !== 1 ? { fontSize: Math.round(Type.caption.size * scale), lineHeight: Math.round(Type.caption.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.meta.size * scale), lineHeight: Math.round(TypographyV2.meta.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -100,7 +101,7 @@ export const Body: React.FC<TextComponentProps> = ({
       style={[
         styles.body,
         { color: color ?? colors.textPrimary },
-        scale !== 1 ? { fontSize: Math.round(Type.body.size * scale), lineHeight: Math.round(Type.body.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.body.size * scale), lineHeight: Math.round(TypographyV2.body.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -124,7 +125,7 @@ export const BodyEmphasis: React.FC<TextComponentProps> = ({
       style={[
         styles.bodyEmphasis,
         { color: color ?? colors.textPrimary },
-        scale !== 1 ? { fontSize: Math.round(Type.priceList.size * scale), lineHeight: Math.round(Type.priceList.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.priceList.size * scale), lineHeight: Math.round(TypographyV2.priceList.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -152,7 +153,7 @@ export const Headline: React.FC<TextComponentProps> = ({
       style={[
         styles.headline,
         { color: color ?? colors.textPrimary },
-        scale !== 1 ? { fontSize: Math.round(Type.subtitle.size * scale), lineHeight: Math.round(Type.subtitle.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.sectionTitle.size * scale), lineHeight: Math.round(TypographyV2.sectionTitle.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -180,7 +181,7 @@ export const Title3: React.FC<TextComponentProps> = ({
       style={[
         styles.title3,
         { color: color ?? colors.textPrimary },
-        scale !== 1 ? { fontSize: Math.round(Type.title.size * scale), lineHeight: Math.round(Type.title.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.screenTitle.size * scale), lineHeight: Math.round(TypographyV2.screenTitle.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -204,7 +205,7 @@ export const Title2: React.FC<TextComponentProps> = ({
       style={[
         styles.title2,
         { color: color ?? colors.textPrimary },
-        scale !== 1 ? { fontSize: Math.round(Type.title.size * scale), lineHeight: Math.round(Type.title.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.screenTitle.size * scale), lineHeight: Math.round(TypographyV2.screenTitle.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -228,7 +229,7 @@ export const Title1: React.FC<TextComponentProps> = ({
       style={[
         styles.title1,
         { color: color ?? colors.textPrimary },
-        scale !== 1 ? { fontSize: Math.round(Type.title.size * scale), lineHeight: Math.round(Type.title.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.screenTitle.size * scale), lineHeight: Math.round(TypographyV2.screenTitle.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -263,7 +264,7 @@ export const Price: React.FC<PriceProps> = ({
       style={[
         styles.price,
         { color: color ?? colors.textPrimary },
-        scale !== 1 ? { fontSize: Math.round(Type.priceList.size * scale), lineHeight: Math.round(Type.priceList.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.priceList.size * scale), lineHeight: Math.round(TypographyV2.priceList.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -289,7 +290,7 @@ export const PriceCompact: React.FC<PriceProps> = ({
       style={[
         styles.priceCompact,
         { color: color ?? colors.textPrimary },
-        scale !== 1 ? { fontSize: Math.round(Type.caption.size * scale), lineHeight: Math.round(Type.caption.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.meta.size * scale), lineHeight: Math.round(TypographyV2.meta.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -315,7 +316,7 @@ export const PriceLarge: React.FC<PriceProps> = ({
       style={[
         styles.priceLarge,
         { color: color ?? colors.textPrimary },
-        scale !== 1 ? { fontSize: Math.round(Type.priceHero.size * scale), lineHeight: Math.round(Type.priceHero.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.priceHero.size * scale), lineHeight: Math.round(TypographyV2.priceHero.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -343,7 +344,7 @@ export const Meta: React.FC<TextComponentProps> = ({
       style={[
         styles.meta,
         { color: color ?? colors.textSecondary },
-        scale !== 1 ? { fontSize: Math.round(Type.meta.size * scale), lineHeight: Math.round(Type.meta.lineHeight * scale) } : undefined,
+        scale !== 1 ? { fontSize: Math.round(TypographyV2.meta.size * scale), lineHeight: Math.round(TypographyV2.meta.lineHeight * scale) } : undefined,
         style,
       ]}
       {...props}
@@ -359,78 +360,65 @@ export const Meta: React.FC<TextComponentProps> = ({
 
 const styles = StyleSheet.create({
   caption: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   captionEmphasis: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   body: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   bodyEmphasis: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.priceList.letterSpacing,
-  },
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing },
   headline: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   title3: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   title2: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   title1: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   price: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0,
-  },
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: 0 },
   priceCompact: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0 },
   priceLarge: {
-    fontSize: Type.priceHero.size,
-    lineHeight: Type.priceHero.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceHero.letterSpacing,
-  },
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: TypographyV2.priceHero.fontFamily,
+    letterSpacing: TypographyV2.priceHero.letterSpacing },
   meta: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing } });
 
 // ============================================================================
 // NAMESPACE EXPORT (Convenience)
@@ -448,7 +436,6 @@ export const T = {
   Price,
   PriceCompact,
   PriceLarge,
-  Meta,
-};
+  Meta };
 
 export default T;

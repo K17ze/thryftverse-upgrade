@@ -9,7 +9,8 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { fetchPrivacyPreferences, updateActivityStatus, updateSearchVisibility } from '../services/accountApi';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 
@@ -272,30 +273,23 @@ function createStyles(colors: ThemeColors) {
       borderWidth: StyleSheet.hairlineWidth + 0.5,
       borderRadius: Radius.full,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     retryBtnText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     skeletonWrap: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.lg,
-      gap: Space.md,
-    },
+      gap: Space.md },
     skeletonBar: {
       height: 20,
       borderRadius: Radius.sm,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     postureBadge: {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     postureBadgeText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily } });
 }

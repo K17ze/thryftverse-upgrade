@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Type, FontFamily, Scrim } from '../../theme/designTokens';
+import { Space, FontFamily, Scrim } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
@@ -22,8 +23,7 @@ export function FlagshipHeroSection({
   subtitle,
   ctaLabel,
   onCta,
-  height = 320,
-}: FlagshipHeroSectionProps) {
+  height = 320 }: FlagshipHeroSectionProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
@@ -73,35 +73,28 @@ export function FlagshipHeroSection({
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     position: 'relative',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   imageFallback: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   textWrap: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     padding: Space.lg,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   title: {
-    fontSize: Type.display.size,
-    lineHeight: Type.display.lineHeight,
+    fontSize: TypographyV2.display.size,
+    lineHeight: TypographyV2.display.lineHeight,
     fontFamily: FontFamily.bold,
     color: colors.scrimTextPrimary,
-    letterSpacing: -0.5,
-  },
+    letterSpacing: -0.5 },
   subtitle: {
     marginTop: Space.xs,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.regular,
-    color: colors.scrimTextSecondary,
-  },
+    color: colors.scrimTextSecondary },
   ctaWrap: {
     marginTop: Space.md,
-    alignSelf: 'flex-start',
-  },
-});
+    alignSelf: 'flex-start' } });

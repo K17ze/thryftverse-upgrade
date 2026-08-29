@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../../theme/designTokens';
+import { Space, Radius } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { CachedImage } from '../../CachedImage';
@@ -58,8 +59,7 @@ export function CommerceDetailSellerRow({
   secondaryAction,
   roleLabel,
   institutional = false,
-  onPress,
-}: CommerceDetailSellerRowProps) {
+  onPress }: CommerceDetailSellerRowProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -177,75 +177,60 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     flexShrink: 1,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   pressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.985 }],
-  },
+    transform: [{ scale: 0.985 }] },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   // Institutional issuers use a rounded-square avatar to visually
   // distinguish them from individual sellers (circles).
   avatarInstitutional: {
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   avatarImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   // "Verified issuer" badge — subtle brand-tinted pill with a shield
   // glyph. Distinguishes institutional custodians from individual
   // sellers per spec 03_COOWN §2.
   avatarInitial: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   identityText: {
     flexShrink: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   name: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   subtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   quietAction: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   actionHitTarget: {
     minHeight: 44,
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });

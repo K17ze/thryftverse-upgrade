@@ -6,22 +6,21 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { haptics } from '../utils/haptics';
 import { useStore } from '../store/useStore';
 import {
   CommerceUserOrder,
   listUserOrders,
-  type ListUserOrdersParams,
-} from '../services/commerceApi';
+  type ListUserOrdersParams } from '../services/commerceApi';
 import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -33,13 +32,11 @@ import { OrderRowSkeleton } from '../components/skeletons/OrderRowSkeleton';
 import {
   OrdersFilterSheet,
   FilterClassification,
-  OrdersFilterState,
-} from '../components/orders/OrdersFilterSheet';
+  OrdersFilterState } from '../components/orders/OrdersFilterSheet';
 import {
 
   needsAction,
-  type OrderRole,
-} from '../components/orders/orderCapabilities';
+  type OrderRole } from '../components/orders/orderCapabilities';
 import { t } from '../i18n';
 
 interface DateGroup {
@@ -103,8 +100,7 @@ export default function MyOrdersScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [filter, setFilter] = useState<OrdersFilterState>({
     classification: 'all',
-    year: null,
-  });
+    year: null });
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -126,8 +122,7 @@ export default function MyOrdersScreen() {
   const buildParams = useCallback(
     (cursor?: string): ListUserOrdersParams => {
       const params: ListUserOrdersParams = {
-        limit: PAGE_SIZE,
-      };
+        limit: PAGE_SIZE };
 
       // Tab → role mapping:
       //  'all'       → role=all (both buyer + seller orders)
@@ -265,8 +260,7 @@ export default function MyOrdersScreen() {
         role,
         counterpartyUsername,
         shipByDate: order.shipByDate ?? null,
-        serviceName: order.fulfilmentSnapshot?.serviceName ?? order.fulfilmentSnapshot?.carrierId ?? null,
-      };
+        serviceName: order.fulfilmentSnapshot?.serviceName ?? order.fulfilmentSnapshot?.carrierId ?? null };
     });
   }, [orders, viewerId]);
 
@@ -501,8 +495,7 @@ export default function MyOrdersScreen() {
         needs_action: 'Needs action',
         active: 'Active',
         completed: 'Completed',
-        cancelled: 'Cancelled',
-      };
+        cancelled: 'Cancelled' };
       parts.push(labels[filter.classification]);
     }
     if (filter.year) parts.push(String(filter.year));
@@ -519,8 +512,7 @@ export default function MyOrdersScreen() {
           paddingTop: insets.top,
           paddingBottom: Space.sm,
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        }}
+          borderBottomColor: colors.border }}
         rightAction={
           <Pressable
             onPress={() => setFilterSheetVisible(true)}
@@ -649,103 +641,86 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   needsActionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
-    backgroundColor: colors.surface,
-  },
+    backgroundColor: colors.surface },
   needsActionText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.brand },
   searchRow: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   searchInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    height: Control.chrome + Space.xs,
-  },
+    height: Control.chrome + Space.xs },
   searchIcon: {
-    marginLeft: 0,
-  },
+    marginLeft: 0 },
   searchInput: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   filterSummaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   filterSummaryText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.textMuted },
   clearFilterText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.brand },
   groupHeader: {
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
-    paddingBottom: Space.xs + 2,
-  },
+    paddingBottom: Space.xs + 2 },
   groupHeaderText: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     color: colors.textMuted,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   listContent: {
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginLeft: Space.md + 80 + Space.md,
-  },
+    marginLeft: Space.md + 80 + Space.md },
   errorContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.xl * 2,
-    gap: Space.md,
-  },
+    gap: Space.md },
   errorTitle: {
-    fontSize: Type.sectionTitle.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textPrimary },
   errorSubtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   retryBtn: {
     paddingVertical: Space.md - 2,
     paddingHorizontal: Space.xl,
@@ -753,58 +728,48 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
     minHeight: Space.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   retryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse },
   footerLoading: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   footerLoadingText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.textMuted },
   footerError: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   footerErrorText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.textMuted },
   retryLink: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.brand },
   footerEnd: {
     alignItems: 'center',
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   footerEndText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.textMuted,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.textMuted } });
 }

@@ -4,12 +4,12 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri } from '../../utils/media';
 import { ImageViewer } from '../ImageViewer';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -50,8 +50,7 @@ export function ListingMediaHero({
   onDoubleTap,
   bigHeartOpacity,
   bigHeartScale,
-  scrollY,
-}: ListingMediaHeroProps) {
+  scrollY }: ListingMediaHeroProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -64,14 +63,12 @@ export function ListingMediaHero({
     const parallaxTranslate = interpolate(scrollY.value, [0, 360], [0, 90], Extrapolation.CLAMP);
     const scale = interpolate(overscroll, [-120, 0], [1.16, 1], Extrapolation.CLAMP);
     return {
-      transform: [{ translateY: pullDownTranslate + parallaxTranslate }, { scale }],
-    };
+      transform: [{ translateY: pullDownTranslate + parallaxTranslate }, { scale }] };
   });
 
   const bigHeartStyle = useAnimatedStyle(() => ({
     opacity: bigHeartOpacity.value,
-    transform: [{ scale: bigHeartScale.value }],
-  }));
+    transform: [{ scale: bigHeartScale.value }] }));
 
   const heroHeight = SCREEN_H * 0.65;
 
@@ -170,27 +167,23 @@ function createStyles(colors: ThemeColors) {
     width: SCREEN_W,
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   topScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: 120,
-    backgroundColor: colors.glassBg,
-  },
+    backgroundColor: colors.glassBg },
   bigHeartWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 5,
-  },
+    zIndex: 5 },
   bigHeartIcon: {
     shadowColor: colors.textPrimary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
+    shadowRadius: 10 },
   soldOverlay: {
     position: 'absolute',
     bottom: 32,
@@ -198,14 +191,12 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.success,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   soldText: {
     color: colors.background,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 1 },
   indexBadge: {
     position: 'absolute',
     bottom: 16,
@@ -213,13 +204,11 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   indexText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   videoBadge: {
     position: 'absolute',
     bottom: 16,
@@ -230,13 +219,11 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   videoBadgeText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -245,19 +232,15 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   headerRight: {
     flexDirection: 'row',
-    gap: 12,
-  },
+    gap: 12 },
   controlBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  });
+    justifyContent: 'center' } });
 }

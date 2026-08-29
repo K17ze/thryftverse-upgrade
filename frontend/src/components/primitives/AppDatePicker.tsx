@@ -7,16 +7,14 @@ import {
   StyleSheet,
   Text,
   View,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   Radius,
   Space,
-  Type,
-  Typography,
   Elevation,
   Control, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type AppDatePickerMode = 'date' | 'time' | 'datetime';
 
@@ -84,8 +82,7 @@ export function AppDatePicker({
   minDate,
   maxDate,
   label,
-  testID,
-}: AppDatePickerProps) {
+  testID }: AppDatePickerProps) {
   const { colors } = useAppTheme();
   const [modalVisible, setModalVisible] = React.useState(false);
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -175,8 +172,7 @@ function WheelPickerSheet({
   maxDate,
   colors,
   styles,
-  onChange,
-}: WheelPickerSheetProps) {
+  onChange }: WheelPickerSheetProps) {
   const showDate = mode === 'date' || mode === 'datetime';
   const showTime = mode === 'time' || mode === 'datetime';
 
@@ -283,8 +279,7 @@ function WheelColumn({
   colors,
   styles,
   onSelect,
-  label,
-}: WheelColumnProps) {
+  label }: WheelColumnProps) {
   const scrollRef = React.useRef<ScrollView>(null);
   const itemKey = React.useRef(selectedIndex);
 
@@ -292,8 +287,7 @@ function WheelColumn({
     itemKey.current = selectedIndex;
     scrollRef.current?.scrollTo({
       y: selectedIndex * ITEM_HEIGHT,
-      animated: false,
-    });
+      animated: false });
   }, [selectedIndex]);
 
   const handleScrollEnd = React.useCallback(
@@ -369,15 +363,13 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       minHeight: Control.hit,
-      justifyContent: 'center',
-    } as ViewStyle,
+      justifyContent: 'center' } as ViewStyle,
     label: {
-      fontSize: Type.metaElevated.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.label.size,
+      fontFamily: TypographyV2.label.fontFamily,
       color: colors.textSecondary,
-      letterSpacing: Type.metaElevated.letterSpacing,
-      marginBottom: Space.xs,
-    } as ViewStyle,
+      letterSpacing: TypographyV2.label.letterSpacing,
+      marginBottom: Space.xs } as ViewStyle,
     field: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
@@ -386,70 +378,57 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
       backgroundColor: colors.input,
       minHeight: Control.hit,
-      justifyContent: 'center',
-    } as ViewStyle,
+      justifyContent: 'center' } as ViewStyle,
     fieldValue: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-    } as ViewStyle,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing } as ViewStyle,
     overlay: {
       flex: 1,
       justifyContent: 'flex-end',
-      backgroundColor: colors.overlay,
-    } as ViewStyle,
+      backgroundColor: colors.overlay } as ViewStyle,
     sheet: {
       backgroundColor: colors.surface,
       borderTopLeftRadius: Radius.xxl,
       borderTopRightRadius: Radius.xxl,
       paddingBottom: Space.lg,
-      ...Elevation.modal,
-    } as ViewStyle,
+      ...Elevation.modal } as ViewStyle,
     sheetHeader: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       alignItems: 'center',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    } as ViewStyle,
+      paddingVertical: Space.sm } as ViewStyle,
     sheetAction: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.brand,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-    } as ViewStyle,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing } as ViewStyle,
     wheelRow: {
       flexDirection: 'row',
       justifyContent: 'center',
-      paddingHorizontal: Space.sm,
-    } as ViewStyle,
+      paddingHorizontal: Space.sm } as ViewStyle,
     wheelColumn: {
       flex: 1,
       maxWidth: 120,
       height: PICKER_HEIGHT,
-      marginHorizontal: Space.xxs,
-    } as ViewStyle,
+      marginHorizontal: Space.xxs } as ViewStyle,
     wheelContent: {
-      paddingVertical: 0,
-    } as ViewStyle,
+      paddingVertical: 0 } as ViewStyle,
     wheelSpacer: {
-      height: ITEM_HEIGHT * 2,
-    } as ViewStyle,
+      height: ITEM_HEIGHT * 2 } as ViewStyle,
     wheelItem: {
       height: ITEM_HEIGHT,
       justifyContent: 'center',
-      alignItems: 'center',
-    } as ViewStyle,
+      alignItems: 'center' } as ViewStyle,
     wheelItemText: {
-      fontSize: Type.bodyLarge.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    } as ViewStyle,
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
+      color: colors.textMuted } as ViewStyle,
     wheelItemTextSelected: {
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    } as ViewStyle,
+      fontFamily: TypographyV2.priceList.fontFamily,
+      color: colors.textPrimary } as ViewStyle,
     wheelSelectionOverlay: {
       position: 'absolute',
       top: ITEM_HEIGHT * 2,
@@ -458,7 +437,5 @@ function createStyles(colors: ThemeColors) {
       height: ITEM_HEIGHT,
       borderTopWidth: 1,
       borderBottomWidth: 1,
-      borderColor: colors.border,
-    } as ViewStyle,
-  });
+      borderColor: colors.border } as ViewStyle });
 }

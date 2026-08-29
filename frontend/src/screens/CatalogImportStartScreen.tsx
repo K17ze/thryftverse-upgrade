@@ -14,8 +14,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
-  RefreshControl,
-} from 'react-native';
+  RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -25,11 +24,10 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Control,
-  DockConstants,
-} from '../theme/designTokens';
+  DockConstants } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
@@ -37,8 +35,7 @@ import {
   fetchImportSources,
   CatalogImportError,
   type SourceCapabilityDTO,
-  type CatalogSource,
-} from '../services/catalogImportApi';
+  type CatalogSource } from '../services/catalogImportApi';
 
 // ── Navigation param list (registered separately by the main agent) ──────────
 export type CatalogImportStackParamList = {
@@ -56,8 +53,7 @@ const SOURCE_LABEL: Record<CatalogSource, string> = {
   seller_package: 'Send your catalogue',
   ebay: 'eBay',
   depop: 'Depop',
-  vinted: 'Vinted',
-};
+  vinted: 'Vinted' };
 
 export default function CatalogImportStartScreen() {
   const insets = useSafeAreaInsets();
@@ -234,8 +230,7 @@ export default function CatalogImportStartScreen() {
           {
             paddingBottom: insets.bottom + Space.sm,
             backgroundColor: colors.background,
-            borderTopColor: colors.borderSubtle,
-          },
+            borderTopColor: colors.borderSubtle },
         ]}
       >
         <AnimatedPressable
@@ -256,8 +251,7 @@ export default function CatalogImportStartScreen() {
 function BackButton({
   colors,
   styles,
-  onPress,
-}: {
+  onPress }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
   onPress: () => void;
@@ -279,58 +273,48 @@ function BackButton({
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     screen: {
-      flex: 1,
-    },
+      flex: 1 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     backHit: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     loadingWrap: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.smMd,
-    },
+      gap: Space.smMd },
     loadingText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary },
     scrollContent: {
       paddingHorizontal: Space.md,
-      flexGrow: 1,
-    },
+      flexGrow: 1 },
     hero: {
       paddingTop: Space.xl,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     heroTitle: {
       fontFamily: FontFamily.bold,
-      fontSize: Type.title.size,
-      lineHeight: Type.title.lineHeight,
-      letterSpacing: Type.title.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
+      color: colors.textPrimary },
     heroSubtitle: {
       marginTop: Space.sm,
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      color: colors.textSecondary },
     section: {
-      marginBottom: Space.xl,
-    },
+      marginBottom: Space.xl },
     primarySourceCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -339,60 +323,50 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.borderSubtle,
-    },
+      borderColor: colors.borderSubtle },
     primarySourceText: {
-      flex: 1,
-    },
+      flex: 1 },
     primarySourceTitle: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     primarySourceDesc: {
       marginTop: Space.xxs,
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary },
     unavailableSection: {
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
     unavailableHeading: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textSecondary,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     unavailableRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.smMd,
-      gap: Space.md,
-    },
+      gap: Space.md },
     unavailableRowBorder: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     unavailableLabel: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textPrimary },
     unavailableReason: {
       flexShrink: 1,
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textMuted,
-      textAlign: 'right',
-    },
+      textAlign: 'right' },
     dock: {
       position: 'absolute',
       left: 0,
@@ -400,19 +374,15 @@ const createStyles = (colors: ThemeColors) =>
       bottom: 0,
       paddingTop: Space.sm,
       paddingHorizontal: Space.md,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
+      borderTopWidth: StyleSheet.hairlineWidth },
     dockButton: {
       height: DockConstants.primaryButtonHeight,
       borderRadius: Radius.sm,
       backgroundColor: colors.brand,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     dockButtonText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-      color: colors.textInverse,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      color: colors.textInverse } });

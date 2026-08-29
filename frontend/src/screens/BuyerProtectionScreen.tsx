@@ -12,8 +12,7 @@ import {
   Text,
   StyleSheet,
   RefreshControl,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,7 +21,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -35,8 +35,7 @@ import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import {
   fetchBuyerProtection,
   createBuyerProtectionClaim,
-  type BuyerProtectionInfo,
-} from '../services/commerceApi';
+  type BuyerProtectionInfo } from '../services/commerceApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BuyerProtection'>;
@@ -45,8 +44,7 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
-    year: 'numeric',
-  });
+    year: 'numeric' });
 }
 
 export default function BuyerProtectionScreen({ navigation, route }: Props) {
@@ -125,8 +123,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
         try {
           await createBuyerProtectionClaim(orderId, {
             reason: reason.trim(),
-            description: description.trim(),
-          });
+            description: description.trim() });
           haptics.success();
           show('Claim submitted. We respond as quickly as we can.', 'success');
           setShowClaimForm(false);
@@ -139,8 +136,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
           setSubmitting(false);
         }
       },
-      variant: 'default',
-    });
+      variant: 'default' });
   };
 
   if (loading) {
@@ -307,60 +303,49 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: {
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
     errorContainer: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     errorTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     errorBody: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     sectionTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     claimForm: {
       padding: Space.md,
       marginHorizontal: Space.md,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     inputLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       marginTop: Space.sm,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     input: {
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     textArea: {
       minHeight: Space.xxl * 2 + Space.xs,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     claimFormActions: {
       flexDirection: 'row',
-      marginTop: Space.md,
-    },
-  });
+      marginTop: Space.md } });
 }

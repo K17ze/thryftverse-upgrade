@@ -24,8 +24,7 @@ import {
   Pressable,
   LayoutChangeEvent,
   ViewStyle,
-  ColorValue,
-} from 'react-native';
+  ColorValue } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -34,10 +33,10 @@ import Reanimated, {
   useAnimatedStyle,
   withTiming,
   Easing,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Stroke, Control, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -83,8 +82,7 @@ function StopThumb({
   isSelected,
   onSelect,
   onDragChange,
-  onDragCommit,
-}: StopThumbProps) {
+  onDragCommit }: StopThumbProps) {
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
   // Shared value (not useRef) so the worklet can read the measured width
@@ -127,14 +125,12 @@ function StopThumb({
   const thumbStyle = useAnimatedStyle(() => {
     if (reduceMotion) {
       return {
-        transform: [{ translateX: thumbX.value - STOP_THUMB_SIZE / 2 }],
-      };
+        transform: [{ translateX: thumbX.value - STOP_THUMB_SIZE / 2 }] };
     }
     return {
       transform: [
         { translateX: withTiming(thumbX.value - STOP_THUMB_SIZE / 2, SNAP_TIMING) },
-      ],
-    };
+      ] };
   });
 
   return (
@@ -146,8 +142,7 @@ function StopThumb({
           {
             backgroundColor: toHexString(stop.color),
             borderColor: isSelected ? colors.brand : colors.textInverse,
-            borderWidth: isSelected ? Stroke.emphasis : Stroke.standard,
-          },
+            borderWidth: isSelected ? Stroke.emphasis : Stroke.standard },
         ]}
         accessibilityRole="adjustable"
         accessibilityLabel={`Gradient stop at ${Math.round(stop.position * 100)} percent`}
@@ -155,8 +150,7 @@ function StopThumb({
           min: 0,
           max: 100,
           now: Math.round(stop.position * 100),
-          text: `Position ${Math.round(stop.position * 100)} percent`,
-        }}
+          text: `Position ${Math.round(stop.position * 100)} percent` }}
       />
     </GestureDetector>
   );
@@ -167,8 +161,7 @@ export function GradientEditor({
   gradient,
   onChange,
   onCommit,
-  style,
-}: GradientEditorProps) {
+  style }: GradientEditorProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useGradientEditorStyles(colors);
@@ -257,13 +250,11 @@ export function GradientEditor({
     const newStop: GradientStop = {
       id: makeStableId('stop'),
       position: bestPos,
-      color: newColor,
-    };
+      color: newColor };
 
     const newGradient = {
       ...gradient,
-      stops: [...gradient.stops, newStop],
-    };
+      stops: [...gradient.stops, newStop] };
     setSelectedStopId(newStop.id);
     updateGradient(newGradient, true);
   }, [gradient, haptic, updateGradient]);
@@ -281,8 +272,7 @@ export function GradientEditor({
     haptic.selection();
     const reversedStops = gradient.stops.map((s) => ({
       ...s,
-      position: 1 - s.position,
-    }));
+      position: 1 - s.position }));
     updateGradient({ ...gradient, stops: reversedStops }, true);
   }, [gradient, haptic, updateGradient]);
 
@@ -501,14 +491,12 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
   const thumbStyle = useAnimatedStyle(() => {
     if (reduceMotion) {
       return {
-        transform: [{ translateX: thumbX.value - THUMB_SIZE / 2 }],
-      };
+        transform: [{ translateX: thumbX.value - THUMB_SIZE / 2 }] };
     }
     return {
       transform: [
         { translateX: withTiming(thumbX.value - THUMB_SIZE / 2, SNAP_TIMING) },
-      ],
-    };
+      ] };
   });
 
   return (
@@ -522,8 +510,7 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
           min: 0,
           max: 360,
           now: Math.round(angle),
-          text: `${Math.round(angle)} degrees`,
-        }}
+          text: `${Math.round(angle)} degrees` }}
       >
         <View style={[styles.angleTrack, { backgroundColor: colors.border, height: TRACK_HEIGHT }]} />
         <Reanimated.View
@@ -535,8 +522,7 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
               height: THUMB_SIZE,
               borderRadius: THUMB_SIZE / 2,
               backgroundColor: colors.brand,
-              borderColor: colors.textInverse,
-            },
+              borderColor: colors.textInverse },
           ]}
         />
       </View>
@@ -562,8 +548,7 @@ function interpolateGradientColor(gradient: GradientDefinition, position: number
         r: a.color.r + (b.color.r - a.color.r) * t,
         g: a.color.g + (b.color.g - a.color.g) * t,
         b: a.color.b + (b.color.b - a.color.b) * t,
-        a: a.color.a + (b.color.a - a.color.a) * t,
-      });
+        a: a.color.a + (b.color.a - a.color.a) * t });
     }
   }
   return sorted[sorted.length - 1]!.color;
@@ -572,23 +557,19 @@ function interpolateGradientColor(gradient: GradientDefinition, position: number
 // ── Styles ───────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   barContainer: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   bar: {
     height: GRADIENT_BAR_HEIGHT,
     borderRadius: Radius.md,
     overflow: 'hidden',
     borderWidth: Stroke.hairline,
-    borderColor: 'rgba(0,0,0,0.1)',
-  },
+    borderColor: 'rgba(0,0,0,0.1)' },
   thumbsOverlay: {
     position: 'relative',
     height: STOP_THUMB_SIZE,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   stopThumb: {
     position: 'absolute',
     top: 0,
@@ -596,65 +577,52 @@ const styles = StyleSheet.create({
     height: STOP_THUMB_SIZE,
     borderRadius: STOP_THUMB_SIZE / 2,
     borderWidth: Stroke.standard,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   stopControls: {
     flexDirection: 'row',
     gap: Space.sm,
     minHeight: Control.hit,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   controlBtn: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   controlBtnDisabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   controlBtnActive: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.05)' },
   angleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   angleLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    color: '#666666',
-  },
+    fontSize: TypographyV2.meta.size,
+    color: '#666666' },
   angleValue: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     minWidth: 40,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   angleSlider: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   angleTrack: {
     position: 'absolute',
     left: 0,
     right: 0,
     // Track height is set inline via TRACK_HEIGHT; borderRadius keeps the bar
     // a pill — canvas-specific, no token.
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   angleThumb: {
     position: 'absolute',
     top: Space.xs,
     borderWidth: Stroke.emphasis,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   colorPickerSection: {
-    marginTop: Space.sm,
-  },
-});
+    marginTop: Space.sm } });
 
 // ── Theme-dependent styles ───────────────────────────────────────────
 function useGradientEditorStyles(colors: ThemeColors) {
@@ -662,63 +630,50 @@ function useGradientEditorStyles(colors: ThemeColors) {
     () =>
       StyleSheet.create({
         container: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         barContainer: {
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         bar: {
           height: GRADIENT_BAR_HEIGHT,
           borderRadius: Radius.md,
           overflow: 'hidden',
           borderWidth: Stroke.hairline,
-          borderColor: colors.borderSubtle,
-        },
+          borderColor: colors.borderSubtle },
         thumbsOverlay: {
           position: 'relative',
           height: STOP_THUMB_SIZE,
-          marginTop: Space.xs,
-        },
+          marginTop: Space.xs },
         stopControls: {
           flexDirection: 'row',
           gap: Space.sm,
           minHeight: Control.hit,
-          alignItems: 'center',
-        },
+          alignItems: 'center' },
         controlBtn: {
           width: Control.hit,
           height: Control.hit,
           borderRadius: Radius.md,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         controlBtnDisabled: {
-          opacity: 0.4,
-        },
+          opacity: 0.4 },
         controlBtnActive: {
-          backgroundColor: colors.brandSubtle,
-        },
+          backgroundColor: colors.brandSubtle },
         angleRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         angleLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.caption.size,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          color: colors.textSecondary },
         angleValue: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.body.size,
+          fontSize: TypographyV2.body.size,
           color: colors.textPrimary,
           minWidth: 40,
-          textAlign: 'right',
-        },
+          textAlign: 'right' },
         colorPickerSection: {
-          marginTop: Space.sm,
-        },
-      }),
+          marginTop: Space.sm } }),
     [colors],
   );
 }

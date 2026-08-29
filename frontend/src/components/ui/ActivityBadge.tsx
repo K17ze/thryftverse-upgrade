@@ -7,7 +7,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type ActivityBadgeVariant =
   | 'viewers'
@@ -40,58 +41,49 @@ function buildVariantConfig(colors: ThemeColors): Record<ActivityBadgeVariant, {
       iconColor: colors.textSecondary,
       glowColor: colors.brand,
       defaultLabel: 'people viewing',
-      accent: false,
-    },
+      accent: false },
     closeted: {
       icon: 'bookmark-outline',
       iconColor: colors.brand,
       glowColor: colors.brand,
       defaultLabel: 'in closets',
-      accent: true,
-    },
+      accent: true },
     recentSale: {
       icon: 'checkmark-circle-outline',
       iconColor: colors.success,
       glowColor: colors.success,
       defaultLabel: 'sold recently',
-      accent: false,
-    },
+      accent: false },
     trending: {
       icon: 'flame-outline',
       iconColor: colors.warning,
       glowColor: colors.warning,
       defaultLabel: 'trending',
-      accent: true,
-    },
+      accent: true },
     offersPending: {
       icon: 'chatbubble-outline',
       iconColor: colors.brand,
       glowColor: colors.brand,
       defaultLabel: 'offers pending',
-      accent: true,
-    },
+      accent: true },
     priceDropped: {
       icon: 'trending-down-outline',
       iconColor: colors.success,
       glowColor: colors.success,
       defaultLabel: 'price dropped',
-      accent: false,
-    },
+      accent: false },
     rareItem: {
       icon: 'diamond-outline',
       iconColor: colors.brand,
       glowColor: colors.brand,
       defaultLabel: 'rare find',
-      accent: true,
-    },
+      accent: true },
     fastSelling: {
       icon: 'timer-outline',
       iconColor: colors.warning,
       glowColor: colors.warning,
       defaultLabel: 'selling fast',
-      accent: true,
-    },
-  };
+      accent: true } };
 }
 
 function PulsingDot({ color }: { color: string }) {
@@ -113,8 +105,7 @@ export function ActivityBadge({
   count,
   label,
   subtitle,
-  style,
-}: ActivityBadgeProps) {
+  style }: ActivityBadgeProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const variantConfig = React.useMemo(() => buildVariantConfig(colors), [colors]);
@@ -164,54 +155,43 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   badgeAccent: {
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   badgeContent: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   pulseDot: {
     width: 6,
     height: 6,
     borderRadius: Radius.sm,
-    marginRight: 6,
-  },
+    marginRight: 6 },
   icon: {
-    marginRight: Space.xs,
-  },
+    marginRight: Space.xs },
   text: {
-    fontSize: Type.meta.size,
-    fontFamily: Type.meta.weight === '500' ? Typography.family.medium : Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.weight === '500' ? Typography.family.medium : Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   count: {
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: 2,
     marginLeft: 20,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   rowContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.xs + 2,
-  },
-});
+    gap: Space.xs + 2 } });
 
 /**
  * ActivityBadgeRow — Horizontal stack of multiple badges for ItemDetail

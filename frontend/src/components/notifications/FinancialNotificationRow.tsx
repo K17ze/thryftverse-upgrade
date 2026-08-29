@@ -5,18 +5,15 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import {
   NotificationRowBase,
-  NotificationStatusIcon,
-} from './NotificationRowBase';
+  NotificationStatusIcon } from './NotificationRowBase';
 import {
   Space,
-  Type,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   readPayloadNumber,
   readPayloadString,
-  type NotificationEventV2,
-} from '../../services/notificationsApi';
+  type NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
 // FinancialNotificationRow — payout / refund events
@@ -57,8 +54,7 @@ export function FinancialNotificationRow({
   time,
   aggregatedCount,
   inAttentionSection = false,
-  onPress,
-}: FinancialNotificationRowProps) {
+  onPress }: FinancialNotificationRowProps) {
   const { colors } = useAppTheme();
   const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -115,29 +111,24 @@ export function FinancialNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyStrong.lineHeight,
-      flexShrink: 1,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      flexShrink: 1 },
     titleUnread: {
       color: colors.textPrimary,
-      fontFamily: FontFamily.semibold,
-    },
+      fontFamily: FontFamily.semibold },
     amount: {
-      fontSize: Type.body.size + 2,
+      fontSize: TypographyV2.body.size + 2,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
-      lineHeight: Type.body.size + 8,
+      lineHeight: TypographyV2.body.size + 8,
       fontVariant: ['tabular-nums'],
-      marginTop: Space.xs / 2,
-    },
+      marginTop: Space.xs / 2 },
     body: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      lineHeight: TypographyV2.body.lineHeight } });
 }

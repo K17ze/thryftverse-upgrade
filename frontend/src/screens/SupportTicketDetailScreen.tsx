@@ -3,15 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons, type Ionicons as IoniconsType } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation, Stroke } from '../theme/designTokens';
+import { Space, Radius, Elevation, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -28,16 +28,14 @@ import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import type {
   SupportCase,
   SupportCaseEvent,
-  CaseResolutionDisposition,
-} from '../contracts/support';
+  CaseResolutionDisposition } from '../contracts/support';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupportTicketDetail'>;
 
 const STATUS_CONFIG: Record<string, { label: string; tone: 'pending' | 'success' | 'neutral' | 'shipped' | 'paid' | 'delivered' }> = {
   open: { label: 'Open', tone: 'pending' },
   resolved: { label: 'Resolved', tone: 'success' },
-  closed: { label: 'Closed', tone: 'neutral' },
-};
+  closed: { label: 'Closed', tone: 'neutral' } };
 
 const DISPOSITION_LABELS: Record<CaseResolutionDisposition, string> = {
   information_provided: 'Information provided',
@@ -52,8 +50,7 @@ const DISPOSITION_LABELS: Record<CaseResolutionDisposition, string> = {
   duplicate: 'Duplicate case',
   merged: 'Merged case',
   external_dispute: 'External dispute',
-  unable_to_resolve: 'Unable to resolve',
-};
+  unable_to_resolve: 'Unable to resolve' };
 
 interface EventDescriptor {
   label: string;
@@ -83,8 +80,7 @@ const EVENT_DESCRIPTORS: Record<string, EventDescriptor> = {
   appealed: { label: 'Appealed', icon: 'arrow-up-circle-outline' },
   action_proposed: { label: 'Action proposed', icon: 'bulb-outline' },
   action_confirmed: { label: 'Action confirmed', icon: 'checkmark-outline' },
-  action_executed: { label: 'Action completed', icon: 'checkmark-done-outline' },
-};
+  action_executed: { label: 'Action completed', icon: 'checkmark-done-outline' } };
 
 function describeEvent(eventType: string): EventDescriptor {
   const known = EVENT_DESCRIPTORS[eventType];
@@ -99,15 +95,13 @@ function formatDate(ts: string | number): string {
   return new Date(ts).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
-    year: 'numeric',
-  });
+    year: 'numeric' });
 }
 
 function formatTime(ts: string | number): string {
   return new Date(ts).toLocaleTimeString('en-GB', {
     hour: '2-digit',
-    minute: '2-digit',
-  });
+    minute: '2-digit' });
 }
 
 export default function SupportTicketDetailScreen({ navigation, route }: Props) {
@@ -227,8 +221,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         } catch {
           show('Could not close the request. Check your connection and try again.', 'error');
         }
-      },
-    });
+      } });
   }, [ticket, haptic, updateSupportTicketStatus, caseData, refreshCase, show, setConfirmSheet]);
 
   const handleReopen = useCallback(async () => {
@@ -251,8 +244,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
     navigation.navigate('SupportConversation', {
       conversationId: caseData.conversationId,
       contextKind: 'order',
-      contextId: ticket?.orderId,
-    });
+      contextId: ticket?.orderId });
   }, [caseData?.conversationId, haptic, navigation, ticket?.orderId]);
 
   if (!ticket) {
@@ -527,49 +519,40 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     alignItems: 'center',
     padding: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   emptyTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   emptySub: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   statusHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   statusTitle: {
-    fontSize: Type.title.size,
+    fontSize: TypographyV2.screenTitle.size,
     color: colors.textPrimary,
-    marginBottom: Space.xs / 2,
-  },
+    marginBottom: Space.xs / 2 },
   statusId: {
-    letterSpacing: Type.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
   metaRow: {
     flexDirection: 'row',
     gap: Space.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingTop: Space.md,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   metaItem: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   metaValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   dispositionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -577,44 +560,36 @@ function createStyles(colors: ThemeColors) {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingTop: Space.md,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   dispositionLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   dispositionValue: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand },
   sectionLabel: {
     marginLeft: Space.sm,
     letterSpacing: 1.2,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   detailsCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.lg,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   detailsText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.body.lineHeight + 4,
-  },
+    lineHeight: TypographyV2.body.lineHeight + 4 },
   actionsCard: {
-    gap: Space.md,
-  },
+    gap: Space.md },
   actionBtn: {
-    width: '100%',
-  },
+    width: '100%' },
   orderLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -623,14 +598,12 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     paddingHorizontal: Space.lg,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   orderLinkText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   conversationLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -639,124 +612,100 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     paddingHorizontal: Space.lg,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   conversationLinkText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   orderContextCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   orderContextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   orderContextThumb: {
     width: Space.xl + Space.xl - 4,
     height: Space.xl + Space.xl - 4,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   orderContextInfo: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   orderContextTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   orderContextMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   orderContextStatus: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.brand,
-    textTransform: 'capitalize',
-  },
+    textTransform: 'capitalize' },
   evidenceCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   evidenceThumbs: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   evidenceThumb: {
     width: Space.xxl + Space.xl,
     height: Space.xxl + Space.xl,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   // ── Timeline — flat vertical line with dots, no card wrapper ──
   timeline: {
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   timelineLoading: {
     paddingVertical: Space.lg,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   timelineEntry: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    minHeight: 44,
-  },
+    minHeight: 44 },
   timelineRail: {
     width: Space.md,
     alignItems: 'center',
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   timelineDot: {
     width: Space.sm,
     height: Space.sm,
     borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   timelineConnector: {
     width: Stroke.hairline,
     flex: 1,
     minHeight: Space.lg,
     backgroundColor: colors.border,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   timelineBody: {
     flex: 1,
     paddingBottom: Space.lg,
-    marginLeft: Space.sm,
-  },
+    marginLeft: Space.sm },
   timelineTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   timelineItemTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   timelineItemDate: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   timelineItemNote: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     marginTop: Space.xs / 2,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
-  });
+    lineHeight: TypographyV2.meta.lineHeight + 2 } });
 }

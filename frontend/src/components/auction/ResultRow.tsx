@@ -3,12 +3,12 @@ import {
   View,
   StyleSheet,
   Pressable,
-  Text,
-} from 'react-native';
+  Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { AuctionHomeItem } from '../../utils/auctionHomeLogic';
 import { AuctionValueLockup } from './AuctionValueLockup';
 
@@ -18,8 +18,7 @@ import { AuctionValueLockup } from './AuctionValueLockup';
 export const ResultRow = memo(function ResultRow({
   item,
   onPress,
-  formatValueLockup,
-}: {
+  formatValueLockup }: {
   item: AuctionHomeItem;
   onPress: () => void;
   formatValueLockup: (amountGbp: number) => { izeText: string; localText: string | null };
@@ -93,49 +92,40 @@ function createStyles(colors: ThemeColors) {
       gap: Space.md,
       paddingVertical: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     resultImageWrap: {
       width: Space.xxl + Space.xl + Space.xl - 4,
       height: Space.xxl + Space.xl + Space.xl - 4,
       borderRadius: Radius.md,
       overflow: 'hidden',
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     resultImage: {
       width: Space.xxl + Space.xl + Space.xl - 4,
-      height: Space.xxl + Space.xl + Space.xl - 4,
-    },
+      height: Space.xxl + Space.xl + Space.xl - 4 },
     resultBody: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     resultTitle: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       fontWeight: '600',
       color: colors.textPrimary,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     resultOutcome: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontWeight: '600',
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-      fontVariant: ['tabular-nums'],
-    },
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontVariant: ['tabular-nums'] },
     resultActionWrap: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     resultActionLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-  });
+      letterSpacing: TypographyV2.meta.letterSpacing } });
 }

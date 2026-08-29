@@ -6,17 +6,15 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Stroke,
-  Control,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type {
   FieldCandidateDTO,
   CandidateSourceModule,
   CandidateValidationState,
-  FieldDecisionKind,
-} from '../../services/catalogImportApi';
+  FieldDecisionKind } from '../../services/catalogImportApi';
 
 // ── Source module labels (short, factual — no "AI-powered" language) ────────
 const SOURCE_MODULE_LABEL: Record<CandidateSourceModule, string> = {
@@ -27,8 +25,7 @@ const SOURCE_MODULE_LABEL: Record<CandidateSourceModule, string> = {
   vision: 'From photo',
   catalog_match: 'From catalog match',
   deterministic_map: 'Mapped',
-  copy_generation: 'Drafted',
-};
+  copy_generation: 'Drafted' };
 
 interface Props {
   candidate: FieldCandidateDTO;
@@ -72,8 +69,7 @@ export function ExtractionCandidateRow({
   deciding,
   onDecide,
   onEdit,
-  onShowEvidence,
-}: Props) {
+  onShowEvidence }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -230,75 +226,62 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       borderTopColor: colors.borderSubtle,
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     topRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
-      gap: Space.md,
-    },
+      gap: Space.md },
     sourceLabel: {
       flexShrink: 0,
       maxWidth: 120,
       fontFamily: FontFamily.medium,
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       color: colors.textMuted,
-      paddingTop: 2,
-    },
+      paddingTop: 2 },
     valueWrap: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'flex-end',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     warningGlyph: {
-      flexShrink: 0,
-    },
+      flexShrink: 0 },
     value: {
       flexShrink: 1,
       textAlign: 'right',
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      color: colors.textPrimary },
     valueInvalid: {
       color: colors.textMuted,
-      textDecorationLine: 'line-through',
-    },
+      textDecorationLine: 'line-through' },
     evidenceHit: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
       justifyContent: 'center',
-      flexShrink: 0,
-    },
+      flexShrink: 0 },
     actions: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       gap: Space.sm,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     actionHit: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xxs,
       minHeight: Control.hit,
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
     actionLabel: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      letterSpacing: Type.meta.letterSpacing,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textSecondary },
     actionLabelDisabled: {
-      color: colors.textMuted,
-    },
-  });
+      color: colors.textMuted } });

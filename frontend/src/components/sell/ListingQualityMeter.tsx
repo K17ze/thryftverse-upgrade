@@ -28,16 +28,14 @@ import {
   Space,
   Radius,
   Stroke,
-  Type,
   TypeStyles,
-  Control,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   LISTING_QUALITY_DEMO_MODE,
   type ListingQualityScore,
   type QualitySeverity,
-  type QualitySuggestionType,
-} from '../../services/listingQualityApi';
+  type QualitySuggestionType } from '../../services/listingQualityApi';
 
 export interface ListingQualityMeterProps {
   /** The current quality score for the listing draft. */
@@ -59,8 +57,7 @@ const SEVERITY_ICON: Record<
 > = {
   critical: { icon: 'alert-circle', label: 'Critical' },
   warning: { icon: 'warning', label: 'Warning' },
-  info: { icon: 'information-circle', label: 'Info' },
-};
+  info: { icon: 'information-circle', label: 'Info' } };
 
 /** Suggestion type → icon. */
 const TYPE_ICON: Record<QualitySuggestionType, keyof typeof Ionicons.glyphMap> = {
@@ -68,8 +65,7 @@ const TYPE_ICON: Record<QualitySuggestionType, keyof typeof Ionicons.glyphMap> =
   title: 'text-outline',
   description: 'document-text-outline',
   pricing: 'pricetag-outline',
-  shipping: 'cube-outline',
-};
+  shipping: 'cube-outline' };
 
 /** Resolve a 0–100 score to a colour token from the theme. */
 function scoreColor(
@@ -312,106 +308,85 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       padding: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     scoreBlock: {
       flexDirection: 'row',
-      alignItems: 'baseline',
-    },
+      alignItems: 'baseline' },
     scoreNumber: {
-      fontSize: Type.priceHero.size,
-      lineHeight: Type.priceHero.lineHeight,
+      fontSize: TypographyV2.priceHero.size,
+      lineHeight: TypographyV2.priceHero.lineHeight,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '700',
-      letterSpacing: -0.5,
-    },
+      letterSpacing: -0.5 },
     scoreMax: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       color: colors.textMuted,
-      marginLeft: 2,
-    },
+      marginLeft: 2 },
     headerText: {
-      flex: 1,
-    },
+      flex: 1 },
     title: {
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+      fontWeight: '600' },
     band: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      marginTop: 2,
-    },
+      marginTop: 2 },
     progressTrack: {
       height: 6,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
       overflow: 'hidden',
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     progressFill: {
       height: '100%',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     detailWrap: {
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     subScoreList: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     subScoreRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     subScoreIcon: {
-      marginRight: 2,
-    },
+      marginRight: 2 },
     subScoreLabel: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      width: 76,
-    },
+      width: 76 },
     subScoreBarWrap: {
-      flex: 1,
-    },
+      flex: 1 },
     subScoreBarTrack: {
       height: 4,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     subScoreBarFill: {
       height: '100%',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     subScoreValue: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
       width: 28,
-      textAlign: 'right',
-    },
+      textAlign: 'right' },
     suggestionsWrap: {
       marginTop: Space.md,
       paddingTop: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     suggestionsTitle: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '500',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     suggestionRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -419,33 +394,27 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingVertical: Space.xs,
       paddingLeft: Space.sm,
       borderLeftWidth: Stroke.standard,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     suggestionIcon: {
       marginTop: 1,
-      marginRight: 2,
-    },
+      marginRight: 2 },
     suggestionBody: {
-      flex: 1,
-    },
+      flex: 1 },
     suggestionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 3,
-      marginBottom: 2,
-    },
+      marginBottom: 2 },
     suggestionType: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
       textTransform: 'capitalize',
-      letterSpacing: 0.3,
-    },
+      letterSpacing: 0.3 },
     suggestionMessage: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      lineHeight: 17,
-    },
+      lineHeight: 17 },
     demoBadge: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -453,18 +422,14 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingTop: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.borderSubtle,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     demoIcon: {
-      marginRight: 2,
-    },
+      marginRight: 2 },
     demoText: {
       flex: 1,
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '500',
       color: colors.textMuted,
-      letterSpacing: 0.15,
-    },
-  });
+      letterSpacing: 0.15 } });
 }

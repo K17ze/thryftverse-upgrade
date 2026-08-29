@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   useWindowDimensions,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import Reanimated, {
   useSharedValue,
@@ -15,12 +14,12 @@ import Reanimated, {
   withSequence,
   withSpring,
   cancelAnimation,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type, AspectRatio, Stroke} from '../../theme/designTokens';
+import { Space, Typography, Radius, AspectRatio, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -48,8 +47,7 @@ const STATUS_PROGRESS: Record<ItemStatus, number> = {
   uploading: 0.65,
   uploaded: 1,
   failed: 0,
-  cancelled: 0,
-};
+  cancelled: 0 };
 
 interface ListingMediaStudioProps {
   items: ListingMediaDraftItem[];
@@ -109,10 +107,8 @@ function StatusLabel({ status, color }: { status: ItemStatus; color: string }) {
 
 const statusLabelStyles = StyleSheet.create({
   statusLabelText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily } });
 
 function UploadProgressOverlay({
   status,
@@ -120,8 +116,7 @@ function UploadProgressOverlay({
   variant,
   reducedMotion,
   colors,
-  styles,
-}: {
+  styles }: {
   status: ItemStatus;
   trackWidth: number;
   variant: 'thumb' | 'cover';
@@ -138,8 +133,7 @@ function UploadProgressOverlay({
     const target = STATUS_PROGRESS[status];
     progress.value = withTiming(target, {
       duration: reducedMotion ? 0 : Motion.duration.slow,
-      easing: Easing.out(Easing.cubic),
-    });
+      easing: Easing.out(Easing.cubic) });
     if (active) {
       barOpacity.value = withTiming(1, { duration: reducedMotion ? 0 : Motion.duration.fast });
       if (reducedMotion) {
@@ -162,8 +156,7 @@ function UploadProgressOverlay({
   const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.value }));
   const fillStyle = useAnimatedStyle(() => ({
     width: trackWidth * progress.value,
-    opacity: barOpacity.value,
-  }));
+    opacity: barOpacity.value }));
 
   if (!isActiveStatus(status)) return null;
 
@@ -192,8 +185,7 @@ function UploadedCheckBadge({
   reducedMotion,
   spring,
   colors,
-  styles,
-}: {
+  styles }: {
   variant: 'thumb' | 'cover';
   reducedMotion: boolean;
   spring: ReturnType<typeof useMotionConfig>['spring'];
@@ -243,8 +235,7 @@ export function ListingMediaStudio({
   removeLabel = 'Remove',
   canRemoveItem,
   reorderEnabled = true,
-  lockedNote,
-}: ListingMediaStudioProps) {
+  lockedNote }: ListingMediaStudioProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -627,14 +618,12 @@ export function ListingMediaStudio({
 function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: number) {
   return StyleSheet.create({
   container: {
-    width: screenWidth,
-  },
+    width: screenWidth },
   emptyCanvas: {
     width: screenWidth,
     paddingHorizontal: Space.md,
     paddingVertical: Space.lg,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   emptyDashed: {
     width: '100%',
     height: coverHeight,
@@ -643,8 +632,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     borderColor: colors.border,
     borderRadius: Radius.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   emptyIconWrap: {
     width: 72,
     height: 72,
@@ -652,36 +640,31 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: colors.brandSubtle,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   emptyTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   emptySub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   emptyHint: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: Space.sm,
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   emptyActions: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: screenWidth - Space.md * 2,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   emptySecondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -690,29 +673,24 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     borderRadius: Radius.xxl,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   emptySecondaryText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   emptyCount: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   coverWrap: {
     width: screenWidth,
     height: coverHeight,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   coverImage: {
     width: screenWidth,
-    height: coverHeight,
-  },
+    height: coverHeight },
   coverBadge: {
     position: 'absolute',
     top: Space.sm,
@@ -720,14 +698,12 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   coverBadgeText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
     color: colors.scrimTextPrimary,
-    letterSpacing: 0.5,
-  },
+    letterSpacing: 0.5 },
   videoIndicator: {
     position: 'absolute',
     top: Space.sm,
@@ -738,13 +714,11 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   videoText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: colors.scrimTextPrimary,
-  },
+    color: colors.scrimTextPrimary },
   countBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -752,13 +726,11 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   countText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.scrimTextPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextPrimary },
   coverRemoveBtn: {
     position: 'absolute',
     top: Space.sm,
@@ -768,8 +740,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverStatusOverlay: {
     position: 'absolute',
     top: 0,
@@ -778,32 +749,27 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverStatusLabel: {
     position: 'absolute',
     bottom: Space.lg,
     alignItems: 'center',
-    gap: 2,
-  },
+    gap: 2 },
   coverProgressPct: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
-    color: colors.scrimTextPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextPrimary },
   coverProgressBarTrack: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.2)' },
   coverUploadedBadge: {
     position: 'absolute',
     bottom: Space.sm,
-    right: Space.sm,
-  },
+    right: Space.sm },
   coverFailedOverlay: {
     position: 'absolute',
     bottom: Space.sm,
@@ -814,13 +780,11 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: colors.danger,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   coverFailedText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textInverse },
   coverRetryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -828,13 +792,11 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.2)' },
   coverRetryText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textInverse },
   coverCancelledOverlay: {
     position: 'absolute',
     bottom: Space.sm,
@@ -845,13 +807,11 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   coverCancelledText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.scrimTextPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextPrimary },
   /* ── thumbnail content (inside SortablePhotoStrip) ── */
   thumbContent: {
     width: THUMB_SIZE,
@@ -861,25 +821,21 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   thumbContentFailed: {
     borderColor: colors.danger,
-    borderWidth: 2,
-  },
+    borderWidth: 2 },
   thumbImage: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   thumbVideoTile: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: Radius.md,
     backgroundColor: colors.surface,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   thumbVideoBadge: {
     position: 'absolute',
     top: 4,
@@ -889,8 +845,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   thumbCoverBadge: {
     position: 'absolute',
     top: 4,
@@ -898,14 +853,12 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: colors.brand,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   thumbCoverText: {
     color: colors.background,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.3,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.3 },
   thumbNumberBadge: {
     position: 'absolute',
     bottom: 4,
@@ -915,13 +868,11 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   thumbNumberText: {
     color: colors.background,
     fontSize: 10,
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   thumbStatusOverlay: {
     position: 'absolute',
     top: 0,
@@ -930,30 +881,25 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   thumbStatusLabel: {
     position: 'absolute',
     bottom: 8,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   thumbProgressBarTrack: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.2)' },
   progressBarFill: {
     height: 3,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   thumbUploadedBadge: {
     position: 'absolute',
     bottom: 4,
-    right: 4,
-  },
+    right: 4 },
   thumbFailedOverlay: {
     position: 'absolute',
     top: 0,
@@ -963,13 +909,11 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   thumbRetryText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.scrimTextPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextPrimary },
   thumbRetryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -977,13 +921,11 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: Radius.sm,
-    backgroundColor: colors.danger,
-  },
+    backgroundColor: colors.danger },
   thumbRetryBtnText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
   thumbCancelledOverlay: {
     position: 'absolute',
     top: 0,
@@ -993,13 +935,11 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
-  },
+    gap: 2 },
   thumbCancelledText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.scrimTextPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextPrimary },
   thumbRemoveBtn: {
     position: 'absolute',
     top: 4,
@@ -1009,8 +949,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     borderRadius: Radius.full,
     backgroundColor: colors.danger,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   /* ── Set as cover button ──
      Per audit 04 P0: explicit cover-photo semantics.
      Compact pill at bottom-left — distinct from remove (top-right)
@@ -1026,48 +965,40 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.55)' },
   thumbSetCoverText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.scrimTextPrimary,
-    letterSpacing: 0.3,
-  },
+    letterSpacing: 0.3 },
   /* ── studio actions ── */
   studioActions: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     paddingVertical: 6,
-    gap: Space.md,
-  },
+    gap: Space.md },
   studioActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.xs,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   studioActionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   errorText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
     paddingHorizontal: Space.md,
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   lockedNote: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
     paddingTop: 6,
-    textAlign: 'center',
-  },
-  });
+    textAlign: 'center' } });
 }

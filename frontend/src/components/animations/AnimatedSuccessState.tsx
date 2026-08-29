@@ -4,7 +4,8 @@ import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { Space, Type, Typography } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { LottieAnimation, type LottieAnimationSource } from './LottieAnimation';
 
 // ---------------------------------------------------------------------------
@@ -49,8 +50,7 @@ export function AnimatedSuccessState({
   subtitle,
   onComplete,
   animationSize = 140,
-  style,
-}: AnimatedSuccessStateProps) {
+  style }: AnimatedSuccessStateProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -136,36 +136,29 @@ function createStyles(colors: ThemeColors): SuccessStateStyles {
       justifyContent: 'center',
       paddingHorizontal: Space.xl + Space.sm,
       paddingVertical: Space.xxl + Space.sm,
-      gap: Space.sm + 2,
-    },
+      gap: Space.sm + 2 },
     iconSlot: {
       alignItems: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     title: {
-      fontSize: Type.priceList.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
       letterSpacing: -0.2,
       color: colors.textPrimary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     subtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       letterSpacing: 0.08,
       color: colors.textMuted,
       textAlign: 'center',
-      lineHeight: Type.body.lineHeight + 1,
-      maxWidth: 280,
-    },
-  });
+      lineHeight: TypographyV2.body.lineHeight + 1,
+      maxWidth: 280 } });
 
   return {
     ...staticStyles,
     animation: (size: number): ViewStyle => ({
       width: size,
       height: size,
-      marginBottom: Space.md,
-    }),
-  };
+      marginBottom: Space.md }) };
 }

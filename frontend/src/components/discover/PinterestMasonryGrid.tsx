@@ -6,8 +6,7 @@ import {
   Text,
   Pressable,
   NativeSyntheticEvent,
-  NativeScrollEvent,
-} from 'react-native';
+  NativeScrollEvent } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,12 +19,12 @@ import type {
   LookFeedUnit,
   MoodboardFeedUnit,
   PosterFeedUnit,
-  RecommendationBreakFeedUnit,
-} from '../../contracts/discoveryFeedUnit';
+  RecommendationBreakFeedUnit } from '../../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
 import { mapListingToDiscoverySummary } from '../../contracts/DiscoveryListingSummary';
 import { ProductDiscoveryTile } from '../ProductCard';
-import { Space, Type, Typography, Radius } from '../../theme/designTokens';
+import { Space, Typography, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { typographyV2Style } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -193,8 +192,7 @@ export function PinterestMasonryGrid({
   refreshControl,
   onScroll,
   scrollRef,
-  listHeaderComponent,
-}: Props) {
+  listHeaderComponent }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
@@ -256,8 +254,7 @@ export function PinterestMasonryGrid({
           isListingSaved: isItemSaved,
           onLookPress,
           onPosterPress,
-          onMoodboardPress,
-        });
+          onMoodboardPress });
       }
       // Legacy listing path — single-column tile with optional save button.
       return (
@@ -402,8 +399,7 @@ function renderUnit(
           style={{
             paddingHorizontal: ctx.gap / 2,
             paddingBottom: ctx.gap,
-            width: '100%',
-          }}
+            width: '100%' }}
         >
           <ProductDiscoveryTile
             item={u.listing}
@@ -459,8 +455,7 @@ function renderUnit(
 
 function LookDiscoveryTile({
   unit,
-  onPress,
-}: {
+  onPress }: {
   unit: LookFeedUnit;
   onPress?: (lookId: string) => void;
 }) {
@@ -484,11 +479,11 @@ function LookDiscoveryTile({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd }}>
-          <Text style={{ color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight }} numberOfLines={2}>
             {unit.title}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xxs, marginTop: 2 }}>
-            <Text style={{ color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold, fontSize: 12, lineHeight: 16 }} numberOfLines={1}>
+            <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.body.fontFamily, fontSize: 12, lineHeight: 16 }} numberOfLines={1}>
               @{creator}
             </Text>
             {creatorVerified && (
@@ -530,8 +525,7 @@ function LookDiscoveryTile({
 
 function PosterDiscoveryTile({
   unit,
-  onPress,
-}: {
+  onPress }: {
   unit: PosterFeedUnit;
   onPress?: (storyId: string) => void;
 }) {
@@ -595,8 +589,7 @@ function PosterDiscoveryTile({
 
 function MoodboardDiscoveryTile({
   unit,
-  onPress,
-}: {
+  onPress }: {
   unit: MoodboardFeedUnit;
   onPress?: (moodboardId: string) => void;
 }) {
@@ -636,10 +629,10 @@ function MoodboardDiscoveryTile({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.md, right: Space.md, bottom: Space.smMd }}>
-          <Text style={{ color: colors.scrimTextPrimary, fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, lineHeight: Type.subtitle.lineHeight }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, lineHeight: TypographyV2.sectionTitle.lineHeight }} numberOfLines={1}>
             {unit.moodboard.title}
           </Text>
-          <Text style={{ color: colors.scrimTextSecondary, fontFamily: Typography.family.regular, fontSize: Type.caption.size, lineHeight: Type.caption.lineHeight }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextSecondary, fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, lineHeight: TypographyV2.meta.lineHeight }} numberOfLines={1}>
             {unit.moodboard.curator} · {unit.moodboard.items.length} pieces
           </Text>
         </View>
@@ -680,8 +673,7 @@ function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) 
   const eyebrowStyle = React.useMemo(
     () => ({
       ...typographyV2Style('label'),
-      color: colors.textSecondary,
-    }),
+      color: colors.textSecondary }),
     [colors.textSecondary],
   );
   return (
@@ -692,8 +684,7 @@ function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) 
         paddingHorizontal: 0,
         paddingTop: Space.lg,
         paddingBottom: Space.xs,
-        width: '100%',
-      }}
+        width: '100%' }}
       accessibilityRole="header"
     >
       <View
@@ -701,8 +692,7 @@ function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) 
           flexDirection: 'row',
           alignItems: 'center',
           marginLeft: gap / 2,
-          gap: Space.xs,
-        }}
+          gap: Space.xs }}
       >
         {/* Subtle decorative hairline before the text — a quiet visual
             marker that separates chapters without fabricated media. */}
@@ -710,8 +700,7 @@ function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) 
           style={{
             width: BREAK_HAIRLINE_WIDTH,
             height: StyleSheet.hairlineWidth,
-            backgroundColor: colors.borderSubtle,
-          }}
+            backgroundColor: colors.borderSubtle }}
         />
         <Text style={eyebrowStyle} numberOfLines={1}>
           {label}
@@ -725,32 +714,25 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   footer: {
     paddingVertical: Space.md,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   footerSkeletonRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   endOfList: {
     alignItems: 'center',
     paddingVertical: Space.lg,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   endOfListHairline: {
     width: 40,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-  },
+    backgroundColor: colors.borderSubtle },
   endOfListText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   empty: {
     flex: 1,
-    paddingHorizontal: Space.md,
-  },
-  });
+    paddingHorizontal: Space.md } });
 }

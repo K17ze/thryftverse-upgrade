@@ -5,15 +5,15 @@ import Reanimated, {
   useAnimatedStyle,
   useDerivedValue,
   withSpring,
-  interpolateColor,
-} from 'react-native-reanimated';
+  interpolateColor } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useHaptics } from '../../platform/haptics';
 import { REDUCED_SPRING } from '../../theme/motionTokens';
-import { Radius, Space, Type, Typography } from '../../theme/designTokens';
+import { Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 const ReanimatedView = Reanimated.View;
 
@@ -46,8 +46,7 @@ export function AppCheckbox({
   onCheckedChange,
   disabled = false,
   label,
-  testID,
-}: AppCheckboxProps) {
+  testID }: AppCheckboxProps) {
   const { colors } = useAppTheme();
   const { spring } = useMotionConfig();
   const haptics = useHaptics();
@@ -74,13 +73,11 @@ export function AppCheckbox({
       progress.value,
       [0, 1],
       [colors.border, colors.brand],
-    ),
-  }));
+    ) }));
 
   const checkStyle = useAnimatedStyle(() => ({
     transform: [{ scale: checkScale.value }],
-    opacity: checkScale.value,
-  }));
+    opacity: checkScale.value }));
 
   const handlePress = React.useCallback(() => {
     if (disabled) return;
@@ -123,11 +120,9 @@ function createStyles(colors: ThemeColors) {
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: 44,
-    },
+      minHeight: 44 },
     disabled: {
-      opacity: 0.5,
-    },
+      opacity: 0.5 },
     box: {
       width: BOX_SIZE,
       height: BOX_SIZE,
@@ -135,21 +130,17 @@ function createStyles(colors: ThemeColors) {
       borderWidth: BORDER_WIDTH,
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: Space.sm,
-    },
+      marginRight: Space.sm },
     checkHost: {
       width: BOX_SIZE,
       height: BOX_SIZE,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     label: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight } });
 }

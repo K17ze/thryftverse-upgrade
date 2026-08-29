@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { t } from '../../i18n';
 
 // Compact row showing what is in the parcel — thumbnail + title — so the buyer
@@ -12,8 +13,7 @@ export function PackageContents({
   title,
   imageUrl,
   subtitle,
-  onPress,
-}: {
+  onPress }: {
   title: string;
   imageUrl: string;
   subtitle?: string;
@@ -23,8 +23,7 @@ export function PackageContents({
   const themed = useMemo(() => ({
     label: { color: colors.textMuted },
     title: { color: colors.textPrimary },
-    subtitle: { color: colors.textSecondary },
-  }), [colors]);
+    subtitle: { color: colors.textSecondary } }), [colors]);
 
   const content = (
     <View style={styles.packageContentsRow}>
@@ -65,26 +64,20 @@ const styles = StyleSheet.create({
   packageContentsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   packageThumb: {
     width: 40,
     height: 40,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   packageContentsText: {
     flex: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   packageContentsTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   packageContentsSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily } });

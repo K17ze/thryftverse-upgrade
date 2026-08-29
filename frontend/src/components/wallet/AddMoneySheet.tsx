@@ -19,14 +19,12 @@ import {
   TextInput,
   Platform,
   Pressable,
-  Linking,
-} from 'react-native';
+  Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   initPaymentSheet,
   PaymentSheetError,
-  presentPaymentSheet,
-} from '@stripe/stripe-react-native';
+  presentPaymentSheet } from '@stripe/stripe-react-native';
 import { BottomSheet } from '../BottomSheet';
 import { AppButton } from '../ui/AppButton';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
@@ -35,7 +33,8 @@ import { useCurrencyContext } from '../../context/CurrencyContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useToast } from '../../context/ToastContext';
 import { useConnectivity } from '../../hooks/useConnectivity';
-import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 import { formatIzeAmount, usdToIze } from '../../utils/currency';
 import { SupportedCurrencyCode } from '../../constants/currencies';
@@ -44,12 +43,10 @@ import { parseApiError } from '../../lib/apiClient';
 import {
   createIzeMintQuote,
   createStripeIntentSheet,
-  buyIze,
-} from '../../services/walletApi';
+  buyIze } from '../../services/walletApi';
 import {
   configureStripeMobile,
-  getStripeReturnUrl,
-} from '../../platform/payments/stripeMobile';
+  getStripeReturnUrl } from '../../platform/payments/stripeMobile';
 
 /**
  * Funding source — human goal, not internal "Load" vs "Buy" terminology.
@@ -92,8 +89,7 @@ export function AddMoneySheet({
   availableFiatBalance,
   isWalletOperational,
   onCompleted,
-  userId,
-}: AddMoneySheetProps) {
+  userId }: AddMoneySheetProps) {
   const { colors } = useAppTheme();
   const { currencyCode, fxRates } = useCurrencyContext();
   const { formatFromFiat } = useFormattedPrice();
@@ -205,9 +201,7 @@ export function AddMoneySheet({
             source: 'wallet_addmoney_sheet_quote_preview',
             displayCurrency: currencyCode,
             enteredDisplayAmount: fiatValue,
-            enteredUsdAmount: loadAmountUsd,
-          },
-        });
+            enteredUsdAmount: loadAmountUsd } });
         if (cancelled) return;
         const expiresAtMs = response.quote.expiresAt
           ? Date.parse(response.quote.expiresAt)
@@ -287,9 +281,7 @@ export function AddMoneySheet({
             source: 'wallet_addmoney_sheet_topup_quote',
             displayCurrency: currencyCode,
             enteredDisplayAmount: fiatValue,
-            enteredUsdAmount: loadAmountUsd,
-          },
-        });
+            enteredUsdAmount: loadAmountUsd } });
       }
 
       const intent = quoteResponse.intent;
@@ -312,10 +304,8 @@ export function AddMoneySheet({
               ? {
                   merchantCountryCode: sheet.merchantCountryCode,
                   currencyCode: sheet.currency,
-                  testEnv: sheet.publishableKey.startsWith('pk_test_'),
-                }
-              : undefined,
-        });
+                  testEnv: sheet.publishableKey.startsWith('pk_test_') }
+              : undefined });
         if (initializationError) {
           throw new Error(initializationError.message);
         }
@@ -348,8 +338,7 @@ export function AddMoneySheet({
         : '';
       setReceipt({
         title: `${formatIzeAmount(op.izeAmount)} pending confirmation`,
-        subtitle: `${formatFromFiat(op.fiatAmount, (op.fiatCurrency as SupportedCurrencyCode) ?? 'GBP', { displayMode: 'fiat' })} → 1ZE at par${feeLine}. Credited once your payment provider confirms settlement.`,
-      });
+        subtitle: `${formatFromFiat(op.fiatAmount, (op.fiatCurrency as SupportedCurrencyCode) ?? 'GBP', { displayMode: 'fiat' })} → 1ZE at par${feeLine}. Credited once your payment provider confirms settlement.` });
       onCompleted();
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to add 1ZE right now. Try again shortly.');
@@ -380,14 +369,12 @@ export function AddMoneySheet({
         userId,
         fiatAmount: fiatValue,
         fiatCurrency: currencyCode,
-        idempotencyKey,
-      });
+        idempotencyKey });
       const p = result.purchase;
       setAmountInput('');
       setReceipt({
         title: `${formatIzeAmount(p.izeAmount)} added to your wallet`,
-        subtitle: `Paid ${formatFromFiat(p.fiatAmount, currencyCode, { displayMode: 'fiat' })} · Fee (${p.feeBps} bps) ${formatFromFiat(p.feeFiat, currencyCode, { displayMode: 'fiat' })} · 1ZE received ${formatIzeAmount(p.izeAmount)}`,
-      });
+        subtitle: `Paid ${formatFromFiat(p.fiatAmount, currencyCode, { displayMode: 'fiat' })} · Fee (${p.feeBps} bps) ${formatFromFiat(p.feeFiat, currencyCode, { displayMode: 'fiat' })} · 1ZE received ${formatIzeAmount(p.izeAmount)}` });
       onCompleted();
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to add 1ZE right now.');
@@ -417,15 +404,13 @@ export function AddMoneySheet({
       value: 'card',
       label: 'Card or Apple Pay',
       hint: 'Add 1ZE from an external payment method.',
-      icon: 'card-outline',
-    },
+      icon: 'card-outline' },
     {
       value: 'fiatBalance',
       label: 'Fiat balance',
       hint: `Available: ${formatFromFiat(availableFiatBalance, currencyCode, { displayMode: 'fiat' })}`,
       icon: 'wallet-outline',
-      disabled: availableFiatBalance <= 0,
-    },
+      disabled: availableFiatBalance <= 0 },
   ];
 
   return (
@@ -643,8 +628,7 @@ function ReviewRow({
   label,
   value,
   colors,
-  total,
-}: {
+  total }: {
   label: string;
   value: React.ReactNode;
   colors: ReturnType<typeof useAppTheme>['colors'];
@@ -658,8 +642,7 @@ function ReviewRow({
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
           marginTop: Space.xs,
-          paddingTop: Space.xs,
-        },
+          paddingTop: Space.xs },
       ]}
       accessibilityRole="text"
       accessibilityLabel={label}
@@ -681,30 +664,25 @@ function ReviewRow({
 const styles = StyleSheet.create({
   body: {
     flex: 1,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   sheetTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   sheetHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   stepLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs },
   sourceList: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   sourceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -712,110 +690,91 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   sourceIcon: {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   sourceInfo: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   sourceLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   sourceHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   amountInput: {
     borderWidth: Stroke.standard,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Platform.OS === 'ios' ? Space.sm : Space.xs,
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   reviewRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   reviewLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   reviewFiat: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   reviewRate: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   offlineNote: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   confirmBtn: {
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   receiptWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xl,
-  },
+    paddingVertical: Space.xl },
   receiptIcon: {
     width: 56,
     height: 56,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   receiptTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    textAlign: 'center' },
   receiptSubtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'center' },
   receiptDoneBtn: {
     marginTop: Space.md,
-    alignSelf: 'stretch',
-  },
-});
+    alignSelf: 'stretch' } });

@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../../theme/designTokens';
+import { Space } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import type { CommerceDetailFamily } from './types';
 
 /**
@@ -69,8 +70,7 @@ export function CommerceDetailTransactionSurface({
   elevated = false,
   family = 'direct',
   flush = false,
-  surfaceColor,
-}: CommerceDetailTransactionSurfaceProps) {
+  surfaceColor }: CommerceDetailTransactionSurfaceProps) {
   const { colors } = useAppTheme();
 
   // Per spec 05 §1: family-aware composition.
@@ -135,8 +135,7 @@ export function CommerceDetailTransactionSurface({
           backgroundColor: surfaceColor
             ?? (elevated
               ? colors.surfaceElevated
-              : colors.background),
-        },
+              : colors.background) },
       ]}
       accessibilityRole="summary"
     >
@@ -175,113 +174,93 @@ const styles = StyleSheet.create({
   container: {
     marginHorizontal: Space.md,
     marginTop: Space.md,
-    paddingHorizontal: 0,
-  },
+    paddingHorizontal: 0 },
   containerFlush: {
     marginHorizontal: 0,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   // Direct uses a quiet, near-flat price rhythm.
   containerDirect: {
     paddingHorizontal: 0,
     paddingVertical: Space.md,
-    borderWidth: 0,
-  },
+    borderWidth: 0 },
   // Auction gives the current bid breathing room without introducing
   // another visual surface.
   containerAuction: {
     paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   // Co-Own uses a structured market grid on the same page canvas.
   containerCoOwn: {
     paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   // Primary row: label sits quietly above the dominant value. The
   // value is the hero of this surface — it does not compete with the
   // label for horizontal space. The gap creates clear hierarchy.
   primaryRow: {
     flexDirection: 'column',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   primaryRowCoOwn: {
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   label: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    textTransform: 'none',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'none' },
   primaryValue: {
-    fontSize: Type.priceHero.size,
-    lineHeight: Type.priceHero.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceHero.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: TypographyV2.priceHero.fontFamily,
+    letterSpacing: TypographyV2.priceHero.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   primaryValueAuction: {
-    fontSize: Type.display.size + 2,
-    lineHeight: Type.display.lineHeight + 2,
-    letterSpacing: -0.8,
-  },
+    fontSize: TypographyV2.display.size + 2,
+    lineHeight: TypographyV2.display.lineHeight + 2,
+    letterSpacing: -0.8 },
   primaryValueCoOwn: {
-    fontSize: Type.display.size,
-    lineHeight: Type.display.lineHeight,
-    letterSpacing: -0.55,
-  },
+    fontSize: TypographyV2.display.size,
+    lineHeight: TypographyV2.display.lineHeight,
+    letterSpacing: -0.55 },
   auctionHeadline: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: Space.md,
-  },
+    gap: Space.md },
   auctionHeadlineAside: {
     flexShrink: 1,
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   secondaryRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: Space.sm,
     marginTop: Space.sm,
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   secondaryRowAuction: {
     flexDirection: 'column',
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
     marginTop: 0,
     gap: Space.xs,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   secondaryLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   secondaryValue: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] },
   // Viewer state row: separated by a hairline so it reads as a
   // distinct concern from the primary value, but still part of the
   // same surface.
   viewerStateRow: {
     marginTop: Space.md,
     paddingTop: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   statusRow: {
     marginTop: Space.md,
     paddingTop: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-});
+    borderTopWidth: StyleSheet.hairlineWidth } });

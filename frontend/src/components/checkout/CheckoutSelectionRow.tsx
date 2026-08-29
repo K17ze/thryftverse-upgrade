@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -38,8 +39,7 @@ function CheckoutSelectionRowBase({
   rightElement,
   icon,
   isFilled = true,
-  testID,
-}: Props) {
+  testID }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -107,89 +107,71 @@ export { CheckoutSelectionRow };
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrapper: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingVertical: Space.md,
-    minHeight: 56,
-  },
+    minHeight: 56 },
   rowPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   left: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   iconSlot: {
     width: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 3,
-  },
+    marginTop: 3 },
   textCol: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   label: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
+    letterSpacing: 0.8 },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   titleEmpty: {
     fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    color: colors.textSecondary },
   subtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary,
-    lineHeight: 19,
-  },
+    lineHeight: 19 },
   alertRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 3,
-  },
+    marginTop: 3 },
   warningText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.warning,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.warning },
   errorText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
   right: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-  },
+    gap: 2 },
   actionLabel: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   actionLabelAdd: {
-    color: colors.brand,
-  },
-});
+    color: colors.brand } });

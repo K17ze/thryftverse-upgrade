@@ -5,10 +5,10 @@ import {
   StyleSheet,
   Pressable,
   Modal,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Typography, Type, Radius, Stroke} from '../../theme/designTokens';
+import { Space, Typography, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 export type FilterClassification =
@@ -44,8 +44,7 @@ export function OrdersFilterSheet({
   currentFilter,
   availableYears,
   onApply,
-  onClose,
-}: OrdersFilterSheetProps) {
+  onClose }: OrdersFilterSheetProps) {
   const { colors } = useAppTheme();
   const [localClassification, setLocalClassification] =
     React.useState<FilterClassification>(currentFilter.classification);
@@ -61,8 +60,7 @@ export function OrdersFilterSheet({
   const handleApply = () => {
     onApply({
       classification: localClassification,
-      year: localYear,
-    });
+      year: localYear });
     onClose();
   };
 
@@ -219,62 +217,53 @@ export function OrdersFilterSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
-    maxHeight: '80%',
-  },
+    maxHeight: '80%' },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.full,
     alignSelf: 'center',
     marginTop: Space.sm,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Space.md,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   sectionLabel: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.md,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   optionText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   footer: {
     flexDirection: 'row',
     gap: Space.md,
     paddingTop: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   clearBtn: {
     flex: 1,
     paddingVertical: Space.md + 2,
@@ -282,24 +271,19 @@ const styles = StyleSheet.create({
     borderWidth: Stroke.standard,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
-  },
+    minHeight: 48 },
   clearBtnText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   applyBtn: {
     flex: 1,
     paddingVertical: Space.md + 2,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
-  },
+    minHeight: 48 },
   applyBtnText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily } });

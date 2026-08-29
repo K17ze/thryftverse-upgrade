@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, useWindowDimensio
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { Listing } from '../../domain';
 import { ProductCard } from '../ProductCard';
 import { ProductAnalytics } from '../../platform/product';
@@ -30,8 +31,7 @@ export function DiscoveryGrid({
   numColumns = 2,
   title = 'More like this',
   subtitle,
-  onSeeAll,
-}: DiscoveryGridProps) {
+  onSeeAll }: DiscoveryGridProps) {
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -120,53 +120,42 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     marginTop: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   headerLeft: {
     flex: 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textPrimary },
   subtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   seeAllRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   seeAll: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   listContent: {
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   gridItem: {
     flex: 1,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   footerLoading: {
     paddingVertical: Space.lg,
-    alignItems: 'center',
-  },
-  });
+    alignItems: 'center' } });
 }

@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Type, Control } from '../../theme/designTokens';
+import { Space, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 import { t } from '../../i18n';
 
@@ -15,8 +16,7 @@ export function CompletedOrderSummary({
   onBuyAgain,
   onViewReceipt,
   onViewSupportHistory,
-  hasReview,
-}: {
+  hasReview }: {
   onLeaveReview: () => void;
   onBuyAgain: () => void;
   onViewReceipt: () => void;
@@ -28,8 +28,7 @@ export function CompletedOrderSummary({
     label: { color: colors.textMuted },
     title: { color: colors.textPrimary },
     actionText: { color: colors.brand },
-    actionRow: { borderBottomColor: colors.borderSubtle },
-  }), [colors]);
+    actionRow: { borderBottomColor: colors.borderSubtle } }), [colors]);
 
   return (
     <View style={styles.completedSection}>
@@ -93,40 +92,33 @@ export function CompletedOrderSummary({
 
 const styles = StyleSheet.create({
   sectionLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   completedSection: {
     paddingVertical: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   completedTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-    marginBottom: Space.sm,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    marginBottom: Space.sm },
   completedActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   completedActionPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   completedActionText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing } });

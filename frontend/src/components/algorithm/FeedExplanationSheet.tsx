@@ -26,8 +26,7 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '../BottomSheet';
@@ -35,7 +34,8 @@ import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 import {
   AlgorithmFeedExplanation,
@@ -44,8 +44,7 @@ import {
   ConfidenceLabel,
   ALGORITHM_DEMO_MODE,
   fetchFeedExplanation,
-  removeTopic,
-} from '../../services/algorithmTransparencyApi';
+  removeTopic } from '../../services/algorithmTransparencyApi';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 export interface FeedExplanationSheetProps {
@@ -67,15 +66,13 @@ export interface FeedExplanationSheetProps {
 const SOURCE_LABEL: Record<SignalSource, string> = {
   explicit: 'Explicit',
   implicit: 'Implicit',
-  inferred: 'Inferred',
-};
+  inferred: 'Inferred' };
 
 // ─── Confidence visual metadata ──────────────────────────────────────────────
 const CONFIDENCE_META: Record<ConfidenceLabel, { barWidth: number; iconName: keyof typeof Ionicons.glyphMap }> = {
   'Strong match': { barWidth: 0.85, iconName: 'checkmark-circle' },
   'Moderate match': { barWidth: 0.55, iconName: 'remove-circle' },
-  'Exploratory': { barWidth: 0.25, iconName: 'compass-outline' },
-};
+  'Exploratory': { barWidth: 0.25, iconName: 'compass-outline' } };
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export function FeedExplanationSheet({
@@ -84,8 +81,7 @@ export function FeedExplanationSheet({
   itemId,
   onSeeMoreLikeThis,
   onShowLessLikeThis,
-  onTopicRemoved,
-}: FeedExplanationSheetProps) {
+  onTopicRemoved }: FeedExplanationSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
 
@@ -244,8 +240,7 @@ export function FeedExplanationSheet({
                     styles.confidenceFill,
                     {
                       width: `${Math.round(CONFIDENCE_META[explanation.confidenceLabel].barWidth * 100)}%`,
-                      backgroundColor: colors.textPrimary,
-                    },
+                      backgroundColor: colors.textPrimary },
                   ]}
                 />
               </View>
@@ -332,8 +327,7 @@ function ReasonRow({
   reason,
   isLast,
   colors,
-  styles,
-}: {
+  styles }: {
   reason: FeedExplanationReason;
   isLast: boolean;
   colors: ReturnType<typeof useAppTheme>['colors'];
@@ -370,17 +364,15 @@ function ReasonRow({
 function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
     container: {
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
 
     // Header
     headerTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-      marginBottom: Space.sm,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      marginBottom: Space.sm },
 
     // Demo pill
     demoPill: {
@@ -391,193 +383,160 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingVertical: Space.xs + 1,
       borderRadius: Radius.full,
       alignSelf: 'flex-start',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     demoPillText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textSecondary },
 
     // Loading
     loadingWrap: {
       alignItems: 'center',
-      paddingVertical: Space.xl,
-    },
+      paddingVertical: Space.xl },
     loadingText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      marginTop: Space.md,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      marginTop: Space.md },
 
     // Error
     errorWrap: {
       alignItems: 'center',
       paddingVertical: Space.xl,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     errorTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       marginTop: Space.md,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     errorSubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-      textAlign: 'center',
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
+      textAlign: 'center' },
 
     // Item identity
     itemRow: {
       flexDirection: 'row',
       gap: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     itemThumb: {
       width: 64,
       height: 64,
       borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     itemText: {
       flex: 1,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     itemTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     itemCaption: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: 2 },
 
     // Confidence
     confidenceWrap: {
       borderWidth: Stroke.standard,
       borderRadius: Radius.lg,
       padding: Space.md,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     confidenceHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs + 2,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     confidenceLabel: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     confidenceBar: {
       height: 4,
       borderRadius: Radius.full,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     confidenceFill: {
       height: '100%',
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
 
     // Reasons
     reasonsHeader: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: 0.5,
-      lineHeight: Type.meta.lineHeight,
+      lineHeight: TypographyV2.meta.lineHeight,
       textTransform: 'uppercase',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     reasonsList: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     reasonRow: {
       paddingVertical: Space.md,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     reasonMain: {
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     reasonTopic: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
     reasonSource: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: 2 },
     reasonWeightBar: {
       height: 3,
       borderRadius: Radius.full,
       backgroundColor: colors.border,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     reasonWeightFill: {
       height: '100%',
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
 
     // Actions
     actionsWrap: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     actionBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs + 2,
       height: 52,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     actionPrimary: {
       // backgroundColor set inline
     },
     actionPrimaryText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     actionSecondary: {
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     actionSecondaryText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     removeAction: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
       paddingVertical: Space.md,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     removeActionText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing } });
 }

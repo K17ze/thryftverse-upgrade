@@ -45,13 +45,12 @@ import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import {
   PUSH_NOTIFICATION_DEFINITIONS,
-  PUSH_NOTIFICATION_GROUPS,
-} from '../preferences/settingsPreferences';
+  PUSH_NOTIFICATION_GROUPS } from '../preferences/settingsPreferences';
 import {
   getNotificationPreferences,
-  updateNotificationPreferences,
-} from '../services/notificationsApi';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+  updateNotificationPreferences } from '../services/notificationsApi';
+import { Space, Radius, Typography } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { formatHour } from '../utils/timeFormat';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NotificationPreferences'>;
@@ -73,8 +72,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     setPushNotificationToggle,
     setAllPushNotificationToggles,
     quietHours,
-    setQuietHours,
-  } = useSettingsPreferences();
+    setQuietHours } = useSettingsPreferences();
 
   // Local-only toggles — persisted to AsyncStorage so they survive restarts.
   const [showPreview, setShowPreview] = React.useState(true);
@@ -184,10 +182,8 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
         content: {
           title: 'Test notification 🔔',
           body: 'Your notification settings are working correctly.',
-          data: { type: 'test' },
-        },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 },
-      });
+          data: { type: 'test' } },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 } });
       show('Test notification scheduled — check your notifications.', 'success');
     } catch {
       show('Could not schedule test notification.', 'error');
@@ -434,36 +430,30 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     permissionBannerText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     permissionBannerAction: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     prefsLoading: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.sm,
-      paddingVertical: Space.md + Space.sm,
-    },
+      paddingVertical: Space.md + Space.sm },
     prefsLoadingText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     quietHoursRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     quietTimePicker: {
       flex: 1,
       flexDirection: 'row',
@@ -473,38 +463,31 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
-      minHeight: Space.xxl,
-    },
+      minHeight: Space.xxl },
     quietTimePickerPressed: {
       opacity: 0.7,
-      transform: [{ scale: 0.98 }],
-    },
+      transform: [{ scale: 0.98 }] },
     quietTimeLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     quietTimeValue: {
       flex: 1,
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     quietHoursPickerSheet: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     quietHoursPickerTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     quietHoursPickerGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     quietHourCell: {
       paddingHorizontal: Space.sm + Space.xs,
       paddingVertical: Space.sm + 2,
@@ -512,23 +495,17 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
       minHeight: Space.xl + Space.sm,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     quietHourCellActive: {
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     quietHourCellPressed: {
       opacity: 0.7,
-      transform: [{ scale: 0.96 }],
-    },
+      transform: [{ scale: 0.96 }] },
     quietHourCellText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textPrimary },
     quietHourCellTextActive: {
       color: colors.textInverse,
-      fontFamily: Typography.family.bold,
-    },
-  });
+      fontFamily: Typography.family.bold } });
 }

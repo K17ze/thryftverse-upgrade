@@ -37,11 +37,11 @@ import Reanimated, {
   withSpring,
   withTiming,
   runOnJS,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography, Stroke, Elevation} from '../../../theme/designTokens';
+import { Space, Radius, Stroke, Elevation} from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
@@ -97,8 +97,7 @@ export function ContextMenu({
   children,
   title = 'Options',
   accentColor,
-  enabled = true,
-}: ContextMenuProps) {
+  enabled = true }: ContextMenuProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
@@ -125,8 +124,7 @@ export function ContextMenu({
         slideSV.value = withSpring(1, spring.entrance);
         backdropOpacity.value = withTiming(1, {
           duration: 180,
-          easing: Easing.out(Easing.cubic),
-        });
+          easing: Easing.out(Easing.cubic) });
       }
       runOnJS(haptic.medium)();
       runOnJS(AccessibilityInfo.announceForAccessibility)(`${title} menu opened`);
@@ -138,8 +136,7 @@ export function ContextMenu({
         slideSV.value = withSpring(0, spring.entrance);
         backdropOpacity.value = withTiming(0, {
           duration: 150,
-          easing: Easing.in(Easing.cubic),
-        });
+          easing: Easing.in(Easing.cubic) });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -147,12 +144,10 @@ export function ContextMenu({
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: (1 - slideSV.value) * 300 }],
-    opacity: slideSV.value,
-  }));
+    opacity: slideSV.value }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
+    opacity: backdropOpacity.value }));
 
   // ── Action handler ─────────────────────────────────────────────────
   const handleAction = useCallback(
@@ -258,29 +253,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: 34,
     paddingTop: Space.sm,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.full,
     alignSelf: 'center',
-    marginBottom: Space.sm + Space.xs,
-  },
+    marginBottom: Space.sm + Space.xs },
   title: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     marginBottom: Space.md,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+    letterSpacing: 0.5 },
   actionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-around',
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   actionBtn: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -288,11 +279,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     gap: Space.xs,
     borderWidth: Stroke.standard,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   actionLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    textAlign: 'center',
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'center' } });

@@ -29,8 +29,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -46,7 +45,8 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { t } from '../i18n';
 
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Postage'>;
 
@@ -70,8 +70,7 @@ function toCarrierRow(c: CapabilityCarrier, selectedKey: string): CarrierRowData
     etaMinDays: c.etaMinDays,
     etaMaxDays: c.etaMaxDays,
     tracking: c.tracking,
-    selected: c.id === selectedKey,
-  };
+    selected: c.id === selectedKey };
 }
 
 function formatEta(min: number, max: number): string {
@@ -299,92 +298,75 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
       paddingBottom: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     summaryTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     summarySubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     carrierRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + Space.xs,
-      minHeight: 56,
-    },
+      minHeight: 56 },
     carrierRowBorder: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     carrierText: {
       flex: 1,
-      marginRight: Space.sm,
-    },
+      marginRight: Space.sm },
     carrierLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
     carrierMeta: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     pricingNote: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     // ── Loading skeleton rows (match carrier row geometry, no layout shift) ──
     skeletonRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + Space.xs,
-      minHeight: 56,
-    },
+      minHeight: 56 },
     skeletonText: {
       flex: 1,
-      marginRight: Space.sm,
-    },
+      marginRight: Space.sm },
     skeletonBar: {
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     skeletonLabel: {
       width: '45%',
-      height: Type.body.size,
-    },
+      height: TypographyV2.body.size },
     skeletonMeta: {
       width: '65%',
-      height: Type.caption.size,
-      marginTop: Space.xs / 2,
-    },
+      height: TypographyV2.meta.size,
+      marginTop: Space.xs / 2 },
     skeletonRadio: {
       width: 22,
       height: 22,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     footerNote: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       paddingHorizontal: Space.md,
-      marginTop: Space.sm,
-    },
-  });
+      marginTop: Space.sm } });
 }

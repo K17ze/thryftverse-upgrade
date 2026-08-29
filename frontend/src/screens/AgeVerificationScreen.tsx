@@ -4,14 +4,14 @@ import {
   Text,
   StyleSheet,
   BackHandler,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, FontFamily, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, FontFamily, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AppButton } from '../components/ui/AppButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -230,77 +230,65 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     paddingHorizontal: Space.xl,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   brandMark: {
     position: 'absolute',
     top: Space.xxl,
-    alignSelf: 'center',
-  },
+    alignSelf: 'center' },
   logoBadge: {
     width: Space.xxl + Space.sm,
     height: Space.xxl + Space.sm,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   content: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-  },
+    flex: 1 },
   title: {
     fontFamily: Typography.family.extrabold,
-    fontSize: Type.display.size + 4,
-    lineHeight: Type.display.lineHeight + 6,
+    fontSize: TypographyV2.display.size + 4,
+    lineHeight: TypographyV2.display.lineHeight + 6,
     letterSpacing: LetterSpacing.tight,
     textAlign: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   subtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 4,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 4,
+    letterSpacing: TypographyV2.body.letterSpacing,
     textAlign: 'center',
     marginBottom: Space.xxl,
-    maxWidth: 320,
-  },
+    maxWidth: 320 },
   actions: {
     width: '100%',
     maxWidth: 360,
     alignSelf: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   button: {
-    width: '100%',
-  },
+    width: '100%' },
   microcopy: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight + 2,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textAlign: 'center',
     marginTop: Space.lg,
     maxWidth: 300,
-    alignSelf: 'center',
-  },
+    alignSelf: 'center' },
   iosCloseHint: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 4,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 4,
+    letterSpacing: TypographyV2.body.letterSpacing,
     textAlign: 'center',
     marginTop: Space.lg,
     maxWidth: 300,
-    alignSelf: 'center',
-  },
+    alignSelf: 'center' },
   deniedIcon: {
     width: Space.xxl + Space.lg,
     height: Space.xxl + Space.lg,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.lg,
-  },
-});
+    marginBottom: Space.lg } });

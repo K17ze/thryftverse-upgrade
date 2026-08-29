@@ -15,13 +15,13 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Control, Radius, Space, Type, TypeStyles, FontFamily } from '../theme/designTokens';
+import { Control, Radius, Space, TypeStyles, FontFamily } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
   deleteConversationOnApi,
   createGroupInviteLinkOnApi,
   archiveConversationOnApi,
-  type GroupInviteLink,
-} from '../services/chatApi';
+  type GroupInviteLink } from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
 import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
 
@@ -110,8 +110,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const avatarMembers = memberProfiles.map((member) => ({
     id: member.id,
     displayName: member.displayName ?? member.username,
-    avatar: member.avatar,
-  }));
+    avatar: member.avatar }));
 
   const leaveGroup = () => {
     setConfirmSheet({
@@ -134,8 +133,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         } finally {
           setIsLeaving(false);
         }
-      },
-    });
+      } });
   };
 
   const deleteForMe = () => {
@@ -159,8 +157,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         } finally {
           setIsDeleting(false);
         }
-      },
-    });
+      } });
   };
 
   const archive = async () => {
@@ -196,8 +193,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     setIsGeneratingInvite(true);
     try {
       const link = await createGroupInviteLinkOnApi(conversationId, {
-        expiresInHours: 72,
-      });
+        expiresInHours: 72 });
       setInviteLink(link);
       show('Invite link created', 'success');
     } catch (err) {
@@ -399,8 +395,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                   mediaType,
                   senderLabel,
                   timestamp,
-                  messageId,
-                })
+                  messageId })
               }
             />
           )}
@@ -452,8 +447,7 @@ function MembersTab({
   canManageIdentity,
   memberCount,
   onViewAll,
-  onAddMembers,
-}: {
+  onAddMembers }: {
   memberProfiles: Array<{ id: string; username: string; displayName?: string | null; avatar?: string | null }>;
   memberRoles?: Record<string, 'owner' | 'admin' | 'member'>;
   currentUserId?: string;
@@ -562,13 +556,10 @@ const styles_memberAvatar = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   initials: {
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.semibold,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold } });
 
 // ---------------------------------------------------------------------------
 // Media tab — 3-column grid of recent shared media
@@ -576,8 +567,7 @@ const styles_memberAvatar = StyleSheet.create({
 function MediaTab({
   mediaItems,
   onViewAll,
-  onOpenMedia,
-}: {
+  onOpenMedia }: {
   mediaItems: Array<{ id: string; mediaUri?: string; mediaType?: 'image' | 'video'; senderId?: string; timestamp?: string }>;
   onViewAll: () => void;
   onOpenMedia: (uri: string, mediaType?: 'image' | 'video', senderLabel?: string, timestamp?: string, messageId?: string) => void;
@@ -666,8 +656,7 @@ function SettingsTab({
   isLeaving,
   onLeaveGroup,
   isDeleting,
-  onDeleteForMe,
-}: {
+  onDeleteForMe }: {
   isMuted: boolean;
   isTogglingMute: boolean;
   onToggleMute: () => void;
@@ -802,40 +791,33 @@ function SettingsTab({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   content: {
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   paddedContent: {
     paddingHorizontal: Space.md,
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   center: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   headerAction: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverWrap: {
     width: '100%',
     height: 220,
-    position: 'relative',
-  },
+    position: 'relative' },
   coverImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   coverFallback: {
     width: '100%',
     height: 220,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
-    position: 'relative',
-  },
+    position: 'relative' },
   coverEditBadge: {
     position: 'absolute',
     bottom: Space.sm + 2,
@@ -845,62 +827,53 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   identity: {
     alignItems: 'center',
     paddingTop: Space.sm,
     paddingBottom: Space.xs,
     paddingHorizontal: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   groupName: {
     maxWidth: '88%',
     color: colors.textPrimary,
     fontFamily: TypeStyles.title.fontFamily,
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   description: {
     maxWidth: '84%',
     color: colors.textSecondary,
     fontFamily: TypeStyles.body.fontFamily,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.size + 6,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.size + 6,
     textAlign: 'center',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   identityMeta: {
     color: colors.textMuted,
     fontFamily: TypeStyles.body.fontFamily,
-    fontSize: Type.caption.size,
-    marginTop: Space.xs / 2 + 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    marginTop: Space.xs / 2 + 1 },
   // ── Tab bar ──
   tabBar: {
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.sm + 2,
-    position: 'relative',
-  },
+    position: 'relative' },
   tabLabel: {
     color: colors.textMuted,
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   tabLabelActive: {
     color: colors.textPrimary,
-    fontFamily: FontFamily.semibold,
-  },
+    fontFamily: FontFamily.semibold },
   tabIndicator: {
     position: 'absolute',
     bottom: 0,
@@ -908,11 +881,9 @@ function createStyles(colors: ThemeColors) {
     right: '25%',
     height: 2,
     backgroundColor: colors.textPrimary,
-    borderRadius: 1,
-  },
+    borderRadius: 1 },
   tabContent: {
-    flex: 1,
-  },
+    flex: 1 },
   // ── Members tab ──
   addMembersRow: {
     flexDirection: 'row',
@@ -920,102 +891,83 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-  },
+    borderColor: colors.borderSubtle },
   addMembersIcon: {
     width: 40,
     height: 40,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.brandSubtle,
-  },
+    backgroundColor: colors.brandSubtle },
   addMembersText: {
     color: colors.brand,
     fontFamily: FontFamily.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   memberList: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
   memberRowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
+    borderBottomColor: colors.borderSubtle },
   memberCopy: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   memberName: {
     color: colors.textPrimary,
     fontFamily: FontFamily.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   memberHandle: {
     color: colors.textMuted,
     fontFamily: FontFamily.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   roleBadge: {
     paddingHorizontal: Space.sm,
     paddingVertical: 3,
     borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   roleBadgeOwner: {
-    backgroundColor: colors.brandSubtle,
-  },
+    backgroundColor: colors.brandSubtle },
   roleBadgeText: {
     color: colors.textSecondary,
     fontFamily: FontFamily.semibold,
-    fontSize: Type.meta.size,
-    letterSpacing: 0.2,
-  },
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: 0.2 },
   roleBadgeTextOwner: {
-    color: colors.brand,
-  },
+    color: colors.brand },
   emptyMembers: {
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   viewAllRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   viewAllText: {
     color: colors.textSecondary,
     fontFamily: FontFamily.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   // ── Media tab ──
   mediaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   mediaTile: {
     width: '32.5%',
     aspectRatio: 1,
     borderRadius: Radius.sm,
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   mediaTileImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   mediaVideoBadge: {
     position: 'absolute',
     bottom: Space.xs,
@@ -1025,52 +977,41 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   mediaEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.xxl * 2,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   mediaEmptyText: {
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   // ── Invite link card ──
   inviteLinkCard: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     padding: Space.md,
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   inviteLinkText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.caption.size + 6,
-  },
+    lineHeight: TypographyV2.meta.size + 6 },
   inviteLinkActions: {
     flexDirection: 'row',
-    gap: Space.md,
-  },
+    gap: Space.md },
   inviteActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     minHeight: Control.hit,
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   inviteActionPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   inviteActionText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: colors.brand,
-  },
+    color: colors.brand },
   inviteExpiry: {
-    fontSize: Type.meta.size,
-  },
-  });
+    fontSize: TypographyV2.meta.size } });
 }

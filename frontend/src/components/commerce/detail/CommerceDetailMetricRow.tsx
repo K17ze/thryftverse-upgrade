@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../../theme/designTokens';
+import { Space, Typography } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 
 /**
  * Compact metric row — a label/value pair laid out for tabular numerals.
@@ -42,8 +43,7 @@ export function CommerceDetailMetricRow({
   trailing,
   subLabel,
   emphasis = false,
-  separated = false,
-}: CommerceDetailMetricRowProps) {
+  separated = false }: CommerceDetailMetricRowProps) {
   const { colors } = useAppTheme();
 
   return (
@@ -93,52 +93,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   // Hairline detaching a summary total from the line items above it.
   // Per Design.md stroke grammar: separators are hairline.
   rowSeparated: {
     borderTopWidth: StyleSheet.hairlineWidth,
     marginTop: Space.xs,
-    paddingTop: Space.sm + Space.xs,
-  },
+    paddingTop: Space.sm + Space.xs },
   label: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     flex: 1,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   labelEmphasis: {
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   valueCluster: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Space.xs,
     maxWidth: '56%',
     flexShrink: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   value: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     fontVariant: ['tabular-nums'],
     flexShrink: 1,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   // Per Design.md checkout summary spec: the total is the dominant
   // number in a cost breakdown.
   valueEmphasis: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-  },
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing },
   subLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily } });

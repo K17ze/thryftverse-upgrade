@@ -20,7 +20,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useStore } from '../../store/useStore';
 import { listUserOrders, type CommerceUserOrder } from '../../services/commerceApi';
@@ -53,8 +54,7 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
     async function fetchOrder(userId: string) {
       try {
         const result = await listUserOrders(userId, {
-          limit: 20,
-        });
+          limit: 20 });
         if (cancelled) return;
         // Find the most recent order for this listing
         const matching = result.items.find((o) => o.listingId === listingId);
@@ -184,31 +184,24 @@ function createStyles(colors: ThemeColors) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
       backgroundColor: colors.background,
-      minHeight: 44,
-    },
+      minHeight: 44 },
     stripPressed: {
-      opacity: 0.7,
-    },
+      opacity: 0.7 },
     stripNeedsAction: {
-      backgroundColor: colors.brandSubtle,
-    },
+      backgroundColor: colors.brandSubtle },
     statusDot: {
       width: 8,
       height: 8,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     stripContent: {
       flex: 1,
-      gap: 1,
-    },
+      gap: 1 },
     statusLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     deadline: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     ctaBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -216,11 +209,8 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 1,
       borderRadius: Radius.full,
-      borderWidth: StyleSheet.hairlineWidth,
-    },
+      borderWidth: StyleSheet.hairlineWidth },
     ctaText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily } });
 }

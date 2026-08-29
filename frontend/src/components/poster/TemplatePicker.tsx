@@ -4,8 +4,7 @@ import {
   StyleSheet,
   Text,
   ScrollView,
-  Dimensions,
-} from 'react-native';
+  Dimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
@@ -15,10 +14,10 @@ import Reanimated, {
   withTiming,
   withDelay,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 import { POSTER_TEMPLATES, PosterTemplate } from '../../data/posters';
-import { Typography, Radius, Type, Space, Stroke } from '../../theme/designTokens';
+import { Radius, Space, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Motion } from '../../theme/motionTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -69,8 +68,7 @@ const TemplateCard = React.memo(function TemplateCard({
   reducedMotion,
   staggerDelay,
   onSelect,
-  onClose,
-}: TemplateCardProps) {
+  onClose }: TemplateCardProps) {
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
   const { colors } = useAppTheme();
@@ -107,8 +105,7 @@ const TemplateCard = React.memo(function TemplateCard({
     );
     return {
       transform: [{ scale }],
-      opacity,
-    };
+      opacity };
   });
 
   // Selection scale lift — subtle spring pop when becoming active.
@@ -121,8 +118,7 @@ const TemplateCard = React.memo(function TemplateCard({
   const selectionStyle = useAnimatedStyle(() => {
     'worklet';
     return {
-      transform: [{ scale: selectionScale.value }],
-    };
+      transform: [{ scale: selectionScale.value }] };
   });
 
   const handleSelect = React.useCallback(() => {
@@ -179,8 +175,7 @@ export default function TemplatePicker({
   visible,
   onClose,
   onSelect,
-  currentTemplateId,
-}: TemplatePickerProps) {
+  currentTemplateId }: TemplatePickerProps) {
   const [category, setCategory] = React.useState<TemplateCategory>('all');
   const reducedMotion = useReducedMotion();
   const { spring, stagger } = useMotionConfig();
@@ -226,16 +221,13 @@ export default function TemplatePicker({
   }, [visible, reducedMotion, spring.entrance, translateY, backdropOpacity, contentOpacity]);
 
   const drawerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
+    opacity: backdropOpacity.value }));
 
   const contentStyle = useAnimatedStyle(() => ({
-    opacity: contentOpacity.value,
-  }));
+    opacity: contentOpacity.value }));
 
   const handleClose = React.useCallback(() => {
     haptic.light();
@@ -356,8 +348,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     backdrop: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     drawer: {
       position: 'absolute',
       bottom: 0,
@@ -368,66 +359,53 @@ function createStyles(colors: ThemeColors) {
       borderTopLeftRadius: Radius.xxl,
       borderTopRightRadius: Radius.xxl,
       overflow: 'hidden',
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     handleRow: {
       alignItems: 'center',
       paddingTop: 10,
-      paddingBottom: 6,
-    },
+      paddingBottom: 6 },
     handle: {
       width: 36,
       height: 4,
       borderRadius: Radius.sm,
-      backgroundColor: colors.glassBorder,
-    },
+      backgroundColor: colors.glassBorder },
     title: {
-      fontSize: Type.heading.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.scrimTextPrimary,
       textAlign: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     tabRow: {
       flexDirection: 'row',
       gap: 8,
       paddingHorizontal: Space.md,
-      paddingBottom: 10,
-    },
+      paddingBottom: 10 },
     tab: {
       paddingHorizontal: 14,
       paddingVertical: 7,
       borderRadius: Radius.lg,
-      backgroundColor: colors.glassBorder,
-    },
+      backgroundColor: colors.glassBorder },
     tabActive: {
-      backgroundColor: colors.glassBorder,
-    },
+      backgroundColor: colors.glassBorder },
     tabText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.scrimTextSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.scrimTextSecondary },
     tabTextActive: {
-      color: colors.scrimTextPrimary,
-    },
+      color: colors.scrimTextPrimary },
     gridWrapper: {
-      flex: 1,
-    },
+      flex: 1 },
     gridContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     gridItem: {
       flex: 1,
       alignItems: 'center',
       paddingHorizontal: Space.xs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     card: {
       alignItems: 'center',
-      gap: 6,
-    },
+      gap: 6 },
     thumb: {
       width: THUMB_SIZE,
       height: THUMB_SIZE,
@@ -436,11 +414,9 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       borderWidth: Stroke.standard,
       borderColor: colors.glassBorder,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     thumbActive: {
-      borderColor: 'transparent',
-    },
+      borderColor: 'transparent' },
     checkBadge: {
       position: 'absolute',
       top: 4,
@@ -449,16 +425,12 @@ function createStyles(colors: ThemeColors) {
       height: 18,
       borderRadius: Radius.lg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     cardLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.scrimTextSecondary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     cardLabelActive: {
-      color: colors.scrimTextPrimary,
-    },
-  });
+      color: colors.scrimTextPrimary } });
 }

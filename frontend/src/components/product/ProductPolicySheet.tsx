@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Type } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 /**
@@ -36,21 +37,16 @@ export function ProductPolicySheet({ title, body, icon }: ProductPolicySheetProp
 const styles = StyleSheet.create({
   container: {
     paddingVertical: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   iconRow: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   body: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + Space.xs,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + Space.xs,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing } });

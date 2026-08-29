@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -15,7 +14,8 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, AspectRatio, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, AspectRatio, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -102,8 +102,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
             return next;
           });
         }
-      },
-    });
+      } });
   }, [collectionId, haptic, addToCollection, removeFromCollection, removeFromCollectionOnApi, show]);
 
   const handleAdd = useCallback(async (itemId: string) => {
@@ -304,58 +303,48 @@ function createStyles(colors: ThemeColors) {
   const THUMB_H = Math.round(THUMB_W / AspectRatio.portrait); // ~75pt
   return StyleSheet.create({
     scroll: {
-      flex: 1,
-    },
+      flex: 1 },
     scrollContent: {
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
     sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     sectionTitle: {
-      fontSize: Type.label.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.label.size,
+      fontFamily: TypographyV2.label.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
-    },
+      letterSpacing: TypographyV2.label.letterSpacing },
     sectionCount: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     listContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
       paddingVertical: Space.smMd,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     rowRemoving: {
-      opacity: 0.5,
-    },
+      opacity: 0.5 },
     availableInfo: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
-      flex: 1,
-    },
+      flex: 1 },
     thumb: {
       width: THUMB_W,
       height: THUMB_H,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     thumbEmpty: {
       width: THUMB_W,
       height: THUMB_H,
@@ -364,45 +353,36 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       alignItems: 'center',
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     rowBody: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     rowPrice: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     removeBtn: {
       width: Space.xl + Space.sm,
       height: Space.xl + Space.sm,
       borderRadius: Radius.md,
       backgroundColor: 'transparent',
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     addBtn: {
       width: Space.xl + Space.sm,
       height: Space.xl + Space.sm,
       borderRadius: Radius.md,
       backgroundColor: 'transparent',
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     addBtnLoading: {
-      opacity: 0.5,
-    },
+      opacity: 0.5 },
     separator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginLeft: THUMB_W + Space.md,
-    },
+      marginLeft: THUMB_W + Space.md },
     availableSection: {
       paddingTop: Space.lg,
-      flex: 1,
-    },
-  });
+      flex: 1 } });
 }

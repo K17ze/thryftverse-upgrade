@@ -3,22 +3,21 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
 import { AppButton } from './AppButton';
 import { CachedImage } from '../CachedImage';
 import { Meta, Body, Headline } from './Text';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   isBuyNowValid,
   mapApiErrorToTransactionError,
   shouldCloseSheetDueToLifecycle,
   isSheetStateStale,
-  type TransactionError,
-} from '../../utils/transactionSheetLogic';
+  type TransactionError } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
 import { createStableId } from '../../utils/createStableId';
 import { toIze, formatAuctionIze, type FxRates } from '../../utils/currency';
@@ -58,8 +57,7 @@ export function BuyNowSheet({
   fxRates,
   formatFromFiat,
   onSubmitBuyNow,
-  onRefreshDetail,
-}: BuyNowSheetProps) {
+  onRefreshDetail }: BuyNowSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [stage, setStage] = React.useState<BuyNowStage>('review');
@@ -93,8 +91,7 @@ export function BuyNowSheet({
             : 'This auction has ended. Buy Now is no longer available.',
         canRetry: false,
         transactionPossible: false,
-        isAmbiguous: false,
-      });
+        isAmbiguous: false });
       setStage('error');
     }
   }, [visible, auction.effectiveState]);
@@ -103,8 +100,7 @@ export function BuyNowSheet({
     buyNowPriceGbp: auction.buyNowPriceGbp,
     isSeller: auction.isSeller,
     effectiveState: auction.effectiveState,
-    isSubmitting,
-  });
+    isSubmitting });
 
   const handleConfirm = async () => {
     if (!canBuyNow || !auction.buyNowPriceGbp) return;
@@ -123,8 +119,7 @@ export function BuyNowSheet({
             message: 'Unable to verify current auction state. Check your connection and try again.',
             canRetry: true,
             transactionPossible: true,
-            isAmbiguous: true,
-          });
+            isAmbiguous: true });
           setStage('error');
           return;
         }
@@ -143,8 +138,7 @@ export function BuyNowSheet({
             message: 'This auction is no longer live. Buy Now is unavailable.',
             canRetry: false,
             transactionPossible: false,
-            isAmbiguous: false,
-          });
+            isAmbiguous: false });
           setStage('error');
           return;
         }
@@ -158,8 +152,7 @@ export function BuyNowSheet({
             currentBuyNowPriceGbp: serverPrice,
             canRetry: true,
             transactionPossible: true,
-            isAmbiguous: false,
-          });
+            isAmbiguous: false });
           setStage('review');
           return;
         }
@@ -436,111 +429,92 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   itemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   itemThumb: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemThumbContainer: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemThumbPlaceholder: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemHeaderText: {
-    flex: 1,
-  },
+    flex: 1 },
   itemTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   itemSeller: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   stageContent: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   // ── Fixed-price experience ──
   fixedPriceLabel: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     marginTop: Space.xs,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
+    letterSpacing: 0.8 },
   fixedPriceBlock: {
     alignItems: 'center',
     paddingVertical: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   fixedPriceValue: {
-    fontSize: Type.display.size + 4,
-    lineHeight: Type.display.lineHeight + 4,
+    fontSize: TypographyV2.display.size + 4,
+    lineHeight: TypographyV2.display.lineHeight + 4,
     fontWeight: '700',
-    letterSpacing: Type.display.letterSpacing,
+    letterSpacing: TypographyV2.display.letterSpacing,
     color: colors.textPrimary,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.display.fontFamily,
+    fontVariant: ['tabular-nums'] },
   fixedPriceIze: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.brand,
-    fontFamily: Typography.family.medium,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   fixedPriceEquivalent: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   fixedPriceContext: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center',
     lineHeight: 20,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   dominantAction: {
     width: '100%',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   dismissLink: {
     alignItems: 'center',
     paddingVertical: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   dismissLinkText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -549,82 +523,65 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: colors.dangerSubtle,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   errorText: {
     flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.danger,
-    fontFamily: Typography.family.medium,
-    lineHeight: 18,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: 18 },
   actions: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   actionBtn: {
-    flex: 1,
-  },
+    flex: 1 },
   primaryBtn: {},
   centerStage: {
     alignItems: 'center',
     paddingVertical: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   submittingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   submittingSpinnerWrap: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   submittingDetail: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   successIcon: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   successTitle: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    color: colors.textPrimary },
   successDetail: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     textAlign: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   doneBtn: {
     minWidth: 160,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   errorIcon: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   errorIconSmall: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   errorTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     textAlign: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   // R09: Unknown-outcome recovery hint
   ambiguousHint: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    lineHeight: 18,
-  },
-  });
+    lineHeight: 18 } });
 }

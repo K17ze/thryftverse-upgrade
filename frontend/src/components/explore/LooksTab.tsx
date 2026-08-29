@@ -5,8 +5,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   Pressable,
-  RefreshControl,
-} from 'react-native';
+  RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,7 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type, AspectRatio } from '../../theme/designTokens';
+import { Space, Radius, AspectRatio } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useScrollToTop } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -26,8 +26,7 @@ import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { isVideoUri } from '../../utils/media';
 import {
   resolveLookTemplate,
-  type LookTemplate,
-} from '../../utils/lookTemplates';
+  type LookTemplate } from '../../utils/lookTemplates';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -59,8 +58,7 @@ function LookTile({
   template,
   onPress,
   colors,
-  styles,
-}: {
+  styles }: {
   look: LookApiItem;
   template: LookTemplate;
   onPress: () => void;
@@ -508,88 +506,71 @@ function createStyles(colors: ThemeColors) {
     masonrySkeletonGrid: {
       flexDirection: 'row',
       justifyContent: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     masonrySkeletonCol: {
       flexDirection: 'column',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     masonrySkeletonTile: {
-      marginBottom: 0,
-    },
+      marginBottom: 0 },
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     // Outer container for the populated feed — holds the static header +
     // feed tabs above the scrolling FlashList.
     feedContainer: {
-      flex: 1,
-    },
+      flex: 1 },
     // Static (non-scrolling) header region: section header + feed tabs.
     // Horizontal padding matches the FlashList content padding so the
     // header aligns with the masonry grid below.
     feedStaticHeader: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     // ── Feed tabs ──
     // Pill-style feed segmentation (For You / Following / Trending).
     // Active pill carries the brand fill; inactive pills are plain text.
     feedTabsRow: {
       flexDirection: 'row',
       gap: Space.xs,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     feedPill: {
       paddingVertical: Space.xs + 2,
       paddingHorizontal: Space.md,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     feedPillActive: {
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     feedPillText: {
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     feedPillTextActive: {
       color: colors.textInverse,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
     feedPillTextInactive: {
       color: colors.textSecondary,
-      fontFamily: Typography.family.medium,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
     errorWrap: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 80,
       paddingHorizontal: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     errorTitle: {
-      fontSize: Type.heading.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      color: colors.textPrimary },
     errorSubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     retryBtn: {
       marginTop: Space.sm,
       paddingHorizontal: Space.lg,
       paddingVertical: 10,
       backgroundColor: colors.brand,
-      borderRadius: Radius.xxl,
-    },
+      borderRadius: Radius.xxl },
     retryBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textInverse },
     refreshErrorBanner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -599,67 +580,55 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: 10,
       marginBottom: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     refreshErrorText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     retryLink: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.brand },
     footer: {
       paddingVertical: Space.md,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     endOfList: {
       alignItems: 'center',
       paddingVertical: Space.lg,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     endOfListHairline: {
       width: 40,
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     endOfListText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     // ── Tile ──
     tileCell: {
       paddingHorizontal: Space.sm,
       paddingBottom: Space.sm,
-      width: '100%',
-    },
+      width: '100%' },
     tile: {
       width: '100%',
       borderRadius: Radius.lg,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     tileMedia: {
       width: '100%',
-      position: 'relative',
-    },
+      position: 'relative' },
     tileImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     // Gradient scrim — covers bottom 40% of tile for text legibility.
     tileScrim: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
-      height: '45%',
-    },
+      height: '45%' },
     // Creator identity — bottom-left, on the gradient scrim. No pill.
     creatorOverlay: {
       position: 'absolute',
@@ -668,8 +637,7 @@ function createStyles(colors: ThemeColors) {
       right: Space.xs + 2,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     // Username — 12pt semibold white. Fixed white ink because the gradient
     // scrim is always dark at the bottom; a theme text token (black in dark
     // mode) would render invisible.
@@ -677,27 +645,23 @@ function createStyles(colors: ThemeColors) {
       color: '#FFFFFF',
       fontSize: 12,
       lineHeight: 16,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.meta.letterSpacing,
-      flexShrink: 1,
-    },
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      flexShrink: 1 },
     // Verified checkmark — 14pt blue, recognisable trust signal (not a tiny
     // inline glyph). Uses the brand blue so it reads as verification, not
     // a decorative icon.
     verifiedIcon: {
-      flexShrink: 0,
-    },
+      flexShrink: 0 },
     // Shoppable count — inline with creator handle, not a separate badge.
     shoppableInline: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 2,
-    },
+      gap: 2 },
     shoppableText: {
       color: '#FFFFFF',
       fontSize: 10,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
     // Media-type / multi-layer cue — top-right, small icon only.
     mediaCueBadge: {
       position: 'absolute',
@@ -708,8 +672,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     // Like count — bottom-right, on the gradient scrim.
     likeOverlay: {
       position: 'absolute',
@@ -717,15 +680,12 @@ function createStyles(colors: ThemeColors) {
       right: Space.xs + 2,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
-    },
+      gap: 3 },
     // Heart count — 11pt regular white. Fixed white ink because the gradient
     // scrim guarantees contrast; a theme token would render black-on-dark in
     // dark mode.
     likeText: {
       color: '#FFFFFF',
       fontSize: 11,
-      fontFamily: Typography.family.regular,
-    },
-  });
+      fontFamily: TypographyV2.meta.fontFamily } });
 }

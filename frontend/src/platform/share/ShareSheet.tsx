@@ -17,7 +17,8 @@
 import React, { useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
+import { Space, Radius, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { BottomSheet } from '../../components/BottomSheet';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
@@ -29,8 +30,7 @@ import {
   shareToTikTok,
   shareToWhatsApp,
   shareToTelegram,
-  shareToSystemSheet,
-} from './SocialShare';
+  shareToSystemSheet } from './SocialShare';
 import type { ShareSheetProps, SocialShareTarget } from './types';
 
 // ============================================================================
@@ -49,28 +49,23 @@ const SHARE_OPTIONS: readonly ShareOption[] = [
   {
     id: 'instagram-story',
     label: 'Story',
-    icon: 'logo-instagram',
-  },
+    icon: 'logo-instagram' },
   {
     id: 'tiktok',
     label: 'TikTok',
-    icon: 'logo-tiktok',
-  },
+    icon: 'logo-tiktok' },
   {
     id: 'whatsapp',
     label: 'WhatsApp',
-    icon: 'logo-whatsapp',
-  },
+    icon: 'logo-whatsapp' },
   {
     id: 'telegram',
     label: 'Telegram',
-    icon: 'paper-plane-outline',
-  },
+    icon: 'paper-plane-outline' },
   {
     id: 'system',
     label: 'More',
-    icon: 'share-outline',
-  },
+    icon: 'share-outline' },
 ] as const;
 
 // ============================================================================
@@ -105,37 +100,32 @@ export function ShareSheet({ visible, onClose, shareParams }: ShareSheetProps) {
             await shareToInstagramStory({
               backgroundImageUri: composedImageUri ?? listing.imageUri,
               stickerImageUri,
-              attributionLink: listing.deepLink,
-            });
+              attributionLink: listing.deepLink });
             break;
 
           case 'tiktok':
             await shareToTikTok({
               imageUri: composedImageUri ?? listing.imageUri,
-              caption: `"${listing.title}" — \u00A3${listing.priceGbp.toFixed(2)} on Thryftverse`,
-            });
+              caption: `"${listing.title}" — \u00A3${listing.priceGbp.toFixed(2)} on Thryftverse` });
             break;
 
           case 'whatsapp':
             await shareToWhatsApp({
               message: `Check out "${listing.title}" — \u00A3${listing.priceGbp.toFixed(2)} on Thryftverse\n${listing.deepLink}`,
-              imageUri: listing.imageUri,
-            });
+              imageUri: listing.imageUri });
             break;
 
           case 'telegram':
             await shareToTelegram({
               message: `Check out "${listing.title}" — \u00A3${listing.priceGbp.toFixed(2)} on Thryftverse\n${listing.deepLink}`,
-              imageUri: listing.imageUri,
-            });
+              imageUri: listing.imageUri });
             break;
 
           case 'system':
             await shareToSystemSheet({
               message: `Check out "${listing.title}" — \u00A3${listing.priceGbp.toFixed(2)} on Thryftverse\n${listing.deepLink}`,
               imageUri: listing.imageUri,
-              url: listing.deepLink,
-            });
+              url: listing.deepLink });
             break;
         }
       } catch {
@@ -249,90 +239,74 @@ const styles = StyleSheet.create({
   container: {
     paddingTop: Space.sm,
     paddingHorizontal: Space.md,
-    gap: Space.md,
-  },
+    gap: Space.md },
   sheetTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     textAlign: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   // ── Preview — flat, no card ──
   previewRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   previewImageWrap: {
     width: 48,
     height: 48,
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   previewImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   previewIconFallback: {
     width: '100%',
     height: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   previewTextCol: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   previewTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: FontFamily.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold },
   previewSubtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: FontFamily.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular },
   // ── Platform options grid ──
   optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.md,
     justifyContent: 'center',
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   optionBtn: {
     alignItems: 'center',
     gap: Space.xs + 2,
-    width: 68,
-  },
+    width: 68 },
   optionIconWrap: {
     width: 56,
     height: 56,
     borderRadius: Radius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   optionLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   // ── Cancel — quiet text action ──
   cancelBtn: {
     marginTop: Space.xs,
     paddingVertical: Space.md,
     alignItems: 'center',
     minHeight: 44,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   cancelText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: FontFamily.semibold,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold } });

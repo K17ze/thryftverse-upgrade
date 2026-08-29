@@ -29,16 +29,14 @@ import {
   Text,
   ScrollView,
   LayoutChangeEvent,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 import {
   Canvas,
   Path as SkiaPath,
-  Skia,
-} from '@shopify/react-native-skia';
+  Skia } from '@shopify/react-native-skia';
 import type { SpeedCurve, SpeedPoint, SpeedCurveEasing } from './SpeedCurveTypes';
 import {
   SPEED_CURVE_PRESETS,
@@ -46,8 +44,7 @@ import {
   SPEED_MAX,
   clampSpeed,
   clampPosition,
-  sampleSpeedAtPosition,
-} from './SpeedCurveTypes';
+  sampleSpeedAtPosition } from './SpeedCurveTypes';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -59,9 +56,8 @@ import {
   Control,
   FontFamily,
   FontSize,
-  LetterSpacing,
-  Type,
-} from '../../../theme/designTokens';
+  LetterSpacing } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 
 export interface SpeedCurveEditorProps {
@@ -76,8 +72,7 @@ const EASINGS: SpeedCurveEasing[] = ['linear', 'smooth', 'hold'];
 const EASING_LABELS: Record<SpeedCurveEasing, string> = {
   linear: 'Linear',
   smooth: 'Smooth',
-  hold: 'Hold',
-};
+  hold: 'Hold' };
 const CURVE_SAMPLES = 120; // resolution of the rendered curve line
 
 // ── Y-axis mapping: log2 scale ────────────────────────────────────────
@@ -145,8 +140,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
       // Deep-copy the preset so edits don't mutate the preset constant.
       onChange({
         easing: preset.curve.easing,
-        points: preset.curve.points.map((p) => ({ ...p, id: makeStableId('sp') })),
-      });
+        points: preset.curve.points.map((p) => ({ ...p, id: makeStableId('sp') })) });
     },
     [haptic, onChange],
   );
@@ -288,8 +282,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
         ...curve,
         points: curve.points.map((p) =>
           p.id === selectedId ? { ...p, speed: newSpeed } : p,
-        ),
-      });
+        ) });
     },
     [selectedId, curve, haptic, onChange],
   );
@@ -357,8 +350,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
                   styles.presetLabel,
                   {
                     color: active ? colors.brand : colors.textSecondary,
-                    textDecorationLine: active ? 'underline' : 'none',
-                  },
+                    textDecorationLine: active ? 'underline' : 'none' },
                 ]}
               >
                 {preset.name}
@@ -445,8 +437,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
                     styles.pointDot,
                     {
                       backgroundColor: isSelected ? brandColor : pointFillColor,
-                      borderColor: isSelected ? brandColor : pointBorderColor,
-                    },
+                      borderColor: isSelected ? brandColor : pointBorderColor },
                   ]}
                 />
               </View>
@@ -475,8 +466,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
                     styles.easingLabel,
                     {
                       color: active ? colors.brand : colors.textSecondary,
-                      textDecorationLine: active ? 'underline' : 'none',
-                    },
+                      textDecorationLine: active ? 'underline' : 'none' },
                   ]}
                 >
                   {EASING_LABELS[ease]}
@@ -546,37 +536,31 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
 const styles = StyleSheet.create({
   container: {
     paddingVertical: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   presetRow: {
     paddingHorizontal: Space.sm,
     gap: Space.xs,
     alignItems: 'center',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   presetChip: {
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   presetLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    letterSpacing: LetterSpacing.normal,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: LetterSpacing.normal },
   canvasWrap: {
     marginHorizontal: Space.sm,
     height: CURVE_HEIGHT,
     borderTopWidth: Stroke.hairline,
     borderBottomWidth: Stroke.hairline,
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   canvasTapLayer: {
     ...StyleSheet.absoluteFill,
-    zIndex: 1,
-  },
+    zIndex: 1 },
   yAxisLabels: {
     position: 'absolute',
     left: 4,
@@ -585,89 +569,74 @@ const styles = StyleSheet.create({
     width: 36,
     justifyContent: 'space-between',
     paddingVertical: 0,
-    zIndex: 5,
-  },
+    zIndex: 5 },
   axisLabel: {
     fontFamily: FontFamily.medium,
     fontSize: 10.5,
-    letterSpacing: LetterSpacing.normal,
-  },
+    letterSpacing: LetterSpacing.normal },
   pointHit: {
     position: 'absolute',
     width: POINT_HIT,
     height: POINT_HIT,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
-  },
+    zIndex: 10 },
   pointDot: {
     width: POINT_RADIUS * 2,
     height: POINT_RADIUS * 2,
     borderRadius: POINT_RADIUS,
-    borderWidth: Stroke.emphasis,
-  },
+    borderWidth: Stroke.emphasis },
   easingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   easingRowLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    letterSpacing: LetterSpacing.normal,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: LetterSpacing.normal },
   easingButtons: {
     flexDirection: 'row',
-    gap: Space.md,
-  },
+    gap: Space.md },
   easingButton: {
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   easingLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    letterSpacing: LetterSpacing.normal,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: LetterSpacing.normal },
   inspector: {
     marginHorizontal: Space.sm,
     borderTopWidth: Stroke.hairline,
     paddingTop: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   inspectorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   inspectorLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    letterSpacing: LetterSpacing.normal,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: LetterSpacing.normal },
   valueControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   stepButton: {
     width: Control.chrome,
     height: Control.chrome,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   valueText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     letterSpacing: LetterSpacing.normal,
     minWidth: 56,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -675,15 +644,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingVertical: Space.sm,
     borderRadius: Radius.lg,
-    minHeight: 50,
-  },
+    minHeight: 50 },
   deleteLabel: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: '#FFFFFF',
-    letterSpacing: LetterSpacing.normal,
-  },
-});
+    letterSpacing: LetterSpacing.normal } });
 
 // Keep ViewStyle referenced for typed style composition without unused-import
 // errors at compile time.

@@ -9,8 +9,7 @@ import {
   Pressable,
   Dimensions,
   type NativeSyntheticEvent,
-  type NativeScrollEvent,
-} from "react-native";
+  type NativeScrollEvent } from "react-native";
 
 import { FlashList } from "@shopify/flash-list";
 
@@ -18,8 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import {
   useSafeAreaInsets,
-  SafeAreaView,
-} from "react-native-safe-area-context";
+  SafeAreaView } from "react-native-safe-area-context";
 
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -38,8 +36,7 @@ import { useStore } from "../store/useStore";
 
 import {
   clearComposerStateOnApi,
-  reportConversationOnApi,
-} from "../services/chatApi";
+  reportConversationOnApi } from "../services/chatApi";
 import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
 
 import { useToast } from "../context/ToastContext";
@@ -59,8 +56,7 @@ import { ChatListingContextBar } from "../components/chat/ChatListingContextBar"
 import { ChatTransactionStrip } from "../components/chat/ChatTransactionStrip";
 
 import {
-  ChatActionSheet,
-} from "../components/chat/ChatActionSheet";
+  ChatActionSheet } from "../components/chat/ChatActionSheet";
 
 import { AttachmentReviewSheet } from "../components/chat/AttachmentReviewSheet";
 
@@ -82,8 +78,7 @@ import { SuggestedRepliesBar } from "../components/chat/SuggestedRepliesBar";
 import { OfflineBanner } from "../components/OfflineBanner";
 import {
   getAgentSuggestions as getChatAgentSuggestions,
-  getAgentResponse as getChatAgentResponse,
-} from "../services/chatAgentsApi";
+  getAgentResponse as getChatAgentResponse } from "../services/chatAgentsApi";
 
 import * as Clipboard from "expo-clipboard";
 
@@ -93,25 +88,21 @@ import { detectChatSafetyWarning, containsOffPlatformPaymentPattern } from "../u
 import {
   resolveComposerStack,
   isSlotVisible,
-  type ComposerStackSlotState,
-} from "../utils/chatComposerStack";
+  type ComposerStackSlotState } from "../utils/chatComposerStack";
 
 import {
   resolveContextualStack,
   type ContextualStackSlot,
   type ContextualSlotState,
-  MESSAGE_LIST_MIN_HEIGHT_RATIO,
-} from "../utils/chatContextualStack";
+  MESSAGE_LIST_MIN_HEIGHT_RATIO } from "../utils/chatContextualStack";
 
 import {
   isFirstInCluster as isFirstInClusterHelper,
-  isLastInCluster as isLastInClusterHelper,
-} from "../utils/messageGrouping";
+  isLastInCluster as isLastInClusterHelper } from "../utils/messageGrouping";
 
 import {
   isTrustedSystemMessage,
-  resolveSystemMessageProvenance,
-} from "../utils/systemMessageProvenance";
+  resolveSystemMessageProvenance } from "../utils/systemMessageProvenance";
 
 import { MarketplaceChatCard } from "../components/chat/MarketplaceChatCard";
 import { MessageBubble } from "../components/chat/MessageBubble";
@@ -120,7 +111,8 @@ import { PaymentWarningCard } from "../components/chat/PaymentWarningCard";
 
 import { t } from "../i18n";
 
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 import { useVisuallyComplete } from "../performance/visuallyComplete";
 
@@ -135,8 +127,7 @@ import {
   DEFAULT_SELLER_QUICK_REPLIES,
   DEFAULT_BUYER_QUICK_REPLIES,
   formatDateSeparator,
-  formatMessageTime,
-} from "../hooks/chat";
+  formatMessageTime } from "../hooks/chat";
 import { useTypingIndicator } from "../services/realtimeClient";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -149,8 +140,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const styles = useMemo(() => StyleSheet.create({
     screenRoot: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
 
     selectionToolbar: {
       flexDirection: "row",
@@ -160,74 +150,62 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingVertical: Space.sm - 1,
       backgroundColor: colors.surfaceAlt,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
 
     emptyStateWrap: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
       paddingHorizontal: Space.xl,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
 
     messageList: {
       paddingTop: Space.sm,
-      paddingBottom: Space.md,
-    },
+      paddingBottom: Space.md },
 
     dateWrap: {
       alignItems: "center",
       marginVertical: Space.md,
       paddingVertical: 0,
       paddingHorizontal: 0,
-      alignSelf: "center",
-    },
+      alignSelf: "center" },
 
     dateText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       letterSpacing: 0.4,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
 
     statusWrap: {
       marginVertical: Space.xs,
       paddingHorizontal: Space.md,
-      alignItems: "center",
-    },
+      alignItems: "center" },
 
     msgRow: {
       flexDirection: "column",
       width: "100%",
       gap: Space.xs,
-      paddingHorizontal: 0,
-    },
+      paddingHorizontal: 0 },
 
     msgRowRight: {
-      alignItems: "stretch",
-    },
+      alignItems: "stretch" },
 
     linkPreviewWrap: {
       maxWidth: "78%",
       alignSelf: "flex-start",
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
 
     linkPreviewWrapRight: {
-      alignSelf: "flex-end",
-    },
+      alignSelf: "flex-end" },
 
     selectionRow: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
 
     selectionRowRight: {
-      flexDirection: "row-reverse",
-    },
+      flexDirection: "row-reverse" },
 
     checkbox: {
       width: Control.icon,
@@ -238,13 +216,11 @@ export default function ChatScreen({ navigation, route }: Props) {
       backgroundColor: colors.surfaceAlt,
       alignItems: "center",
       justifyContent: "center",
-      marginHorizontal: Space.sm,
-    },
+      marginHorizontal: Space.sm },
 
     checkboxActive: {
       backgroundColor: colors.brand,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
 
     composerWrap: {
       paddingHorizontal: 0,
@@ -252,8 +228,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingTop: 0,
       backgroundColor: colors.background,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
 
     undoBanner: {
       flexDirection: "row",
@@ -266,20 +241,17 @@ export default function ChatScreen({ navigation, route }: Props) {
       marginTop: 0,
       marginBottom: 0,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm - 1,
-    },
+      paddingVertical: Space.sm - 1 },
 
     undoBannerText: {
       color: colors.textSecondary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
 
     undoBannerAction: {
       color: colors.brand,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
 
     agentRow: {
       flexDirection: 'row',
@@ -287,8 +259,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
       gap: Space.xs + 1,
-      flexWrap: 'wrap',
-    },
+      flexWrap: 'wrap' },
 
     agentChip: {
       flexDirection: 'row',
@@ -299,47 +270,40 @@ export default function ChatScreen({ navigation, route }: Props) {
       borderRadius: Radius.full,
       backgroundColor: colors.brandSubtle,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.brandBorder,
-    },
+      borderColor: colors.brandBorder },
 
     agentChipPressed: {
-      backgroundColor: colors.brandSubtle,
-    },
+      backgroundColor: colors.brandSubtle },
 
     agentChipText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textPrimary,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
 
     unreadDividerWrap: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       marginVertical: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
 
     unreadDividerLine: {
       flex: 1,
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
 
     unreadDividerBadge: {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
-      backgroundColor: colors.brandSubtle,
-    },
+      backgroundColor: colors.brandSubtle },
 
     unreadDividerText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.brand,
       letterSpacing: 0.3,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
 
     // Conversation-level safety banner — rendered above the message list
     // as the highest-priority contextual element. Uses semantic tokens
@@ -352,21 +316,18 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingVertical: Space.sm - 1,
       backgroundColor: colors.surfaceAlt,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
 
     safetyBannerText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily },
 
     // Suggested-replies wrapper — adds a dismiss control so the bar can
     // be dismissed for the current conversation session.
     suggestedRepliesWrap: {
-      position: 'relative',
-    },
+      position: 'relative' },
 
     suggestedRepliesClose: {
       position: 'absolute',
@@ -376,8 +337,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       height: Control.icon - 6,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
 
     // Message list container — flexes to fill remaining space but is
     // never squeezed below ~40% of screen height (audit requirement).
@@ -385,9 +345,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       flex: 1,
       minHeight: Math.floor(
         Dimensions.get('window').height * MESSAGE_LIST_MIN_HEIGHT_RATIO,
-      ),
-    },
-  }), [colors]);
+      ) } }), [colors]);
 
   const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params;
 
@@ -496,11 +454,9 @@ export default function ChatScreen({ navigation, route }: Props) {
 
             originalPrice: entry.originalPrice,
 
-            status: entry.offerStatus as "pending" | "declined" | "countered" | "accepted" | "expired" | "cancelled" | undefined,
-          },
+            status: entry.offerStatus as "pending" | "declined" | "countered" | "accepted" | "expired" | "cancelled" | undefined },
 
-          text: entry.text,
-        };
+          text: entry.text };
       }
 
       return {
@@ -532,15 +488,13 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           count: r.userIds.length,
 
-          reactedByMe: r.userIds.includes(currentUser?.id ?? "me"),
-        })),
+          reactedByMe: r.userIds.includes(currentUser?.id ?? "me") })),
 
         mediaUri: entry.mediaUri,
 
         mediaType: entry.mediaType,
 
-        uploadStatus: entry.uploadStatus,
-      };
+        uploadStatus: entry.uploadStatus };
     });
   }, [botLookup, conversation?.messages, currentUser?.id, userLookup]);
 
@@ -575,15 +529,13 @@ export default function ChatScreen({ navigation, route }: Props) {
     setSearchMatchIndex,
     isSearchActive,
     setIsSearchActive,
-    handleAttachmentSelect,
-  } = useConversationComposer({
+    handleAttachmentSelect } = useConversationComposer({
     conversationId,
     initialSearchQuery: route.params?.focusQuery,
     messagesRef,
     show,
     haptic,
-    setConversationDraft,
-  });
+    setConversationDraft });
 
   // ─── Controller hook: AI chat agents (demo-mode service) ───
   // useConversationAgents owns deployed agents, agent picker visibility,
@@ -598,13 +550,11 @@ export default function ChatScreen({ navigation, route }: Props) {
     handleDeployChatAgent,
     handleRemoveChatAgent,
     handleSelectChatAgentSuggestion,
-    agentQuickReplies,
-  } = useConversationAgents({
+    agentQuickReplies } = useConversationAgents({
     conversationId,
     show,
     haptic,
-    setInput,
-  });
+    setInput });
 
   // ─── Controller hook: safety warnings ───
   // useConversationSafety owns composer-level safety detection, danger/
@@ -615,8 +565,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     dismissedWarningIds,
     setDangerWarningDismissed,
     setCautionWarningDismissed,
-    dismissMessageWarning,
-  } = useConversationSafety({ input });
+    dismissMessageWarning } = useConversationSafety({ input });
 
   // Suggested replies are dismissible for the current conversation session.
   // Once dismissed they do not reappear until the conversation changes.
@@ -663,8 +612,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     dateSeparatorIndices,
     unreadDividerIndex,
     handleMessageListScroll: hookHandleMessageListScroll,
-    syncMessagesFromApi,
-  } = useConversationMessages({
+    syncMessagesFromApi } = useConversationMessages({
     conversationId,
     routeOfferPayload,
     currentUser,
@@ -683,8 +631,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     conversationUnread: conversation?.unread,
     markConversationRead,
     appendConversationMessage,
-    replaceConversationMessages,
-  });
+    replaceConversationMessages });
 
   // Update composer hydration ref with the latest messages (the ref was
   // created before useConversationComposer so the hook has a stable object;
@@ -719,16 +666,14 @@ export default function ChatScreen({ navigation, route }: Props) {
     handleAcceptOffer,
     handleDeclineOffer,
     handleCounterOffer,
-    handleOfferExpired,
-  } = useConversationCommerce({
+    handleOfferExpired } = useConversationCommerce({
     messages,
     setMessages,
     routeItemId,
     conversationItemId: conversation?.itemId,
     show,
     haptic,
-    navigation,
-  });
+    navigation });
 
   // ─── Controller hook: message selection ───
   // useMessageSelection owns selection mode, selected IDs, context menu
@@ -742,8 +687,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     setSelectedMessage,
     toggleMessageSelection,
     enterSelectionMode,
-    exitSelectionMode,
-  } = useMessageSelection({ selectionMode: false });
+    exitSelectionMode } = useMessageSelection({ selectionMode: false });
 
   // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature
   const handleSend = useCallback(() => {
@@ -853,8 +797,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         listRef.current.scrollToIndex({
           index: targetIndex,
           animated: true,
-          viewPosition: 0.5,
-        });
+          viewPosition: 0.5 });
       } catch {
         // FlashList may not have rendered the item yet
       }
@@ -982,8 +925,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               itemTitle: msg.commerceState.itemTitle,
               itemImage: msg.commerceState.itemImage,
               trackingNumber: msg.commerceState.trackingNumber,
-              carrier: msg.commerceState.carrier,
-            }}
+              carrier: msg.commerceState.carrier }}
             onViewOrder={() => {
               navigation.navigate("OrderDetail", { orderId: msg.commerceState!.orderId });
             }}
@@ -1011,8 +953,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         type: msg.type === "system" ? "system" : undefined,
         systemTitle: msg.systemTitle,
         text: msg.text,
-        timestamp: msg.date ?? "",
-      })
+        timestamp: msg.date ?? "" })
     ) {
       const provenance = resolveSystemMessageProvenance({
         id: msg.id,
@@ -1021,8 +962,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         type: msg.type === "system" ? "system" : undefined,
         systemTitle: msg.systemTitle,
         text: msg.text,
-        timestamp: msg.date ?? "",
-      });
+        timestamp: msg.date ?? "" });
       const content = (
         <View key={msg.id} style={styles.statusWrap}>
           <MarketplaceChatCard
@@ -1062,8 +1002,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
             offer={msg.offer}
             formattedPrice={formatFromFiat(msg.offer!.price, currencyCode, {
-              displayMode: "fiat",
-            })}
+              displayMode: "fiat" })}
             formattedOriginalPrice={formatFromFiat(
               msg.offer!.originalPrice, currencyCode,
               { displayMode: "fiat" },
@@ -1170,8 +1109,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                       mediaType: msg.mediaType ?? "image",
                       senderLabel: msg.senderLabel,
                       timestamp: msg.date,
-                      messageId: msg.id,
-                    });
+                      messageId: msg.id });
                   }
                 : undefined
             }
@@ -1184,8 +1122,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     return parent
                       ? {
                           senderName: parent.senderLabel ?? t('chat.fallbackUserName'),
-                          text: parent.text ?? "",
-                        }
+                          text: parent.text ?? "" }
                       : null;
                   })()
                 : null
@@ -1241,8 +1178,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 onReport={() => {
                   navigation.navigate("Report", {
                     type: "user",
-                    targetId: msg.senderId,
-                  });
+                    targetId: msg.senderId });
                 }}
                 isMe={isMe}
               />
@@ -1342,25 +1278,21 @@ export default function ChatScreen({ navigation, route }: Props) {
       {
         slot: "safetyWarning",
         visible: !!conversationSafetyWarning,
-        estimatedHeight: 52,
-      },
+        estimatedHeight: 52 },
       {
         slot: "listingTransaction",
         visible:
           !isGroup && !!linkedListing && !!linkedListing.isSold,
-        estimatedHeight: 48,
-      },
+        estimatedHeight: 48 },
       {
         slot: "agentRow",
         visible: deployedChatAgents.length > 0,
-        estimatedHeight: 36,
-      },
+        estimatedHeight: 36 },
       {
         slot: "suggestedReplies",
         visible:
           agentSuggestionsActive && !suggestedRepliesDismissed,
-        estimatedHeight: 52,
-      },
+        estimatedHeight: 52 },
     ];
 
     return resolveContextualStack(slots, budget);
@@ -1427,14 +1359,12 @@ export default function ChatScreen({ navigation, route }: Props) {
             if (!conversation) return;
             if (isGroup) {
               navigation.navigate("GroupChatInfo", {
-                conversationId: conversation.id,
-              });
+                conversationId: conversation.id });
             } else if (resolvedPartnerId) {
               openProfile(navigation, resolvedPartnerId, currentUser?.id);
             } else {
               navigation.navigate("ConversationInfo", {
-                conversationId: conversation.id,
-              });
+                conversationId: conversation.id });
             }
           }}
           isSearchActive={isSearchActive}
@@ -1498,8 +1428,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                       ? colors.danger
                       : conversationSafetyWarning.level === "caution"
                         ? colors.warning
-                        : colors.textSecondary,
-                },
+                        : colors.textSecondary },
               ]}
               numberOfLines={2}
             >
@@ -1513,8 +1442,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             thumbnailUri={getListingCoverUri(linkedListing.images, "")}
             title={linkedListing.title}
             price={formatFromFiat(linkedListing.price, currencyCode, {
-              displayMode: "fiat",
-            })}
+              displayMode: "fiat" })}
             availability={linkedListing.isSold ? "Sold" : "Available"}
             primaryActionLabel={
               linkedListing.isSold
@@ -1534,17 +1462,14 @@ export default function ChatScreen({ navigation, route }: Props) {
               linkedListing.isSold
                 ? () =>
                     navigation.navigate("ItemDetail", {
-                      itemId: linkedListing.id,
-                    })
+                      itemId: linkedListing.id })
                 : linkedListing.sellerId === currentUser?.id
                   ? () =>
                       navigation.navigate("ManageListing", {
-                        itemId: linkedListing.id,
-                      })
+                        itemId: linkedListing.id })
                   : () =>
                       navigation.navigate("Checkout", {
-                        itemId: linkedListing.id,
-                      })
+                        itemId: linkedListing.id })
             }
             secondaryActionLabel={
               linkedListing.isSold ? undefined : "View item"
@@ -1555,8 +1480,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 ? undefined
                 : () =>
                     navigation.navigate("ItemDetail", {
-                      itemId: linkedListing.id,
-                    })
+                      itemId: linkedListing.id })
             }
             onTitlePress={() =>
               navigation.navigate("ItemDetail", { itemId: linkedListing.id })
@@ -1674,8 +1598,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               // prepended via cursor pagination. This keeps the user's
               // current viewing position stable instead of jumping to top.
               maintainVisibleContentPosition={{
-                autoscrollToTopThreshold: 0,
-              }}
+                autoscrollToTopThreshold: 0 }}
             />
           ) : (
             <View style={styles.emptyStateWrap}>
@@ -1856,37 +1779,29 @@ export default function ChatScreen({ navigation, route }: Props) {
                       ...(sellerQuickReplies.length > 0
                         ? sellerQuickReplies.slice(0, 4).map((reply) => ({
                             label: reply.title,
-                            onPress: () => setInput(reply.message),
-                          }))
+                            onPress: () => setInput(reply.message) }))
                         : DEFAULT_SELLER_QUICK_REPLIES.map((text) => ({
                             label: text,
-                            onPress: () => setInput(text),
-                          }))),
+                            onPress: () => setInput(text) }))),
                       {
                         label: "Manage replies",
                         onPress: () =>
                           navigation.navigate("ManageQuickReplies", {
-                            role: "seller",
-                          }),
-                      },
+                            role: "seller" }) },
                     ]
                   : [
                       ...(buyerQuickReplies.length > 0
                         ? buyerQuickReplies.slice(0, 4).map((reply) => ({
                             label: reply.title,
-                            onPress: () => setInput(reply.message),
-                          }))
+                            onPress: () => setInput(reply.message) }))
                         : DEFAULT_BUYER_QUICK_REPLIES.map((text) => ({
                             label: text,
-                            onPress: () => setInput(text),
-                          }))),
+                            onPress: () => setInput(text) }))),
                       {
                         label: "Manage replies",
                         onPress: () =>
                           navigation.navigate("ManageQuickReplies", {
-                            role: "buyer",
-                          }),
-                      },
+                            role: "buyer" }) },
                     ]
                 : undefined
             }

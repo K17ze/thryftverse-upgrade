@@ -10,8 +10,7 @@ import {
   Image,
   ActivityIndicator,
   AccessibilityInfo,
-  BackHandler,
-} from 'react-native';
+  BackHandler } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,8 +34,7 @@ import {
   votePosterPoll,
   votePosterQuiz,
   answerPosterQuestion,
-  votePosterStyle,
-} from '../services/postersApi';
+  votePosterStyle } from '../services/postersApi';
 import type {
   PosterStory,
   PosterFrame,
@@ -44,15 +42,15 @@ import type {
   PosterTag,
   PosterSticker as ApiPosterSticker,
   PollVoteResult,
-  QuizVoteResult,
-} from '../services/postersApi';
+  QuizVoteResult } from '../services/postersApi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { usePosterViewerGesture } from '../hooks/usePosterViewerGesture';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { Type, Typography, Space, Radius, Control, LetterSpacing, Elevation } from '../theme/designTokens';
+import { Typography, Space, Radius, Control, LetterSpacing, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { Motion } from '../theme/motionTokens';
 import { isVideoUrl, shadeColor } from '../utils/posterPhysics';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -71,8 +69,7 @@ import { Video } from '../components/compat/Video';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 import * as Clipboard from 'expo-clipboard';
@@ -285,8 +282,7 @@ export default function PosterViewerScreen() {
 
   const storyAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: storyScale.value }],
-    opacity: storyOpacity.value,
-  }));
+    opacity: storyOpacity.value }));
 
   // Skip to the next story (account) — used by swipe-left gesture.
   const goNextStory = React.useCallback(() => {
@@ -325,8 +321,7 @@ export default function PosterViewerScreen() {
         } catch {
           show('Failed to delete story', 'error');
         }
-      },
-    });
+      } });
   };
 
   const handleArchive = async () => {
@@ -471,8 +466,7 @@ export default function PosterViewerScreen() {
     zoomAnimatedStyle,
     leftZoneGesture,
     rightZoneGesture,
-    heartBurst,
-  } = usePosterViewerGesture({
+    heartBurst } = usePosterViewerGesture({
     activeFrame,
     activeStory,
     compositionDoc,
@@ -485,8 +479,7 @@ export default function PosterViewerScreen() {
     setIsPaused,
     navigation,
     haptic,
-    currentUserId: currentUser?.id,
-  });
+    currentUserId: currentUser?.id });
 
   const handleRemoveReaction = async () => {
     if (!activeFrame) return;
@@ -588,8 +581,7 @@ export default function PosterViewerScreen() {
       setPollResult({
         selectedOptionId: optionId,
         options: [],
-        totalVotes: 0,
-      });
+        totalVotes: 0 });
       AccessibilityInfo.announceForAccessibility('Vote submitted');
       show('Vote submitted', 'success');
     } catch {
@@ -635,19 +627,16 @@ export default function PosterViewerScreen() {
     const options: { text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }[] = [
       {
         text: 'Copy link',
-        onPress: handleCopyLink,
-      },
+        onPress: handleCopyLink },
     ];
     if (isOwner) {
       options.push({
         text: 'Archive story',
-        onPress: handleArchive,
-      });
+        onPress: handleArchive });
       options.push({
         text: 'Delete story',
         onPress: handleDelete,
-        style: 'destructive',
-      });
+        style: 'destructive' });
     }
     options.push({ text: 'Cancel', style: 'cancel' });
     // Map the action menu to ConfirmationSheet — first non-cancel button
@@ -660,8 +649,7 @@ export default function PosterViewerScreen() {
         message: firstAction.text,
         confirmLabel: firstAction.text,
         variant: firstAction.style === 'destructive' ? 'danger' : 'default',
-        onConfirm: () => { firstAction.onPress?.(); },
-      });
+        onConfirm: () => { firstAction.onPress?.(); } });
     }
   };
 
@@ -990,8 +978,7 @@ export default function PosterViewerScreen() {
                       styles.mentionTapTarget,
                       {
                         left: sticker.x * SCREEN_WIDTH - 30,
-                        top: sticker.y * SCREEN_HEIGHT - 24,
-                      },
+                        top: sticker.y * SCREEN_HEIGHT - 24 },
                     ]}
                     hitSlop={8}
                     accessibilityLabel={`View @${sticker.payload.username}'s profile`}
@@ -1023,8 +1010,7 @@ export default function PosterViewerScreen() {
                       styles.stickerTapTarget,
                       {
                         left: sticker.x * SCREEN_WIDTH - 80,
-                        top: sticker.y * SCREEN_HEIGHT - 60,
-                      },
+                        top: sticker.y * SCREEN_HEIGHT - 60 },
                     ]}
                     hitSlop={4}
                     accessibilityLabel={
@@ -1055,8 +1041,7 @@ export default function PosterViewerScreen() {
                   styles.tagHotspot,
                   {
                     left: tag.x * SCREEN_WIDTH,
-                    top: tag.y * SCREEN_HEIGHT,
-                  },
+                    top: tag.y * SCREEN_HEIGHT },
                 ]}
               >
                 <Pressable
@@ -1225,58 +1210,49 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   loadingContainer: {
     flex: 1,
     backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   emptyText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   closeBtn: {
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
     // Near-transparent chrome. Legibility
     // comes from the top scrim + text shadows, not an opaque pill fill.
-    backgroundColor: colors.glassBorder,
-  },
+    backgroundColor: colors.glassBorder },
   closeBtnText: {
     color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   mediaFull: {
     position: 'absolute',
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   textFrameContent: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     textAlign: 'center',
     paddingHorizontal: Space.xl,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 12,
-  },
+    textShadowRadius: 12 },
   textFrameVignette: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   backdropOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   // Top gradient scrim — ensures chrome legibility over any media content
   topScrim: {
     position: 'absolute',
@@ -1284,12 +1260,10 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     left: 0,
     right: 0,
     height: 160,
-    zIndex: 5,
-  },
+    zIndex: 5 },
   overlay: {
     flex: 1,
-    paddingHorizontal: Space.sm + Space.xs,
-  },
+    paddingHorizontal: Space.sm + Space.xs },
   // Tap layer positioned between the top meta row and the bottom footer
   // using safe-area insets. This replaces the fragile Space.xxl*10-40 math.
   tapLayer: {
@@ -1297,26 +1271,22 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     left: 0,
     right: 0,
     flexDirection: 'row',
-    zIndex: 5,
-  },
+    zIndex: 5 },
   // Instagram-style tap zones: left third for previous frame,
   // right two-thirds for next frame. The "next" action is the primary
   // intent (users advance forward far more often than they go back),
   // so it gets the larger hit area.
   tapLeft: {
-    flex: 1,
-  },
+    flex: 1 },
   tapRight: {
-    flex: 2,
-  },
+    flex: 2 },
   topMetaRow: {
     marginTop: Space.xs + 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.xs + 2,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   authorBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1327,44 +1297,37 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     // Near-transparent chrome. The author
     // name + posted time carry text shadows for legibility over media.
     backgroundColor: colors.glassBg,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   authorAvatar: {
     width: Space.lg + 4,
     height: Space.lg + 4,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   authorAvatarPlaceholder: {
-    backgroundColor: colors.scrimTextTertiary,
-  },
+    backgroundColor: colors.scrimTextTertiary },
   authorAvatarText: {
     color: colors.scrimTextPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   authorName: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   postedTime: {
     color: colors.scrimTextSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   topControlRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   topIconBtn: {
     width: Control.hit,
     height: Control.hit,
@@ -1373,68 +1336,58 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     justifyContent: 'center',
     // Near-transparent chrome. Icons rely
     // on the top scrim for legibility rather than an opaque dark disc.
-    backgroundColor: colors.glassBg,
-  },
+    backgroundColor: colors.glassBg },
   viewerFooter: {
     position: 'absolute',
     left: 0,
     right: 0,
     paddingHorizontal: Space.sm + Space.xs,
-    zIndex: 20,
-  },
+    zIndex: 20 },
   captionWrap: {
     paddingBottom: Space.sm,
     // Deliberate breathing room above the reply bar so the caption reads
     // as authored content, not a label stuck to the input.
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   captionText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    fontFamily: TypographyV2.body.fontFamily,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
-  },
+    textShadowRadius: 8 },
   captionAuthor: {
     fontFamily: Typography.family.semibold,
-    fontWeight: '600',
-  },
+    fontWeight: '600' },
   captionMore: {
     color: colors.scrimTextSecondary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   footerExpiry: {
     color: colors.scrimTextTertiary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     paddingBottom: Space.xs,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   footerGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: 200,
-    zIndex: 5,
-  },
+    zIndex: 5 },
   mediaErrorOverlay: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.overlay,
     gap: Space.smMd,
-    zIndex: 25,
-  },
+    zIndex: 25 },
   mediaErrorText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: colors.scrimTextPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    color: colors.scrimTextPrimary },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1442,13 +1395,11 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
-    backgroundColor: colors.glassBorder,
-  },
+    backgroundColor: colors.glassBorder },
   retryBtnText: {
     color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   pauseIndicator: {
     position: 'absolute',
     top: '50%',
@@ -1463,14 +1414,12 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     flexDirection: 'row',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md + 4,
-    zIndex: 15,
-  },
+    zIndex: 15 },
   pauseIndicatorText: {
     color: colors.scrimTextSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.wide,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: LetterSpacing.wide },
   bufferingIndicator: {
     position: 'absolute',
     top: '50%',
@@ -1481,37 +1430,30 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 15,
-  },
+    zIndex: 15 },
   tagLayer: {
     ...StyleSheet.absoluteFill,
-    zIndex: 15,
-  },
+    zIndex: 15 },
   mentionTapLayer: {
     ...StyleSheet.absoluteFill,
-    zIndex: 16,
-  },
+    zIndex: 16 },
   mentionTapTarget: {
     position: 'absolute',
     width: 60,
     height: 48,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   // Interactive sticker tap targets — poll, quiz, question, style_vote
   stickerInteractionLayer: {
     ...StyleSheet.absoluteFill,
-    zIndex: 17,
-  },
+    zIndex: 17 },
   stickerTapTarget: {
     position: 'absolute',
     width: 160,
     height: 120,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   tagHotspot: {
     position: 'absolute',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   tagDot: {
     width: Space.lg,
     height: Space.lg,
@@ -1519,30 +1461,24 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     backgroundColor: colors.scrimTextPrimary,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Elevation.floating,
-  },
+    ...Elevation.floating },
   tagDotPressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.9 }],
-  },
+    transform: [{ scale: 0.9 }] },
   tagDotInner: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   tagLabelWrap: {
     marginTop: Space.xs,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs - 1,
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
-    maxWidth: 140,
-  },
+    maxWidth: 140 },
   tagLabelText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.wide,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: LetterSpacing.wide } });
 }

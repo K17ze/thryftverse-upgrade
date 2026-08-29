@@ -3,15 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -65,8 +65,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         mediaUri: m.mediaUri!,
         isVideo: m.mediaType === 'video' || isVideoUri(m.mediaUri!),
         senderLabel: m.senderId === 'me' ? 'You' : 'Thryft user',
-        timestamp: m.timestamp,
-      }));
+        timestamp: m.timestamp }));
   }, [conversation]);
 
   const photos = useMemo(() => allMedia.filter((m) => !m.isVideo), [allMedia]);
@@ -87,8 +86,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       mediaUri: item.mediaUri,
       mediaType: item.isVideo ? 'video' : 'image',
       senderLabel: item.senderLabel,
-      timestamp: item.timestamp,
-    });
+      timestamp: item.timestamp });
   };
 
   const enterSelectionMode = (item: MediaItem) => {
@@ -312,14 +310,12 @@ function createStyles(colors: ThemeColors) {
     listContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
     filterRow: {
       flexDirection: 'row',
       gap: Space.sm,
       paddingHorizontal: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     filterChip: {
       minHeight: Control.chrome,
       paddingHorizontal: Space.md,
@@ -328,41 +324,33 @@ function createStyles(colors: ThemeColors) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     filterChipActive: {
       backgroundColor: colors.textPrimary,
-      borderColor: colors.textPrimary,
-    },
+      borderColor: colors.textPrimary },
     filterText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     filterTextActive: {
-      color: colors.textInverse,
-    },
+      color: colors.textInverse },
     thumbWrap: {
       borderRadius: Radius.sm,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
       marginRight: GAP,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     thumbSelected: {
       borderColor: colors.brand,
       borderWidth: Stroke.emphasis,
-      opacity: 0.7,
-    },
+      opacity: 0.7 },
     thumb: {
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     videoTile: {
       backgroundColor: colors.surface,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     videoBadge: {
       position: 'absolute',
       top: '50%',
@@ -374,8 +362,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.xl,
       backgroundColor: colors.overlay,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     checkOverlay: {
       position: 'absolute',
       top: Space.xs,
@@ -383,29 +370,23 @@ function createStyles(colors: ThemeColors) {
       width: CHECK_SIZE,
       height: CHECK_SIZE,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     checkCircle: {
       width: CHECK_SIZE,
       height: CHECK_SIZE,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     checkCircleEmpty: {
       backgroundColor: colors.overlay,
-      borderColor: colors.scrimTextPrimary,
-    },
+      borderColor: colors.scrimTextPrimary },
     checkCircleFilled: {
       backgroundColor: colors.brand,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     deleteBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
-  });
+      alignItems: 'center' } });
 }

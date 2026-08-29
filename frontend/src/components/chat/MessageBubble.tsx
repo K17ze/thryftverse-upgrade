@@ -4,9 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   withTiming,
   withSpring,
-  type EntryExitAnimationFunction,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, TypeStyles, Typography, Stroke, AspectRatio } from '../../theme/designTokens';
+  type EntryExitAnimationFunction } from 'react-native-reanimated';
+import { Space, Radius, TypeStyles, Stroke, AspectRatio } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
@@ -101,8 +101,7 @@ function MessageBubbleBase({
   onReactionPress,
   onRetry,
   onMediaPress,
-  onReplyPress,
-}: MessageBubbleProps) {
+  onReplyPress }: MessageBubbleProps) {
   const { colors, isDark } = useAppTheme();
   const { isEnabled: motionEnabled, spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -118,13 +117,10 @@ function MessageBubbleBase({
           return {
             animations: {
               opacity: withTiming(1, { duration: Motion.duration.normal }),
-              transform: [{ scale: withSpring(1, spring.settle) }],
-            },
+              transform: [{ scale: withSpring(1, spring.settle) }] },
             initialValues: {
               opacity: 0,
-              transform: [{ scale: 0.92 }],
-            },
-          };
+              transform: [{ scale: 0.92 }] } };
         }
       : undefined;
 
@@ -135,12 +131,9 @@ function MessageBubbleBase({
         'worklet';
         return {
           animations: {
-            transform: [{ scale: withSpring(1, spring.tap) }],
-          },
+            transform: [{ scale: withSpring(1, spring.tap) }] },
           initialValues: {
-            transform: [{ scale: 0.8 }],
-          },
-        };
+            transform: [{ scale: 0.8 }] } };
       }
     : undefined;
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
@@ -387,11 +380,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   rowRight: {
-    flexDirection: 'row-reverse',
-  },
+    flexDirection: 'row-reverse' },
   avatar: {
     width: 28,
     height: 28,
@@ -399,8 +390,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   agentAvatar: {
     width: 28,
     height: 28,
@@ -408,32 +398,26 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Space.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   avatarText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   avatarSpacer: {
-    width: 28,
-  },
+    width: 28 },
   bubbleColumn: {
     maxWidth: '75%',
-    gap: 3,
-  },
+    gap: 3 },
   senderLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     marginBottom: 2,
-    marginLeft: Space.xs,
-  },
+    marginLeft: Space.xs },
   senderName: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   aiChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -441,57 +425,46 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   aiChipText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   bubble: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.sm - 1,
-    gap: 2,
-  },
+    gap: 2 },
   bubbleMedia: {
     padding: 0,
     overflow: 'hidden',
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   bubbleMe: {
     backgroundColor: colors.brand,
-    alignSelf: 'flex-end',
-  },
+    alignSelf: 'flex-end' },
   bubbleAgent: {
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   bubbleThem: {
     backgroundColor: colors.surfaceAlt,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   bubbleFailed: {
     backgroundColor: colors.dangerSubtle,
     borderWidth: Stroke.standard,
-    borderColor: colors.dangerBorder,
-  },
+    borderColor: colors.dangerBorder },
   bubbleDraft: {
     // TODO: no surfaceAltSubtle token available
     backgroundColor: `${colors.surfaceAlt}80`,
     borderWidth: Stroke.standard,
-    borderColor: colors.borderSubtle,
-  },
+    borderColor: colors.borderSubtle },
   draftBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   draftLabel: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   draftConfirmBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -503,63 +476,51 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: colors.brandSubtle,
     alignSelf: 'flex-start',
-    minHeight: 32,
-  },
+    minHeight: 32 },
   draftConfirmText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   replyBlock: {
     borderLeftWidth: 2,
     paddingLeft: Space.sm - 1,
     marginBottom: Space.xs,
-    gap: 1,
-  },
+    gap: 1 },
   replyName: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   replyText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   messageText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: TypeStyles.body.fontFamily,
-    lineHeight: Type.body.lineHeight + 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    letterSpacing: TypographyV2.body.letterSpacing },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 4,
     marginTop: 2,
-    minHeight: 14,
-  },
+    minHeight: 14 },
   metaRowMe: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   timestamp: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: TypeStyles.body.fontFamily,
-  },
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypeStyles.body.fontFamily },
   statusWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-  },
+    gap: 2 },
   mediaWrap: {
     backgroundColor: 'transparent',
-    position: 'relative',
-  },
+    position: 'relative' },
   mediaImage: {
     width: '100%',
     minWidth: 200,
     maxWidth: 280,
-    aspectRatio: AspectRatio.portrait,
-  },
+    aspectRatio: AspectRatio.portrait },
   videoBadge: {
     position: 'absolute',
     top: '50%',
@@ -571,23 +532,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   uploadOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   uploadProgressBar: {
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   uploadText: {
     color: colors.textInverse,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   retryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -598,24 +555,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
     backgroundColor: colors.dangerSubtle,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   retryText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
   reactions: {
     flexDirection: 'row',
     gap: 4,
     marginTop: 1,
-    marginLeft: Space.xs,
-  },
+    marginLeft: Space.xs },
   reactionsRight: {
     marginLeft: 0,
     marginRight: Space.xs,
-    alignSelf: 'flex-end',
-  },
+    alignSelf: 'flex-end' },
   reactionChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -624,17 +577,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm - 1,
     paddingVertical: Space.xs,
-    minHeight: 26,
-  },
+    minHeight: 26 },
   reactionChipActive: {
-    backgroundColor: colors.brandSubtle,
-  },
+    backgroundColor: colors.brandSubtle },
   reactionEmoji: {
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   reactionCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary } });

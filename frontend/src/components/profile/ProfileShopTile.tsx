@@ -6,7 +6,8 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type, IconGrammar, GlyphShadow } from '../../theme/designTokens';
+import { Space, Radius, IconGrammar, GlyphShadow } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { SupportedCurrencyCode } from '../../constants/currencies';
 import { CurrencyDisplayMode } from '../../utils/currency';
 import type { ListingApiItem } from '../../services/listingsApi';
@@ -39,8 +40,7 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
   onPress,
   formatPrice,
   cardWidth,
-  cardHeight,
-}: ProfileShopTileProps) {
+  cardHeight }: ProfileShopTileProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const showSold = isSold || item.status === 'sold';
@@ -112,8 +112,7 @@ function createStyles(colors: ThemeColors) {
   gridImageWrap: {
     borderRadius: Radius.md,
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   gridImage: { width: '100%', height: '100%' },
   // Restrained placeholder for listings with no image — surfaceAlt fill with a
   // category glyph. Never a broken-image tile; never a grey card shell that
@@ -123,8 +122,7 @@ function createStyles(colors: ThemeColors) {
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   // Pinned/featured indicator — small dark pill with pin glyph, top-left.
   // Subtle scrim backing for legibility over any image.
   pinnedBadge: {
@@ -136,32 +134,27 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Real short fade from bottom — no hard translucent rectangle
   soldFade: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 44,
-  },
+    height: 44 },
   soldLabelWrap: {
     position: 'absolute',
     bottom: 6,
-    left: Space.sm,
-  },
+    left: Space.sm },
   soldText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
     ...GlyphShadow.label,
-    textShadowColor: colors.shadow,
-  },
-  gridPrice: { fontSize: Type.caption.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: Space.xs + 1, fontVariant: ['tabular-nums'] as ['tabular-nums'] },
-  gridBrand: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
-  });
+    textShadowColor: colors.shadow },
+  gridPrice: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textPrimary, marginTop: Space.xs + 1, fontVariant: ['tabular-nums'] as ['tabular-nums'] },
+  gridBrand: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary, marginTop: 1 } });
 }
 
 export { ProfileShopTile };

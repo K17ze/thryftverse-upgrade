@@ -9,10 +9,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import type { SuggestedReply, SuggestedReplyType } from '../../services/chatAgentsApi';
 
@@ -29,14 +29,12 @@ const ICON_BY_TYPE: Record<SuggestedReplyType, keyof typeof Ionicons.glyphMap> =
   question: 'help-circle-outline',
   answer: 'chatbubble-ellipses-outline',
   offer: 'pricetags-outline',
-  info: 'information-circle-outline',
-};
+  info: 'information-circle-outline' };
 
 export function SuggestedRepliesBar({
   suggestions,
   onSelect,
-  agentName,
-}: SuggestedRepliesBarProps) {
+  agentName }: SuggestedRepliesBarProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -85,13 +83,11 @@ const createStyles = (colors: ThemeColors) =>
     root: {
       paddingTop: Space.sm - 1,
       paddingBottom: Space.xs + 1,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     scrollContent: {
       paddingHorizontal: Space.md,
       gap: Space.sm - 1,
-      paddingVertical: 2,
-    },
+      paddingVertical: 2 },
     pill: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -100,12 +96,9 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
       borderWidth: StyleSheet.hairlineWidth,
-      minHeight: 24,
-    },
+      minHeight: 24 },
     pillText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      maxWidth: 220,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      maxWidth: 220 } });

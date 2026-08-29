@@ -5,11 +5,10 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   Space,
-  Type,
   FontFamily,
   Stroke,
-  Control,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 type Confidence = 'high' | 'medium' | 'low';
 
@@ -39,8 +38,7 @@ export function ImportedFieldDiff({
   importedValue,
   resolvedValue,
   confidence,
-  onEdit,
-}: Props) {
+  onEdit }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -132,69 +130,57 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       borderTopWidth: Stroke.hairline,
       borderTopColor: colors.border,
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     content: {
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     topRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
-      gap: Space.md,
-    },
+      gap: Space.md },
     label: {
       flexShrink: 0,
       maxWidth: 120,
       fontFamily: FontFamily.semibold,
-      fontSize: Type.metaElevated.size,
-      lineHeight: Type.metaElevated.lineHeight,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      letterSpacing: TypographyV2.label.letterSpacing,
       color: colors.textMuted,
-      paddingTop: 2,
-    },
+      paddingTop: 2 },
     valueWrap: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'flex-end',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     warningGlyph: {
-      flexShrink: 0,
-    },
+      flexShrink: 0 },
     resolvedValue: {
       flexShrink: 1,
       textAlign: 'right',
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      color: colors.textPrimary },
     chevron: {
-      flexShrink: 0,
-    },
+      flexShrink: 0 },
     importedRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.xs,
-      paddingLeft: 0,
-    },
+      paddingLeft: 0 },
     importedLabel: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       color: colors.textMuted,
-      paddingTop: 1,
-    },
+      paddingTop: 1 },
     importedValue: {
       flex: 1,
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textSecondary,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textSecondary } });

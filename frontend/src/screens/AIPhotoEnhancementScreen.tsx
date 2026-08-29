@@ -24,14 +24,14 @@ import {
   Pressable,
   AccessibilityInfo,
   ActivityIndicator,
-  PanResponder,
-} from 'react-native';
+  PanResponder } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -53,8 +53,7 @@ import {
   type BackgroundScene,
   type EnhancementResult,
   type EnhancementCapability,
-  type EnhancementProvenance,
-} from '../services/aiPhotoEnhancementApi';
+  type EnhancementProvenance } from '../services/aiPhotoEnhancementApi';
 import { setEnhancementResult } from '../services/enhancementResultHandoff';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIPhotoEnhancement'>;
@@ -163,8 +162,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
       onPanResponderRelease: () => {
         hapticRef.current.light();
       },
-      onPanResponderTerminationRequest: () => false,
-    }),
+      onPanResponderTerminationRequest: () => false }),
   ).current;
 
   // -- Capability check -----------------------------------------------------
@@ -336,8 +334,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
     setEnhancementResult({
       originalUri: result.originalUri,
       enhancedUri: result.enhancedUri,
-      appliedOperationLabel: result.appliedOperationLabel,
-    });
+      appliedOperationLabel: result.appliedOperationLabel });
     navigation.goBack();
   }, [result, haptic, navigation]);
 
@@ -627,8 +624,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                   >
                     <View style={[styles.toolChip, {
                       backgroundColor: isSelected ? colors.brand : 'transparent',
-                      borderColor: isSelected ? colors.brand : colors.borderSubtle,
-                    }]}>
+                      borderColor: isSelected ? colors.brand : colors.borderSubtle }]}>
                       <Text style={[styles.toolChipText, { color: isSelected ? colors.textInverse : colors.textPrimary }]} numberOfLines={1}>
                         {op.label}
                       </Text>
@@ -658,8 +654,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                   >
                     <View style={[styles.presetChip, {
                       backgroundColor: isSelected ? colors.brandSubtle : 'transparent',
-                      borderColor: isSelected ? colors.brand : colors.borderSubtle,
-                    }]}>
+                      borderColor: isSelected ? colors.brand : colors.borderSubtle }]}>
                       <Text style={[styles.presetChipText, { color: isSelected ? colors.brand : colors.textSecondary }]} numberOfLines={1}>
                         {preset.label}
                       </Text>
@@ -694,8 +689,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                   >
                     <View style={[styles.sceneChip, {
                       backgroundColor: isSelected ? colors.brand : colors.surfaceAlt,
-                      borderColor: isSelected ? colors.brand : colors.borderSubtle,
-                    }]}>
+                      borderColor: isSelected ? colors.brand : colors.borderSubtle }]}>
                       <Text style={[styles.sceneChipText, { color: isSelected ? colors.textInverse : colors.textPrimary }]} numberOfLines={1}>
                         {scene.label}
                       </Text>
@@ -741,8 +735,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
         <View style={[styles.footer, {
           backgroundColor: colors.background,
           borderTopColor: colors.borderSubtle,
-          paddingBottom: insets.bottom + Space.sm,
-        }]}>
+          paddingBottom: insets.bottom + Space.sm }]}>
           {phase === 'candidate_ready' ? (
             <View style={styles.footerRow}>
               <AppButton
@@ -870,151 +863,124 @@ function createStyles(colors: ThemeColors) {
     header: {
       flexDirection: 'row', alignItems: 'center',
       paddingHorizontal: Space.sm, paddingVertical: Space.sm,
-      borderBottomWidth: Stroke.hairline,
-    },
+      borderBottomWidth: Stroke.hairline },
     headerBack: {
       width: Control.hit, height: Control.hit,
-      justifyContent: 'center', alignItems: 'center',
-    },
+      justifyContent: 'center', alignItems: 'center' },
     headerTitle: {
       flex: 1, textAlign: 'center',
-      fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing, marginHorizontal: Space.sm,
-    },
+      fontSize: TypographyV2.sectionTitle.size, fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing, marginHorizontal: Space.sm },
     // Offline notice
     offlineNotice: {
       flexDirection: 'row', alignItems: 'center', gap: Space.xs,
-      paddingHorizontal: Space.md, paddingVertical: Space.sm,
-    },
-    offlineNoticeText: { flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
+      paddingHorizontal: Space.md, paddingVertical: Space.sm },
+    offlineNoticeText: { flex: 1, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     // Scroll
     scrollContent: { paddingHorizontal: Space.md, paddingTop: Space.md },
     // Empty state
     emptyWrap: {
       flex: 1, alignItems: 'center', justifyContent: 'center',
-      paddingHorizontal: Space.xl, gap: Space.sm,
-    },
-    emptyTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold },
-    emptySubtitle: { fontSize: Type.body.size, fontFamily: Typography.family.regular, textAlign: 'center' },
+      paddingHorizontal: Space.xl, gap: Space.sm },
+    emptyTitle: { fontSize: TypographyV2.sectionTitle.size, fontFamily: TypographyV2.sectionTitle.fontFamily },
+    emptySubtitle: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, textAlign: 'center' },
     // Media stage — the dominant object
     mediaStage: {
       width: '100%', height: PREVIEW_HEIGHT, borderRadius: Radius.lg,
-      overflow: 'hidden', backgroundColor: colors.surfaceAlt,
-    },
+      overflow: 'hidden', backgroundColor: colors.surfaceAlt },
     mediaImage: { width: '100%', height: '100%' },
     beforeOverlay: { position: 'absolute', top: 0, left: 0, bottom: 0, overflow: 'hidden' },
     mediaLabelRow: {
       position: 'absolute', top: Space.sm, left: Space.sm, right: Space.sm,
-      flexDirection: 'row', justifyContent: 'space-between',
-    },
+      flexDirection: 'row', justifyContent: 'space-between' },
     mediaLabel: { paddingHorizontal: Space.sm, paddingVertical: Space.xs, borderRadius: Radius.full },
     mediaLabelText: {
-      fontSize: Type.meta.size, fontFamily: Typography.family.semibold,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     // Draggable slider handle — 44pt transparent target, 2pt visible line
     sliderHandle: {
       position: 'absolute', top: 0, bottom: 0, width: Control.hit,
       justifyContent: 'center', alignItems: 'center',
-      transform: [{ translateX: -Control.hit / 2 }],
-    },
+      transform: [{ translateX: -Control.hit / 2 }] },
     sliderLine: {
       position: 'absolute', top: 0, bottom: 0, width: Stroke.emphasis,
-      backgroundColor: colors.textInverse,
-    },
+      backgroundColor: colors.textInverse },
     sliderKnob: {
       width: Control.chrome, height: Control.chrome, borderRadius: Radius.full,
-      justifyContent: 'center', alignItems: 'center',
-    },
+      justifyContent: 'center', alignItems: 'center' },
     // Quick-position buttons (Before / Split / After)
     quickPosRow: { flexDirection: 'row', marginTop: Space.sm, gap: Space.sm },
     quickPosBtn: {
       flex: 1, minHeight: Control.hit, justifyContent: 'center', alignItems: 'center',
-      paddingVertical: Space.sm,
-    },
-    quickPosText: { fontSize: Type.caption.size, fontFamily: Typography.family.semibold },
+      paddingVertical: Space.sm },
+    quickPosText: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     // Submitting overlay — honest stage text + spinner, no scanline
     submittingOverlay: {
-      ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', gap: Space.xs,
-    },
+      ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', gap: Space.xs },
     submittingRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-    submittingText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold },
-    submittingHint: { fontSize: Type.caption.size, fontFamily: Typography.family.regular },
+    submittingText: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily },
+    submittingHint: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     cancelLink: {
-      fontSize: Type.caption.size, fontFamily: Typography.family.semibold,
-      paddingVertical: Space.xs, marginTop: Space.xs,
-    },
+      fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily,
+      paddingVertical: Space.xs, marginTop: Space.xs },
     // State blocks (checking, unavailable, error, outcome_unknown)
     stateBlock: { paddingTop: Space.lg, paddingHorizontal: Space.sm, gap: Space.sm },
     stateTitle: {
-      fontSize: Type.itemTitle.size, fontFamily: Typography.family.semibold,
-      letterSpacing: Type.itemTitle.letterSpacing,
-    },
+      fontSize: TypographyV2.itemTitle.size, fontFamily: TypographyV2.itemTitle.fontFamily,
+      letterSpacing: TypographyV2.itemTitle.letterSpacing },
     stateBody: {
-      fontSize: Type.body.size, fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight + 2,
-    },
-    retryLink: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, paddingVertical: Space.xs },
+      fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight + 2 },
+    retryLink: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, paddingVertical: Space.xs },
     unknownActions: { flexDirection: 'row', gap: Space.lg },
     // Tool strip — flat, hairline-separated, not carded
     toolStrip: {
       marginTop: Space.lg, paddingVertical: Space.sm,
-      borderTopWidth: Stroke.hairline, borderTopColor: colors.borderSubtle,
-    },
+      borderTopWidth: Stroke.hairline, borderTopColor: colors.borderSubtle },
     toolStripContent: { gap: Space.sm, paddingRight: Space.md },
     toolChip: {
       paddingHorizontal: Space.md, paddingVertical: Space.sm + 2,
-      borderRadius: Radius.md, borderWidth: Stroke.standard,
-    },
-    toolChipText: { fontSize: Type.body.size, fontFamily: Typography.family.medium },
+      borderRadius: Radius.md, borderWidth: Stroke.standard },
+    toolChipText: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily },
     // Presets — contextual, not a competing rail
     presetsRow: { marginTop: Space.md, gap: Space.xs },
     presetsLabel: {
-      fontSize: Type.meta.size, fontFamily: Typography.family.medium,
-      letterSpacing: Type.meta.letterSpacing, textTransform: 'uppercase',
-    },
+      fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing, textTransform: 'uppercase' },
     presetsContent: { gap: Space.sm, paddingRight: Space.md, paddingVertical: Space.xs },
     presetChip: {
       paddingHorizontal: Space.md, paddingVertical: Space.sm,
-      borderRadius: Radius.full, borderWidth: Stroke.standard,
-    },
-    presetChipText: { fontSize: Type.caption.size, fontFamily: Typography.family.medium },
+      borderRadius: Radius.full, borderWidth: Stroke.standard },
+    presetChipText: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     presetDescription: {
-      fontSize: Type.caption.size, fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight + 2, paddingTop: Space.xs,
-    },
+      fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight + 2, paddingTop: Space.xs },
     // Scene picker — contextual expansion
     sceneSection: { marginTop: Space.md, gap: Space.xs },
     sceneLabel: {
-      fontSize: Type.meta.size, fontFamily: Typography.family.medium,
-      letterSpacing: Type.meta.letterSpacing, textTransform: 'uppercase',
-    },
+      fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing, textTransform: 'uppercase' },
     sceneContent: { gap: Space.sm, paddingRight: Space.md, paddingVertical: Space.xs },
     sceneChip: {
       paddingHorizontal: Space.md, paddingVertical: Space.sm,
-      borderRadius: Radius.md, borderWidth: Stroke.standard,
-    },
-    sceneChipText: { fontSize: Type.caption.size, fontFamily: Typography.family.medium },
+      borderRadius: Radius.md, borderWidth: Stroke.standard },
+    sceneChipText: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     // Candidate info (candidate_ready)
     candidateInfo: { paddingTop: Space.md, gap: Space.xs },
     compareHint: {
-      flexDirection: 'row', alignItems: 'center', gap: Space.xs, flexWrap: 'wrap',
-    },
-    compareHintText: { flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.regular },
-    compareToggleLink: { fontSize: Type.caption.size, fontFamily: Typography.family.semibold },
+      flexDirection: 'row', alignItems: 'center', gap: Space.xs, flexWrap: 'wrap' },
+    compareHintText: { flex: 1, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
+    compareToggleLink: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     verifyText: {
-      fontSize: Type.caption.size, fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight + 2,
-    },
+      fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight + 2 },
     provenanceText: {
-      fontSize: Type.meta.size, fontFamily: Typography.family.medium,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     // Footer
     footer: { borderTopWidth: Stroke.hairline, paddingHorizontal: Space.md, paddingTop: Space.sm },
     footerRow: { flexDirection: 'row', gap: Space.sm },
     footerPrimaryBtn: { flex: 1 },
     footerSecondaryBtn: { flex: 0, minWidth: 100 },
-    footerFullBtn: { width: '100%' },
-  });
+    footerFullBtn: { width: '100%' } });
 }

@@ -6,11 +6,10 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   Space,
-  Type,
   FontFamily,
   Stroke,
-  Control,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { BlockingIssue } from '../../services/catalogImportApi';
 
 interface Props {
@@ -37,8 +36,7 @@ export function ImportIssueNavigator({
   currentIndex,
   total,
   onPrevious,
-  onNext,
-}: Props) {
+  onNext }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -128,51 +126,42 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     bar: {
       backgroundColor: colors.surface,
       borderTopWidth: Stroke.hairline,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     safeArea: {
       minHeight: BAR_CONTENT_HEIGHT,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     counter: {
       flexShrink: 0,
       fontFamily: FontFamily.regular,
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
-      letterSpacing: Type.captionElevated.letterSpacing,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textSecondary },
     message: {
       flex: 1,
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      color: colors.textPrimary },
     navControls: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     iconButton: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     recoveryHint: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textMuted,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textMuted } });

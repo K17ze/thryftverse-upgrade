@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Control, Type, TypeStyles, PressScale } from '../../theme/designTokens';
+import { Space, Control, TypeStyles, PressScale } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 export type FlagshipHeaderVariant = 'pushed' | 'modal' | 'large';
@@ -40,8 +41,7 @@ export function FlagshipHeader({
   avatar,
   onTitlePress,
   titleAccessibilityLabel,
-  collapseProgress,
-}: FlagshipHeaderProps) {
+  collapseProgress }: FlagshipHeaderProps) {
   const { colors } = useAppTheme();
   const isLarge = variant === 'large';
   const isModal = variant === 'modal';
@@ -67,12 +67,11 @@ export function FlagshipHeader({
             styles.title,
             {
               color: colors.textPrimary,
-              fontSize: isLarge ? Type.title.size : Type.subtitle.size,
+              fontSize: isLarge ? TypographyV2.screenTitle.size : TypographyV2.sectionTitle.size,
               fontFamily: isLarge ? TypeStyles.title.fontFamily : TypeStyles.bodyStrong.fontFamily,
-              lineHeight: isLarge ? Type.title.lineHeight : Type.subtitle.lineHeight,
-              letterSpacing: isLarge ? Type.title.letterSpacing : Type.subtitle.letterSpacing,
-              opacity: compactTitleOpacity,
-            },
+              lineHeight: isLarge ? TypographyV2.screenTitle.lineHeight : TypographyV2.sectionTitle.lineHeight,
+              letterSpacing: isLarge ? TypographyV2.screenTitle.letterSpacing : TypographyV2.sectionTitle.letterSpacing,
+              opacity: compactTitleOpacity },
           ]}
           numberOfLines={1}
         >
@@ -136,49 +135,38 @@ const styles = StyleSheet.create({
   root: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
-    minHeight: 56,
-  },
+    minHeight: 56 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   iconBtn: {
     width: ICON_SIZE,
     height: ICON_SIZE,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   iconBtnPlaceholder: {
     width: ICON_SIZE,
-    height: ICON_SIZE,
-  },
+    height: ICON_SIZE },
   titleWrap: {
     flex: 1,
     alignItems: 'center',
-    marginHorizontal: Space.sm,
-  },
+    marginHorizontal: Space.sm },
   title: {
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   subtitle: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
     marginTop: Space.xs / 2,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   rightSlot: {
     minWidth: ICON_SIZE,
     alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarWrap: {
-    marginRight: Space.sm,
-  },
+    marginRight: Space.sm },
   identityPress: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-  },
-});
+    alignItems: 'center' } });

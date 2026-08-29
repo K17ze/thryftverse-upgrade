@@ -21,7 +21,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Canvas, Rect, Line, Text as SkiaText, useFont } from '@shopify/react-native-skia';
 import { FrameProfiler, TARGET_FRAME_MS, type FrameMetrics } from './FrameProfiler';
-import { Radius, Type } from '../../../theme/designTokens';
+import { Radius } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -46,8 +47,7 @@ export interface PerformanceOverlayProps {
 
 export function PerformanceOverlay({
   profiler = FrameProfiler.getInstance(),
-  defaultVisible = true,
-}: PerformanceOverlayProps) {
+  defaultVisible = true }: PerformanceOverlayProps) {
   // This entire component is dev-only. The parent should gate on __DEV__,
   // but we also guard here so the overlay is never rendered in production.
   if (!__DEV__) return null;
@@ -61,8 +61,7 @@ export function PerformanceOverlay({
 // mounts its hooks).
 function OverlayInner({
   profiler,
-  defaultVisible,
-}: {
+  defaultVisible }: {
   profiler: FrameProfiler;
   defaultVisible: boolean;
 }) {
@@ -224,8 +223,7 @@ function OverlayInner({
 function Stat({
   label,
   value,
-  color = '#FFFFFF',
-}: {
+  color = '#FFFFFF' }: {
   label: string;
   value: string;
   color?: string;
@@ -249,8 +247,7 @@ function SkiaFrameGraph({
   frameHistory,
   width,
   height,
-  targetMs,
-}: {
+  targetMs }: {
   frameHistory: number[];
   width: number;
   height: number;
@@ -325,115 +322,93 @@ const styles = StyleSheet.create({
     top: Platform.select({ ios: 60, android: 50 }),
     right: 8,
     zIndex: 9999,
-    elevation: 9999,
-  },
+    elevation: 9999 },
   collapsedContainer: {
     position: 'absolute',
     top: Platform.select({ ios: 60, android: 50 }),
     right: 8,
     zIndex: 9999,
-    elevation: 9999,
-  },
+    elevation: 9999 },
   panel: {
     width: OVERLAY_WIDTH,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     borderRadius: Radius.md,
     padding: 8,
-    gap: 4,
-  },
+    gap: 4 },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   title: {
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   headerBtns: {
     flexDirection: 'row',
-    gap: 4,
-  },
+    gap: 4 },
   miniBtn: {
     width: 22,
     height: 22,
     borderRadius: Radius.sm,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   miniBtnActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.3)',
-  },
+    backgroundColor: 'rgba(16, 185, 129, 0.3)' },
   miniBtnText: {
     color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '600',
-  },
+    fontWeight: '600' },
   fpsRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 4,
-  },
+    gap: 4 },
   fpsValue: {
     fontSize: 32,
     fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   fpsUnit: {
     color: '#FFFFFF80',
     fontSize: 12,
-    fontWeight: '500',
-  },
+    fontWeight: '500' },
   graphContainer: {
     marginVertical: 2,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   statItem: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 4,
-  },
+    gap: 4 },
   statLabel: {
     color: '#FFFFFF60',
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '500',
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
+    letterSpacing: 0.3 },
   statValue: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   threadRow: {
-    marginTop: 2,
-  },
+    marginTop: 2 },
   threadLabel: {
     color: '#FFFFFF50',
-    fontSize: Type.meta.size,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    fontVariant: ['tabular-nums'] },
   toggleBtn: {
     width: 44,
     height: 24,
     borderRadius: Radius.sm,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   toggleBtnText: {
     color: '#FFFFFF',
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-});
+    letterSpacing: 0.5 } });

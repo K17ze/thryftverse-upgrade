@@ -8,15 +8,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
@@ -134,8 +134,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
         } catch {
           show('Could not delete this reply. Check your connection and try again.', 'error');
         }
-      },
-    });
+      } });
   };
 
   const title = role === 'seller' ? 'Seller quick replies' : 'Buyer quick replies';
@@ -344,13 +343,11 @@ function createStyles(colors: ThemeColors) {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     list: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     replyRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -358,77 +355,64 @@ function createStyles(colors: ThemeColors) {
       paddingLeft: Space.md,
       paddingRight: Space.sm,
       minHeight: Control.hit + Space.sm,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     replyBody: {
-      flex: 1,
-    },
+      flex: 1 },
     replyTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      lineHeight: Type.bodyStrong.lineHeight,
-      marginBottom: 2,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      marginBottom: 2 },
     replyText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     iconBtn: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     divider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginLeft: Space.md,
-    },
+      marginLeft: Space.md },
     // Modal
     modalOverlay: {
       flex: 1,
       backgroundColor: colors.overlay,
-      justifyContent: 'flex-end',
-    },
+      justifyContent: 'flex-end' },
     modalAvoid: {
       flex: 1,
-      justifyContent: 'flex-end',
-    },
+      justifyContent: 'flex-end' },
     modalSheet: {
       backgroundColor: colors.background,
       borderTopLeftRadius: Radius.xl,
       borderTopRightRadius: Radius.xl,
       padding: Space.lg,
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
     modalHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     modalTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     modalCloseBtn: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     fieldLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       letterSpacing: 0.5,
-      marginBottom: Space.xs + 2,
-    },
+      marginBottom: Space.xs + 2 },
     field: {
       minHeight: Space.xxl * 2,
       borderWidth: Stroke.standard,
@@ -436,46 +420,38 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     fieldSingle: {
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     fieldError: {
-      borderColor: colors.danger,
-    },
+      borderColor: colors.danger },
     fieldMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       marginTop: Space.xs,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     fieldHint: {
       flex: 1,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     fieldErrorText: {
       flex: 1,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.danger,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.danger },
     charCount: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     modalActions: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     modalCancelBtn: {
       flex: 1,
       minHeight: Control.hit,
@@ -483,28 +459,22 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     modalCancelText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     modalSaveBtn: {
       flex: 1,
       minHeight: Control.hit,
       borderRadius: Radius.full,
       backgroundColor: colors.textPrimary,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     modalSaveDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     modalSaveText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textInverse,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textInverse } });
 }

@@ -13,14 +13,14 @@ import {
   UIManager,
   type StyleProp,
   type ImageStyle,
-  type ViewStyle,
-} from 'react-native';
+  type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList, type FlashListProps } from '@shopify/flash-list';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
@@ -34,12 +34,10 @@ import {
   fetchUserListingsFromApi,
   patchListingOnApi,
   deleteListingOnApi,
-  type ListingApiItem,
-} from '../services/listingsApi';
+  type ListingApiItem } from '../services/listingsApi';
 import {
   submitSellerHubBatchCommand,
-  type SellerHubBatchResult,
-} from '../services/sellerHubApi';
+  type SellerHubBatchResult } from '../services/sellerHubApi';
 import { parseApiError } from '../lib/apiClient';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
@@ -153,8 +151,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
       sold: sold.length,
       paused: paused.length,
       draft: draft.length,
-      totalValue,
-    };
+      totalValue };
   }, [listings]);
 
   // ── Filtered + sorted list ──
@@ -266,8 +263,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
             return next;
           });
         }
-      },
-    });
+      } });
   }, [pendingActionIds, haptic, show, load]);
 
   // ── Bulk selection ──
@@ -450,8 +446,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
             return next;
           });
         }
-      },
-    });
+      } });
   }, [selectedIds, listings, haptic, show, exitSelectionMode, load]);
 
   // ── States ──
@@ -732,8 +727,7 @@ function SummaryCell({
   colors,
   styles,
   accent,
-  last,
-}: {
+  last }: {
   label: string;
   value: string;
   colors: ThemeColors;
@@ -766,8 +760,7 @@ function InventoryList({
   onToggleSelect,
   isRefreshing,
   onRefresh,
-  selectionBarHeight,
-}: {
+  selectionBarHeight }: {
   listings: ListingApiItem[];
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -833,8 +826,7 @@ function InventoryRow({
   onTogglePause,
   onRelist,
   onDelete,
-  onToggleSelect,
-}: {
+  onToggleSelect }: {
   item: ListingApiItem;
   isLast: boolean;
   colors: ThemeColors;
@@ -951,8 +943,7 @@ function Metric({
   icon,
   value,
   colors,
-  styles,
-}: {
+  styles }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   value: number;
   colors: ThemeColors;
@@ -970,8 +961,7 @@ function IconButton({
   icon,
   onPress,
   color,
-  label,
-}: {
+  label }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   onPress: () => void;
   color: string;
@@ -995,9 +985,7 @@ const stylesShared = StyleSheet.create({
     width: Control.chrome,
     height: Control.chrome,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+    alignItems: 'center' } });
 
 // ── Status config ──
 const STATUS_CONFIG: Record<string, { label: string; accent: 'success' | 'muted' | 'warning' | 'brand' | 'default' }> = {
@@ -1006,8 +994,7 @@ const STATUS_CONFIG: Record<string, { label: string; accent: 'success' | 'muted'
   paused: { label: 'Paused', accent: 'warning' },
   draft: { label: 'Draft', accent: 'brand' },
   reserved: { label: 'Reserved', accent: 'warning' },
-  unknown: { label: 'Unknown', accent: 'default' },
-};
+  unknown: { label: 'Unknown', accent: 'default' } };
 
 // ── Theme-dependent styles ──
 function createStyles(colors: ThemeColors) {
@@ -1017,8 +1004,7 @@ function createStyles(colors: ThemeColors) {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     searchWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1028,63 +1014,52 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
       marginHorizontal: Space.md,
       marginTop: Space.sm,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     searchIcon: {
-      marginLeft: Space.xs,
-    },
+      marginLeft: Space.xs },
     searchInput: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       paddingVertical: Space.sm,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     summaryRow: {
       flexDirection: 'row',
       alignItems: 'stretch',
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     summaryCell: {
       flex: 1,
       alignItems: 'center',
       gap: Space.xs / 2,
       borderRightWidth: StyleSheet.hairlineWidth,
       borderRightColor: colors.border,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     summaryValue: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     summaryLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     filterRail: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     filterRailContent: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.md,
-      gap: Space.md,
-    },
+      gap: Space.md },
     filterTab: {
       paddingVertical: Space.sm,
-      position: 'relative',
-    },
+      position: 'relative' },
     filterTabLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     filterIndicator: {
       position: 'absolute',
       bottom: 0,
@@ -1092,26 +1067,22 @@ function createStyles(colors: ThemeColors) {
       right: 0,
       height: Stroke.emphasis,
       borderRadius: Radius.none, // Hairline indicator — intentionally 1pt
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     sortRow: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     sortTrigger: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: Space.xs,
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
     sortTriggerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     sortMenu: {
       marginHorizontal: Space.md,
       marginBottom: Space.sm,
@@ -1119,8 +1090,7 @@ function createStyles(colors: ThemeColors) {
       overflow: 'hidden',
       backgroundColor: colors.surface,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     sortMenuItem: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1128,37 +1098,29 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     sortMenuItemText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     listScroll: {
-      flex: 1,
-    },
+      flex: 1 },
     listContent: {
-      flexGrow: 1,
-    },
+      flexGrow: 1 },
     emptyScroll: {
-      flex: 1,
-    },
+      flex: 1 },
     filteredEmptyWrap: {
       flex: 1,
       justifyContent: 'center',
-      paddingVertical: Space.xl,
-    },
+      paddingVertical: Space.xl },
     rowWrap: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm + 2,
-    },
+      paddingVertical: Space.sm + 2 },
     selectCheckbox: {
       // Intentional checkbox size
       width: Control.icon,
@@ -1167,85 +1129,69 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     thumbnailWrap: {
       // Intentional thumbnail size
       width: Control.hit + Space.sm,
       height: Control.hit + Space.sm,
       borderRadius: Radius.md,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     thumbnail: {
       width: Control.hit + Space.sm,
-      height: Control.hit + Space.sm,
-    },
+      height: Control.hit + Space.sm },
     thumbnailFallback: {
       backgroundColor: colors.surfaceAlt,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     rowBody: {
       flex: 1,
       gap: Space.xs - 1,
-      minWidth: 0,
-    },
+      minWidth: 0 },
     rowTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      color: colors.textPrimary },
     rowPrice: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      color: colors.textPrimary },
     rowMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     statusBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     statusDot: {
       width: Space.xs + 2,
       height: Space.xs + 2,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     statusText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     metricsRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     metricItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs - 1,
-    },
+      gap: Space.xs - 1 },
     metricText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     quickActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     rowSpinner: {
-      marginRight: Space.sm,
-    },
+      marginRight: Space.sm },
     bulkBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1254,37 +1200,29 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     bulkBarInfo: {
-      flex: 1,
-    },
+      flex: 1 },
     bulkBarCount: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     bulkBarActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     bulkActionBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: Space.sm - 2,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     bulkActionText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textPrimary },
     bulkCancelText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary } });
 }

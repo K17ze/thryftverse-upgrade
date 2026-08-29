@@ -5,8 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import Reanimated, { FadeInRight, FadeInLeft } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -14,7 +13,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -110,8 +110,7 @@ export default function StyleQuizScreen() {
     updatePersonalisation({
       genderFilter,
       categoriesAndSizesPref: selectedStyles.length > 0 ? selectedStyles.join(', ') : 'Balanced',
-      brandsPref: selectedPrice ? selectedPrice : 'Any',
-    });
+      brandsPref: selectedPrice ? selectedPrice : 'Any' });
     show('Saved to your style profile', 'success');
     navigation.navigate('MainTabs', { screen: 'Home' });
   };
@@ -253,56 +252,46 @@ function createStyles(colors: ThemeColors) {
   progressWrap: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   progressTrack: {
     height: Space.xs,
     borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   progressFill: {
     height: '100%',
     backgroundColor: colors.textPrimary,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   progressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   progressText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   skipText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand },
   stepContent: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   stepTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   stepSub: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.body.letterSpacing,
-    marginBottom: Space.md,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    marginBottom: Space.md },
   optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   optionCard: {
     width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
     aspectRatio: 1.2,
@@ -312,25 +301,20 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   optionCardActive: {
     backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-  },
+    borderColor: colors.textPrimary },
   optionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   optionLabelActive: {
-    color: colors.background,
-  },
+    color: colors.background },
   optionsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -340,23 +324,18 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   pillActive: {
     backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-  },
+    borderColor: colors.textPrimary },
   pillLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   pillLabelActive: {
-    color: colors.background,
-  },
+    color: colors.background },
   optionsColumn: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   rowOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -366,24 +345,19 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   rowOptionActive: {
     backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-  },
+    borderColor: colors.textPrimary },
   rowOptionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   rowOptionLabelActive: {
-    color: colors.background,
-  },
+    color: colors.background },
   completeIconWrap: {
     alignItems: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   summaryCard: {
     marginTop: Space.md,
     backgroundColor: colors.surface,
@@ -391,29 +365,23 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     padding: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   summaryLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   summaryValue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
     flex: 1,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   footer: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
-  },
-  });
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24 } });
 }

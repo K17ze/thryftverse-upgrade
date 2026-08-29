@@ -2,7 +2,8 @@ import React, { useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AppButton } from '../ui/AppButton';
 import { useBiometricGate, type UseBiometricGateResult } from '../../hooks/useBiometricGate';
 import { haptics } from '../../utils/haptics';
@@ -38,8 +39,7 @@ export function BiometricGatePrompt({
   gate,
   reason = 'Authenticate to continue',
   header,
-  onBack,
-}: BiometricGatePromptProps) {
+  onBack }: BiometricGatePromptProps) {
   const { colors } = useAppTheme();
 
   const handleRetry = useCallback(() => {
@@ -123,8 +123,7 @@ export function BiometricGate({
   reason = 'Authenticate to continue',
   children,
   header,
-  onBack,
-}: BiometricGateProps) {
+  onBack }: BiometricGateProps) {
   const gate = useBiometricGate();
   const { colors } = useAppTheme();
   const { status, isAuthenticating, authenticate } = gate;
@@ -151,8 +150,7 @@ export function BiometricGate({
             styles.warningBanner,
             {
               backgroundColor: colors.warningSubtle,
-              borderColor: colors.warningBorder,
-            },
+              borderColor: colors.warningBorder },
           ]}
         >
           <Ionicons name="shield-outline" size={16} color={colors.warning} />
@@ -180,50 +178,41 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   icon: {
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     textAlign: 'center',
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-    marginBottom: Space.xs,
-  },
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    marginBottom: Space.xs },
   subtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center',
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight,
     marginBottom: Space.lg,
-    maxWidth: 320,
-  },
+    maxWidth: 320 },
   actions: {
     flexDirection: 'column',
     gap: Space.sm,
     width: 260,
-    maxWidth: '100%',
-  },
+    maxWidth: '100%' },
   actionBtn: {
-    width: '100%',
-  },
+    width: '100%' },
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   warningText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight } });

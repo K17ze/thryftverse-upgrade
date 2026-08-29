@@ -2,7 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Conversation } from '../../domain';
-import { Space, Typography, Type, Radius } from '../../theme/designTokens';
+import { Space, Typography, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -13,8 +14,7 @@ function resolveIdentity(conversation: Conversation, currentUserId?: string) {
     return {
       title: conversation.title?.trim() || 'Group conversation',
       avatar: conversation.avatar || null,
-      isGroup: true,
-    };
+      isGroup: true };
   }
 
   const participant = conversation.participantProfiles?.find(
@@ -27,8 +27,7 @@ function resolveIdentity(conversation: Conversation, currentUserId?: string) {
       participant?.username?.trim() ||
       'Conversation',
     avatar: participant?.avatar || conversation.avatar || null,
-    isGroup: false,
-  };
+    isGroup: false };
 }
 
 
@@ -44,8 +43,7 @@ export function ConversationManagementRow({
   secondaryActionLabel,
   onSecondaryAction,
   secondaryDestructive,
-  isLast,
-}: {
+  isLast }: {
   conversation: Conversation;
   currentUserId?: string;
   onOpen: () => void;
@@ -142,68 +140,56 @@ const styles = StyleSheet.create({
     minHeight: 74,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: Space.md,
-  },
+    marginLeft: Space.md },
   main: {
     minWidth: 0,
     flex: 1,
     minHeight: 74,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   avatar: {
     width: 46,
     height: 46,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   avatarFallback: {
     width: 46,
     height: 46,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   copy: {
     minWidth: 0,
     flex: 1,
-    gap: 3,
-  },
+    gap: 3 },
   titleRow: {
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   title: {
     minWidth: 0,
     flex: 1,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   time: {
     flexShrink: 0,
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   preview: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   action: {
     width: 52,
     minHeight: 52,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   secondaryAction: {
     width: 44,
     minHeight: 52,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });

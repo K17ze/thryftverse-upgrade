@@ -6,8 +6,7 @@ import {
   StyleSheet,
   RefreshControl,
   ScrollView,
-  Alert,
-} from 'react-native';
+  Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -17,14 +16,14 @@ import { useHaptic } from '../hooks/useHaptic';
 import { parseApiError } from '../lib/apiClient';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
   fetchIncident,
   createRecoveryChallenge,
   verifyRecoveryChallenge,
   restoreAccess,
-  type CompromiseIncidentDetail,
-} from '../services/accountSecurityApi';
+  type CompromiseIncidentDetail } from '../services/accountSecurityApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AccountSecurityRecovery'>;
 
@@ -122,8 +121,7 @@ export default function AccountSecurityRecoveryScreen({ navigation, route }: Pro
             ...prev,
             state: restoration.state,
             cooldownUntil: restoration.cooldownUntil,
-            recoveryMethod: 'trusted_channel',
-          } : prev);
+            recoveryMethod: 'trusted_channel' } : prev);
           setPhase('done');
           show('Account secured. Some actions are temporarily limited.', 'success');
         } catch (restoreErr) {
@@ -380,8 +378,7 @@ function ChecklistStep({
   description,
   done,
   colors,
-  styles,
-}: {
+  styles }: {
   number: number;
   title: string;
   description: string;
@@ -423,51 +420,43 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
       marginBottom: Space.lg,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     statusText: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight },
     statusSub: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
     section: {
       marginBottom: Space.lg,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     sectionTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       textTransform: 'uppercase',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     protectedRow: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-      paddingVertical: Space.xs,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
+      paddingVertical: Space.xs },
     protectedNote: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.sm,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.sm },
     stepRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       paddingVertical: Space.sm,
-      gap: Space.md,
-    },
+      gap: Space.md },
     stepNumber: {
       width: 24,
       height: 24,
@@ -475,66 +464,53 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: Stroke.standard,
-      marginTop: 2,
-    },
+      marginTop: 2 },
     stepNumberText: {
       fontSize: 13,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     stepContent: {
       flex: 1,
-      gap: 2,
-    },
+      gap: 2 },
     stepTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     stepDesc: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     stepAction: {
       marginTop: Space.sm,
       marginBottom: Space.sm,
-      alignSelf: 'flex-start',
-    },
+      alignSelf: 'flex-start' },
     verifyBlock: {
       marginTop: Space.sm,
       marginBottom: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     verifyLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     verifyInput: {
       borderWidth: Stroke.standard,
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.smMd,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: 2,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: 2 },
     verifyingText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      paddingVertical: Space.sm,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      paddingVertical: Space.sm },
     doneAction: {
-      alignSelf: 'stretch',
-    },
+      alignSelf: 'stretch' },
     supportText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
       textAlign: 'center',
-      paddingVertical: Space.md,
-    },
-  });
+      paddingVertical: Space.md } });
 }

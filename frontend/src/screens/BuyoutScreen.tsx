@@ -13,15 +13,15 @@ import { parseApiError } from '../lib/apiClient';
 import { fetchCoOwnAssetById, fetchCoOwnHoldings, createCoOwnBuyoutOffer } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
-import { Space, Radius, Type, Typography, DockConstants, Stroke } from '../theme/designTokens';
+import { Space, Radius, DockConstants, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import {
   CoOwnStateCanvas,
-  CoOwnStickyActionDock,
-} from '../components/coown';
+  CoOwnStickyActionDock } from '../components/coown';
 
 type RouteT = RouteProp<RootStackParamList, 'Buyout'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -119,8 +119,7 @@ export default function BuyoutScreen() {
           await createCoOwnBuyoutOffer(asset.id, {
             bidderUserId: currentUser.id,
             offerPriceGbp: priceNum,
-            targetUnits: unitsNum,
-          });
+            targetUnits: unitsNum });
           haptics.success();
           show('Buyout offer submitted', 'success');
           setOfferPrice('');
@@ -134,8 +133,7 @@ export default function BuyoutScreen() {
           setSubmitting(false);
         }
       },
-      variant: 'default',
-    });
+      variant: 'default' });
   }, [asset, currentUser?.id, offerPrice, targetUnits, navigation, show]);
 
   if (isLoading) {
@@ -326,83 +324,67 @@ export default function BuyoutScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   image: {
     width: '100%',
     borderRadius: Radius.lg,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   title: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing + 0.1,
-    lineHeight: Type.title.lineHeight,
-    marginBottom: Space.md,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing + 0.1,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    marginBottom: Space.md },
   positionSection: {
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   positionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   positionRowLast: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   positionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   positionValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   statusSection: {
     paddingVertical: Space.lg,
     gap: Space.sm,
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   statusTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing + 0.1,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing + 0.1,
+    textAlign: 'center' },
   statusBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight,
+    textAlign: 'center' },
   formSection: {
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   formLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs },
   input: {
     borderWidth: Stroke.standard,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   formHint: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs } });

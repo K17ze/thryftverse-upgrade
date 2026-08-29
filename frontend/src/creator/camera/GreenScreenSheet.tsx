@@ -14,12 +14,12 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, FontFamily, Control, Stroke, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Control, Stroke, IconGrammar } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../CreatorAnimations';
@@ -67,8 +67,7 @@ export function GreenScreenSheet({
   visible,
   onCancel,
   onApply,
-  initialSettings,
-}: GreenScreenSheetProps) {
+  initialSettings }: GreenScreenSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
 
@@ -117,15 +116,13 @@ export function GreenScreenSheet({
           variant: 'default',
           onConfirm: () => {
             void ImagePicker.requestMediaLibraryPermissionsAsync();
-          },
-        });
+          } });
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: 'images',
         allowsEditing: false,
-        quality: 0.9,
-      });
+        quality: 0.9 });
       if (!result.canceled && result.assets?.[0]?.uri) {
         haptic.medium();
         setBackgroundUri(result.assets[0].uri);
@@ -137,8 +134,7 @@ export function GreenScreenSheet({
         message: 'Please try again.',
         confirmLabel: 'OK',
         variant: 'default',
-        onConfirm: () => {},
-      });
+        onConfirm: () => {} });
     } finally {
       setIsPickingBackground(false);
     }
@@ -270,8 +266,7 @@ export function GreenScreenSheet({
                       styles.chipText,
                       {
                         color: isActive ? colors.brand : colors.textSecondary,
-                        textDecorationLine: isActive ? 'underline' : 'none',
-                      },
+                        textDecorationLine: isActive ? 'underline' : 'none' },
                     ]}
                   >
                     {preset.label}
@@ -304,8 +299,7 @@ export function GreenScreenSheet({
                       styles.chipText,
                       {
                         color: isActive ? colors.brand : colors.textSecondary,
-                        textDecorationLine: isActive ? 'underline' : 'none',
-                      },
+                        textDecorationLine: isActive ? 'underline' : 'none' },
                     ]}
                   >
                     {t.toFixed(1)}
@@ -338,8 +332,7 @@ export function GreenScreenSheet({
                       styles.chipText,
                       {
                         color: isActive ? colors.brand : colors.textSecondary,
-                        textDecorationLine: isActive ? 'underline' : 'none',
-                      },
+                        textDecorationLine: isActive ? 'underline' : 'none' },
                     ]}
                   >
                     {f}px
@@ -393,12 +386,10 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'flex-end',
-    zIndex: 100,
-  },
+    zIndex: 100 },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
@@ -410,97 +401,80 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   closeButton: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   body: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   bodyContent: {
     paddingBottom: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   infoBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs,
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-  },
+    borderBottomColor: 'rgba(255,255,255,0.1)' },
   infoIcon: {
-    marginTop: 2,
-  },
+    marginTop: 2 },
   infoText: {
     flex: 1,
     fontFamily: FontFamily.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   label: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'uppercase' },
   bgChooseBtn: {
     height: 50,
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   bgChooseText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   bgPreviewRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   bgThumbWrap: {
     width: 64,
     height: 64,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    borderWidth: Stroke.hairline,
-  },
+    borderWidth: Stroke.hairline },
   bgThumb: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   bgRemoveBtn: {
     minHeight: Control.hit,
     paddingHorizontal: Space.xs,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   bgRemoveText: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   chipRow: {
     flexDirection: 'row',
     gap: Space.md,
     flexWrap: 'wrap',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -508,41 +482,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   colorSwatch: {
     width: 12,
     height: 12,
     borderRadius: Radius.full,
     borderWidth: Stroke.hairline,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
+    borderColor: 'rgba(255,255,255,0.2)' },
   chipText: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   footer: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   actionButton: {
     flex: 1,
     height: 50,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   applyButton: {
-    borderWidth: 0,
-  },
+    borderWidth: 0 },
   actionText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight } });

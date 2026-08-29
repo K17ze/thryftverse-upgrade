@@ -9,15 +9,15 @@ import Reanimated, {
   withTiming,
   Easing,
   cancelAnimation,
-  FadeIn,
-} from 'react-native-reanimated';
+  FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
-import { Space, Radius, Type, Typography, IconGrammar, Stroke} from '../../theme/designTokens';
+import { Space, Radius, IconGrammar, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 
 export interface FlagshipStateProps {
@@ -38,24 +38,21 @@ const DEFAULT_TITLES: Record<string, string> = {
   empty: 'Nothing here yet',
   error: 'Something went wrong',
   offline: 'You are offline',
-  unavailable: 'Not available',
-};
+  unavailable: 'Not available' };
 
 const DEFAULT_SUBTITLES: Record<string, string> = {
   loading: 'One moment while we get this ready.',
   empty: 'When content appears, you\'ll see it here.',
   error: 'We could not load this. Tap below to try again.',
   offline: 'Check your connection and try again.',
-  unavailable: 'This feature is not available right now.',
-};
+  unavailable: 'This feature is not available right now.' };
 
 const DEFAULT_ICONS: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
   loading: 'sync-outline',
   empty: 'cube-outline',
   error: 'alert-circle-outline',
   offline: 'cloud-offline-outline',
-  unavailable: 'lock-closed-outline',
-};
+  unavailable: 'lock-closed-outline' };
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
 
@@ -79,8 +76,7 @@ export function FlagshipState({
   icon,
   secondaryActionLabel,
   onSecondaryAction,
-  style,
-}: FlagshipStateProps) {
+  style }: FlagshipStateProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
@@ -202,8 +198,7 @@ const ShimmerBar = React.memo(function ShimmerBar({
   marginTop,
   surfaceColor,
   reduced,
-  shimmerStyle,
-}: {
+  shimmerStyle }: {
   width: DimensionValue;
   height: number;
   borderRadius: number;
@@ -221,8 +216,7 @@ const ShimmerBar = React.memo(function ShimmerBar({
           height,
           borderRadius,
           backgroundColor: surfaceColor,
-          marginTop,
-        },
+          marginTop },
       ]}
     >
       {reduced ? null : (
@@ -241,8 +235,7 @@ const ShimmerBar = React.memo(function ShimmerBar({
 
 function LoadingShimmer({
   colors,
-  reduced,
-}: {
+  reduced }: {
   colors: ReturnType<typeof useAppTheme>['colors'];
   reduced: boolean;
 }) {
@@ -265,8 +258,7 @@ function LoadingShimmer({
   }, [reduced, shimmerX]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shimmerX.value * 120 }],
-  }));
+    transform: [{ translateX: shimmerX.value * 120 }] }));
 
   return (
     <View style={styles.shimmerBlock}>
@@ -301,81 +293,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.xl,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   loadingText: {
     marginTop: Space.md,
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   loadingSub: {
     marginTop: Space.xs,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    textAlign: 'center' },
   shimmerBlock: {
     alignItems: 'center',
-    width: 180,
-  },
+    width: 180 },
   shimmerGlyph: {
     width: 56,
     height: 56,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   iconSlot: {
     alignItems: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     textAlign: 'center',
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-    marginBottom: Space.xs,
-  },
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    marginBottom: Space.xs },
   subtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center',
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight,
     marginBottom: Space.md,
-    maxWidth: 280,
-  },
+    maxWidth: 280 },
   actionBtn: {
     paddingHorizontal: Space.lg,
     paddingVertical: Space.smMd,
     borderRadius: Radius.xl,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   actionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   secondaryBtn: {
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   secondaryText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing } });
 
 const shimmerBarStyles = StyleSheet.create({
   base: {
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   gradient: {
-    width: 240,
-  },
-});
+    width: 240 } });

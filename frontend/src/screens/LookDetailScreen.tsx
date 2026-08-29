@@ -8,8 +8,7 @@ import {
   Pressable,
   Share,
   Modal,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,7 +22,8 @@ import { useStore } from '../store/useStore';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Type, Space, Radius, Typography, Control, LetterSpacing, AspectRatio } from '../theme/designTokens';
+import { Space, Radius, Control, LetterSpacing, AspectRatio } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -41,8 +41,7 @@ import {
   fetchRelatedLooksFromApi,
   repostLookOnApi,
   type LookApiItem,
-  type LookTagApiItem,
-} from '../services/looksApi';
+  type LookTagApiItem } from '../services/looksApi';
 import { resolveLookTemplate } from '../utils/lookTemplates';
 import { LookMediaCarousel, type LookMediaCarouselPage } from '../components/look/LookMediaCarousel';
 import { FullscreenMediaViewer } from '../components/product';
@@ -51,13 +50,11 @@ import {
   fetchPublicProfileAggregate,
   followUser,
   unfollowUser,
-  type PublicProfileAggregate,
-} from '../services/profileApi';
+  type PublicProfileAggregate } from '../services/profileApi';
 import {
   openProductDetail,
   type ProductReference,
-  type ProductReferenceKind,
-} from '../platform/product/openProductDetail';
+  type ProductReferenceKind } from '../platform/product/openProductDetail';
 import { ApiRequestError } from '../lib/apiClient';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
@@ -149,20 +146,17 @@ export default function LookDetailScreen() {
       } else {
         setLoadError({
           kind: 'not-found',
-          message: res.error ?? 'This look may have been removed or is unavailable.',
-        });
+          message: res.error ?? 'This look may have been removed or is unavailable.' });
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 404) {
         setLoadError({
           kind: 'not-found',
-          message: 'This look may have been removed or is unavailable.',
-        });
+          message: 'This look may have been removed or is unavailable.' });
       } else {
         setLoadError({
           kind: 'connection',
-          message: 'Check your connection and try again.',
-        });
+          message: 'Check your connection and try again.' });
       }
     } finally {
       setIsLoading(false);
@@ -289,8 +283,7 @@ export default function LookDetailScreen() {
         title: 'Thryftverse Look',
         message: look?.caption
           ? `${look.caption}\n\nLook ID: ${look?.id}`
-          : `View this Look on Thryftverse.\n\nLook ID: ${look?.id}`,
-      });
+          : `View this Look on Thryftverse.\n\nLook ID: ${look?.id}` });
     } catch {
       // Share failed or was dismissed — no feedback needed unless it's a real error
     }
@@ -303,8 +296,7 @@ export default function LookDetailScreen() {
     navigation.navigate('CreatorStudio', {
       type: 'look',
       sourceDocumentId: look.id,
-      sourceMode: 'edit',
-    });
+      sourceMode: 'edit' });
   }, [look, isOwner, navigation, haptic]);
 
   // Remix — open the creator studio seeded from this look so the user can
@@ -315,8 +307,7 @@ export default function LookDetailScreen() {
     navigation.navigate('CreatorStudio', {
       type: 'look',
       sourceDocumentId: look.id,
-      sourceMode: 'remix',
-    });
+      sourceMode: 'remix' });
   }, [look, navigation, haptic]);
 
   // Repost — lightweight re-publish with attribution to the original creator.
@@ -371,8 +362,7 @@ export default function LookDetailScreen() {
         } catch {
           show('Unable to delete look', 'error');
         }
-      },
-    });
+      } });
   }, [look, isOwner, show, navigation]);
 
   const handleFollow = useCallback(async () => {
@@ -479,8 +469,7 @@ export default function LookDetailScreen() {
         pages.push({
           id: `media-${i + 1}`,
           uri: slide.url,
-          isVideo: slide.mediaType === 'video',
-        });
+          isVideo: slide.mediaType === 'video' });
       });
     }
     return pages;
@@ -1116,32 +1105,27 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       paddingHorizontal: Space.sm,
       paddingTop: Space.sm,
-      zIndex: 10,
-    },
+      zIndex: 10 },
     backBtn: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     headerActions: { flexDirection: 'row', gap: Space.xs },
     headerBtn: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     backBtnSolid: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     headerGlyph: {
       textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 4,
-    },
+      textShadowRadius: 4 },
     scrollContent: { paddingBottom: Space.lg },
 
     // ── Media pager ──
@@ -1149,40 +1133,34 @@ function createStyles(colors: ThemeColors) {
       width: SCREEN_W,
       position: 'relative',
       backgroundColor: colors.surfaceAlt,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     heroPage: { width: SCREEN_W, height: '100%' },
     heroGradient: {
       position: 'absolute',
       bottom: 0,
       left: 0,
       right: 0,
-      height: Space.xxl * 3 + Space.xl + Space.xs,
-    },
+      height: Space.xxl * 3 + Space.xl + Space.xs },
 
     // ── Info section ──
     infoSection: {
       paddingHorizontal: Space.md,
       paddingTop: Space.lg,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     repostAttribution: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     repostAttributionText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     creatorRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginTop: Space.xs / 2,
-    },
+      marginTop: Space.xs / 2 },
     creatorAvatar: {
       width: Space.xl + Space.sm,
       height: Space.xl + Space.sm,
@@ -1190,37 +1168,30 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     creatorAvatarImg: { width: Space.xl + Space.sm, height: Space.xl + Space.sm, borderRadius: Radius.xxl },
     creatorInfo: { flex: 1, gap: Space.xs - 2 },
     creatorName: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     creatorMeta: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     followBtn: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm - 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     followBtnActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     followBtnText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textInverse },
     followBtnTextActive: {
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
 
     // ── Social + actions ──
     socialWrap: { marginTop: Space.md },
@@ -1228,33 +1199,28 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       marginTop: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     actionBtn: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs + 2,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     actionDivider: {
       width: StyleSheet.hairlineWidth,
       height: Space.xl - Space.xs,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     actionBtnLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
 
     // ── Explore grid loading footer ──
     exploreLoading: {
       paddingVertical: Space.xl,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
 
     // ── Labeled soft seam (detail → explore transition) ──
     // A magazine section break: hairline divider + editorial label.
@@ -1264,50 +1230,42 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.xl,
       paddingBottom: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     exploreSeamDivider: {
       height: 1,
-      backgroundColor: colors.borderSubtle,
-    },
+      backgroundColor: colors.borderSubtle },
     exploreSeamLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       letterSpacing: LetterSpacing.caps,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
 
     // ── Explore empty state ──
     exploreEmpty: {
       paddingVertical: Space.xxl,
       paddingHorizontal: Space.lg,
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     exploreEmptyTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     exploreEmptySub: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     exploreEmptyRetry: {
       marginTop: Space.xs,
       paddingHorizontal: Space.lg,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     exploreEmptyRetryText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textPrimary },
 
     // ── Explore footer: retry + end state ──
     exploreRetry: {
@@ -1315,104 +1273,87 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     exploreRetryText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     exploreEnd: {
       paddingVertical: Space.xl,
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     exploreEndDivider: {
       width: 40,
       height: 2,
       backgroundColor: colors.borderSubtle,
       borderRadius: 1,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     exploreEndText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     exploreEndSub: {
-      fontSize: Type.meta.size - 1,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size - 1,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
 
     // ── Inspect sheet ──
     inspectBackdrop: {
       flex: 1,
       backgroundColor: colors.overlay,
-      justifyContent: 'flex-end',
-    },
+      justifyContent: 'flex-end' },
     inspectSheet: {
       backgroundColor: colors.surface,
       borderTopLeftRadius: Radius.xl,
       borderTopRightRadius: Radius.xl,
       paddingBottom: Space.lg,
       paddingTop: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     inspectHandle: {
       width: Space.xl + Space.sm,
       height: Space.xxs,
       borderRadius: Space.xxs,
       backgroundColor: colors.border,
       alignSelf: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     inspectContent: {
       flexDirection: 'row',
       gap: Space.md,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     inspectImgWrap: {
       width: Space.xxl + Space.xl,
       height: Space.xxl + Space.xl,
       borderRadius: Radius.lg,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
-      position: 'relative',
-    },
+      position: 'relative' },
     inspectImg: { width: '100%', height: '100%' },
     inspectImgEmpty: {
       width: '100%',
       height: '100%',
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     inspectSoldScrim: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: colors.scrimTextTertiary,
-    },
+      backgroundColor: colors.scrimTextTertiary },
     inspectInfo: { flex: 1, justifyContent: 'center', gap: Space.xs },
     inspectTitle: {
-      fontSize: Type.itemTitle.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.itemTitle.size,
+      fontFamily: TypographyV2.itemTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.itemTitle.letterSpacing,
-    },
+      letterSpacing: TypographyV2.itemTitle.letterSpacing },
     inspectPrice: {
-      fontSize: Type.priceList.size,
-      fontFamily: Typography.family.bold,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
+      color: colors.brand },
     inspectSold: {
-      fontSize: Type.priceList.size,
-      fontFamily: Typography.family.bold,
-      color: colors.danger,
-    },
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
+      color: colors.danger },
     inspectLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     inspectCta: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1420,46 +1361,37 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs + 2,
       paddingVertical: Space.md - 2,
       borderRadius: Radius.lg,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     inspectCtaDisabled: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     inspectCtaText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textInverse },
 
     // ── Owner overflow menu ──
     overflowBackdrop: {
       flex: 1,
       backgroundColor: colors.overlay,
-      justifyContent: 'flex-end',
-    },
+      justifyContent: 'flex-end' },
     overflowSheet: {
       backgroundColor: colors.surface,
       borderTopLeftRadius: Radius.xl,
       borderTopRightRadius: Radius.xl,
       paddingBottom: Space.lg,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     overflowItem: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
       paddingVertical: Space.md,
-      paddingHorizontal: Space.lg,
-    },
+      paddingHorizontal: Space.lg },
     overflowItemText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     overflowDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginVertical: Space.xs,
-    },
-  });
+      marginVertical: Space.xs } });
 }

@@ -16,7 +16,8 @@ import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Typography, Radius } from '../../../theme/designTokens';
+import { Space, Radius } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
@@ -36,8 +37,7 @@ export interface ShippingReturnsInfoProps {
 export function ShippingReturnsInfo({
   commerce,
   carbonNeutral = false,
-  restockingFeeGbp = null,
-}: ShippingReturnsInfoProps) {
+  restockingFeeGbp = null }: ShippingReturnsInfoProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -182,49 +182,40 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   pressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   headerLeft: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   label: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   summary: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   body: {
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   groupLabel: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -233,17 +224,13 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     marginTop: Space.sm,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   badgeText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   conditions: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    paddingTop: Space.sm,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    fontFamily: TypographyV2.body.fontFamily,
+    paddingTop: Space.sm } });

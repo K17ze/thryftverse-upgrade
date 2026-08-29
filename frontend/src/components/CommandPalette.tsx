@@ -26,25 +26,21 @@ import {
   Keyboard,
   useWindowDimensions,
   ViewStyle,
-  TextStyle,
-} from 'react-native';
+  TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   SlideInDown,
-  SlideOutUp,
-} from 'react-native-reanimated';
+  SlideOutUp } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
-  Typography,
   Elevation,
   Control,
-  ZIndex,
-} from '../theme/designTokens';
+  ZIndex } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useCommandPaletteStore, useCommandPalette } from '../hooks/useCommandPalette';
 import type { RootStackParamList } from '../navigation/types';
 import { useHaptic } from '../hooks/useHaptic';
@@ -55,8 +51,7 @@ import {
   groupCommandsByCategory,
   type Command,
   type CommandCategory,
-  type CommandNavigation,
-} from '../services/commandPaletteApi';
+  type CommandNavigation } from '../services/commandPaletteApi';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -115,8 +110,7 @@ export function CommandPalette() {
           r: string,
           p?: Record<string, unknown>,
         ) => void)(route, params);
-      },
-    }),
+      } }),
     [navigation],
   );
 
@@ -163,8 +157,7 @@ export function CommandPalette() {
         items.push({
           ...match,
           id: `recent-cmd-${match.id}`,
-          subtitle: 'Recently used',
-        });
+          subtitle: 'Recently used' });
       }
     }
 
@@ -180,8 +173,7 @@ export function CommandPalette() {
         items.push({
           ...match,
           id: `recent-screen-${entry.name}`,
-          subtitle: 'Recently visited',
-        });
+          subtitle: 'Recently visited' });
       }
     }
 
@@ -195,8 +187,7 @@ export function CommandPalette() {
         category: 'search',
         icon: 'time-outline',
         action: () => navigation.navigate('GlobalSearch'),
-        keywords: [term],
-      });
+        keywords: [term] });
     }
     return items;
   }, [recentCommands, recentScreens, recentSearches, allCommands, commandById, navigation]);
@@ -213,8 +204,7 @@ export function CommandPalette() {
       const catalogSections = groupCommandsByCategory(allCommands).map((s) => ({
         key: s.category,
         label: s.label,
-        commands: s.commands,
-      }));
+        commands: s.commands }));
       return [...recentSection, ...catalogSections];
     }
 
@@ -226,8 +216,7 @@ export function CommandPalette() {
     return grouped.map((s) => ({
       key: s.category,
       label: s.label,
-      commands: s.commands.slice(0, MAX_RESULTS_PER_SECTION),
-    }));
+      commands: s.commands.slice(0, MAX_RESULTS_PER_SECTION) }));
   }, [debouncedQuery, allCommands, recentItems]);
 
   // Flatten for highlight navigation.
@@ -423,8 +412,7 @@ const CommandRow = React.memo(function CommandRow({
   command,
   highlighted,
   onPress,
-  colors,
-}: CommandRowProps) {
+  colors }: CommandRowProps) {
   const styles = useMemo(() => createRowStyles(colors), [colors]);
   const iconName = (command.icon as IconName | undefined) ?? 'square-outline';
   return (
@@ -478,11 +466,9 @@ function createStyles(colors: ThemeColors) {
     backdrop: {
       flex: 1,
       backgroundColor: colors.overlay,
-      zIndex: ZIndex.overlay,
-    },
+      zIndex: ZIndex.overlay },
     cardWrapper: {
-      paddingTop: 0,
-    },
+      paddingTop: 0 },
     card: {
       backgroundColor: colors.surfaceElevated,
       borderBottomLeftRadius: 0,
@@ -492,66 +478,55 @@ function createStyles(colors: ThemeColors) {
       marginTop: 0,
       // Anchor to the top of the screen — thumb-reachable.
       ...Elevation.modal,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     searchHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     searchInput: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-      paddingVertical: Space.xs,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing,
+      paddingVertical: Space.xs },
     closeBtn: {
       paddingHorizontal: Space.xs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     headerHairline: {
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     resultsScroll: {
-      flex: 1,
-    },
+      flex: 1 },
     resultsContent: {
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     section: {
       // Flat canvas — no per-section surface (AGENTS.md §4 surface budget).
     },
     sectionHeader: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.label.letterSpacing,
+      letterSpacing: TypographyV2.label.letterSpacing,
       textTransform: 'uppercase',
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     emptyState: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.xl,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     emptyTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      color: colors.textPrimary },
     emptySubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textMuted },
     footer: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -559,21 +534,17 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     footerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     footerHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-  });
+      letterSpacing: TypographyV2.meta.letterSpacing } });
 }
 
 function createRowStyles(colors: ThemeColors) {
@@ -587,41 +558,33 @@ function createRowStyles(colors: ThemeColors) {
       minHeight: 44, // AGENTS.md §13 — minimum practical touch target
     },
     rowHighlighted: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     rowPressed: {
-      backgroundColor: colors.rowPressed,
-    },
+      backgroundColor: colors.rowPressed },
     rowIcon: {
-      width: Control.icon + Space.xs,
-    },
+      width: Control.icon + Space.xs },
     rowText: {
       flex: 1,
       flexDirection: 'column',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     rowTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     rowSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.caption.letterSpacing,
-      marginTop: 1,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginTop: 1 },
     shortcut: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.caption.letterSpacing,
-      marginRight: Space.xs,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginRight: Space.xs },
     chevron: {
       // Transparent chevron — utility chrome recedes (AGENTS.md §4).
-    },
-  });
+    } });
 }

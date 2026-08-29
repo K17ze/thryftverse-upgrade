@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import type { ListingFamily } from '../../platform/product';
 
@@ -19,8 +20,7 @@ const FAMILY_META: Record<
 > = {
   direct: { label: 'Buy now', icon: 'bag-handle-outline' },
   auction: { label: 'Auction', icon: 'pricetag-outline' },
-  co_own: { label: 'Co-own', icon: 'people-outline' },
-};
+  co_own: { label: 'Co-own', icon: 'people-outline' } };
 
 /**
  * Premium listing-family indicator shared across all three detail screens.
@@ -30,8 +30,7 @@ const FAMILY_META: Record<
 export function ProductFamilyBadge({
   family,
   stateAccent,
-  compact = false,
-}: ProductFamilyBadgeProps) {
+  compact = false }: ProductFamilyBadgeProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const meta = FAMILY_META[family];
@@ -64,11 +63,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   containerCompact: {
-    gap: Space.xs - 1,
-  },
+    gap: Space.xs - 1 },
   familyChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -76,31 +73,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.xs - 1,
     paddingHorizontal: Space.sm,
     backgroundColor: colors.overlay,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   familyLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.scrimTextPrimary,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   familyLabelCompact: {
-    fontSize: 10,
-  },
+    fontSize: 10 },
   accentChip: {
     paddingVertical: Space.xs - 1,
     paddingHorizontal: Space.sm,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   accentLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.scrimTextPrimary,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   accentLabelCompact: {
-    fontSize: 10,
-  },
-});
+    fontSize: 10 } });

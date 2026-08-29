@@ -5,13 +5,13 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  Keyboard,
-} from 'react-native';
+  Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
@@ -21,8 +21,7 @@ import { RootStackParamList } from '../navigation/types';
 import {
   createUserAddress,
   deleteUserAddress,
-  CreateAddressInput,
-} from '../services/commerceApi';
+  CreateAddressInput } from '../services/commerceApi';
 import { lookupUKPostcode, isUKPostcode } from '../utils/postcodeLookup';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -80,8 +79,7 @@ const ADD_DEFAULTS: FormState = {
   postalCode: '',
   countryCode: '',
   country: '',
-  isDefault: true,
-};
+  isDefault: true };
 
 function normaliseForm(f: FormState): FormState {
   return {
@@ -93,8 +91,7 @@ function normaliseForm(f: FormState): FormState {
     postalCode: f.postalCode.trim().toUpperCase(),
     countryCode: f.countryCode,
     country: f.country,
-    isDefault: f.isDefault,
-  };
+    isDefault: f.isDefault };
 }
 
 function formsEqual(a: FormState, b: FormState): boolean {
@@ -169,8 +166,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         postalCode: savedAddress.postalCode,
         countryCode: savedAddress.countryCode,
         country: savedAddress.country,
-        isDefault: savedAddress.isDefault ?? true,
-      };
+        isDefault: savedAddress.isDefault ?? true };
     }
     return { ...ADD_DEFAULTS };
   }, [isEditing, savedAddress]);
@@ -243,8 +239,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       const allErrors = validateForm(form);
       setErrors((prev) => ({
         ...prev,
-        [field]: allErrors[field],
-      }));
+        [field]: allErrors[field] }));
     },
     [form]
   );
@@ -301,8 +296,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           if (action) {
             proceedWithNavigation(action);
           }
-        },
-      });
+        } });
     });
 
     return unsubscribe;
@@ -320,8 +314,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         name: nameRef,
         streetAddress: streetRef,
         city: cityRef,
-        postalCode: postalRef,
-      };
+        postalCode: postalRef };
       refMap[firstErrorField]?.current?.focus();
       return;
     }
@@ -345,8 +338,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       postalCode: normalised.postalCode,
       countryCode: normalised.countryCode,
       country: normalised.country,
-      isDefault: normalised.isDefault,
-    };
+      isDefault: normalised.isDefault };
 
     try {
       if (isEditing && savedAddress?.id !== undefined) {
@@ -371,8 +363,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           postalCode: created.postalCode,
           countryCode: created.countryCode,
           country: created.country,
-          isDefault: created.isDefault,
-        });
+          isDefault: created.isDefault });
 
         haptic.medium();
         if (oldDeleteFailed) {
@@ -394,8 +385,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           postalCode: created.postalCode,
           countryCode: created.countryCode,
           country: created.country,
-          isDefault: created.isDefault,
-        });
+          isDefault: created.isDefault });
 
         haptic.medium();
         show('Delivery address added', 'success');
@@ -444,8 +434,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         show('Delivery address removed', 'success');
         allowNavigationRef.current = true;
         navigation.goBack();
-      },
-    });
+      } });
   }, [clearSavedAddress, show, haptic, navigation, currentUser?.id, savedAddress?.id]);
 
   if (!currentUser) {
@@ -717,15 +706,13 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               styles.defaultSwitch,
               {
                 backgroundColor: form.isDefault ? colors.brand : colors.surfaceAlt,
-                borderColor: form.isDefault ? colors.brand : colors.border,
-              },
+                borderColor: form.isDefault ? colors.brand : colors.border },
             ]}>
               <View style={[
                 styles.defaultSwitchKnob,
                 {
                   backgroundColor: form.isDefault ? colors.textInverse : colors.textMuted,
-                  alignSelf: form.isDefault ? 'flex-end' : 'flex-start',
-                },
+                  alignSelf: form.isDefault ? 'flex-end' : 'flex-start' },
               ]} />
             </View>
           </Pressable>
@@ -801,99 +788,82 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   flex: {
-    flex: 1,
-  },
+    flex: 1 },
 
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   headerBtn: {
     minWidth: Control.hit,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   headerCancelText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   headerTitle: {
     flex: 1,
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   headerSpacer: {
-    minWidth: Control.hit,
-  },
+    minWidth: Control.hit },
 
   // Scroll
   scrollContent: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
 
   // Intro
   intro: {
     paddingTop: Space.lg,
     paddingBottom: Space.lg,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   introTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
-  },
+    letterSpacing: LetterSpacing.tight + LetterSpacing.wide },
   introBody: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
 
   // Section
   section: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   sectionLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginBottom: Space.xs + 2,
-  },
+    marginBottom: Space.xs + 2 },
   input: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: 0,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
 
   // Error
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   errorText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
   postcodeSuggestion: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -904,31 +874,26 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brandSubtle,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.brandBorder,
-  },
+    borderColor: colors.brandBorder },
   postcodeSuggestionText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   postcodeSuggestionBold: {
     fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   saveErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   saveErrorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
 
   // Country
   countryRow: {
@@ -936,16 +901,13 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: Control.hit,
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
   countryText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   countryPlaceholder: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
 
   // Default toggle
   defaultToggleRow: {
@@ -954,42 +916,35 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     paddingVertical: Space.md,
     marginTop: Space.sm,
-    minHeight: Control.hit + Space.xs,
-  },
+    minHeight: Control.hit + Space.xs },
   defaultToggleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flex: 1,
-  },
+    flex: 1 },
   defaultToggleTextCol: {
     flex: 1,
-    gap: Space.xs - 2,
-  },
+    gap: Space.xs - 2 },
   defaultToggleTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   defaultToggleSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   defaultSwitch: {
     width: Space.xxl - Space.sm,
     height: Space.lg,
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
     justifyContent: 'center',
-    padding: Space.xs,
-  },
+    padding: Space.xs },
   defaultSwitchKnob: {
     width: Control.iconCompact,
     height: Control.iconCompact,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
 
   // Remove
   removeBtn: {
@@ -999,13 +954,11 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingVertical: Space.md,
     marginTop: Space.lg,
-    minHeight: Control.hit + Space.xs,
-  },
+    minHeight: Control.hit + Space.xs },
   removeBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textMuted },
 
   // Sticky footer
   stickyFooter: {
@@ -1013,24 +966,20 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.sm,
     backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   saveBtn: {
     backgroundColor: colors.brand,
     paddingVertical: Space.md - 2,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: Control.hit + Space.xs,
-  },
+    minHeight: Control.hit + Space.xs },
   saveBtnPressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   saveBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse },
 
   // Signed out
   signedOutContainer: {
@@ -1038,21 +987,18 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   signedOutTitle: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
     color: colors.textPrimary,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   signedOutBody: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   signedOutBtn: {
     marginTop: Space.md,
     paddingHorizontal: Space.xl,
@@ -1060,12 +1006,9 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
     borderRadius: Radius.md,
     minHeight: Control.hit + Space.xs,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   signedOutBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse } });
 }

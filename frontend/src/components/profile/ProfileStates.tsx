@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, StatusBar, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 const COVER_HEIGHT = 168;
@@ -94,8 +95,7 @@ export function ProfileUnavailableState({ onBack, coverHeight = COVER_HEIGHT }: 
 export function ProfileBlockedState({
   onBack,
   onShare,
-  coverHeight = COVER_HEIGHT,
-}: BaseProps & { onBack: () => void; onShare: () => void }) {
+  coverHeight = COVER_HEIGHT }: BaseProps & { onBack: () => void; onShare: () => void }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -146,31 +146,26 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 0,
     right: 0,
     height: COVER_HEIGHT,
-    zIndex: 8,
-  },
+    zIndex: 8 },
   topUtilityRow: {
     position: 'absolute',
     left: 12,
     right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   topUtilityIconBtn: {
     width: 36,
     height: 36,
     borderRadius: Radius.lg,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   stateContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm + 2,
-    paddingHorizontal: Space.md,
-  },
-  stateText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  stateSubtext: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center' },
-});
+    paddingHorizontal: Space.md },
+  stateText: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary },
+  stateSubtext: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textMuted, textAlign: 'center' } });

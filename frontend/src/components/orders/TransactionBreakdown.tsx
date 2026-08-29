@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { TxRow } from './OrderDetailRows';
 
 interface Props {
@@ -24,14 +25,12 @@ export function TransactionBreakdown({
   totalPaid,
   formatFromFiat,
   currencyCode,
-  fiatOpts,
-}: Props) {
+  fiatOpts }: Props) {
   const { colors } = useAppTheme();
 
   const themed = useMemo(() => ({
     sectionLabel: { color: colors.textMuted },
-    txDivider: { backgroundColor: colors.border },
-  }), [colors]);
+    txDivider: { backgroundColor: colors.border } }), [colors]);
 
   return (
     <View style={styles.transactionSection}>
@@ -53,18 +52,14 @@ export function TransactionBreakdown({
 
 const styles = StyleSheet.create({
   transactionSection: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   sectionLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   txDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
-  },
-});
+    marginVertical: Space.sm } });

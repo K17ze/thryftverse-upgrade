@@ -43,8 +43,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   Modal,
-  type DimensionValue,
-} from 'react-native';
+  type DimensionValue } from 'react-native';
 import { Image } from 'expo-image';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,13 +52,12 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 import {
   Space,
   Radius,
-  Type,
   Typography,
   Stroke,
   Control,
   FontFamily,
-  Elevation,
-} from '../../../theme/designTokens';
+  Elevation } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -75,8 +73,7 @@ import Reanimated, {
   withDelay,
   interpolate,
   Extrapolation,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -160,8 +157,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
 
   const style = useAnimatedStyle(() => ({
     backgroundColor: colors.surfaceAlt,
-    opacity: 0.5 + 0.3 * shimmerSV.value,
-  }));
+    opacity: 0.5 + 0.3 * shimmerSV.value }));
 
   return (
     <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
@@ -219,8 +215,7 @@ function MediaGridItem({
   onPress,
   onLongPress,
   colors,
-  styles,
-}: MediaGridItemProps) {
+  styles }: MediaGridItemProps) {
   const reduceMotion = useReducedMotion();
   const { spring } = useMotionConfig();
   const pressedSV = useSharedValue(0);
@@ -237,13 +232,11 @@ function MediaGridItem({
   const pressStyle = useAnimatedStyle(() => ({
     transform: [
       { scale: interpolate(pressedSV.value, [0, 1], [1, 0.95], Extrapolation.CLAMP) },
-    ],
-  }));
+    ] }));
 
   const badgeStyle = useAnimatedStyle(() => ({
     transform: [{ scale: badgeScaleSV.value }],
-    opacity: badgeScaleSV.value,
-  }));
+    opacity: badgeScaleSV.value }));
 
   return (
     <Pressable
@@ -299,8 +292,7 @@ function MediaGridItem({
 function StaticStateIcon({
   name,
   size,
-  color,
-}: {
+  color }: {
   name: React.ComponentProps<typeof Ionicons>['name'];
   size: number;
   color: string;
@@ -327,8 +319,7 @@ function PermissionDeniedState({
   ctaLabel,
   onCta,
   colors,
-  styles,
-}: PermissionDeniedStateProps) {
+  styles }: PermissionDeniedStateProps) {
   const reduceMotion = useReducedMotion();
   const { spring } = useMotionConfig();
   const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
@@ -343,8 +334,7 @@ function PermissionDeniedState({
     opacity: entranceSV.value,
     transform: [
       { translateY: interpolate(entranceSV.value, [0, 1], [20, 0], Extrapolation.CLAMP) },
-    ],
-  }));
+    ] }));
 
   return (
     <Reanimated.View style={[styles.centerState, entranceStyle]}>
@@ -427,16 +417,13 @@ const previewStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.92)',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   content: {
     width: '100%',
-    height: '80%',
-  },
+    height: '80%' },
   image: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   durationBadge: {
     position: 'absolute',
     bottom: Space.md,
@@ -447,13 +434,11 @@ const previewStyles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   durationText: {
     color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   closeBtn: {
     position: 'absolute',
     top: 50,
@@ -463,9 +448,7 @@ const previewStyles = StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });
 
 // ── AlbumRow — loads its own cover thumbnail (first asset in album) ──
 
@@ -549,8 +532,7 @@ function AlbumListView({
   activeAlbumId,
   onSelectAlbum,
   colors,
-  styles,
-}: AlbumListViewProps) {
+  styles }: AlbumListViewProps) {
   if (albums.length === 0) {
     return (
       <View style={styles.centerState}>
@@ -612,8 +594,7 @@ export function MediaBrowserSheet({
   maxSelections,
   title = 'Select photos',
   showCameraTile = true,
-  allowVideos = true,
-}: MediaBrowserSheetProps) {
+  allowVideos = true }: MediaBrowserSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
@@ -696,8 +677,7 @@ export function MediaBrowserSheet({
         const opts: MediaLibrary.AssetsOptions = {
           first: 60,
           mediaType: allowVideos ? ['photo', 'video'] : ['photo'],
-          sortBy: [['creationTime', false]],
-        };
+          sortBy: [['creationTime', false]] };
         if (!reset && cursorRef.current) {
           opts.after = cursorRef.current;
         }
@@ -717,8 +697,7 @@ export function MediaBrowserSheet({
           // Legacy expo-media-library returns duration in seconds; normalize
           // to milliseconds at the boundary.
           durationMs: a.duration != null ? Math.round(a.duration * 1000) : undefined,
-          filename: a.filename,
-        }));
+          filename: a.filename }));
 
         setAssets((prev) => (reset ? mapped : [...prev, ...mapped]));
         cursorRef.current = page.endCursor;
@@ -816,8 +795,7 @@ export function MediaBrowserSheet({
         width: a.width,
         height: a.height,
         durationMs: a.durationMs,
-        filename: a.filename,
-      }));
+        filename: a.filename }));
     onConfirm(selected);
     onClose();
   }, [selectedIds, assets, onConfirm, onClose, haptic]);
@@ -829,16 +807,14 @@ export function MediaBrowserSheet({
     if (camStatus !== 'granted') return;
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.9,
-    });
+      quality: 0.9 });
     if (!result.canceled && result.assets[0]) {
       const captured: SelectedAsset = {
         uri: result.assets[0].uri,
         mediaType: 'image',
         width: result.assets[0].width,
         height: result.assets[0].height,
-        filename: result.assets[0].fileName ?? undefined,
-      };
+        filename: result.assets[0].fileName ?? undefined };
       onConfirm([captured]);
       onClose();
     }
@@ -854,8 +830,7 @@ export function MediaBrowserSheet({
   // ── Tab indicator animated style ──
   const tabIndicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tabIndicatorXSV.value }],
-    width: tabIndicatorWidthSV.value,
-  }));
+    width: tabIndicatorWidthSV.value }));
 
   // ── FlashList renderItem ──
   type GridItem = MediaAsset | 'camera';
@@ -1008,8 +983,7 @@ export function MediaBrowserSheet({
                 onLayout={(e) => {
                   tabLayoutsRef.current[tab.key] = {
                     x: e.nativeEvent.layout.x,
-                    width: e.nativeEvent.layout.width,
-                  };
+                    width: e.nativeEvent.layout.width };
                   if (tab.key === 'recents' && tabIndicatorWidthSV.value === 0) {
                     tabIndicatorWidthSV.value = e.nativeEvent.layout.width;
                   }
@@ -1120,8 +1094,7 @@ export function MediaBrowserSheet({
             style={[
               styles.confirmBtn,
               {
-                backgroundColor: selectedCount > 0 ? colors.brand : colors.surfaceAlt,
-              },
+                backgroundColor: selectedCount > 0 ? colors.brand : colors.surfaceAlt },
             ]}
             accessibilityLabel={
               selectedCount > 0
@@ -1135,8 +1108,7 @@ export function MediaBrowserSheet({
               style={[
                 styles.confirmBtnText,
                 {
-                  color: selectedCount > 0 ? colors.textInverse : colors.textMuted,
-                },
+                  color: selectedCount > 0 ? colors.textInverse : colors.textMuted },
               ]}
             >
               {selectedCount > 0 ? `Next (${selectedCount})` : 'Next'}
@@ -1166,21 +1138,18 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.title.size,
+      fontSize: TypographyV2.screenTitle.size,
       color: colors.textPrimary,
-      flex: 1,
-    },
+      flex: 1 },
     closeBtn: {
       width: 44,
       height: 44,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
 
     // ── Tab bar ──
     tabRow: {
@@ -1188,66 +1157,54 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       paddingHorizontal: Space.md,
       position: 'relative',
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     tabIndicator: {
       position: 'absolute',
       bottom: 0,
       height: Stroke.emphasis,
-      borderRadius: Stroke.emphasis,
-    },
+      borderRadius: Stroke.emphasis },
     tab: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.smMd,
-      zIndex: 1,
-    },
+      zIndex: 1 },
     tabLabel: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
 
     // ── Album list ──
     albumList: {
-      flex: 1,
-    },
+      flex: 1 },
     albumListContent: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     albumRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.smMd,
       paddingVertical: Space.xs,
-      minHeight: 56,
-    },
+      minHeight: 56 },
     albumThumb: {
       width: 48,
       height: 48,
       borderRadius: Radius.md,
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     albumThumbImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     albumRowTextCol: {
       flex: 1,
       flexDirection: 'column',
-      gap: 1,
-    },
+      gap: 1 },
     albumRowText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     albumRowSubtext: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
 
     // ── Limited-access banner ──
     limitedBanner: {
@@ -1258,19 +1215,16 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       paddingVertical: Space.smMd,
       marginHorizontal: Space.md,
       marginBottom: Space.sm,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     limitedBannerText: {
       flex: 1,
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
 
     // ── Media grid ──
     gridContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     mediaGridCell: {
       width: thumbSize,
       height: thumbSize,
@@ -1278,16 +1232,13 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       overflow: 'hidden',
       justifyContent: 'center',
       alignItems: 'center',
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     mediaGridThumb: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     cameraTile: {
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     mediaGridVideoBadge: {
       position: 'absolute',
       bottom: Space.xs,
@@ -1298,14 +1249,12 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       backgroundColor: 'rgba(0,0,0,0.45)',
       paddingHorizontal: 6,
       paddingVertical: 2,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     mediaGridDuration: {
       color: '#fff',
       fontSize: 10,
       fontFamily: Typography.family.semibold,
-      letterSpacing: 0.2,
-    },
+      letterSpacing: 0.2 },
     mediaGridSelectionBadge: {
       position: 'absolute',
       top: Space.xs,
@@ -1315,69 +1264,56 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
-      ...Elevation.modal,
-    },
+      ...Elevation.modal },
     mediaGridSelectionText: {
       fontSize: 11,
-      fontFamily: Typography.family.bold,
-    },
+      fontFamily: Typography.family.bold },
     gridFooter: {
       paddingVertical: Space.md,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
 
     // ── States ──
     centerState: {
       paddingVertical: Space.xxl,
       alignItems: 'center',
       gap: Space.md,
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     stateTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.title.size,
-      marginTop: Space.sm,
-    },
+      fontSize: TypographyV2.screenTitle.size,
+      marginTop: Space.sm },
     stateMessage: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       textAlign: 'center',
-      lineHeight: 22,
-    },
+      lineHeight: 22 },
     stateBtn: {
       paddingHorizontal: Space.lg,
       height: 44,
       borderRadius: Radius.md,
       justifyContent: 'center',
       alignItems: 'center',
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     stateBtnText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     emptyText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
 
     // ── Bottom bar ──
     bottomBar: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
+      borderTopWidth: StyleSheet.hairlineWidth },
     confirmBtn: {
       height: 50,
       borderRadius: Radius.lg,
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     confirmBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size } });
 }

@@ -19,7 +19,8 @@ import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { haptics } from '../utils/haptics';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { formatHour } from '../utils/timeFormat';
 type Props = NativeStackScreenProps<RootStackParamList, 'PushNotifications'>;
 
@@ -38,8 +39,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     setPushNotificationToggle,
     setAllPushNotificationToggles,
     quietHours,
-    setQuietHours,
-  } = useSettingsPreferences();
+    setQuietHours } = useSettingsPreferences();
   const [isSyncingDevice, setIsSyncingDevice] = React.useState(false);
   const [registeredDeviceId, setRegisteredDeviceId] = React.useState<number | null>(null);
   const [isDeviceRegistered, setIsDeviceRegistered] = React.useState(false);
@@ -116,8 +116,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         token,
         platform: resolvePushPlatform(),
         appVersion: (Constants.expoConfig as { version?: string } | null)?.version,
-        metadata: { enabledNotificationTypes: enabledCount },
-      });
+        metadata: { enabledNotificationTypes: enabledCount } });
       // The server returns a redacted device — we use the id for management.
       // The raw token is never stored in client state.
       setRegisteredDeviceId(null); // Will be set on next device list fetch
@@ -406,17 +405,15 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       alignItems: 'center',
       borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     footerNote: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      lineHeight: Type.caption.lineHeight,
+      lineHeight: TypographyV2.meta.lineHeight,
       marginTop: Space.sm,
       marginHorizontal: Space.md,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     permissionBanner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -425,42 +422,35 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     permissionBannerText: {
       flex: 1,
       color: colors.textSecondary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     permissionBannerAction: {
       color: colors.brand,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     postureSummary: {
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     postureTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     postureSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginTop: Space.xs / 2 },
     quietHoursRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     quietTimePicker: {
       flex: 1,
       flexDirection: 'row',
@@ -470,38 +460,31 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
-      minHeight: Space.xxl,
-    },
+      minHeight: Space.xxl },
     quietTimePickerPressed: {
       opacity: 0.7,
-      transform: [{ scale: 0.98 }],
-    },
+      transform: [{ scale: 0.98 }] },
     quietTimeLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     quietTimeValue: {
       flex: 1,
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     quietHoursPickerSheet: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     quietHoursPickerTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     quietHoursPickerGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     quietHourCell: {
       paddingHorizontal: Space.md - Space.xs,
       paddingVertical: Space.sm + 2,
@@ -509,23 +492,17 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
       minHeight: Control.chrome + Space.xs,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     quietHourCellActive: {
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     quietHourCellPressed: {
       opacity: 0.7,
-      transform: [{ scale: 0.96 }],
-    },
+      transform: [{ scale: 0.96 }] },
     quietHourCellText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textPrimary },
     quietHourCellTextActive: {
       color: colors.textInverse,
-      fontFamily: Typography.family.bold,
-    },
-  });
+      fontFamily: Typography.family.bold } });
 }

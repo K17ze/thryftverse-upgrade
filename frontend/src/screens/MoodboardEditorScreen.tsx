@@ -32,8 +32,7 @@ import {
   ImageStyle,
   ActivityIndicator,
   Pressable,
-  LayoutChangeEvent,
-} from 'react-native';
+  LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
@@ -42,11 +41,11 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -84,8 +83,7 @@ import {
   type MoodboardItem,
   type MoodboardItemPosition,
   type MoodboardTheme,
-  type MoodboardOperationResponse,
-} from '../services/moodboardApi';
+  type MoodboardOperationResponse } from '../services/moodboardApi';
 import { createStableId } from '../utils/createStableId';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MoodboardEditor'>;
@@ -170,8 +168,7 @@ const CanvasItem = React.memo(function CanvasItem({
   reducedMotion,
   onSelect,
   onPositionCommit,
-  onLongPress,
-}: CanvasItemProps) {
+  onLongPress }: CanvasItemProps) {
   const { colors } = useAppTheme();
   const halfBase = ITEM_BASE_SIZE / 2;
 
@@ -218,8 +215,7 @@ const CanvasItem = React.memo(function CanvasItem({
         x: pxToNorm(clampedX, canvasWidth),
         y: pxToNorm(clampedY, canvasHeight),
         scale: finalScale,
-        rotation: finalRotation,
-      };
+        rotation: finalRotation };
       onPositionCommit(item.id, position);
     },
     [canvasWidth, canvasHeight, halfBase, item.id, onPositionCommit, reducedMotion, translateX, translateY],
@@ -332,8 +328,7 @@ const CanvasItem = React.memo(function CanvasItem({
         { translateY: translateY.value - halfBase },
         { scale: scale.value },
         { rotate: `${rotation.value}deg` },
-      ],
-    };
+      ] };
   });
 
   const a11yLabel = multiSelectMode
@@ -465,8 +460,7 @@ const SelectionControl = React.memo(function SelectionControl({
   label,
   hint,
   onPress,
-  destructive,
-}: SelectionControlProps) {
+  destructive }: SelectionControlProps) {
   const { colors } = useAppTheme();
   return (
     <AnimatedPressable
@@ -673,8 +667,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
         setSyncStatus('conflict');
         setConflictDetail({
           currentRevision: response.currentRevision,
-          message: 'Another edit changed this board. Your canvas has been updated to the latest version.',
-        });
+          message: 'Another edit changed this board. Your canvas has been updated to the latest version.' });
         haptic.warning();
         // Re-fetch the canonical board state.
         void reconcileBoard();
@@ -682,8 +675,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
         setSyncStatus('error');
         setConflictDetail({
           currentRevision: boardRevisionRef.current,
-          message: 'You no longer have permission to edit this board. Your unsaved work is preserved locally.',
-        });
+          message: 'You no longer have permission to edit this board. Your unsaved work is preserved locally.' });
         haptic.error();
       }
     },
@@ -753,8 +745,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
               items: prev.items.map((it) =>
                 it.id === id ? { ...it, position } : it,
               ),
-              updatedAt: new Date().toISOString(),
-            }
+              updatedAt: new Date().toISOString() }
           : prev,
       );
       setSyncStatus('syncing');
@@ -768,8 +759,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             boardId: moodboard.id,
             operation: 'item.move',
             payload: { itemId: id, x: position.x, y: position.y },
-            baseRev: moodboard.revision,
-          });
+            baseRev: moodboard.revision });
           // Status remains 'syncing' — the outbox will flush on reconnect.
           return;
         } catch {
@@ -788,9 +778,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             positionX: position.x,
             positionY: position.y,
             rotation: position.rotation,
-            scale: position.scale,
-          },
-        });
+            scale: position.scale } });
         handleOperationResponse(response);
       } catch (error) {
         // Network error or server error. The outcome is unknown if the
@@ -934,8 +922,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             boardId: moodboard.id,
             operation: 'board.setTheme',
             payload: { themeId },
-            baseRev: moodboard.revision,
-          });
+            baseRev: moodboard.revision });
           return;
         } catch {
           // Fall through to online path
@@ -946,8 +933,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
         clientOperationId: createStableId('theme'),
         baseRevision: boardRevisionRef.current,
         type: 'board.theme',
-        payload: { theme: themeId },
-      })
+        payload: { theme: themeId } })
         .then(handleOperationResponse)
         .catch(() => {
           setSyncStatus('error');
@@ -1412,40 +1398,32 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   canvasItem: {
     position: 'absolute',
     top: 0,
-    left: 0,
-  },
+    left: 0 },
   canvasItemInner: {
     width: ITEM_BASE_SIZE,
     height: ITEM_BASE_SIZE,
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   canvasItemInnerSelected: {
-    borderWidth: Stroke.emphasis,
-  },
+    borderWidth: Stroke.emphasis },
   pickerTile: {
     alignItems: 'flex-start',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   pickerTileImage: {
     width: PICKER_TILE_SIZE,
     height: PICKER_TILE_SIZE,
-    borderRadius: Radius.md,
-  } as ImageStyle,
+    borderRadius: Radius.md } as ImageStyle,
   pickerTileTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: LetterSpacing.normal - 0.1,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: LetterSpacing.normal - 0.1 },
   pickerTilePrice: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   themeChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1453,21 +1431,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   themeChipLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   themeChipLabelSelected: {
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   themeChipSwatch: {
     width: Control.iconCompact,
     height: Control.iconCompact,
     borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   selectionControlsRow: {
     position: 'absolute',
     bottom: Space.sm,
@@ -1475,53 +1449,43 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   selectionControl: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   savingOverlay: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   canvasEmpty: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   headerActionButton: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   liveIndicator: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   backButtonPlaceholder: {
-    width: Control.hit,
-  },
+    width: Control.hit },
   pickerSkeletonRail: {
     flexDirection: 'row',
     gap: PICKER_TILE_GAP,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-  },
-});
+    paddingVertical: Space.md } });
 
 // ---------------------------------------------------------------------------
 // Themed styles (depend on useAppTheme colors)
@@ -1533,15 +1497,13 @@ function useStyles() {
       StyleSheet.create({
         container: {
           flex: 1,
-          backgroundColor: colors.background,
-        },
+          backgroundColor: colors.background },
         stateContainer: {
           flex: 1,
           backgroundColor: colors.background,
           justifyContent: 'center',
           alignItems: 'center',
-          paddingHorizontal: Space.lg,
-        },
+          paddingHorizontal: Space.lg },
         demoBanner: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -1550,44 +1512,38 @@ function useStyles() {
           paddingVertical: Space.sm,
           backgroundColor: colors.surface,
           borderBottomWidth: Stroke.hairline,
-          borderBottomColor: colors.borderSubtle,
-        },
+          borderBottomColor: colors.borderSubtle },
         demoBannerText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textSecondary,
-          flex: 1,
-        },
+          flex: 1 },
         headerRow: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: Space.md,
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         backButton: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
           justifyContent: 'center',
-          marginLeft: -Space.xs,
-        },
+          marginLeft: -Space.xs },
         headerTitle: {
-          fontSize: Type.subtitle.size,
-          lineHeight: Type.subtitle.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.sectionTitle.size,
+          lineHeight: TypographyV2.sectionTitle.lineHeight,
+          fontFamily: TypographyV2.sectionTitle.fontFamily,
           color: colors.textPrimary,
           letterSpacing: LetterSpacing.tight,
           flex: 1,
-          textAlign: 'center',
-        },
+          textAlign: 'center' },
         canvas: {
           flex: 1,
           marginHorizontal: Space.md,
           borderRadius: Radius.lg,
           overflow: 'hidden',
-          position: 'relative',
-        },
+          position: 'relative' },
         canvasItemInner: {
           width: ITEM_BASE_SIZE,
           height: ITEM_BASE_SIZE,
@@ -1595,20 +1551,17 @@ function useStyles() {
           overflow: 'hidden',
           backgroundColor: colors.surfaceAlt,
           borderColor: 'transparent',
-          borderWidth: 0,
-        },
+          borderWidth: 0 },
         canvasItemInnerSelected: {
           borderColor: colors.textPrimary,
-          borderWidth: Stroke.emphasis,
-        },
+          borderWidth: Stroke.emphasis },
         selectionControl: {
           width: Control.hit,
           height: Control.hit,
           borderRadius: Radius.full,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: colors.overlay,
-        },
+          backgroundColor: colors.overlay },
         savingPill: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -1616,13 +1569,11 @@ function useStyles() {
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
           borderRadius: Radius.full,
-          backgroundColor: colors.brand,
-        },
+          backgroundColor: colors.brand },
         savingText: {
-          fontSize: Type.bodyStrong.size,
-          fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
-        },
+          fontSize: TypographyV2.bodyStrong.size,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
+          color: colors.textInverse },
         syncedPill: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -1630,8 +1581,7 @@ function useStyles() {
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
           borderRadius: Radius.full,
-          backgroundColor: colors.success,
-        },
+          backgroundColor: colors.success },
         errorPill: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -1639,8 +1589,7 @@ function useStyles() {
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
           borderRadius: Radius.full,
-          backgroundColor: colors.danger,
-        },
+          backgroundColor: colors.danger },
         conflictCard: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -1652,32 +1601,26 @@ function useStyles() {
           borderWidth: Stroke.standard,
           borderColor: colors.warningBorder,
           marginHorizontal: Space.md,
-          maxWidth: 320,
-        },
+          maxWidth: 320 },
         conflictText: {
           flex: 1,
-          fontSize: Type.caption.size,
-          lineHeight: Type.caption.lineHeight,
-          fontFamily: Typography.family.medium,
-          color: colors.warning,
-        },
+          fontSize: TypographyV2.meta.size,
+          lineHeight: TypographyV2.meta.lineHeight,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.warning },
         conflictDismiss: {
-          fontSize: Type.bodyStrong.size,
-          fontFamily: Typography.family.semibold,
-          color: colors.warning,
-        },
+          fontSize: TypographyV2.bodyStrong.size,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
+          color: colors.warning },
         bottomPanel: {
           paddingTop: Space.md,
           gap: Space.xs,
-          backgroundColor: colors.background,
-        },
+          backgroundColor: colors.background },
         themeRailWrap: {
-          marginBottom: Space.xs,
-        },
+          marginBottom: Space.xs },
         themeRailContent: {
           paddingHorizontal: Space.md,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         themeChip: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -1685,103 +1628,84 @@ function useStyles() {
           paddingHorizontal: Space.sm,
           paddingVertical: Space.xs,
           borderRadius: Radius.full,
-          borderWidth: Stroke.standard,
-        },
+          borderWidth: Stroke.standard },
         themeChipLabel: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily },
         themeChipLabelSelected: {
-          fontFamily: Typography.family.semibold,
-        },
+          fontFamily: Typography.family.semibold },
         pickerSectionLabel: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
           letterSpacing: LetterSpacing.caps,
           paddingHorizontal: Space.md,
-          paddingBottom: Space.xs,
-        },
+          paddingBottom: Space.xs },
         pickerRailContent: {
           paddingHorizontal: Space.md,
-          gap: PICKER_TILE_GAP,
-        },
+          gap: PICKER_TILE_GAP },
         pickerTileImage: {
           width: PICKER_TILE_SIZE,
           height: PICKER_TILE_SIZE,
           borderRadius: Radius.md,
-          backgroundColor: colors.surfaceAlt,
-        } as ImageStyle,
+          backgroundColor: colors.surfaceAlt } as ImageStyle,
         pickerTileTitle: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: LetterSpacing.normal - 0.1,
-        },
+          letterSpacing: LetterSpacing.normal - 0.1 },
         pickerTilePrice: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textSecondary },
         pickerEmpty: {
           paddingHorizontal: Space.md,
           paddingVertical: Space.md,
-          alignItems: 'center',
-        },
+          alignItems: 'center' },
         pickerEmptyText: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.regular,
-          color: colors.textMuted,
-        },
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
+          color: colors.textMuted },
         canvasSkeleton: {
           flex: 1,
           marginHorizontal: Space.md,
           borderRadius: Radius.lg,
           overflow: 'hidden',
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surfaceAlt },
         backButtonPlaceholder: {
-          width: Control.hit,
-        },
+          width: Control.hit },
         headerActions: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         headerActionButton: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         liveIndicator: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         liveDot: {
           width: 8,
           height: 8,
           borderRadius: 4,
-          backgroundColor: colors.success,
-        },
+          backgroundColor: colors.success },
         pickerSkeletonRail: {
           flexDirection: 'row',
           gap: PICKER_TILE_GAP,
           paddingHorizontal: Space.md,
-          paddingVertical: Space.md,
-        },
+          paddingVertical: Space.md },
         pickerTile: {
           alignItems: 'flex-start',
-          gap: Space.xs / 2,
-        },
+          gap: Space.xs / 2 },
         canvasEmpty: {
           ...StyleSheet.absoluteFill,
           alignItems: 'center',
           justifyContent: 'center',
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         selectionControlsRow: {
           position: 'absolute',
           bottom: Space.sm,
@@ -1789,15 +1713,13 @@ function useStyles() {
           right: 0,
           flexDirection: 'row',
           justifyContent: 'center',
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         multiSelectBadge: {
           position: 'absolute',
           top: Space.sm,
           left: 0,
           right: 0,
-          alignItems: 'center',
-        },
+          alignItems: 'center' },
         multiSelectPill: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -1805,24 +1727,19 @@ function useStyles() {
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
           borderRadius: Radius.full,
-          backgroundColor: colors.overlay,
-        },
+          backgroundColor: colors.overlay },
         multiSelectCountText: {
-          fontSize: Type.bodyStrong.size,
-          fontFamily: Typography.family.semibold,
-          color: colors.scrimTextPrimary,
-        },
+          fontSize: TypographyV2.bodyStrong.size,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
+          color: colors.scrimTextPrimary },
         multiSelectCancelText: {
-          fontSize: Type.bodyStrong.size,
-          fontFamily: Typography.family.semibold,
-          color: colors.scrimTextPrimary,
-        },
+          fontSize: TypographyV2.bodyStrong.size,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
+          color: colors.scrimTextPrimary },
         savingOverlay: {
           ...StyleSheet.absoluteFill,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
-      }),
+          justifyContent: 'center' } }),
     [colors],
   );
 }

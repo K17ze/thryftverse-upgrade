@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 
 // ── Size guide data ──────────────────────────────────────────────────────────
@@ -30,8 +31,7 @@ const SIZE_GUIDES: Record<string, SizeGuideCategory> = {
       { size: 'L', measurements: { chest: '96–101', length: '72' } },
       { size: 'XL', measurements: { chest: '101–106', length: '74' } },
       { size: 'XXL', measurements: { chest: '106–111', length: '76' } },
-    ],
-  },
+    ] },
   bottoms: {
     title: 'Bottoms — Waist & Inseam',
     columns: ['Size', 'Waist (cm)', 'Inseam (cm)'],
@@ -42,8 +42,7 @@ const SIZE_GUIDES: Record<string, SizeGuideCategory> = {
       { size: 'L', measurements: { waist: '79–84', inseam: '82' } },
       { size: 'XL', measurements: { waist: '84–89', inseam: '84' } },
       { size: 'XXL', measurements: { waist: '89–94', inseam: '86' } },
-    ],
-  },
+    ] },
   dresses: {
     title: 'Dresses — Bust & Waist',
     columns: ['Size', 'Bust (cm)', 'Waist (cm)'],
@@ -54,8 +53,7 @@ const SIZE_GUIDES: Record<string, SizeGuideCategory> = {
       { size: 'L', measurements: { bust: '90–94', waist: '72–76' } },
       { size: 'XL', measurements: { bust: '94–98', waist: '76–80' } },
       { size: 'XXL', measurements: { bust: '98–102', waist: '80–84' } },
-    ],
-  },
+    ] },
   shoes: {
     title: 'Shoes — UK / EU / US',
     columns: ['UK', 'EU', 'US (M)', 'US (F)', 'Foot (cm)'],
@@ -68,8 +66,7 @@ const SIZE_GUIDES: Record<string, SizeGuideCategory> = {
       { size: '9', measurements: { eu: '42', usm: '10', usf: '11.5', foot: '26.7' } },
       { size: '10', measurements: { eu: '43', usm: '11', usf: '12.5', foot: '27.3' } },
       { size: '11', measurements: { eu: '44', usm: '12', usf: '13.5', foot: '27.9' } },
-    ],
-  },
+    ] },
   outerwear: {
     title: 'Outerwear — Chest & Shoulder',
     columns: ['Size', 'Chest (cm)', 'Shoulder (cm)'],
@@ -80,15 +77,13 @@ const SIZE_GUIDES: Record<string, SizeGuideCategory> = {
       { size: 'L', measurements: { chest: '99–104', shoulder: '48' } },
       { size: 'XL', measurements: { chest: '104–109', shoulder: '50' } },
       { size: 'XXL', measurements: { chest: '109–114', shoulder: '52' } },
-    ],
-  },
+    ] },
   accessories: {
     title: 'Accessories — One Size',
     columns: ['Size', 'Notes'],
     rows: [
       { size: 'One Size', measurements: { notes: 'Hats, belts, scarves — check item description for specifics' } },
-    ],
-  },
+    ] },
   bags: {
     title: 'Bags — Dimensions',
     columns: ['Size', 'Width (cm)', 'Height (cm)', 'Depth (cm)'],
@@ -98,8 +93,7 @@ const SIZE_GUIDES: Record<string, SizeGuideCategory> = {
       { size: 'Medium', measurements: { width: '25–30', height: '20–25', depth: '12–16' } },
       { size: 'Large', measurements: { width: '30–35', height: '25–30', depth: '16–20' } },
       { size: 'XL', measurements: { width: '>35', height: '>30', depth: '>20' } },
-    ],
-  },
+    ] },
   jewellery: {
     title: 'Jewellery — Ring & Necklace',
     columns: ['Type', 'Size Guide'],
@@ -107,9 +101,7 @@ const SIZE_GUIDES: Record<string, SizeGuideCategory> = {
       { size: 'Ring', measurements: { guide: 'UK letters A–Z; EU 37–70; US 0.5–13' } },
       { size: 'Necklace', measurements: { guide: 'Choker 35–40cm · Princess 45–50cm · Matinee 55–60cm · Opera 70–85cm' } },
       { size: 'Bracelet', measurements: { guide: 'Small 15cm · Medium 17cm · Large 19cm · XL 21cm' } },
-    ],
-  },
-};
+    ] } };
 
 function resolveSizeGuide(category: string | null | undefined): SizeGuideCategory | null {
   if (!category) return null;
@@ -130,8 +122,7 @@ export function SizeGuideSheet({
   visible,
   category,
   currentSize,
-  onClose,
-}: SizeGuideSheetProps) {
+  onClose }: SizeGuideSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const guide = useMemo(() => resolveSizeGuide(category), [category]);
@@ -287,96 +278,80 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingBottom: Space.xl,
-    maxHeight: '75%',
-  },
+    maxHeight: '75%' },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.full,
     alignSelf: 'center',
     marginTop: Space.sm,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   closeText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   guideTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   scroll: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   // ── Table — flat with hairline separators ──
   table: {
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   tableHeader: {
     flexDirection: 'row',
     paddingVertical: Space.sm,
     paddingHorizontal: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   tableHeaderText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.meta.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'uppercase' },
   tableHeaderFirstCol: {
-    flex: 0.7,
-  },
+    flex: 0.7 },
   tableRow: {
     flexDirection: 'row',
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   tableCell: {
     flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   tableFirstCol: {
     flex: 0.7,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   // ── Tips and notes ──
   measureTipRow: {
     flexDirection: 'row',
@@ -385,51 +360,42 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingTop: Space.md,
     marginTop: Space.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   measureTipText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily },
   footerNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs + 2,
     paddingTop: Space.md,
-    paddingBottom: Space.lg,
-  },
+    paddingBottom: Space.lg },
   footerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Empty state ──
   emptyState: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.xl,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   emptyIconWrap: {
     width: 56,
     height: 56,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   emptyTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    marginBottom: Space.xs },
   emptyText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    textAlign: 'center',
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'center' } });

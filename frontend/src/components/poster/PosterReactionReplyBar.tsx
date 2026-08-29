@@ -7,8 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   AccessibilityInfo,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
@@ -19,10 +18,10 @@ import Reanimated, {
   useAnimatedReaction,
   Easing as ReEasing,
   runOnJS,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography, Control, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Typography, Control, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -96,8 +95,7 @@ export function PosterReactionReplyBar({
   viewerCount,
   onShare,
   onSave,
-  isSaved,
-}: PosterReactionReplyBarProps) {
+  isSaved }: PosterReactionReplyBarProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -131,8 +129,7 @@ export function PosterReactionReplyBar({
 
   const barEntranceStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: barEntranceY.value }],
-    opacity: barEntranceOpacity.value,
-  }));
+    opacity: barEntranceOpacity.value }));
 
   const handleSendReply = useCallback(async () => {
     const trimmed = replyText.trim();
@@ -186,8 +183,7 @@ export function PosterReactionReplyBar({
 
   const trayAnimatedStyle = useAnimatedStyle(() => ({
     opacity: trayOpacitySV.value,
-    transform: [{ scale: trayScaleSV.value }],
-  }));
+    transform: [{ scale: trayScaleSV.value }] }));
 
   // ── Drag-to-select gesture ───────────────────────────────────────────
   // Pan horizontally over the reaction tray to scrub through reactions.
@@ -473,8 +469,7 @@ function ReactionButton({
   dragSelectedIndex,
   springConfig,
   reducedMotion,
-  onPress,
-}: {
+  onPress }: {
   reaction: { type: PosterReactionType; glyph: string; label: string };
   index: number;
   isActive: boolean;
@@ -505,8 +500,7 @@ function ReactionButton({
   );
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scaleSV.value }],
-  }));
+    transform: [{ scale: scaleSV.value }] }));
 
   return (
     <AnimatedPressable
@@ -534,8 +528,7 @@ function createStyles(colors: ThemeColors) {
     container: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     // Floating reaction tray — frosted glass pill containing the emoji.
     // Liquid Glass / BlurView supplies the blur; the pill shape + shadow
     // give the tray depth over any media surface.
@@ -549,14 +542,12 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       overflow: 'hidden',
       alignSelf: 'flex-end',
-      ...Elevation.modal,
-    },
+      ...Elevation.modal },
     // Glass background layer for the reaction tray.
     reactionTrayGlass: {
       borderRadius: Radius.full,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.glassBorder,
-    },
+      borderColor: colors.glassBorder },
     // Reaction emoji button — 44pt hit target with a 26pt glyph.
     // The visible glyph is smaller than the hit area so the emoji
     // reads as floating, not boxed (per §4 icon grammar).
@@ -565,25 +556,20 @@ function createStyles(colors: ThemeColors) {
       height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     reactionActive: {
-      backgroundColor: colors.glassBorder,
-    },
+      backgroundColor: colors.glassBorder },
     // 26pt emoji — within Instagram's 24-28pt band, evenly spaced.
     reactionGlyph: {
-      fontSize: Type.display.size,
-      lineHeight: Type.display.lineHeight,
-      textAlign: 'center',
-    },
+      fontSize: TypographyV2.display.size,
+      lineHeight: TypographyV2.display.lineHeight,
+      textAlign: 'center' },
     // ── Quick reply chips ─────────────────────────────────────────────
     quickRepliesRow: {
-      maxHeight: 36,
-    },
+      maxHeight: 36 },
     quickRepliesContent: {
       gap: Space.xs,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     quickReplyChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -593,36 +579,30 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       backgroundColor: colors.glassBg,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.glassBorder,
-    },
+      borderColor: colors.glassBorder },
     quickReplyEmoji: {
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     quickReplyText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.scrimTextPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.scrimTextPrimary },
     inputRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     iconBtn: {
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     // Reaction toggle glyph — deliberately smaller (24pt) than the
     // tray emoji so the reply input remains the primary element and
     // the reaction toggle reads as a secondary control.
     iconEmoji: {
       fontSize: 24,
       lineHeight: 28,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     // Reply input wrapper — frosted glass pill.
     // The blur is supplied by LiquidGlassBackdrop; the hairline border
     // remains to define the glass edge against any media.
@@ -633,23 +613,20 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.glassBorder,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     // Focus state — 2pt white at 0.3 opacity per §4 stroke grammar
     // (2pt reserved for focus/selection). The subtle highlight makes
     // the active input boundary unmistakable without shouting.
     replyInputWrapFocused: {
       borderColor: colors.glassBorder,
-      borderWidth: 2,
-    },
+      borderWidth: 2 },
     // Glass background layer for the reply input pill. The blur is
     // supplied by LiquidGlassBackdrop; the underlying fill is a subtle
     // rgba(255,255,255,0.08) so the pill reads cleanly even when the
     // blur fallback renders a flat tint.
     replyInputGlass: {
       borderRadius: Radius.full,
-      backgroundColor: colors.glassBg,
-    },
+      backgroundColor: colors.glassBg },
     replyInput: {
       height: Control.hit,
       maxHeight: 80,
@@ -658,8 +635,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 0,
       color: colors.scrimTextPrimary,
       fontFamily: Typography.family.regular,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     replyCounter: {
       position: 'absolute',
       bottom: 2,
@@ -667,11 +643,9 @@ function createStyles(colors: ThemeColors) {
       fontSize: 11,
       fontFamily: Typography.family.regular,
       color: colors.scrimTextSecondary,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     replyCounterLimit: {
-      color: 'rgba(255,120,120,0.85)',
-    },
+      color: 'rgba(255,120,120,0.85)' },
     // Send button — a white paper-plane glyph on a
     // transparent 44pt hit target (no filled circle). The icon is the
     // affordance; the brand accent is reserved for the icon tint so the
@@ -681,19 +655,16 @@ function createStyles(colors: ThemeColors) {
       height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     sendBtnSending: {
-      opacity: 0.6,
-    },
+      opacity: 0.6 },
     // Owner row — hairline separator from the reply area for visual separation
     ownerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.glassBorder,
-    },
+      borderTopColor: colors.glassBorder },
     activityBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -702,12 +673,9 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.sm,
       flex: 1,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     activityBtnText: {
       color: colors.scrimTextPrimary,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
-  });
+      fontSize: TypographyV2.body.size } });
 }

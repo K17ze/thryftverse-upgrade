@@ -19,7 +19,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../../theme/designTokens';
+import { Space, Radius } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 
 export interface CommerceDetailFreshnessBannerProps {
   /** True when a lifecycle-transition refresh is in progress. */
@@ -36,8 +37,7 @@ export function CommerceDetailFreshnessBanner({
   isRefreshing = false,
   isStale = false,
   refreshFailed = false,
-  onRetry,
-}: CommerceDetailFreshnessBannerProps) {
+  onRetry }: CommerceDetailFreshnessBannerProps) {
   const { colors } = useAppTheme();
 
   if (refreshFailed) {
@@ -48,8 +48,7 @@ export function CommerceDetailFreshnessBanner({
           styles.container,
           {
             backgroundColor: colors.dangerSubtle,
-            borderColor: colors.dangerBorder,
-          },
+            borderColor: colors.dangerBorder },
           pressed && { opacity: 0.6 },
         ]}
         accessibilityRole="button"
@@ -78,8 +77,7 @@ export function CommerceDetailFreshnessBanner({
           styles.container,
           {
             backgroundColor: colors.surfaceAlt,
-            borderColor: colors.border,
-          },
+            borderColor: colors.border },
         ]}
       >
         <Ionicons name="sync-outline" size={14} color={colors.textSecondary} />
@@ -105,8 +103,7 @@ export function CommerceDetailFreshnessBanner({
           styles.container,
           {
             backgroundColor: colors.warningSubtle,
-            borderColor: colors.warningBorder,
-          },
+            borderColor: colors.warningBorder },
         ]}
       >
         <Ionicons name="time-outline" size={14} color={colors.warning} />
@@ -138,22 +135,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     marginHorizontal: Space.md,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   textWrap: {
     flex: 1,
-    gap: Space.xs / 4,
-  },
+    gap: Space.xs / 4 },
   title: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   subtitle: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

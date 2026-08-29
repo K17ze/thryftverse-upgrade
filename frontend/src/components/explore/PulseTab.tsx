@@ -4,14 +4,14 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
-} from 'react-native';
+  Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Type, Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useStore } from '../../store/useStore';
 import { useBackendData } from '../../context/BackendDataContext';
 import { useScrollToTop } from '@react-navigation/native';
@@ -86,13 +86,11 @@ function ActivityCard({ item, onPress, colors, styles, formatPrice }: { item: Ac
   const iconMap: Record<ActivityType, React.ComponentProps<typeof Ionicons>['name']> = {
     auction_live: 'flame-outline',
     fresh_drop: 'cube-outline',
-    price_drop: 'trending-down-outline',
-  };
+    price_drop: 'trending-down-outline' };
   const accentMap: Record<ActivityType, string> = {
     auction_live: colors.danger,
     fresh_drop: colors.brand,
-    price_drop: colors.warning,
-  };
+    price_drop: colors.warning };
 
   return (
     <AnimatedPressable style={styles.activityCard} onPress={onPress} activeOpacity={0.92}>
@@ -155,8 +153,7 @@ export default function PulseTab() {
         title: t.title,
         brand: t.brand ?? '',
         price: t.priceGbp,
-        image: t.images[0] ?? t.imageUrl ?? '',
-      }));
+        image: t.images[0] ?? t.imageUrl ?? '' }));
     }
     // Fallback to client-side sorting when backend returns no data
     return [...listings]
@@ -168,8 +165,7 @@ export default function PulseTab() {
         title: l.title,
         brand: l.brand ?? '',
         price: l.price,
-        image: l.images[0] ?? '',
-      }));
+        image: l.images[0] ?? '' }));
   }, [trending, listings]);
 
   const [now, setNow] = useState(() => Date.now());
@@ -189,8 +185,7 @@ export default function PulseTab() {
         image: a.image,
         currentBid: a.currentBid,
         endsAtMs: new Date(a.endsAt).getTime(),
-        listingId: a.listingId,
-      }));
+        listingId: a.listingId }));
   }, [customAuctions, now]);
 
   // Tick the clock every second only while there are live auctions, so idle
@@ -213,8 +208,7 @@ export default function PulseTab() {
           id: `auction_${a.id}`, type: 'auction_live',
           title: a.title, subtitle: `Current bid · ${formatPrice(a.currentBid)}`,
           image: a.image, meta: formatCountdown(Math.max(0, endsAtMs - now)),
-          metaAccent: true, actionLabel: 'Bid', routeId: a.listingId,
-        });
+          metaAccent: true, actionLabel: 'Bid', routeId: a.listingId });
       }
     });
 
@@ -363,48 +357,40 @@ function createStyles(colors: ThemeColors) {
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
 
   /* Live Now Rail */
   liveScroll: {
     paddingHorizontal: Space.md,
     marginHorizontal: -Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   liveCard: {
     width: 150,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   liveImage: {
     width: '100%',
     height: 120,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   liveContent: {
-    gap: 3,
-  },
+    gap: 3 },
   liveTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   liveBid: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.meta.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   liveText: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
     color: colors.warning,
     fontVariant: ['tabular-nums'],
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
 
   /* Activity */
   activityCard: {
@@ -413,123 +399,101 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
     gap: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   activityImage: {
     width: 80,
     height: 80,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   activityContent: {
     flex: 1,
-    gap: 4,
-  },
+    gap: 4 },
   activityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   activityTypeLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.8,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.8 },
   activityTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight },
   activitySubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   activityMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginTop: 2,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   activityMetaAccent: {
     color: colors.danger,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   activityAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   activityActionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
 
   /* Trending Rail (merged from EditTab) */
   trendingScroll: {
     paddingHorizontal: Space.md,
     marginHorizontal: -Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   trendingItem: {
     width: 140,
-    gap: 4,
-  },
+    gap: 4 },
   trendingImage: {
     width: 140,
     height: 180,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   trendingBrand: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-    marginTop: Space.xs,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs },
   trendingTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   trendingPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.brand,
-    letterSpacing: Type.caption.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   windowTabs: {
     flexDirection: 'row',
     gap: Space.xs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   windowTab: {
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   windowTabActive: {
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   windowTabText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   windowTabTextActive: {
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
 
   /* Style Quiz — flat action row, hairline separator (no surface card) */
   quizCard: {
@@ -538,14 +502,11 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
     gap: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   quizActionText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  });
+    letterSpacing: TypographyV2.body.letterSpacing } });
 }

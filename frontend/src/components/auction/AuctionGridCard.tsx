@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Stroke, Type, AspectRatio } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke, AspectRatio } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionCountdown } from './AuctionCountdown';
@@ -50,8 +51,7 @@ function AuctionGridCardBase({
   onPress,
   cardWidth,
   priceLabel,
-  testID,
-}: Props) {
+  testID }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
@@ -121,23 +121,19 @@ export { AuctionGridCard };
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   imageWrap: {
     position: 'relative',
     aspectRatio: AspectRatio.portrait,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   imageContainer: {
     borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   image: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   liveDot: {
     position: 'absolute',
     top: Space.xs + 2,
@@ -147,8 +143,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.full,
     backgroundColor: colors.danger,
     borderWidth: Stroke.standard,
-    borderColor: colors.overlay,
-  },
+    borderColor: colors.overlay },
   personalMarker: {
     position: 'absolute',
     top: Space.xs + 2,
@@ -157,48 +152,38 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-  },
+    borderColor: colors.borderSubtle },
   personalMarkerOutbid: {
-    backgroundColor: colors.danger,
-  },
+    backgroundColor: colors.danger },
   personalMarkerLeading: {
-    backgroundColor: colors.success,
-  },
+    backgroundColor: colors.success },
   personalMarkerText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textInverse,
-    letterSpacing: 0.4,
-  },
+    letterSpacing: 0.4 },
   body: {
     paddingTop: Space.sm,
-    gap: 3,
-  },
+    gap: 3 },
   brand: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textPrimary,
     letterSpacing: -0.3,
-    lineHeight: 18,
-  },
+    lineHeight: 18 },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 2,
-  },
+    marginTop: 2 },
   bidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
-});
+    fontVariant: ['tabular-nums'] } });
 

@@ -5,10 +5,9 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   Space,
-  Type,
   FontFamily,
-  Control,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { ExtractionRunDTO, ExtractionOutcome } from '../../services/catalogImportApi';
 
 interface Props {
@@ -41,8 +40,7 @@ export function ExtractionStatusBanner({
   loading,
   triggering,
   isRunning,
-  onTrigger,
-}: Props) {
+  onTrigger }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -158,28 +156,23 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       paddingHorizontal: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.borderSubtle,
-    },
+      borderColor: colors.borderSubtle },
     statusText: {
       flex: 1,
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textSecondary },
     triggerHit: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       minHeight: Control.hit,
-      flex: 1,
-    },
+      flex: 1 },
     triggerText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-      color: colors.brand,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      color: colors.brand } });

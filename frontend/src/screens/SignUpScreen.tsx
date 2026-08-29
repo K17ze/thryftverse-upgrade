@@ -20,7 +20,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { Motion } from '../theme/motionTokens';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-import { Type, Space, Radius, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -62,8 +63,7 @@ export default function SignUpScreen() {
     clientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || 'dev-client-id-placeholder',
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID || 'dev-android-client-id-placeholder',
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID,
-  });
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID });
 
   // Handle Google OAuth response — creates account or signs in if it exists.
   React.useEffect(() => {
@@ -124,8 +124,7 @@ export default function SignUpScreen() {
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
+        ] });
       if (!credential.identityToken) throw new Error('Missing Apple identity token');
       const result = await loginWithAppleIdentityToken(credential.identityToken);
       login(result.storeUser);
@@ -281,8 +280,7 @@ export default function SignUpScreen() {
       const result = await signupWithPassword({
         username: normalizedUsername,
         email: normalizedEmail,
-        password,
-      });
+        password });
 
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
@@ -483,8 +481,7 @@ export default function SignUpScreen() {
                               backgroundColor:
                                 i < passwordStrength.level
                                   ? passwordStrength.color
-                                  : colors.surfaceAlt,
-                            },
+                                  : colors.surfaceAlt },
                           ]}
                         />
                       ))}
@@ -613,27 +610,23 @@ function createStyles(colors: ThemeColors) {
 
   progressWrap: {
     paddingHorizontal: Space.lg,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   progressTrack: {
     height: Space.xs,
     borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   progressFill: {
     height: '100%',
     backgroundColor: colors.brand,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   progressText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: Space.xs + 2,
     letterSpacing: LetterSpacing.caps,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
 
   content: { flex: 1 },
   contentContainer: {
@@ -641,15 +634,13 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     paddingHorizontal: Space.lg,
     paddingTop: Space.sm,
-    paddingBottom: Space.lg,
-  },
-  title: { fontSize: Type.display.size, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight, letterSpacing: Type.display.letterSpacing, marginBottom: Space.sm },
-  subtitle: { fontSize: Type.body.size, lineHeight: Type.body.lineHeight + 2, color: colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.lg },
+    paddingBottom: Space.lg },
+  title: { fontSize: TypographyV2.display.size, fontFamily: TypographyV2.display.fontFamily, color: colors.textPrimary, lineHeight: TypographyV2.display.lineHeight, letterSpacing: TypographyV2.display.letterSpacing, marginBottom: Space.sm },
+  subtitle: { fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight + 2, color: colors.textSecondary, fontFamily: TypographyV2.body.fontFamily, marginBottom: Space.lg },
 
   socialGroup: {
     marginBottom: Space.lg,
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   socialFullBtn: {
     flexDirection: 'row',
     height: Space.xl + Space.xl + 4,
@@ -659,33 +650,28 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm + 2,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   socialFullText: {
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 0.1 },
   socialBtnDisabled: { opacity: 0.7 },
   socialDivider: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: Space.xs + 2,
-  },
+    marginTop: Space.xs + 2 },
   socialDividerLine: {
     flex: 1,
     height: Stroke.hairline,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
   socialDividerText: {
     color: colors.textMuted,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
 
   errorBanner: {
     flexDirection: 'row',
@@ -697,15 +683,13 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     backgroundColor: colors.dangerSubtle,
     borderWidth: Stroke.standard,
-    borderColor: colors.dangerBorder,
-  },
+    borderColor: colors.dangerBorder },
   errorBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    lineHeight: Type.caption.size + 2,
-  },
+    lineHeight: TypographyV2.meta.size + 2 },
 
   inputGroup: { marginBottom: Space.md },
 
@@ -714,30 +698,25 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.sm,
     marginTop: -Space.xs,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   strengthBars: {
     flexDirection: 'row',
     gap: Space.xs,
-    flex: 1,
-  },
+    flex: 1 },
   strengthBar: {
     flex: 1,
     height: 3,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   strengthLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.1,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.1 },
 
   termsRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm + 2,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   checkbox: {
     width: Control.chrome,
     height: Control.chrome,
@@ -746,25 +725,21 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
-  },
+    marginTop: 2 },
   checkboxActive: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   termsText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   termsLink: { fontFamily: Typography.family.semibold, color: colors.textPrimary, textDecorationLine: 'underline' },
 
   footer: { paddingBottom: Space.sm, position: 'relative' },
-  errorText: { color: colors.danger, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: colors.danger, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtn: { backgroundColor: colors.brand, height: 56, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: colors.textInverse, fontSize: Type.body.size + 2, fontFamily: Typography.family.bold },
-  });
+  primaryText: { color: colors.textInverse, fontSize: TypographyV2.body.size + 2, fontFamily: TypographyV2.body.fontFamily } });
 }

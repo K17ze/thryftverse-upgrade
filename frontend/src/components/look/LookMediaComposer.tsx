@@ -9,8 +9,7 @@ import {
   GestureResponderEvent,
   PanResponder,
   ScrollView,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { CachedImage } from '../CachedImage';
@@ -18,12 +17,10 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Typography,
-  Type,
   Stroke,
   Control,
-  ThumbSize,
-} from '../../theme/designTokens';
+  ThumbSize } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { makeStableId } from '../../utils/createStableId';
 import { useToast } from '../../context/ToastContext';
@@ -34,8 +31,7 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   runOnJS,
-  withSpring,
-} from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { REDUCED_SPRING } from '../../theme/motionTokens';
 
@@ -73,8 +69,7 @@ function uriToItem(uri: string): LookMediaItem {
   return {
     id: makeStableId('media', 8),
     uri,
-    isVideo: isVideoUri(uri),
-  };
+    isVideo: isVideoUri(uri) };
 }
 
 export function LookMediaComposer({
@@ -85,8 +80,7 @@ export function LookMediaComposer({
   tags,
   onTagsChange,
   editable,
-  maxItems = DEFAULT_MAX_ITEMS,
-}: LookMediaComposerProps) {
+  maxItems = DEFAULT_MAX_ITEMS }: LookMediaComposerProps) {
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
@@ -145,8 +139,7 @@ export function LookMediaComposer({
                 mediaTypes: ImagePicker.MediaTypeOptions.All,
                 allowsEditing: true,
                 aspect: [4, 5],
-                quality: 0.92,
-              });
+                quality: 0.92 });
               if (!result.canceled && result.assets?.[0]?.uri) {
                 const next = safeItems.map((it, i) =>
                   i === activeIndex ? uriToItem(result.assets[0].uri) : it
@@ -160,8 +153,7 @@ export function LookMediaComposer({
                 mediaTypes: ImagePicker.MediaTypeOptions.All,
                 allowsMultipleSelection: true,
                 selectionLimit: Math.max(1, remaining),
-                quality: 0.92,
-              });
+                quality: 0.92 });
               if (!result.canceled && result.assets?.length) {
                 const picked = result.assets
                   .filter((a) => !!a.uri)
@@ -181,8 +173,7 @@ export function LookMediaComposer({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: true,
               aspect: [4, 5],
-              quality: 0.92,
-            });
+              quality: 0.92 });
             if (!result.canceled && result.assets?.[0]?.uri) {
               onImageChange(result.assets[0].uri);
               haptic.light();
@@ -200,8 +191,7 @@ export function LookMediaComposer({
               : ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [4, 5],
-            quality: 0.92,
-          });
+            quality: 0.92 });
           if (!result.canceled && result.assets?.[0]?.uri) {
             if (multiMode) {
               if (mode === 'replace') {
@@ -297,8 +287,7 @@ export function LookMediaComposer({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => false,
-      onPanResponderRelease: (_evt, _gestureState) => {},
-    })
+      onPanResponderRelease: (_evt, _gestureState) => {} })
   ).current;
 
   // ── Empty state ────────────────────────────────────────────────────────
@@ -356,8 +345,7 @@ export function LookMediaComposer({
         onLayout={(e) => {
           layoutRef.current = {
             width: e.nativeEvent.layout.width,
-            height: e.nativeEvent.layout.height,
-          };
+            height: e.nativeEvent.layout.height };
         }}
         {...panResponder.panHandlers}
       >
@@ -473,8 +461,7 @@ function ThumbnailStrip({
   onSelect,
   onRemove,
   onReorder,
-  onAdd,
-}: ThumbnailStripProps) {
+  onAdd }: ThumbnailStripProps) {
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
@@ -558,8 +545,7 @@ function ThumbItem({
   onRemove,
   onReorder,
   onLongPress,
-  onMove,
-}: ThumbItemProps) {
+  onMove }: ThumbItemProps) {
   const { colors } = useAppTheme();
   const { spring } = useMotionConfig();
   const { width: screenWidth } = useWindowDimensions();
@@ -616,8 +602,7 @@ function ThumbItem({
         { translateX: translateX.value },
         { scale: 1 + s * 0.08 },
       ],
-      zIndex: isDragging.value ? 100 : 1,
-    };
+      zIndex: isDragging.value ? 100 : 1 };
     if (isDragging.value) {
       style.shadowColor = colors.shadow;
       style.shadowOpacity = 0.3;
@@ -715,28 +700,23 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   placeholderBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    padding: Space.xl,
-  },
+    padding: Space.xl },
   placeholderTitle: {
-    fontSize: Type.heading.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textSecondary },
   placeholderSubtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textMuted },
   sourceRow: {
     flexDirection: 'row',
-    gap: Space.md,
-  },
+    gap: Space.md },
   sourceBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -746,24 +726,20 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     backgroundColor: colors.surface,
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   sourceBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   imageWrap: {
     width: screenWidth,
     height: imageHeight,
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   image: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   tagWrap: {
     position: 'absolute',
     width: 44,
@@ -772,23 +748,20 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     marginTop: -22,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 3,
-  },
+    zIndex: 3 },
   tagDot: {
     width: 14,
     height: 14,
     borderRadius: Radius.md,
     backgroundColor: colors.scrimTextPrimary,
     borderWidth: Stroke.standard,
-    borderColor: colors.overlay,
-  },
+    borderColor: colors.overlay },
   tagDotActive: {
     backgroundColor: colors.brand,
     borderColor: colors.scrimTextPrimary,
     width: 18,
     height: 18,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   tagPill: {
     position: 'absolute',
     top: 24,
@@ -796,13 +769,11 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     borderRadius: Radius.lg,
     paddingHorizontal: 10,
     paddingVertical: Space.xs,
-    maxWidth: 120,
-  },
+    maxWidth: 120 },
   tagPillText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   tagEditor: {
     position: 'absolute',
     top: 26,
@@ -811,23 +782,19 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 2,
-    minWidth: 100,
-  },
+    minWidth: 100 },
   tagEditorLabel: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   tagEditorHint: {
     color: colors.scrimTextSecondary,
     fontSize: 10,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   tagRemoveBtn: {
     position: 'absolute',
     top: -8,
-    right: -8,
-  },
+    right: -8 },
   changePhotoBtn: {
     position: 'absolute',
     bottom: Space.sm,
@@ -838,13 +805,11 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
+    paddingVertical: 5 },
   changePhotoText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   tapHint: {
     position: 'absolute',
     bottom: Space.sm,
@@ -852,24 +817,20 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
+    paddingVertical: 5 },
   tapHintText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Thumbnail strip ──
   stripWrap: {
     width: screenWidth,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   stripContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: THUMB_GAP,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   thumbWrap: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
@@ -878,17 +839,14 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     overflow: 'visible',
-    position: 'relative',
-  },
+    position: 'relative' },
   thumbWrapActive: {
     borderColor: colors.brand,
-    borderWidth: Stroke.emphasis,
-  },
+    borderWidth: Stroke.emphasis },
   thumbImage: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   videoBadge: {
     position: 'absolute',
     bottom: 4,
@@ -898,8 +856,7 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   thumbRemove: {
     position: 'absolute',
     top: -6,
@@ -909,8 +866,7 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   addTile: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
@@ -920,8 +876,7 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
-  },
+    backgroundColor: colors.surface },
   reorderArrowRow: {
     position: 'absolute',
     top: 0,
@@ -933,13 +888,10 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => {
     justifyContent: 'center',
     gap: Space.xs,
     backgroundColor: colors.overlay,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   reorderArrowBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  });
+    justifyContent: 'center' } });
 };

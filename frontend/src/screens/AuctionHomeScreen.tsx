@@ -8,8 +8,7 @@ import {
   Text,
   ScrollView,
   TextInput,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -32,14 +31,14 @@ import {
   DEFAULT_BROWSE_STATE,
   hasActiveFilters,
   scopeToApiStatus,
-  sortToApiSort,
-} from '../utils/auctionHomeLogic';
+  sortToApiSort } from '../utils/auctionHomeLogic';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
-import { Space, Radius, Typography, Type, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { toIze, formatIzeAmount, formatFiatAmount } from '../utils/currency';
 import {
   AuctionMarketHeader,
@@ -55,17 +54,14 @@ import {
   ResultRow,
   FilterSheet,
   type AuctionHeaderAction,
-  type Segment,
-} from '../components/auction';
+  type Segment } from '../components/auction';
 import {
   useAuctionHomeData,
   useAuctionSearch,
-  useAuctionBrowse,
-} from '../hooks/auction';
+  useAuctionBrowse } from '../hooks/auction';
 import {
   listAuctions,
-  type AuctionScope,
-} from '../services/marketApi';
+  type AuctionScope } from '../services/marketApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -102,8 +98,7 @@ export default function AuctionHomeScreen() {
     setBrowseRefreshTick,
     fetchHome,
     secondClock,
-    minuteClock,
-  } = useAuctionHomeData({ filterSheetVisible, draftBrowse });
+    minuteClock } = useAuctionHomeData({ filterSheetVisible, draftBrowse });
 
   // ── Search (extracted) ──
   const {
@@ -118,14 +113,12 @@ export default function AuctionHomeScreen() {
     clearRecentSearches,
     handleSearchChange,
     handleClearSearch,
-    loadMoreSearch,
-  } = useAuctionSearch({ browseState, setPaginationError });
+    loadMoreSearch } = useAuctionSearch({ browseState, setPaginationError });
 
   // ── Browse results (extracted) ──
   const {
     browseResult,
-    loadMoreBrowse,
-  } = useAuctionBrowse({ browseState, browseRefreshTick, setPaginationError });
+    loadMoreBrowse } = useAuctionBrowse({ browseState, browseRefreshTick, setPaginationError });
 
   const isBrowsing = hasActiveFilters(browseState);
   const isSearching = searchState.status !== 'idle';
@@ -344,8 +337,7 @@ export default function AuctionHomeScreen() {
         newest: 'Newest',
         mostBids: 'Most bids',
         priceLow: 'Price: low to high',
-        priceHigh: 'Price: high to low',
-      };
+        priceHigh: 'Price: high to low' };
       chips.push({ key: 'sort', label: sortLabels[browseState.sort], type: 'sort' });
     }
     for (const cat of browseState.categories) {
@@ -487,8 +479,7 @@ export default function AuctionHomeScreen() {
         actionLabel: 'Bid again',
         countdownText: timeLabel,
         onPress: () => navigateToDetail(homeData.attentionItem!.id),
-        onAction: () => navigateToDetail(homeData.attentionItem!.id),
-      };
+        onAction: () => navigateToDetail(homeData.attentionItem!.id) };
     }
     if ((homeData.attentionReason === 'leading' || homeData.attentionReason === 'leading_ending') && homeData.attentionItem) {
       const timing = resolveAuctionTiming(homeData.attentionItem, secondClock);
@@ -503,8 +494,7 @@ export default function AuctionHomeScreen() {
         actionLabel: 'View',
         countdownText: timeLabel,
         onPress: () => navigateToDetail(homeData.attentionItem!.id),
-        onAction: () => navigateToDetail(homeData.attentionItem!.id),
-      };
+        onAction: () => navigateToDetail(homeData.attentionItem!.id) };
     }
     if (homeData.attentionReason === 'won_action' && homeData.attentionItem) {
       return {
@@ -514,8 +504,7 @@ export default function AuctionHomeScreen() {
         message: 'Payment required',
         actionLabel: 'Continue',
         onPress: () => navigateToDetail(homeData.attentionItem!.id),
-        onAction: () => navigateToDetail(homeData.attentionItem!.id),
-      };
+        onAction: () => navigateToDetail(homeData.attentionItem!.id) };
     }
     if (dedupedWatchlist.length > 0) {
       return {
@@ -525,8 +514,7 @@ export default function AuctionHomeScreen() {
         message: 'Track your watched auctions',
         actionLabel: 'View',
         onPress: () => handleActivity(),
-        onAction: () => handleActivity(),
-      };
+        onAction: () => handleActivity() };
     }
     return null;
   }, [homeData.attentionReason, homeData.attentionItem, dedupedWatchlist, navigateToDetail, handleActivity, secondClock]);
@@ -1405,32 +1393,27 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     contentContainer: {
-      paddingBottom: Space.xxl + 24,
-    },
+      paddingBottom: Space.xxl + 24 },
 
     // ── Active filter chips (individually removable) ──
     filterChipsBar: {
       paddingVertical: Space.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     filterResultSummary: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
-      fontFamily: Typography.family.medium,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: 0,
       fontVariant: ['tabular-nums'],
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     filterChipsContent: {
       paddingHorizontal: Space.md,
       gap: Space.xs,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     filterChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1439,118 +1422,98 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xs + 1,
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
-      minHeight: 32,
-    },
+      minHeight: 32 },
     filterChipText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '500',
       color: colors.textPrimary,
-      fontFamily: Typography.family.medium,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: 0,
-      maxWidth: 160,
-    },
+      maxWidth: 160 },
     filterChipClear: {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 1,
       minHeight: 32,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     filterChipClearText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '600',
       color: colors.brand,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
 
     // ── Zone wrapper ──
     zoneWrap: {
       paddingHorizontal: Space.md,
-      marginTop: Space.xl,
-    },
+      marginTop: Space.xl },
 
     // ── Section title (no subtitle) ──
     sectionTitle: {
-      fontSize: Type.sectionTitle.size,
-      lineHeight: Type.sectionTitle.lineHeight,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
       fontWeight: '700',
-      letterSpacing: Type.sectionTitle.letterSpacing,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
       color: colors.textPrimary,
-      fontFamily: Typography.family.bold,
-      marginBottom: Space.md,
-    },
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      marginBottom: Space.md },
 
     // ── Attention zone ──
     attentionZone: {
       paddingHorizontal: Space.md,
       marginTop: Space.sm,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
 
     // ── Composition ──
     compositionWrap: {
       paddingHorizontal: Space.md,
-      marginTop: Space.xl,
-    },
+      marginTop: Space.xl },
     compositionEmpty: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.xl,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     compositionEmptyText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textMuted,
-      fontFamily: Typography.family.regular,
-    },
+      fontFamily: TypographyV2.body.fontFamily },
     asymmetricRow: {
       flexDirection: 'row',
       gap: Space.sm,
-      alignItems: 'stretch',
-    },
+      alignItems: 'stretch' },
     supportingColumn: {
       gap: Space.sm,
-      flex: 1,
-    },
+      flex: 1 },
     supportingRow: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     continuationGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.sm,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
 
     // ── Horizontal rail ──
     horizontalRailContent: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
 
     // ── Category rail ──
     categoryRailContent: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
 
     // ── Upcoming rows ──
     upcomingContainer: {
-      gap: 0,
-    },
+      gap: 0 },
 
     // ── Results ──
     resultsContainer: {
-      gap: 0,
-    },
+      gap: 0 },
 
     // ── Empty market ──
     emptyMarketContainer: {
       flexGrow: 1,
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
     emptyMarketResultsWrap: {
       marginTop: Space.xl,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
 
     // ── Search overlay ──
     searchOverlayHeader: {
@@ -1560,8 +1523,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     searchOverlayInput: {
       flex: 1,
       borderWidth: StyleSheet.hairlineWidth,
@@ -1569,74 +1531,61 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textPrimary,
-      fontFamily: Typography.family.medium,
-      backgroundColor: colors.surfaceAlt,
-    },
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      backgroundColor: colors.surfaceAlt },
     searchScopeContext: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     searchScopeText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
-      fontFamily: Typography.family.medium,
-      letterSpacing: 0,
-    },
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: 0 },
     searchIdleContainer: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     searchIdleScroll: {
-      flex: 1,
-    },
+      flex: 1 },
     searchIdleContent: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.lg,
-      gap: Space.xl,
-    },
+      gap: Space.xl },
     searchIdleFallback: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: Space.xxl,
-    },
+      paddingVertical: Space.xxl },
     searchIdleHint: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textMuted,
-      fontFamily: Typography.family.regular,
-      textAlign: 'center',
-    },
+      fontFamily: TypographyV2.body.fontFamily,
+      textAlign: 'center' },
     searchIdleSection: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     searchIdleSectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-    },
+      justifyContent: 'space-between' },
     searchIdleSectionTitle: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '600',
       letterSpacing: LetterSpacing.wide + 0.08,
       color: colors.textSecondary,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
     searchIdleClearBtn: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.brand,
-      fontFamily: Typography.family.medium,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
     searchIdleChips: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     searchIdleChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1644,13 +1593,10 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     searchIdleChipText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textPrimary,
-      fontFamily: Typography.family.medium,
-      maxWidth: 140,
-    },
-  });
+      fontFamily: TypographyV2.meta.fontFamily,
+      maxWidth: 140 } });
 }

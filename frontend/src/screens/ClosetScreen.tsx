@@ -8,8 +8,7 @@ import {
   ScrollView,
   Share,
   Dimensions,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
   useSharedValue,
@@ -17,8 +16,7 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  FadeIn,
-} from 'react-native-reanimated';
+  FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -43,7 +41,8 @@ import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout, AspectRatio } from '../theme/designTokens';
+import { Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout, AspectRatio } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -95,8 +94,7 @@ export default function ClosetScreen() {
     paddingBottom: Space.sm,
     marginBottom: Space.sm,
     borderBottomWidth: Stroke.hairline,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
     statDivider: { backgroundColor: colors.border },
     statValue: { color: colors.textPrimary },
     statLabel: { color: colors.textMuted },
@@ -107,8 +105,7 @@ export default function ClosetScreen() {
     brandChipText: { color: colors.textSecondary },
     brandChipTextActive: { color: colors.background },
     closetToolbarBadge: { backgroundColor: colors.textPrimary },
-    closetToolbarBadgeText: { color: colors.background },
-  });
+    closetToolbarBadgeText: { color: colors.background } });
 
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
@@ -292,8 +289,7 @@ export default function ClosetScreen() {
       totalItems: uniqueItems.length,
       totalValue,
       totalSavings,
-      collectionsCount: collections.length,
-    };
+      collectionsCount: collections.length };
   }, [savedItems, wishlistItems, collections]);
 
   // Brand filter — extract unique brands from the active tab's items
@@ -310,8 +306,7 @@ export default function ClosetScreen() {
     const username = currentUser?.username ?? 'on Thryftverse';
     try {
       await Share.share({
-        message: `Check out my closet @${username} on Thryftverse!`,
-      });
+        message: `Check out my closet @${username} on Thryftverse!` });
     } catch { /* user cancelled */ }
   }, [haptic, currentUser]);
 
@@ -362,8 +357,7 @@ export default function ClosetScreen() {
           // Fallback to local delete if API fails
           deleteCollection(id);
         });
-      },
-    });
+      } });
   }, [haptic, deleteCollection, deleteCollectionOnApi, setConfirmSheet]);
 
   const handleStartRename = useCallback((id: string, currentName: string) => {
@@ -401,20 +395,17 @@ export default function ClosetScreen() {
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
-    },
-  });
+    } });
 
   const headerBgStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP),
-    borderBottomWidth: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP),
-  }));
+    borderBottomWidth: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP) }));
 
   const TAB_ICONS = {
     SAVED: 'bookmark-outline' as const,
     WISHLIST: 'heart-outline' as const,
     COLLECTIONS: 'folder-open-outline' as const,
-    OUTFITS: 'shirt-outline' as const,
-  };
+    OUTFITS: 'shirt-outline' as const };
 
   const renderLoadingSkeleton = () => (
     <View style={styles.skeletonWrap}>
@@ -530,8 +521,7 @@ export default function ClosetScreen() {
         itemCount: collection.itemIds?.length ?? 0,
         covers,
         updatedAt: collection.updatedAt,
-        isPrivate: collection.isPrivate === true,
-      };
+        isPrivate: collection.isPrivate === true };
     });
 
     return (
@@ -581,8 +571,7 @@ export default function ClosetScreen() {
         .map((l) => l.images[0]);
       return {
         ...outfit,
-        thumbs,
-      };
+        thumbs };
     });
 
     return (
@@ -606,8 +595,7 @@ export default function ClosetScreen() {
                   onConfirm: () => {
                     haptic.medium();
                     removeOutfit(outfit.id);
-                  },
-                });
+                  } });
               }}
               style={styles.outfitCard}
             />
@@ -695,8 +683,7 @@ export default function ClosetScreen() {
                 SAVED: savedItems.length,
                 WISHLIST: wishlistItems.length,
                 COLLECTIONS: collections.length,
-                OUTFITS: outfits.length,
-              };
+                OUTFITS: outfits.length };
               const tabLabel = tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : tab === 'COLLECTIONS' ? 'Collections' : 'Outfits';
               return (
                 <AnimatedPressable
@@ -914,45 +901,37 @@ export default function ClosetScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   headerBorder: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: Space.xxl + Space.xl + Space.sm + 2,
-    zIndex: 1,
-  },
+    zIndex: 1 },
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   shareBtn: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
     borderRadius: Radius.md,
     borderWidth: 0,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   tabBar: {
     flexDirection: 'row',
     gap: Space.lg,
-    borderBottomWidth: Stroke.hairline,
-  },
+    borderBottomWidth: Stroke.hairline },
   tabItem: {
     paddingVertical: Space.sm,
-    position: 'relative',
-  },
+    position: 'relative' },
   tabLabel: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   tabLabelActive: {
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   tabIndicator: {
     position: 'absolute',
     bottom: 0,
@@ -960,8 +939,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: Stroke.emphasis,
     borderTopLeftRadius: Radius.none + 1,
-    borderTopRightRadius: Radius.none + 1,
-  },
+    borderTopRightRadius: Radius.none + 1 },
   countPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -969,31 +947,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
-    borderWidth: 0,
-  },
+    borderWidth: 0 },
   countBadge: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   searchWrap: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   closetToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     gap: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   closetToolbarBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-  },
+    position: 'relative' },
   closetToolbarBadge: {
     position: 'absolute',
     top: 6,
@@ -1003,50 +976,40 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
+    paddingHorizontal: 4 },
   closetToolbarBadgeText: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   tabsWrap: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   scrollContent: {
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   sortMenu: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.none,
     borderWidth: 0,
-    overflow: 'visible',
-  },
+    overflow: 'visible' },
   sortOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    borderBottomWidth: Stroke.hairline,
-  },
-  sortOptionActive: {
-  },
+    borderBottomWidth: Stroke.hairline },
+  sortOptionActive: {},
   sortOptionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   sortOptionTextActive: {
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   filterChipRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1055,108 +1018,82 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,
-    minHeight: Space.xl + Space.xs,
-  },
-  filterChipActive: {
-  },
+    minHeight: Space.xl + Space.xs },
+  filterChipActive: {},
   filterChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
-  filterChipTextActive: {
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  filterChipTextActive: {},
   collectionsList: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   createCollectionBtn: {
     marginTop: Space.lg,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   outfitsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
     gap: Space.sm,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   outfitCard: {
-    width: (Layout.screenWidth - Space.md * 2 - Space.sm) / 2,
-  },
+    width: (Layout.screenWidth - Space.md * 2 - Space.sm) / 2 },
   skeletonWrap: {
     paddingHorizontal: SKEL_PADDING,
     gap: SKEL_GAP,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   skeletonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   boardSkeletonWrap: {
     paddingHorizontal: Space.md,
     gap: BOARD_GAP,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   boardSkeletonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   statItem: {
     flex: 1,
     alignItems: 'center',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   statDivider: {
     width: Stroke.standard,
-    height: Space.lg + 4,
-  },
+    height: Space.lg + 4 },
   statValue: {
-    fontSize: Type.sectionTitle.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: LetterSpacing.tight + LetterSpacing.wide },
   statLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + LetterSpacing.tight,
-  },
+    letterSpacing: LetterSpacing.caps + LetterSpacing.tight },
   savingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
     marginTop: Space.sm,
     paddingTop: Space.sm,
-    borderTopWidth: Stroke.hairline,
-  },
+    borderTopWidth: Stroke.hairline },
   savingsText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   brandChipScroll: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   brandChipContent: {
     paddingHorizontal: Space.md,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   brandChip: {
     paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,
     minHeight: Space.xl + Space.xs,
-    justifyContent: 'center',
-  },
-  brandChipActive: {
-  },
+    justifyContent: 'center' },
+  brandChipActive: {},
   brandChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
-  brandChipTextActive: {
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  brandChipTextActive: {} });

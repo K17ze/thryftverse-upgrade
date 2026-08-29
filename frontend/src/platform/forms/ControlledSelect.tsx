@@ -2,7 +2,8 @@ import React from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { Controller, Control, FieldError, RegisterOptions } from 'react-hook-form';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Type, Space } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { NativePicker, type NativePickerOption } from '../native/NativePicker';
 
 export interface ControlledSelectProps {
@@ -21,8 +22,7 @@ export function ControlledSelect({
   label,
   error,
   rules,
-  options,
-}: ControlledSelectProps) {
+  options }: ControlledSelectProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -49,19 +49,15 @@ export function ControlledSelect({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
-    marginBottom: 12,
-  },
+    marginBottom: 12 },
   label: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    marginBottom: 6,
-  },
+    marginBottom: 6 },
   errorText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.danger,
     marginTop: Space.xs,
-    fontFamily: Typography.family.regular,
-  },
-  });
+    fontFamily: TypographyV2.meta.fontFamily } });
 }

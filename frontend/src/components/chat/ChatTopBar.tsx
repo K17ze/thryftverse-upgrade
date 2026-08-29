@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Typography, Control, AvatarSize } from '../../theme/designTokens';
+import { Space, Radius, TypeStyles, Control, AvatarSize } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 
@@ -53,8 +54,7 @@ export function ChatTopBar({
   searchResultLabel,
   onPreviousResult,
   onNextResult,
-  onCloseSearch,
-}: ChatTopBarProps) {
+  onCloseSearch }: ChatTopBarProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -215,15 +215,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   safe: {
     backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   searchRoot: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm - 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   searchFieldWrap: {
     flex: 1,
     flexDirection: 'row',
@@ -232,58 +230,49 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 0,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
-    minHeight: 38,
-  },
+    minHeight: 38 },
   searchFieldIcon: {
-    marginRight: Space.xs,
-  },
+    marginRight: Space.xs },
   searchInput: {
     flex: 1,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textPrimary,
-    paddingVertical: Space.sm - 2,
-  },
+    paddingVertical: Space.sm - 2 },
   searchNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 0,
-  },
+    gap: 0 },
   searchNavBtn: {
     width: Control.chrome,
     height: Control.chrome,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   searchCount: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textMuted,
     minWidth: 34,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   root: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm - 1,
     gap: Space.xs,
-    minHeight: 56,
-  },
+    minHeight: 56 },
   backBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: -2,
-  },
+    marginLeft: -2 },
   center: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   avatar: {
     width: AvatarSize.md,
     height: AvatarSize.md,
@@ -291,13 +280,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   avatarImage: {
     width: AvatarSize.md,
     height: AvatarSize.md,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   presenceDotOuter: {
     position: 'absolute',
     bottom: 0,
@@ -306,55 +293,44 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     height: Space.smMd,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   presenceDot: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   avatarText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   titleWrap: {
     flex: 1,
     justifyContent: 'center',
-    minWidth: 0,
-  },
+    minWidth: 0 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   title: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    flexShrink: 1,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    flexShrink: 1 },
   verifiedBadge: {
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   subtitle: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textMuted,
     marginTop: 1,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 0,
-  },
+    gap: 0 },
   iconBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+    alignItems: 'center' } });

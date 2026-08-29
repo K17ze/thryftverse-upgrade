@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   ViewStyle,
-  StyleProp,
-} from 'react-native';
+  StyleProp } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
@@ -15,9 +14,8 @@ import {
   Radius,
   Stroke,
   Control,
-  Type,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
@@ -83,8 +81,7 @@ const DELIVERY_STATUS_CONFIG: Record<
 > = {
   suppressed: { label: 'Silenced', icon: 'moon-outline', colorKey: 'textMuted' },
   failed: { label: 'Delivery failed', icon: 'alert-circle-outline', colorKey: 'danger' },
-  queued: { label: 'Pending', icon: 'time-outline', colorKey: 'textSecondary' },
-};
+  queued: { label: 'Pending', icon: 'time-outline', colorKey: 'textSecondary' } };
 
 export function NotificationRowBase({
   event,
@@ -98,8 +95,7 @@ export function NotificationRowBase({
   children,
   trailing,
   accessibilityLabel,
-  style,
-}: NotificationRowBaseProps) {
+  style }: NotificationRowBaseProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isUnread = !event.readAt;
@@ -174,8 +170,7 @@ export function NotificationThumbnail({
   uri,
   fallbackIcon = 'notifications-outline',
   size = 44,
-  colors,
-}: {
+  colors }: {
   uri?: string;
   fallbackIcon?: keyof typeof Ionicons.glyphMap;
   size?: number;
@@ -212,8 +207,7 @@ export function NotificationThumbnail({
 export function NotificationStatusIcon({
   icon,
   accentColor,
-  size = 24,
-}: {
+  size = 24 }: {
   icon: keyof typeof Ionicons.glyphMap;
   accentColor: string;
   size?: number;
@@ -228,8 +222,7 @@ export function NotificationActionButton({
   label,
   onPress,
   colors,
-  variant = 'primary',
-}: {
+  variant = 'primary' }: {
   label: string;
   onPress: () => void;
   colors: ThemeColors;
@@ -267,8 +260,7 @@ function createStyles(colors: ThemeColors) {
       minHeight: 64,
       backgroundColor: 'transparent',
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     // Unread is signalled ONLY by the unread dot on the leading element +
     // semibold title weight (applied by the presenter). No row tint —
     // a 6% grey wash across all unread rows creates "single grey background
@@ -280,14 +272,12 @@ function createStyles(colors: ThemeColors) {
     rowAttention: {
       borderLeftWidth: 2,
       borderLeftColor: colors.danger,
-      paddingLeft: Space.md - 2,
-    },
+      paddingLeft: Space.md - 2 },
     leadingWrap: {
       position: 'relative',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingTop: Space.xs / 2,
-    },
+      paddingTop: Space.xs / 2 },
     unreadDot: {
       position: 'absolute',
       top: 0,
@@ -300,31 +290,26 @@ function createStyles(colors: ThemeColors) {
       // avatar/image. Without this, a dark dot on a dark avatar area is
       // invisible. This is not decoration; it is contrast separation.
       borderWidth: Stroke.standard,
-      borderColor: colors.background,
-    },
+      borderColor: colors.background },
     body: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     metaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginTop: Space.xs / 2,
-    },
+      marginTop: Space.xs / 2 },
     time: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       flexShrink: 0,
-      marginTop: 2,
-    },
+      marginTop: 2 },
     aggregatedBadge: {
       minWidth: Space.md + 4,
       height: Space.md + 4,
@@ -332,30 +317,24 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs + 2,
       backgroundColor: colors.brand,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     aggregatedText: {
       // Small badge text — no dedicated token below meta; meta - 2 gives ~9px.
-      fontSize: Type.meta.size - 2,
+      fontSize: TypographyV2.meta.size - 2,
       fontFamily: FontFamily.bold,
-      color: colors.background,
-    },
+      color: colors.background },
     deliveryStatus: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     deliveryStatusText: {
-      fontSize: Type.meta.size,
-      fontFamily: FontFamily.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular },
     trailing: {
       alignItems: 'center',
       justifyContent: 'center',
       minWidth: Control.hit,
-      minHeight: Control.hit,
-    },
-  });
+      minHeight: Control.hit } });
 }
 
 function createThumbnailStyles(colors: ThemeColors, size: number) {
@@ -365,20 +344,16 @@ function createThumbnailStyles(colors: ThemeColors, size: number) {
       height: size,
       borderRadius: Radius.md,
       overflow: 'hidden',
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     image: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     placeholder: {
       width: size,
       height: size,
       borderRadius: Radius.md,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
-  });
+      justifyContent: 'center' } });
 }
 
 function createActionStyles(colors: ThemeColors, variant: 'primary' | 'quiet') {
@@ -393,13 +368,10 @@ function createActionStyles(colors: ThemeColors, variant: 'primary' | 'quiet') {
       borderWidth: isPrimary ? 0 : Stroke.standard,
       borderColor: isPrimary ? 'transparent' : colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     label: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: isPrimary ? colors.textInverse : colors.textPrimary,
-      letterSpacing: 0.1,
-    },
-  });
+      letterSpacing: 0.1 } });
 }

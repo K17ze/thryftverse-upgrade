@@ -3,7 +3,8 @@ import { View, Dimensions, StyleSheet } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
 
-import { Radius, Space, Type, AvatarSize } from '../../theme/designTokens';
+import { Radius, Space, AvatarSize } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 const { width: W } = Dimensions.get('window');
 
@@ -56,7 +57,7 @@ export function ProfileSkeleton() {
         {/* Display name */}
         <SkeletonLoader
           width={160}
-          height={Type.title.size}
+          height={TypographyV2.screenTitle.size}
           borderRadius={Radius.sm}
           style={styles.skeletonName}
         />
@@ -64,7 +65,7 @@ export function ProfileSkeleton() {
         {/* Username */}
         <SkeletonLoader
           width={120}
-          height={Type.caption.size}
+          height={TypographyV2.meta.size}
           borderRadius={Radius.sm}
           style={styles.skeletonUsername}
         />
@@ -72,7 +73,7 @@ export function ProfileSkeleton() {
         {/* Bio line */}
         <SkeletonLoader
           width={W - Space.md * 2}
-          height={Type.body.size}
+          height={TypographyV2.body.size}
           borderRadius={Radius.sm}
           style={styles.skeletonBio}
         />
@@ -83,12 +84,12 @@ export function ProfileSkeleton() {
             <View key={i} style={styles.statItem}>
               <SkeletonLoader
                 width={48}
-                height={Type.bodyStrong.size}
+                height={TypographyV2.bodyStrong.size}
                 borderRadius={Radius.sm}
               />
               <SkeletonLoader
                 width={56}
-                height={Type.meta.size}
+                height={TypographyV2.meta.size}
                 borderRadius={Radius.sm}
                 style={{ marginTop: Space.xs }}
               />
@@ -103,7 +104,7 @@ export function ProfileSkeleton() {
           <SkeletonLoader
             key={i}
             width={70}
-            height={Type.bodyStrong.size}
+            height={TypographyV2.bodyStrong.size}
             borderRadius={Radius.sm}
           />
         ))}
@@ -127,47 +128,36 @@ export function ProfileSkeleton() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   heroBlock: {
     paddingHorizontal: Space.md,
     alignItems: 'center',
     marginTop: -AVATAR_SIZE / 2 - 8,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   avatar: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   skeletonName: {
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   skeletonUsername: {
-    marginTop: Space.xxs,
-  },
+    marginTop: Space.xxs },
   skeletonBio: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
     paddingVertical: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   statItem: {
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   tabRail: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: Space.md,
-  },
+    gap: Space.md },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    gap: GRID_GAP,
-  },
-});
+    gap: GRID_GAP } });

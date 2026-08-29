@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Typography, Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface FeaturedBoard {
   id: string;
@@ -76,48 +77,38 @@ export function FeaturedBoardCard({ board }: Props) {
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {
     width: 260,
-    marginRight: Space.smMd,
-  },
+    marginRight: Space.smMd },
   collage: {
     flexDirection: 'row',
     height: 150,
     borderRadius: Radius.xl,
     overflow: 'hidden',
     gap: 3,
-    marginBottom: Space.smMd,
-  },
+    marginBottom: Space.smMd },
   mainImage: {
     flex: 3,
-    height: '100%',
-  },
+    height: '100%' },
   sideColumn: {
     flex: 2,
-    gap: 3,
-  },
+    gap: 3 },
   sideImage: {
     flex: 1,
-    width: '100%',
-  },
+    width: '100%' },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: colors.textPrimary,
     marginBottom: 3,
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.2 },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Space.xxs,
-  },
+    marginBottom: Space.xxs },
   subtitle: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.textSecondary },
   meta: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: colors.textMuted,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted } });

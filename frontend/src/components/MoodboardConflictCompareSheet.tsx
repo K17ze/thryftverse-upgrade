@@ -3,7 +3,8 @@ import { View, StyleSheet, Text } from 'react-native';
 import { FormSheet } from './sheets/FormSheet';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useAppTheme } from '../theme/ThemeContext';
-import { FontFamily, Radius, Space, Stroke, Type } from '../theme/designTokens';
+import { FontFamily, Radius, Space, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { getThemeById, type Moodboard } from '../services/moodboardApi';
 
 interface MoodboardConflictCompareSheetProps {
@@ -27,8 +28,7 @@ export function MoodboardConflictCompareSheet({
   localVersion,
   serverVersion,
   onKeepLocal,
-  onKeepServer,
-}: MoodboardConflictCompareSheetProps) {
+  onKeepServer }: MoodboardConflictCompareSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -66,8 +66,7 @@ export function MoodboardConflictCompareSheet({
                 width: 6,
                 height: 6,
                 borderRadius: 1,
-                backgroundColor: colors.textPrimary,
-              }}
+                backgroundColor: colors.textPrimary }}
             />
           ))}
         </View>
@@ -141,12 +140,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     separator: { width: StyleSheet.hairlineWidth, backgroundColor: colors.borderSubtle },
     columnLabel: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.metaElevated.size,
-      lineHeight: Type.metaElevated.lineHeight,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      letterSpacing: TypographyV2.label.letterSpacing,
       color: colors.textSecondary,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     miniCanvas: {
       width: 100,
       height: 100,
@@ -154,45 +152,39 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       borderWidth: Stroke.hairline,
       borderColor: colors.borderSubtle,
       marginBottom: Space.sm,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     boardTitle: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
       color: colors.textPrimary,
       marginBottom: Space.xxs,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     metaText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textSecondary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     actionRow: { flexDirection: 'row', gap: Space.sm, marginTop: Space.lg, paddingHorizontal: Space.sm },
     button: { flex: 1, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
     primaryButton: { backgroundColor: colors.brand },
     secondaryButton: { backgroundColor: colors.surfaceAlt, borderWidth: Stroke.standard, borderColor: colors.border },
-    primaryButtonText: { fontFamily: FontFamily.semibold, fontSize: Type.body.size, color: colors.textInverse },
-    secondaryButtonText: { fontFamily: FontFamily.semibold, fontSize: Type.body.size, color: colors.textPrimary },
+    primaryButtonText: { fontFamily: FontFamily.semibold, fontSize: TypographyV2.body.size, color: colors.textInverse },
+    secondaryButtonText: { fontFamily: FontFamily.semibold, fontSize: TypographyV2.body.size, color: colors.textPrimary },
     messageContainer: { alignItems: 'center', paddingVertical: Space.xl },
     messageText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textSecondary,
       marginBottom: Space.md,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     singleButton: {
       height: 44,
       paddingHorizontal: Space.lg,
       borderRadius: Radius.md,
       backgroundColor: colors.brand,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
-  });
+      justifyContent: 'center' } });

@@ -3,15 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { haptics } from '../utils/haptics';
 import { AnimatedPressable } from './AnimatedPressable';
 import { PremiumToggle } from './PremiumToggle';
 
-import { Type, Space, Radius, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, Typography, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 export type SettingsCellVariant = 'default' | 'value' | 'toggle' | 'button' | 'destructive' | 'custom';
 
 interface SettingsCellProps {
@@ -49,8 +49,7 @@ export function SettingsCell({
   isFirst = false,
   isLast = false,
   style,
-  accessibilityHint,
-}: SettingsCellProps) {
+  accessibilityHint }: SettingsCellProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const showChevron = variant === 'default' || variant === 'value';
@@ -195,68 +194,56 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surface,
       borderRadius: Radius.xl,
       overflow: 'hidden',
-      ...Elevation.card,
-    },
+      ...Elevation.card },
     container: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.sm + 6,
       paddingHorizontal: Space.md,
       minHeight: 52,
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     rowBorder: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     iconCol: {
       width: 28,
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: Space.sm + 2,
-    },
+      marginRight: Space.sm + 2 },
     textContainer: {
       flex: 1,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     title: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
     destructiveTitle: {
       color: colors.danger,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     buttonTitle: {
       color: colors.brand,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     subtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       marginTop: 2,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     rightContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     valueText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
       maxWidth: 150,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     chevron: {
-      marginLeft: 2,
-    },
+      marginLeft: 2 },
     badge: {
       backgroundColor: colors.brand,
       borderRadius: Radius.lg,
@@ -264,51 +251,43 @@ function createStyles(colors: ThemeColors) {
       height: 20,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 6,
-    },
+      paddingHorizontal: 6 },
     badgeText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.surfaceElevated,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     sectionHeader: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       marginHorizontal: Space.md,
       marginTop: Space.lg,
       marginBottom: Space.sm,
-      letterSpacing: Type.meta.letterSpacing,
-      textTransform: 'uppercase',
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      textTransform: 'uppercase' },
     sectionHeader_high: {
       color: colors.textSecondary,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       marginTop: Space.lg + Space.sm,
-      marginBottom: Space.sm + 2,
-    },
+      marginBottom: Space.sm + 2 },
     sectionHeader_medium: {
       // defaults
     },
     sectionHeader_low: {
       fontFamily: Typography.family.medium,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     sectionHeader_lowest: {
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     sectionFooter: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       marginHorizontal: Space.md,
       marginTop: Space.sm,
       marginBottom: Space.md,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-  });
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing } });
 }

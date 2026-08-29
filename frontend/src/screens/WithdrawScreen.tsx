@@ -7,8 +7,7 @@ import { View,
   Text,
   StyleSheet,
   TextInput,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -33,21 +32,19 @@ import {
   getWalletSnapshot,
   lookupPayoutByIdempotencyKey,
   PayoutAccountPayload,
-  PayoutRequestPayload,
-} from '../services/walletApi';
+  PayoutRequestPayload } from '../services/walletApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
-import { Typography, Space, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import {
   convertDisplayToGbpAmount,
   getDefaultWithdrawDisplayAmount,
-  sanitizeDecimalInput,
-} from '../utils/currencyAuthoringFlows';
+  sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import {
   formatCountryPolicyScope,
   formatPayoutPolicyHint,
-  isPaymentMethodAllowed,
-} from '../utils/capabilityPolicy';
+  isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
@@ -85,29 +82,23 @@ const PAYOUT_STATUS_CONFIG: Record<PayoutStatus, PayoutStatusConfig> = {
   requested: {
     label: t('withdraw.status.pending'),
     subtitle: t('withdraw.status.awaitingReview'),
-    colorKey: 'textMuted',
-  },
+    colorKey: 'textMuted' },
   processing: {
     label: t('withdraw.status.processing'),
     subtitle: t('withdraw.status.transferInitiated'),
-    colorKey: 'warning',
-  },
+    colorKey: 'warning' },
   paid: {
     label: t('withdraw.status.paid'),
     subtitle: t('withdraw.status.bankConfirmed'),
-    colorKey: 'success',
-  },
+    colorKey: 'success' },
   failed: {
     label: t('withdraw.status.failed'),
     subtitle: t('withdraw.status.transferCouldNotComplete'),
-    colorKey: 'danger',
-  },
+    colorKey: 'danger' },
   cancelled: {
     label: t('withdraw.status.cancelled'),
     subtitle: '',
-    colorKey: 'textMuted',
-  },
-};
+    colorKey: 'textMuted' } };
 
 function resolvePayoutStatusConfig(status: PayoutStatus): PayoutStatusConfig {
   return PAYOUT_STATUS_CONFIG[status] ?? PAYOUT_STATUS_CONFIG.requested;
@@ -310,21 +301,18 @@ export default function WithdrawScreen() {
           payoutAccount.status === 'active'
             ? t('withdraw.payout.connectedProfile')
             : t('withdraw.payout.verificationPending'),
-        details: `${payoutAccount.gatewayId} · ${payoutAccount.currency}${payoutLocation}`,
-      };
+        details: `${payoutAccount.gatewayId} · ${payoutAccount.currency}${payoutLocation}` };
     }
 
     if (!allowBankAccounts) {
       return {
         name: t('withdraw.payout.bankUnavailable'),
-        details: 'Country policy will route withdrawals through supported payout rails.',
-      };
+        details: 'Country policy will route withdrawals through supported payout rails.' };
     }
 
     return {
       name: t('withdraw.form.connectPayoutProfile'),
-      details: 'Verify your identity and bank details to enable payouts',
-    };
+      details: 'Verify your identity and bank details to enable payouts' };
   }, [allowBankAccounts, payoutAccount]);
 
   const ensureCapabilities = async (): Promise<UserCountryCapabilities | null> => {
@@ -393,9 +381,7 @@ export default function WithdrawScreen() {
           ?? 'GB',
         metadata: {
           source: 'withdraw_screen_stripe_connect_sync',
-          capabilityPolicyVersion: resolvedCapabilities?.policyVersion ?? null,
-        },
-      });
+          capabilityPolicyVersion: resolvedCapabilities?.policyVersion ?? null } });
     }
 
     if (activeAccount.status !== 'active') {
@@ -419,8 +405,7 @@ export default function WithdrawScreen() {
     if (payoutAccount && payoutAccount.status === 'active') {
       return {
         account: payoutAccount,
-        capabilities: resolvedCapabilities,
-      };
+        capabilities: resolvedCapabilities };
     }
 
     const existingAccounts = await listPayoutAccounts(currentUser.id);
@@ -431,15 +416,13 @@ export default function WithdrawScreen() {
       setPayoutAccount(activeAccount);
       return {
         account: activeAccount,
-        capabilities: resolvedCapabilities,
-      };
+        capabilities: resolvedCapabilities };
     }
 
     const createdAccount = await connectOrSyncPayoutAccount(resolvedCapabilities);
     return {
       account: createdAccount,
-      capabilities: resolvedCapabilities,
-    };
+      capabilities: resolvedCapabilities };
   };
 
   const handleConnectPayout = async () => {
@@ -515,8 +498,7 @@ export default function WithdrawScreen() {
         const fxQuote = await getIzeFxQuote({
           fromCurrency: 'GBP',
           toCurrency: payoutCurrency,
-          amount: amountGbp,
-        });
+          amount: amountGbp });
 
         payoutAmount = Number(fxQuote.quote.convertedAmount.toFixed(2));
       }
@@ -536,9 +518,7 @@ export default function WithdrawScreen() {
                 source: 'withdraw_screen_request',
                 enteredDisplayAmount: numericAmountDisplay,
                 enteredDisplayCurrency: currencyCode,
-                payoutMode: 'sale_proceeds_only',
-              },
-            }
+                payoutMode: 'sale_proceeds_only' } }
           : {
               payoutAccountId: payoutProfile.id,
               amount: payoutAmount,
@@ -548,9 +528,7 @@ export default function WithdrawScreen() {
                 source: 'withdraw_screen_request',
                 enteredDisplayAmount: numericAmountDisplay,
                 enteredDisplayCurrency: currencyCode,
-                payoutMode: 'sale_proceeds_only',
-              },
-            };
+                payoutMode: 'sale_proceeds_only' } };
 
       const payoutResponse = await createPayoutRequest(currentUser.id, payoutRequestInput);
 
@@ -562,8 +540,7 @@ export default function WithdrawScreen() {
         reference: payoutResponse.payoutRequest.providerPayoutRef ?? payoutResponse.payoutRequest.id,
         amountGbp,
         payoutCurrency,
-        createdAt: payoutResponse.payoutRequest.createdAt,
-      });
+        createdAt: payoutResponse.payoutRequest.createdAt });
       haptic.success();
       idempotencyKeyRef.current = null;
       setStep('success');
@@ -588,8 +565,7 @@ export default function WithdrawScreen() {
               reference: payoutRequest.providerPayoutRef ?? payoutRequest.id,
               amountGbp: payoutRequest.amountGbp,
               payoutCurrency: payoutRequest.amountCurrency,
-              createdAt: payoutRequest.createdAt,
-            });
+              createdAt: payoutRequest.createdAt });
             haptic.success();
             idempotencyKeyRef.current = null;
             setStep('success');
@@ -606,8 +582,7 @@ export default function WithdrawScreen() {
             setStep('form');
             show('We could not confirm your withdrawal. Check your history before retrying.', 'info');
           },
-          shouldContinue: () => isMountedRef.current,
-        });
+          shouldContinue: () => isMountedRef.current });
 
         if (result.outcome === 'acknowledged' || result.outcome === 'safe_to_retry' || result.outcome === 'unresolved') {
           return;
@@ -718,8 +693,7 @@ export default function WithdrawScreen() {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
-      minute: '2-digit',
-    });
+      minute: '2-digit' });
     return (
       <FlagshipScreen
         header={
@@ -1045,8 +1019,7 @@ export default function WithdrawScreen() {
                     const formattedDate = new Date(item.createdAt).toLocaleDateString('en-GB', {
                       day: 'numeric',
                       month: 'short',
-                      year: 'numeric',
-                    });
+                      year: 'numeric' });
                     return (
                       <View
                         key={item.id}
@@ -1101,92 +1074,84 @@ export default function WithdrawScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Space.xl, gap: Space.md },
-  unknownTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, textAlign: 'center' },
-  unknownBody: { fontSize: Type.body.size, fontFamily: Typography.family.regular, textAlign: 'center', lineHeight: Type.body.lineHeight },
+  unknownTitle: { fontSize: TypographyV2.sectionTitle.size, fontFamily: TypographyV2.sectionTitle.fontFamily, textAlign: 'center' },
+  unknownBody: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, textAlign: 'center', lineHeight: TypographyV2.body.lineHeight },
   skeletonContainer: { paddingHorizontal: Space.md + Space.xs, paddingTop: Space.md },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, height: Space.xl + Space.xl + 8, borderBottomWidth: Stroke.standard, borderBottomColor: colors.border },
   backBtn: { width: Control.hit, height: Control.hit, justifyContent: 'center', alignItems: 'flex-start' },
-  headerTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  headerTitle: { fontSize: TypographyV2.sectionTitle.size, fontFamily: TypographyV2.sectionTitle.fontFamily, color: colors.textPrimary },
   offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: Stroke.standard,
-  },
+    borderBottomWidth: Stroke.standard },
   offlineBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
 
   content: { flex: 1 },
 
   amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.md, marginTop: Space.xl + Space.xl - 8, marginBottom: Space.sm + Space.xs },
-  currencySymbol: { fontSize: Type.priceHero.size + 16, fontFamily: Typography.family.bold, color: colors.textPrimary, marginRight: Space.sm },
-  amountInput: { fontSize: Type.priceHero.size + 28, fontFamily: Typography.family.bold, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2, fontVariant: ['tabular-nums'] },
+  currencySymbol: { fontSize: TypographyV2.priceHero.size + 16, fontFamily: TypographyV2.priceHero.fontFamily, color: colors.textPrimary, marginRight: Space.sm },
+  amountInput: { fontSize: TypographyV2.priceHero.size + 28, fontFamily: TypographyV2.priceHero.fontFamily, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2, fontVariant: ['tabular-nums'] },
   availableText: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textSecondary,
     marginBottom: Space.sm,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   policyLabel: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textMuted,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   policyHint: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textMuted,
-    marginBottom: Space.lg + Space.xs,
-  },
+    marginBottom: Space.lg + Space.xs },
   balanceError: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
     marginTop: Space.xs,
     marginBottom: Space.md + 4,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.danger },
 
   addBankBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm + Space.xs },
   addBankText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.brand },
   railHintText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + Space.xs,
-  },
+    paddingVertical: Space.sm + Space.xs },
 
   footer: { paddingVertical: Space.md + 4, borderTopWidth: Stroke.standard, borderTopColor: colors.border, backgroundColor: colors.background },
   // Estimated arrival row — clear disclosure per spec
@@ -1196,44 +1161,38 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     marginBottom: Space.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   arrivalLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   arrivalLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   arrivalValue: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   feeText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textMuted,
     textAlign: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   primaryBtn: { backgroundColor: colors.textPrimary, height: Space.xl + Space.xl + 8, borderRadius: Space.lg + 4, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: colors.background, fontSize: Type.body.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
+  primaryText: { color: colors.background, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, fontVariant: ['tabular-nums'] },
   secondaryBtn: {
     height: Space.xl + 8,
     borderRadius: Space.lg + 4,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
 
   // ── Flat note (success + confirm) — no border, no radius ──
   flatNote: {
@@ -1241,8 +1200,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'flex-start',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
 
   // ── Success step ──
   successIconCircle: {
@@ -1251,97 +1209,80 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   successTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
     textAlign: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   successSubtitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
     textAlign: 'center',
-    marginBottom: Space.xl,
-  },
+    marginBottom: Space.xl },
   flatNoteText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   rateTimestampRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   rateTimestampText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // ── Recent withdrawals — flat list, hairline separators ──
   withdrawalsStatusText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    paddingVertical: Space.sm,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    paddingVertical: Space.sm },
   withdrawalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
   withdrawalLeft: {
     flex: 1,
-    marginRight: Space.sm,
-  },
+    marginRight: Space.sm },
   withdrawalAmount: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     fontVariant: ['tabular-nums'],
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   withdrawalDate: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   withdrawalRight: {
     alignItems: 'flex-end',
-    maxWidth: '45%',
-  },
+    maxWidth: '45%' },
   withdrawalStatusLine: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   withdrawalDot: {
     width: 7,
     height: 7,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   withdrawalStatusLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   withdrawalStatusSubtitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-    textAlign: 'right',
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'right' } });
 }

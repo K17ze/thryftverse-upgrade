@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput } from 
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { NativeSheet } from '../../platform/native';
-import { Space, Typography, Type, Radius } from '../../theme/designTokens';
+import { Space, Typography, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { KeyboardAwareScrollView, KeyboardStickyView, type KeyboardAwareScrollViewRef } from '../../platform/keyboard/KeyboardProvider';
 import type { ReportReason } from '../../services/profileApi';
@@ -14,8 +15,7 @@ function SheetItem({
   label,
   onPress,
   destructive = false,
-  colors,
-}: {
+  colors }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
@@ -57,8 +57,7 @@ interface MoreSheetProps {
 
 export function ProfileMoreSheet({
   visible, onDismiss, isSelfProfile, isBlocked,
-  onShare, onCopyLink, onReport, onBlock, onUnblock,
-}: MoreSheetProps) {
+  onShare, onCopyLink, onReport, onBlock, onUnblock }: MoreSheetProps) {
   const { colors } = useAppTheme();
   return (
     <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.38 }]}>
@@ -189,8 +188,7 @@ export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: 
                   styles.detailsInput,
                   {
                     borderColor: requiresDetails && details.trim().length === 0 ? colors.danger : colors.border,
-                    color: colors.textPrimary,
-                  },
+                    color: colors.textPrimary },
                 ]}
                 value={details}
                 onChangeText={setDetails}
@@ -241,8 +239,7 @@ interface BlockConfirmSheetProps {
 }
 
 export function ProfileBlockConfirmSheet({
-  visible, onDismiss, displayHandle, isPending, onConfirm,
-}: BlockConfirmSheetProps) {
+  visible, onDismiss, displayHandle, isPending, onConfirm }: BlockConfirmSheetProps) {
   const { colors } = useAppTheme();
   return (
     <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.4 }]}>
@@ -289,21 +286,18 @@ export function ProfileBlockConfirmSheet({
 const styles = StyleSheet.create({
   sheetContainer: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   sheetTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-    marginBottom: Space.sm,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    marginBottom: Space.sm },
   sheetDescription: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.md,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    marginBottom: Space.md },
   // ── Sheet items — flat rows with hairline separators ──
   sheetItem: {
     flexDirection: 'row',
@@ -311,71 +305,61 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingVertical: Space.md + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 52,
-  },
+    minHeight: 52 },
   sheetItemText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.regular,
-    flex: 1,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    flex: 1 },
   // ── Report sheet ──
   reportSheetRoot: { flex: 1 },
   reportSheetHeader: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   reportScroll: { flex: 1 },
   reportScrollContent: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   reportReason: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.md + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 52,
-  },
+    minHeight: 52 },
   radioOuter: {
     width: 22,
     height: 22,
     borderRadius: Radius.full,
     borderWidth: 2,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   radioInner: {
     width: 10,
     height: 10,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   reportReasonLabel: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   // ── Details field ──
   detailsWrap: { marginTop: Space.md },
   detailsLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs },
   detailsInput: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     minHeight: 80,
-    textAlignVertical: 'top',
-  },
+    textAlignVertical: 'top' },
   // ── Submit button ──
   submitBtn: {
     height: 52,
@@ -384,42 +368,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginHorizontal: Space.md,
     marginTop: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   submitBtnText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   // ── Block confirmation ──
   confirmRow: {
     flexDirection: 'row',
     gap: Space.md,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   cancelBtn: {
     flex: 1,
     height: 48,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   cancelBtnText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   confirmBlockBtn: {
     flex: 1,
     height: 48,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   confirmBlockBtnText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily } });

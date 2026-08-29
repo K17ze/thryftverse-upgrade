@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface Props {
   etaWindow: string;
@@ -21,8 +22,7 @@ export function EtaBanner({ etaWindow, estimatedDeliveryLabel, serviceName }: Pr
     etaIconWrap: {},
     etaLabel: { color: colors.textMuted },
     etaValue: { color: colors.textPrimary },
-    etaService: { color: colors.textSecondary },
-  }), [colors]);
+    etaService: { color: colors.textSecondary } }), [colors]);
 
   return (
     <View style={[styles.etaBanner, themed.etaBanner]}>
@@ -52,34 +52,27 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   etaIconWrap: {
     width: 28,
     height: 28,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   etaContent: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   etaLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    opacity: 0.6,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    opacity: 0.6 },
   etaValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   etaService: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    opacity: 0.5,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    opacity: 0.5 } });

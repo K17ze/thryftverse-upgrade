@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Control, FontFamily, FontSize } from '../../theme/designTokens';
+import { Space, Control, FontFamily, FontSize } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PremiumToggle } from '../PremiumToggle';
 
@@ -48,8 +49,7 @@ export function SettingsRow({
   children,
   accessibilityLabel,
   accessibilityHint,
-  titleStyle,
-}: SettingsRowProps) {
+  titleStyle }: SettingsRowProps) {
   const { colors } = useAppTheme();
   const hasAction = !!onPress || !!onToggle;
   const showChevron = !!onPress && !onToggle && toggleValue === undefined;
@@ -152,52 +152,44 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + Space.xs,
     paddingHorizontal: Space.md,
     minHeight: 56,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   // 44pt transparent hit target — no visible chrome, just the touch area.
   iconTarget: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -Space.xs,
-  },
+    marginLeft: -Space.xs },
   textWrap: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
-    gap: Space.xs / 4,
-  },
+    gap: Space.xs / 4 },
   // Label: 16sp regular weight per 2026 mobile UX spec.
   title: {
     fontSize: FontSize.bodyLarge,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: 22,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: 22 },
   subtitle: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     marginTop: 0,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   right: {
     flexDirection: 'row',
     alignItems: 'center',
     minWidth: 0,
     flexShrink: 1,
     justifyContent: 'flex-end',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   // Value/status: 14sp muted per spec.
   value: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
     flexShrink: 1,
     maxWidth: '100%',
     textAlign: 'right',
-    letterSpacing: Type.body.letterSpacing,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
-});
+    letterSpacing: TypographyV2.body.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] } });

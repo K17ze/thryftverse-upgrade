@@ -18,8 +18,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,7 +31,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardStickyView } from '../platform/keyboard/KeyboardProvider';
-import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 import { ChatTopBar } from '../components/chat/ChatTopBar';
 import { MessageBubble } from '../components/chat/MessageBubble';
@@ -53,8 +53,7 @@ import {
   getDeployedAgents,
   getAgentSuggestions,
   type ChatAgent,
-  type SuggestedReply,
-} from '../services/chatAgentsApi';
+  type SuggestedReply } from '../services/chatAgentsApi';
 import { reportConversationOnApi } from '../services/chatApi';
 import { useTypingIndicator } from '../services/realtimeClient';
 
@@ -63,8 +62,7 @@ import {
   useConversationComposer,
   type Message,
   formatDateSeparator,
-  formatMessageTime,
-} from '../hooks/chat';
+  formatMessageTime } from '../hooks/chat';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
 
@@ -75,8 +73,7 @@ function toEmojiReactions(
   return reactions.map((r) => ({
     emoji: r.emoji,
     count: r.count,
-    reactedByMe: r.reactedByMe,
-  }));
+    reactedByMe: r.reactedByMe }));
 }
 
 export default function GroupChatScreen({ navigation, route }: Props) {
@@ -129,10 +126,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
         reactions: entry.reactions?.map((r) => ({
           emoji: r.emoji,
           count: r.userIds.length,
-          reactedByMe: r.userIds.includes(currentUser?.id ?? 'me'),
-        })),
-        replyToMessageId: entry.replyToMessageId,
-      };
+          reactedByMe: r.userIds.includes(currentUser?.id ?? 'me') })),
+        replyToMessageId: entry.replyToMessageId };
     });
   }, [conversation, currentUser?.id]);
 
@@ -169,8 +164,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     handleUndoDelete,
     dateSeparatorIndices,
     handleMessageListScroll: hookHandleMessageListScroll,
-    syncMessagesFromApi,
-  } = useConversationMessages({
+    syncMessagesFromApi } = useConversationMessages({
     conversationId,
     currentUser,
     hydratedMessages,
@@ -188,8 +182,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     conversationUnread: conversation?.unread,
     markConversationRead,
     appendConversationMessage,
-    replaceConversationMessages,
-  });
+    replaceConversationMessages });
 
   // ─── Controller hook: composer state, typing, reply ─────────────────
   const messagesRef = useRef(messages);
@@ -202,14 +195,12 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     replyTo,
     setReplyTo,
     reactingToMessage,
-    setReactingToMessage,
-  } = useConversationComposer({
+    setReactingToMessage } = useConversationComposer({
     conversationId,
     messagesRef,
     show,
     haptic,
-    setConversationDraft,
-  });
+    setConversationDraft });
 
   // ─── Server-driven typing indicator (other participants only) ──────
   // P0.13: Replaces the false self-typing indicator. useTypingIndicator
@@ -478,8 +469,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               // P0.6: Preserve scroll anchor when older messages are
               // prepended via cursor pagination.
               maintainVisibleContentPosition={{
-                autoscrollToTopThreshold: 0,
-              }}
+                autoscrollToTopThreshold: 0 }}
             />
 
             <KeyboardStickyView style={styles.composerWrap}>
@@ -583,44 +573,36 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     screenRoot: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     agentChipsRow: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     agentChipsContent: {
       paddingHorizontal: Space.md,
       gap: Space.xs,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     agentChip: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     agentChipText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
     centerState: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs + 2,
       paddingHorizontal: Space.xl,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     stateTitle: {
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     stateCaption: {
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     retryBtn: {
       paddingHorizontal: Space.lg,
       paddingVertical: Space.sm,
@@ -628,79 +610,62 @@ const createStyles = (colors: ThemeColors) =>
       minHeight: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     retryBtnText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
     listContent: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      flexGrow: 1,
-    },
+      flexGrow: 1 },
     messageRow: {
-      marginVertical: 2,
-    },
+      marginVertical: 2 },
     dateSeparator: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     dateSeparatorLine: {
       flex: 1,
-      height: StyleSheet.hairlineWidth,
-    },
+      height: StyleSheet.hairlineWidth },
     dateSeparatorText: {
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     composerWrap: {
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     undoBanner: {
       backgroundColor: colors.brand,
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     replyQuote: {
       marginHorizontal: Space.md,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     reactionsBar: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     typingRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     addAgentContainer: {
       alignItems: 'center',
       paddingVertical: Space.sm,
-      paddingBottom: Space.md,
-    },
+      paddingBottom: Space.md },
     addAgentRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     addAgentText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
     addAgentDescription: {
       textAlign: 'center',
       marginTop: Space.xs,
-      paddingHorizontal: Space.lg,
-    },
-  });
+      paddingHorizontal: Space.lg } });

@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  StatusBar,
-} from 'react-native';
+  StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -19,7 +18,8 @@ import { DevSettings } from 'react-native';
 import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { Typography, Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 type Props = NativeStackScreenProps<RootStackParamList, 'RuntimeSmokeTest'>;
 
 /**
@@ -160,11 +160,9 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
               message: 'Shake the device and select Reload.',
               confirmLabel: 'OK',
               variant: 'default',
-              onConfirm: () => {},
-            });
+              onConfirm: () => {} });
           }
-        },
-      });
+        } });
     } catch (e) {
       setConfirmSheet({
         visible: true,
@@ -172,8 +170,7 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
         message: String(e),
         confirmLabel: 'OK',
         variant: 'default',
-        onConfirm: () => {},
-      });
+        onConfirm: () => {} });
     }
   };
 
@@ -186,8 +183,7 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
         message: `Cannot open ${btn.label}: no ${btn.needsData} found in current store/backend state.`,
         confirmLabel: 'OK',
         variant: 'default',
-        onConfirm: () => {},
-      });
+        onConfirm: () => {} });
       return;
     }
     safeNavigate(navigation, btn.screen, params);
@@ -316,27 +312,22 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   scrollContent: {
     padding: Space.md,
-    paddingBottom: Space.xxl + Space.lg,
-  },
+    paddingBottom: Space.xxl + Space.lg },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   headerTitle: {
-    fontSize: Type.title.size,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
+    lineHeight: TypographyV2.screenTitle.lineHeight },
   subtitle: {
     marginBottom: Space.md,
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   statsCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
@@ -344,21 +335,17 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   statRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   statValue: {
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: Typography.family.medium },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   tile: {
     width: '30%',
     flexGrow: 1,
@@ -372,25 +359,20 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     minHeight: Space.xxl + Space.lg,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   tileDisabled: {
     backgroundColor: colors.surfaceAlt,
-    borderColor: colors.borderSubtle,
-  },
+    borderColor: colors.borderSubtle },
   tileLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   tileLabelDisabled: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   tileMissing: {
-    fontSize: Type.meta.size,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.danger },
   resetTile: {
     width: '100%',
     backgroundColor: colors.dangerSubtle,
@@ -402,18 +384,14 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.dangerBorder,
     marginBottom: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   resetTileLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   resetTileCaption: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    textAlign: 'center',
-  },
-  });
+    textAlign: 'center' } });
 }

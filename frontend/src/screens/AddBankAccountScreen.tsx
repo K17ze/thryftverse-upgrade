@@ -6,8 +6,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -22,7 +21,8 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { t } from '../i18n';
 
@@ -115,16 +115,14 @@ export default function AddBankAccountScreen({ navigation }: Props) {
         type: 'bank_account',
         label: localPaymentMethod.label,
         details: localPaymentMethod.details,
-        isDefault: true,
-      });
+        isDefault: true });
 
       savePaymentMethod({
         id: saved.id,
         type: saved.type,
         label: saved.label,
         details: saved.details ?? undefined,
-        isDefault: saved.isDefault,
-      });
+        isDefault: saved.isDefault });
       show('Bank account saved', 'success');
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to save bank account right now.');
@@ -262,45 +260,35 @@ export default function AddBankAccountScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     postureSummary: {
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     postureTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     postureSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginTop: Space.xs / 2 },
     policyLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       textAlign: 'center',
       marginTop: Space.xs,
       marginBottom: Space.md,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     fieldRow: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     fieldLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      marginBottom: Space.xs,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginBottom: Space.xs },
     fieldInput: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.medium,
-      paddingVertical: Space.xs,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      paddingVertical: Space.xs },
     divider: {
-      height: StyleSheet.hairlineWidth,
-    },
+      height: StyleSheet.hairlineWidth },
     saveBtn: {
-      borderRadius: Radius.full,
-    },
-  });
+      borderRadius: Radius.full } });
 }

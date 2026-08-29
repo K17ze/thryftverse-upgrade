@@ -27,13 +27,11 @@ import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import {
   Space,
   Radius,
-  Type,
   TypeStyles,
-  Typography,
   AspectRatio,
   Control,
-  Stroke,
-} from '../../theme/designTokens';
+  Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 
 export interface ListingPreviewCardProps {
@@ -57,8 +55,7 @@ export function ListingPreviewCard({
   price,
   condition,
   sellerName,
-  sellerAvatar,
-}: ListingPreviewCardProps) {
+  sellerAvatar }: ListingPreviewCardProps) {
   const { colors } = useAppTheme();
   const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -157,39 +154,33 @@ export function ListingPreviewCard({
 function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
     wrap: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     labelRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     labelText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '500',
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     card: {
       flexDirection: 'row',
       backgroundColor: colors.surface,
       borderRadius: Radius.lg,
       borderWidth: Stroke.hairline,
       borderColor: colors.borderSubtle,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     // Media — portrait 3:4, fixed width so the row is stable
     imageWrap: {
       position: 'relative',
       width: Space.xxl + Space.xl,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     image: {
       width: '100%',
-      aspectRatio: AspectRatio.portrait,
-    },
+      aspectRatio: AspectRatio.portrait },
     conditionBadge: {
       position: 'absolute',
       top: Space.xs,
@@ -197,52 +188,44 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       backgroundColor: colors.overlay,
       paddingHorizontal: Space.xs + 1,
       paddingVertical: Space.xs / 2,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     conditionText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textInverse,
       letterSpacing: 0.3,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
     // Info
     info: {
       flex: 1,
       padding: Space.sm,
       justifyContent: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     title: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     priceRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     priceHero: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     sellerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs + 1,
-      minHeight: 20,
-    },
+      minHeight: 20 },
     sellerAvatar: {
       width: Space.md,
       height: Space.md,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     sellerAvatarPlaceholder: {
       width: Space.md,
       height: Space.md,
@@ -251,14 +234,11 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderWidth: Stroke.hairline,
       borderColor: colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     sellerName: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      flex: 1,
-    },
-  });
+      flex: 1 } });
 }

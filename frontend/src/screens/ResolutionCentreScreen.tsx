@@ -5,14 +5,14 @@ import {
   StyleSheet,
   Pressable,
   RefreshControl,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Typography, Radius, Type, Stroke } from '../theme/designTokens';
+import { Space, Typography, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useStore } from '../store/useStore';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
@@ -32,8 +32,7 @@ function getStatusConfig(colors: ThemeColors): Record<string, { label: string; c
   return {
   open: { label: 'Open', color: colors.brand, icon: 'folder-open-outline' },
   resolved: { label: 'Resolved', color: colors.success, icon: 'checkmark-circle-outline' },
-  closed: { label: 'Closed', color: colors.textMuted, icon: 'close-circle-outline' },
-  };
+  closed: { label: 'Closed', color: colors.textMuted, icon: 'close-circle-outline' } };
 }
 
 function formatRelativeDate(timestamp: number): string {
@@ -201,43 +200,35 @@ function createStyles(colors: ThemeColors) {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
     paddingVertical: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   filterRailContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   filterChip: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 3,
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
+    backgroundColor: colors.surface },
   filterChipActive: {
     borderColor: colors.brand,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   filterChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   filterChipTextActive: {
     color: colors.textInverse,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   filterChipCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    opacity: 0.7,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    opacity: 0.7 },
   listContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   ticketRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -245,42 +236,33 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   ticketInfo: {
     flex: 1,
-    gap: Space.xs / 2 + 1,
-  },
+    gap: Space.xs / 2 + 1 },
   ticketTopic: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   ticketDetails: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.size + 4,
-  },
+    lineHeight: TypographyV2.meta.size + 4 },
   ticketMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   statusPill: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   ticketStatus: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   ticketDate: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted } });
 }

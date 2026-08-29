@@ -17,8 +17,7 @@ import {
   ScrollView,
   TextInput,
   FlatList,
-  type DimensionValue,
-} from 'react-native';
+  type DimensionValue } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,9 +25,9 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  useReducedMotion,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '../../../theme/designTokens';
+  useReducedMotion } from 'react-native-reanimated';
+import { Space, Radius, Typography, FontFamily, Control, Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
@@ -39,8 +38,7 @@ import {
   fetchUserListingsFromApi,
   fetchListingByIdFromApi,
   type ListingSearchResult,
-  type ListingApiItem,
-} from '../../../services/listingsApi';
+  type ListingApiItem } from '../../../services/listingsApi';
 import { useStore } from '../../../store/useStore';
 import { createStableId } from '../../../utils/createStableId';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -125,8 +123,7 @@ async function recordRecentListing(item: ListingSearchResult): Promise<void> {
       title: item.title,
       priceGbp: item.priceGbp,
       imageUrl: item.imageUrl,
-      createdAt: item.createdAt,
-    };
+      createdAt: item.createdAt };
     const filtered = existing.filter((e) => e.id !== entry.id);
     const next = [entry, ...filtered].slice(0, MAX_RECENT);
     await AsyncStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(next));
@@ -149,8 +146,7 @@ function listingApiItemToSearchResult(item: ListingApiItem): ListingSearchResult
     brand: item.brand,
     size: item.size,
     condition: item.condition,
-    category: item.category,
-  };
+    category: item.category };
 }
 
 function listingToProductRef(item: ListingSearchResult): ProductRef {
@@ -161,8 +157,7 @@ function listingToProductRef(item: ListingSearchResult): ProductRef {
     priceGbp: item.priceGbp,
     imageUri: item.imageUrl ?? '',
     brand: item.brand ?? undefined,
-    size: item.size ?? undefined,
-  };
+    size: item.size ?? undefined };
 }
 
 // ── SkeletonBlock — one-time shimmer sweep (AGENTS.md §14, §17) ──────
@@ -179,8 +174,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
 
   const style = useAnimatedStyle(() => ({
     backgroundColor: colors.surfaceAlt,
-    opacity: 0.5 + 0.3 * shimmerSV.value,
-  }));
+    opacity: 0.5 + 0.3 * shimmerSV.value }));
 
   return (
     <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
@@ -193,9 +187,9 @@ function ProductTileSkeleton() {
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'transparent' }}>
       <SkeletonBlock width={48} height={48} radius={Radius.sm} />
       <View style={{ flex: 1, gap: Space.xs }}>
-        <SkeletonBlock width={'70%'} height={Type.body.size + 2} radius={Radius.sm} />
-        <SkeletonBlock width={'40%'} height={Type.caption.size + 2} radius={Radius.sm} />
-        <SkeletonBlock width={36} height={Type.caption.size + 2} radius={Radius.sm} />
+        <SkeletonBlock width={'70%'} height={TypographyV2.body.size + 2} radius={Radius.sm} />
+        <SkeletonBlock width={'40%'} height={TypographyV2.meta.size + 2} radius={Radius.sm} />
+        <SkeletonBlock width={36} height={TypographyV2.meta.size + 2} radius={Radius.sm} />
       </View>
     </View>
   );
@@ -221,8 +215,8 @@ function ProductGridSkeleton() {
           {[0, 1].map((col) => (
             <View key={col} style={{ flex: 1, gap: Space.xs }}>
               <SkeletonBlock width={'100%'} height={120} radius={Radius.md} />
-              <SkeletonBlock width={'80%'} height={Type.body.size + 2} radius={Radius.sm} />
-              <SkeletonBlock width={40} height={Type.caption.size + 2} radius={Radius.sm} />
+              <SkeletonBlock width={'80%'} height={TypographyV2.body.size + 2} radius={Radius.sm} />
+              <SkeletonBlock width={40} height={TypographyV2.meta.size + 2} radius={Radius.sm} />
             </View>
           ))}
         </View>
@@ -237,8 +231,7 @@ export function ProductBrowserSheet({
   visible,
   onClose,
   onProductSelect,
-  sources,
-}: ProductBrowserSheetProps) {
+  sources }: ProductBrowserSheetProps) {
   const { colors } = useAppTheme();
   const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
@@ -580,47 +573,39 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: 44,
       height: 44,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     // ── Tab bar ──
     tabBar: {
       flexDirection: 'row',
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     tabBarContent: {
       gap: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     tab: {
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     tabLabel: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     // ── Search ──
     searchRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     searchIcon: {},
     searchInput: {
       flex: 1,
@@ -628,78 +613,62 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     // ── Results ──
     resultList: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     resultRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     resultThumb: {
       width: 48,
       height: 48,
       borderRadius: Radius.sm,
       justifyContent: 'center',
       alignItems: 'center',
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     resultThumbImg: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     resultInfo: {
       flex: 1,
-      gap: 2,
-    },
+      gap: 2 },
     resultName: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     resultSubtext: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     resultPrice: {
       fontFamily: Typography.family.bold,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     // ── States ──
     emptyState: {
       paddingVertical: Space.xl,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     emptyText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     errorBody: {
       paddingVertical: Space.xl,
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     errorText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     retryBtn: {
       height: 50,
       paddingHorizontal: Space.xl,
       borderRadius: Radius.lg,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     retryBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.textInverse,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textInverse } });
 }

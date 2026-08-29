@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   RefreshControl,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -16,7 +15,8 @@ import { parseApiError } from '../lib/apiClient';
 import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipNavigationRow } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import { Space, Radius, Type, Typography, Stroke, IconGrammar } from '../theme/designTokens';
+import { Space, Radius, Stroke, IconGrammar } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
 import {
   fetchInterventionState,
@@ -25,14 +25,12 @@ import {
   revokeOtherSecuritySessions,
   declareCompromise,
   type UserSafeInterventionState,
-  type SecuritySessionInfo,
-} from '../services/accountSecurityApi';
+  type SecuritySessionInfo } from '../services/accountSecurityApi';
 import {
   registerPasskey,
   listUserPasskeys,
   removeUserPasskey,
-  type PasskeyInfo,
-} from '../services/passkeyApi';
+  type PasskeyInfo } from '../services/passkeyApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AccountSecurity'>;
 
@@ -164,8 +162,7 @@ export default function AccountSecurityScreen({ navigation }: Props) {
         } finally {
           setRevokingOthers(false);
         }
-      },
-    });
+      } });
   }, [haptic, show]);
 
   const handleRegisterPasskey = useCallback(async () => {
@@ -205,8 +202,7 @@ export default function AccountSecurityScreen({ navigation }: Props) {
         } finally {
           setRemovingPasskeyId(null);
         }
-      },
-    });
+      } });
   }, [haptic, show]);
 
   const handleDeclareCompromise = useCallback(async () => {
@@ -228,8 +224,7 @@ export default function AccountSecurityScreen({ navigation }: Props) {
         } finally {
           setDeclaring(false);
         }
-      },
-    });
+      } });
   }, [haptic, show, navigation]);
 
   // ── Loading state ──────────────────────────────────────────────────
@@ -447,8 +442,7 @@ function SessionRow({
   onRevoke,
   isLast,
   colors,
-  styles,
-}: {
+  styles }: {
   session: SecuritySessionInfo;
   isRevoking: boolean;
   onRevoke: () => void;
@@ -499,8 +493,7 @@ function capabilityLabel(cap: string): string {
   const labels: Record<string, string> = {
     payout_changes: 'Payout changes',
     withdrawals: 'Withdrawals',
-    protected_field_changes: 'Profile changes',
-  };
+    protected_field_changes: 'Profile changes' };
   return labels[cap] ?? cap;
 }
 
@@ -514,80 +507,64 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
       marginBottom: Space.lg,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     interventionText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing },
     interventionCaps: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     interventionAction: {
       marginTop: Space.xs,
-      alignSelf: 'flex-start',
-    },
+      alignSelf: 'flex-start' },
     section: {
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     sectionTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       textTransform: 'uppercase',
       marginBottom: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     sessionRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.smMd,
       paddingHorizontal: Space.md,
       borderBottomWidth: Stroke.hairline,
-      minHeight: 52,
-    },
+      minHeight: 52 },
     sessionIconWrap: {
-      marginRight: Space.md,
-    },
+      marginRight: Space.md },
     sessionContent: {
       flex: 1,
-      gap: 2,
-    },
+      gap: 2 },
     sessionDevice: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     sessionCurrent: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     sessionMeta: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     revokeBtn: {
-      minWidth: 60,
-    },
+      minWidth: 60 },
     revokedLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     emptyText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
-    },
-  });
+      paddingVertical: Space.md } });
 }
 
 // ── Passkey row ────────────────────────────────────────────────────────
@@ -598,8 +575,7 @@ function PasskeyRow({
   onRemove,
   isLast,
   colors,
-  styles,
-}: {
+  styles }: {
   passkey: PasskeyInfo;
   isRemoving: boolean;
   onRemove: () => void;

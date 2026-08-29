@@ -2,14 +2,14 @@ import React from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Stroke} from '../../theme/designTokens';
+import { Typography, Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -57,8 +57,7 @@ export function ProfileVisualHeader({
   onMessage,
   following = false,
   verified = false,
-  hideCover = false,
-}: ProfileVisualHeaderProps) {
+  hideCover = false }: ProfileVisualHeaderProps) {
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -187,19 +186,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     backgroundColor: colors.surface,
     overflow: 'hidden',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   coverWrap: {
     width: '100%',
     height: COVER_H,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   coverImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   editCoverBtn: {
     position: 'absolute',
     bottom: Space.md,
@@ -210,20 +206,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   editCoverText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: '#fff',
-  },
+    fontSize: TypographyV2.meta.size,
+    color: '#fff' },
   identityBlock: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: Space.md,
     marginTop: -AVATAR_SIZE / 2,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   avatarWrap: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
@@ -232,12 +225,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.surface,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   avatarImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   editAvatarBtn: {
     position: 'absolute',
     bottom: 0,
@@ -249,40 +240,34 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: colors.surface,
-  },
+    borderColor: colors.surface },
   verifiedBadge: {
     position: 'absolute',
     top: -2,
     right: -2,
     backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   nameBlock: {
     flex: 1,
     paddingBottom: Space.xs,
-    paddingTop: AVATAR_SIZE / 2 + Space.xs,
-  },
+    paddingTop: AVATAR_SIZE / 2 + Space.xs },
   displayName: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.priceList.size,
+    fontSize: TypographyV2.priceList.size,
     color: colors.textPrimary,
     letterSpacing: -0.4,
-    lineHeight: Type.priceList.lineHeight,
-  },
+    lineHeight: TypographyV2.priceList.lineHeight },
   handle: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   bio: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
     marginTop: Space.xs,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   statsRail: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -290,64 +275,53 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginHorizontal: Space.md,
     marginTop: Space.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   statCell: {
     alignItems: 'center',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   statValue: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   statLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    letterSpacing: 0.5,
-  },
+    letterSpacing: 0.5 },
   actionDock: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     height: 44,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   actionBtnPrimary: {
     flex: 1,
-    backgroundColor: colors.textPrimary,
-  },
+    backgroundColor: colors.textPrimary },
   actionBtnPrimaryText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    color: colors.background,
-  },
+    fontSize: TypographyV2.body.size,
+    color: colors.background },
   actionBtnSecondary: {
     width: 48,
     backgroundColor: colors.surfaceAlt,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   actionBtnSecondaryText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    color: colors.textPrimary },
   contextRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   contextPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -355,11 +329,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   contextPillText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: colors.textMuted,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted } });

@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { ListingQualityResult } from '../../utils/listingQuality';
 import { useAppTheme } from '../../theme/ThemeContext';
 
@@ -13,8 +14,7 @@ export interface ListingQualityMeterProps {
 const TIER_ICON: Record<string, string> = {
   basic: 'ellipse-outline',
   good: 'star-half-outline',
-  excellent: 'star',
-};
+  excellent: 'star' };
 
 /**
  * Shows a listing quality progress bar with tier label and missing-item chips.
@@ -76,54 +76,43 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   title: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   scoreWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   score: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   tierBadge: {
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   tierText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily },
   barTrack: {
     height: Stroke.emphasis,
     borderRadius: Radius.sm,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   barFill: {
     height: '100%',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   itemsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   missingChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -132,29 +121,22 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs / 2 + 1,
     backgroundColor: 'transparent',
     borderRadius: Radius.sm,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   missingChipText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily },
   tipsCol: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   tipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   tipBullet: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight - 1,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight - 1,
+    fontFamily: TypographyV2.meta.fontFamily },
   tipText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight - 1,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight - 1 } });

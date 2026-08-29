@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type PasswordStrength = 'weak' | 'fair' | 'good' | 'strong';
 
@@ -67,53 +68,43 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: {
       marginTop: Space.sm,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     barRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     bars: {
       flexDirection: 'row',
       gap: Space.xs,
-      flex: 1,
-    },
+      flex: 1 },
     segment: {
       flex: 1,
       height: 4,
       borderRadius: Radius.sm,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     label: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: 0.2,
       minWidth: 50,
-      textAlign: 'right',
-    },
+      textAlign: 'right' },
     checklist: {
       gap: Space.xs + 2,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     checklistItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     checklistIcon: {
       width: 18,
       height: 18,
       borderRadius: Radius.full,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     checklistText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: 0.1,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: 0.1 } });
 
 export function PasswordStrengthBar({ password, showChecklist = true }: PasswordStrengthBarProps) {
   const { colors } = useAppTheme();

@@ -21,7 +21,8 @@ import React from 'react';
 import { View, Text, StyleSheet, type TextStyle, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, FontFamily, Control, IconGrammar, PressScale } from '../../theme/designTokens';
+import { Space, FontFamily, Control, IconGrammar, PressScale } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 export interface FlagshipNavigationRowProps {
@@ -80,8 +81,7 @@ export function FlagshipNavigationRow({
   accessibilityHint,
   children,
   minHeight = Control.hit,
-  style,
-}: FlagshipNavigationRowProps) {
+  style }: FlagshipNavigationRowProps) {
   const { colors } = useAppTheme();
   const isTappable = !!onPress && !disabled;
   const resolvedShowChevron =
@@ -174,43 +174,34 @@ const styles = StyleSheet.create({
   inner: {
     paddingVertical: Space.sm + Space.xs,
     paddingHorizontal: Space.md,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   textWrap: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   title: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   subtitle: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   trailing: {
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   children: {
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginTop: Space.sm + Space.xs,
-  },
-});
+    marginTop: Space.sm + Space.xs } });

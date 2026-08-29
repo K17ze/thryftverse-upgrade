@@ -7,8 +7,7 @@ import {
   ScrollView,
   Keyboard,
   useWindowDimensions,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -16,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke, Type} from '../../theme/designTokens';
+import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -24,7 +23,6 @@ import { useToast } from '../../context/ToastContext';
 import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
 import type { CreatorLayer, EffectNode } from '../composition';
-import { hasFullBleedMedia } from '../composition';
 import { layerTypeLabel } from '../shared/layerUtils';
 import { makeStableId } from '../../utils/createStableId';
 import { CreatorCanvas } from '../CreatorCanvas';
@@ -57,8 +55,7 @@ import {
   type ToolContext,
   type ToolGroup,
   type ToolDefinition,
-  getOverflowTools,
-} from '../core/toolRegistry';
+  getOverflowTools } from '../core/toolRegistry';
 import { EffectPreviewRail, AdjustPanel, FILTER_PRESETS, AutoAdjustButton, computeAutoAdjust, isAutoAdjustNode } from '../tools/effects';
 import type { AdjustNode } from '../tools/effects';
 import {
@@ -72,8 +69,7 @@ import {
   type TimelineState,
   type TimelineOperation,
   computeTotalDuration,
-  formatTimecode,
-} from './timeline';
+  formatTimecode } from './timeline';
 import { TransitionPreviewRail } from './transitions/TransitionPreviewRail';
 import { TRANSITION_PRESETS } from './transitions/TransitionPresets';
 import { KeyframeEditor } from './keyframes/KeyframeEditor';
@@ -157,8 +153,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     addPosterFrames,
     hasPendingRecovery,
     recoverCrashedProject,
-    dismissRecovery,
-  } = useCreator();
+    dismissRecovery } = useCreator();
 
   // ── Sheet / overlay state ──────────────────────────────────────────
   // 13 mutually exclusive sheets consolidated into a single discriminated
@@ -258,26 +253,24 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // ── Edit-surface geometry ──────────────────────────────────────────
-  // The 9:16 aspect ratio is the EXPORT ratio, not the edit surface ratio.
-  // When a full-bleed media layer exists (width=1, height=1), the edit
-  // surface fills the entire screen — the media uses contentFit="cover"
-  // to fill it (cropping if needed), matching Snapchat/Instagram where the
-  // viewfinder fills the screen and edits float over it.
-  // For documents WITHOUT full-bleed media (blank canvas, text-only),
-  // keep the centered 9:16 canvas so the authoring surface matches export.
+  // The authored coordinate space is always the document's canvas aspect
+  // ratio (9:16 for posters). The edit surface letterboxes around this
+  // authored space — it never mutates the document geometry to match the
+  // physical screen. Full-bleed media is achieved by the media layer's
+  // contentFit="cover" filling the authored canvas, not by changing the
+  // canvas dimensions. This ensures editor, viewer, thumbnail, and export
+  // all use the same coordinate space.
   const canvasWidth = screenWidth;
-  const pageHasFullBleedMedia = hasFullBleedMedia(page);
   const canvasHeight = useMemo(() => {
-    if (pageHasFullBleedMedia) return screenHeight;
+    // Always use the authored aspect ratio — never the physical screen ratio.
     const h = Math.floor(screenWidth / document.canvas.aspectRatio);
     return Math.min(h, screenHeight);
-  }, [pageHasFullBleedMedia, screenWidth, document.canvas.aspectRatio, screenHeight]);
+  }, [screenWidth, document.canvas.aspectRatio, screenHeight]);
 
   const canvasVerticalOffset = useMemo(() => {
-    if (pageHasFullBleedMedia) return 0;
     if (canvasHeight >= screenHeight) return 0;
     return Math.floor((screenHeight - canvasHeight) / 2);
-  }, [pageHasFullBleedMedia, canvasHeight, screenHeight]);
+  }, [canvasHeight, screenHeight]);
 
   // ── Auto-show frame tray on frame change (doc 04) ──────────────────
   // "show a bottom frame tray that appears when frame change occurs or
@@ -315,11 +308,9 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             message: 'Try again.',
             confirmLabel: 'OK',
             variant: 'default',
-            onConfirm: () => {},
-          });
+            onConfirm: () => {} });
         }
-      },
-    });
+      } });
   }, [isDirty, navigation, saveDraft]);
 
   // ── Keyboard shortcuts (web/tablet only) ───────────────────────────
@@ -449,9 +440,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   const chromeFadeStyle = useAnimatedStyle(() => ({
     opacity: withTiming(manipulationActiveSV.value === 1 ? 0.15 : 1, {
       duration: 200,
-      easing: Easing.out(Easing.cubic),
-    }),
-  }));
+      easing: Easing.out(Easing.cubic) }) }));
 
   // ── Video detection — any page with video media ───────────────────
   // When video content exists, the editor enters "video mode": the
@@ -510,8 +499,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     isPlaying: false,
     currentTimeMs: 0,
     totalDurationMs: 0,
-    playbackRate: 1,
-  });
+    playbackRate: 1 });
   useEffect(() => {
     const unsubscribe = playbackClock.subscribe((state) => {
       setPlaybackState(state);
@@ -559,8 +547,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         // Playback rate changes are handled by the clock's playbackRate.
         // The Video component's rate would be set via a ref in a future
         // enhancement.
-      },
-    });
+      } });
     return () => {
       playbackClock.unregisterVideoAdapter();
     };
@@ -617,8 +604,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           speed,
           volume: payload.volume ?? 1.0,
           thumbnailUri: payload.thumbnailUri,
-          durationMs,
-        });
+          durationMs });
         pageIndices.push(pageIdx);
       }
     }
@@ -682,8 +668,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             id: layer.id,
             type: overlayType,
             timeRange: { startMs: clipOffsetMs, endMs: clipOffsetMs + pageDuration },
-            label,
-          });
+            label });
         }
       }
     }
@@ -722,8 +707,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       overlays: timelineOverlays,
       playheadMs: playbackState.currentTimeMs,
       totalDurationMs: timelineTotalDurationMs,
-      isPlaying: playbackState.isPlaying,
-    }),
+      isPlaying: playbackState.isPlaying }),
     [timelineClips, timelineOverlays, playbackState.currentTimeMs, timelineTotalDurationMs, playbackState.isPlaying],
   );
 
@@ -764,8 +748,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             : clip.trimEndMs;
           updateLayer(op.clipId, {
             type: 'media',
-            payload: { ...layer.payload, trimStartMs: newTrimStart, trimEndMs: newTrimEnd },
-          }, 'Trim clip');
+            payload: { ...layer.payload, trimStartMs: newTrimStart, trimEndMs: newTrimEnd } }, 'Trim clip');
           break;
         }
         case 'speed': {
@@ -775,8 +758,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           if (!layer || layer.type !== 'media') return;
           updateLayer(op.clipId, {
             type: 'media',
-            payload: { ...layer.payload, speed: op.speed },
-          }, 'Change speed');
+            payload: { ...layer.payload, speed: op.speed } }, 'Change speed');
           haptic.light();
           break;
         }
@@ -787,8 +769,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           if (!layer || layer.type !== 'media') return;
           updateLayer(op.clipId, {
             type: 'media',
-            payload: { ...layer.payload, volume: op.volume },
-          }, 'Change volume');
+            payload: { ...layer.payload, volume: op.volume } }, 'Change volume');
           haptic.light();
           break;
         }
@@ -830,8 +811,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           // 1. Update the original clip's trim end to the split point
           updateLayer(op.clipId, {
             type: 'media',
-            payload: { ...layer.payload, trimEndMs: Math.round(splitPoint) },
-          }, 'Split clip (first half)');
+            payload: { ...layer.payload, trimEndMs: Math.round(splitPoint) } }, 'Split clip (first half)');
 
           // 2. Create a new media layer for the second half
           const newLayer: CreatorLayer = {
@@ -841,9 +821,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             payload: {
               ...layer.payload,
               trimStartMs: Math.round(splitPoint),
-              trimEndMs: clip.trimEndMs,
-            },
-          };
+              trimEndMs: clip.trimEndMs } };
           addLayer(newLayer);
 
           haptic.medium();
@@ -868,8 +846,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             .find((l) => l.id === op.overlayId);
           if (!layer) return;
           updateLayer(op.overlayId, {
-            timeRange: op.timeRange,
-          }, 'Move overlay');
+            timeRange: op.timeRange }, 'Move overlay');
           haptic.light();
           break;
         }
@@ -915,10 +892,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           left: vp.viewRect.x,
           top: vp.viewRect.y,
           width: vp.viewRect.width,
-          height: vp.viewRect.height,
-        },
-        aspectRatio: vp.authoredAspectRatio,
-      });
+          height: vp.viewRect.height },
+        aspectRatio: vp.authoredAspectRatio });
     } else {
       setEntrySourceTransform(null);
     }
@@ -1050,9 +1025,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
         textColor: '#ffffff',
         alignment: 'center',
-        opacity: 1,
-      },
-    } as CreatorLayer;
+        opacity: 1 } } as CreatorLayer;
     addLayer(newLayer);
     // Enter in-place text editing immediately — the InlineTextEditor
     // renders AT the layer's position on the canvas so the user can type
@@ -1173,8 +1146,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           ];
           updateLayerLive(selectedMediaLayer.id, {
             type: 'media',
-            payload: { ...selectedMediaLayer.payload, effects: revertedEffects },
-          });
+            payload: { ...selectedMediaLayer.payload, effects: revertedEffects } });
         }
       }
       previewFilterIdRef.current = null;
@@ -1198,8 +1170,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       ];
       updateLayerLive(selectedMediaLayer.id, {
         type: 'media',
-        payload: { ...selectedMediaLayer.payload, effects: previewEffects },
-      });
+        payload: { ...selectedMediaLayer.payload, effects: previewEffects } });
     },
     [selectedMediaLayer, currentEffects, updateLayerLive],
   );
@@ -1219,8 +1190,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     ];
     updateLayer(selectedMediaLayer.id, {
       type: 'media',
-      payload: { ...selectedMediaLayer.payload, effects: newEffects },
-    }, 'Apply filter');
+      payload: { ...selectedMediaLayer.payload, effects: newEffects } }, 'Apply filter');
     // Commit ends the preview: clear preview state and record the new
     // committed filter so a subsequent panel close does not revert it.
     previewFilterIdRef.current = null;
@@ -1242,8 +1212,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     ];
     updateLayer(selectedMediaLayer.id, {
       type: 'media',
-      payload: { ...selectedMediaLayer.payload, effects: newEffects },
-    });
+      payload: { ...selectedMediaLayer.payload, effects: newEffects } });
   }, [selectedMediaLayer, currentEffects, updateLayer]);
 
   const handleEffectReset = useCallback(() => {
@@ -1251,8 +1220,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     const newEffects = currentEffects.filter((n) => n.type !== 'adjust');
     updateLayer(selectedMediaLayer.id, {
       type: 'media',
-      payload: { ...selectedMediaLayer.payload, effects: newEffects },
-    }, 'Reset adjustments');
+      payload: { ...selectedMediaLayer.payload, effects: newEffects } }, 'Reset adjustments');
   }, [selectedMediaLayer, currentEffects, updateLayer]);
 
   // ── Auto-adjust (one-tap color correction) ─────────────────────────
@@ -1272,8 +1240,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       const newEffects = currentEffects.filter((n) => n.type !== 'adjust');
       updateLayer(selectedMediaLayer.id, {
         type: 'media',
-        payload: { ...selectedMediaLayer.payload, effects: newEffects },
-      }, 'Remove auto-adjust');
+        payload: { ...selectedMediaLayer.payload, effects: newEffects } }, 'Remove auto-adjust');
       return;
     }
     const autoNode = await computeAutoAdjust(effectsSourceUri);
@@ -1283,8 +1250,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     ];
     updateLayer(selectedMediaLayer.id, {
       type: 'media',
-      payload: { ...selectedMediaLayer.payload, effects: newEffects },
-    }, 'Apply auto-adjust');
+      payload: { ...selectedMediaLayer.payload, effects: newEffects } }, 'Apply auto-adjust');
   }, [selectedMediaLayer, currentEffects, updateLayer, effectsSourceUri]);
 
   // ── Crop action for selected media ─────────────────────────────────
@@ -1335,8 +1301,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     const newPages = [...document.pages];
     newPages[activePageIndex] = {
       ...newPages[activePageIndex],
-      transitionId: presetId,
-    };
+      transitionId: presetId };
     commitDocument(
       { ...document, pages: newPages, updatedAt: new Date().toISOString() },
       'Apply transition',
@@ -1374,8 +1339,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     const existing = (selectedLayer as { keyframes?: Keyframe[] }).keyframes ?? [];
     updateLayer(selectedLayer.id, {
       ...selectedLayer,
-      keyframes: [...existing, newKf],
-    } as Partial<CreatorLayer>, 'Add keyframe');
+      keyframes: [...existing, newKf] } as Partial<CreatorLayer>, 'Add keyframe');
     haptic.light();
   }, [selectedLayer, updateLayer, haptic]);
 
@@ -1385,8 +1349,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     const newKeyframes = existing.map((k) => k.id === id ? { ...k, ...updates } : k);
     updateLayer(selectedLayer.id, {
       ...selectedLayer,
-      keyframes: newKeyframes,
-    } as Partial<CreatorLayer>, 'Update keyframe');
+      keyframes: newKeyframes } as Partial<CreatorLayer>, 'Update keyframe');
   }, [selectedLayer, updateLayer]);
 
   const handleRemoveKeyframe = useCallback((id: string) => {
@@ -1395,8 +1358,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     const newKeyframes = existing.filter((k) => k.id !== id);
     updateLayer(selectedLayer.id, {
       ...selectedLayer,
-      keyframes: newKeyframes.length > 0 ? newKeyframes : undefined,
-    } as Partial<CreatorLayer>, 'Remove keyframe');
+      keyframes: newKeyframes.length > 0 ? newKeyframes : undefined } as Partial<CreatorLayer>, 'Remove keyframe');
     haptic.light();
   }, [selectedLayer, updateLayer, haptic]);
 
@@ -1413,8 +1375,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     if (!selectedLayer || selectedLayer.type !== 'media') return;
     updateLayer(selectedLayer.id, {
       type: 'media',
-      payload: { ...selectedLayer.payload, speedCurve: nextCurve },
-    }, 'Edit speed curve');
+      payload: { ...selectedLayer.payload, speedCurve: nextCurve } }, 'Edit speed curve');
   }, [selectedLayer, updateLayer]);
 
   // ── Tool groups for ContextToolRail ────────────────────────────────
@@ -1440,8 +1401,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       accessibilityLabel,
       accessibilityHint,
       active,
-      capabilityId,
-    });
+      capabilityId });
 
     // Overflow tools shared across contexts (Layers, Preview, Safe Zone,
     // Templates, Drafts, Settings, Add Frame)
@@ -1491,8 +1451,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         mk('timeline', 'Timeline', 'film-outline', handleTimelineToggle, 'Timeline', 'Expands the timeline for editing clip timing and overlays', undefined, bottomSurface === 'timeline'),
         ...addFrameOverflow,
         ...sharedOverflow,
-      ],
-    };
+      ] };
 
     // ── poster-video-default: Timeline, Text, Stickers, Product ──
     // Timeline stays primary for video (it is the job-to-be-done for video
@@ -1510,8 +1469,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         mk('draw', 'Draw', 'brush-outline', handleDraw, 'Draw', 'Opens the drawing tool', 'drawing', undefined, 'layerDraw'),
         ...addFrameOverflow,
         ...sharedOverflow,
-      ],
-    };
+      ] };
 
     // ── poster-media-selected: Replace, Crop, Adjust, Effects ──
     // Per report §7.4: the 4 most relevant media-editing actions are
@@ -1563,8 +1521,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
         mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
         ...sharedOverflow,
-      ],
-    };
+      ] };
 
     // ── poster-text-selected: Edit, Font, Color, Align, More ──
     // The Align tool's glyph is dynamic — it reflects the current alignment
@@ -1590,8 +1547,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           const nextStyle = presets[(currentIdx + 1) % presets.length];
           updateLayer(selectedLayer.id, {
             type: 'text',
-            payload: { ...selectedLayer.payload, textStyle: nextStyle },
-          }, 'Change font style');
+            payload: { ...selectedLayer.payload, textStyle: nextStyle } }, 'Change font style');
         }, 'Font', 'Cycles through font styles'),
         mk('color', 'Color', 'color-palette-outline', () => {
           if (!selectedLayer || selectedLayer.type !== 'text') return;
@@ -1603,8 +1559,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           const nextColor = colors[(currentIdx + 1) % colors.length];
           updateLayer(selectedLayer.id, {
             type: 'text',
-            payload: { ...selectedLayer.payload, textColor: nextColor },
-          }, 'Change text color');
+            payload: { ...selectedLayer.payload, textColor: nextColor } }, 'Change text color');
         }, 'Color', 'Cycles through text colors'),
         mk('align', 'Align', 'text', () => {
           if (!selectedLayer || selectedLayer.type !== 'text') return;
@@ -1613,8 +1568,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           const next = current === 'left' ? 'center' : current === 'center' ? 'right' : 'left';
           updateLayer(selectedLayer.id, {
             type: 'text',
-            payload: { ...selectedLayer.payload, alignment: next },
-          }, 'Change alignment');
+            payload: { ...selectedLayer.payload, alignment: next } }, 'Change alignment');
         }, 'Align', 'Cycles text alignment', alignGlyph),
       ],
       overflow: [
@@ -1623,8 +1577,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
         mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
         ...sharedOverflow,
-      ],
-    };
+      ] };
 
     // ── poster-sticker-selected: Edit, Replace, More ──
     const stickerSelected: ToolGroup = {
@@ -1639,8 +1592,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
         mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
         ...sharedOverflow,
-      ],
-    };
+      ] };
 
     // ── poster-product-selected: Item, Price, More ──
     const productSelected: ToolGroup = {
@@ -1655,8 +1607,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
         mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
         ...sharedOverflow,
-      ],
-    };
+      ] };
 
     return [
       photoDefault,
@@ -1718,8 +1669,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     return (['Create', 'Edit', 'Arrange', 'Project'] as const)
       .map((title) => ({
         title,
-        tools: activeOverflowTools.filter((tool) => sectionFor(tool.id) === title),
-      }))
+        tools: activeOverflowTools.filter((tool) => sectionFor(tool.id) === title) }))
       .filter((section) => section.tools.length > 0);
   }, [activeOverflowTools]);
 
@@ -1842,8 +1792,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 screenHeight={screenHeight}
                 onCommit={(text) => {
                   updateLayer(editingTextLayer.id, {
-                    payload: { ...editingTextLayer.payload, text },
-                  } as Partial<CreatorLayer>, 'Edit text content');
+                    payload: { ...editingTextLayer.payload, text } } as Partial<CreatorLayer>, 'Edit text content');
                 }}
                 onDismiss={() => setEditingTextLayerId(null)}
               />
@@ -2030,8 +1979,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                       styles.pageSegmentFill,
                       {
                         flex: i === activePageIndex ? 1 : 0,
-                        backgroundColor: i <= activePageIndex ? colors.scrimTextPrimary : 'rgba(255,255,255,0.2)',
-                      },
+                        backgroundColor: i <= activePageIndex ? colors.scrimTextPrimary : 'rgba(255,255,255,0.2)' },
                     ]}
                   />
                 </View>
@@ -2411,8 +2359,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         layers={(page?.layers ?? []).map((l) => ({
           id: l.id,
           label: layerTypeLabel(l.type),
-          zIndex: l.zIndex,
-        })) as ZOrderLayer[]}
+          zIndex: l.zIndex })) as ZOrderLayer[]}
         selectedLayerId={selectedLayerId}
         onClose={closeSheet}
         onReorder={(layerId, direction) => reorderLayer(layerId, direction)}
@@ -2559,8 +2506,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 onToggle={(reversed) => {
                   updateLayer(selectedLayer.id, {
                     type: 'media',
-                    payload: { ...selectedLayer.payload, reversed },
-                  }, reversed ? 'Reverse clip' : 'Unreverse clip');
+                    payload: { ...selectedLayer.payload, reversed } }, reversed ? 'Reverse clip' : 'Unreverse clip');
                   haptic.medium();
                 }}
               />
@@ -2598,9 +2544,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                   payload: {
                     ...selectedLayer.payload,
                     freezeFrameMs: freezeMs,
-                    freezeDurationMs: freezeDurMs,
-                  },
-                }, freezeMs ? 'Set freeze frame' : 'Clear freeze frame');
+                    freezeDurationMs: freezeDurMs } }, freezeMs ? 'Set freeze frame' : 'Clear freeze frame');
                 haptic.medium();
               }}
             />
@@ -2637,9 +2581,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     ...selectedLayer.payload,
                     volume: selectedLayer.payload.volume ?? 1,
                     fadeInMs,
-                    fadeOutMs,
-                  },
-                }, 'Set audio fade');
+                    fadeOutMs } }, 'Set audio fade');
                 haptic.medium();
               }}
             />
@@ -2661,9 +2603,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                   ...selectedLayer.payload,
                   mediaUri: newUri,
                   mediaFinalizationId: undefined,
-                  mediaAssetId: undefined,
-                },
-              }, 'Crop media');
+                  mediaAssetId: undefined } }, 'Crop media');
             }
             setCropMode(false);
           }}
@@ -2687,10 +2627,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 payload: {
                   ...cutoutPreviewTarget.payload,
                   mediaUri: result.uri,
-                  contentFit: 'contain',
-                },
-                maskRef: result.maskRef?.uri,
-              } as Partial<CreatorLayer>, 'Apply cutout');
+                  contentFit: 'contain' },
+                maskRef: result.maskRef?.uri } as Partial<CreatorLayer>, 'Apply cutout');
             }
             setCutoutPreviewTarget(null);
           }}
@@ -2813,17 +2751,14 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         left: 0,
         top: canvasVerticalOffset,
         width: canvasWidth,
-        height: canvasHeight,
-      }}
+        height: canvasHeight }}
       sourceContentTransform={entrySourceTransform}
       destinationContentTransform={{
         frame: {
           left: 0,
           top: canvasVerticalOffset,
           width: canvasWidth,
-          height: canvasHeight,
-        },
-      }}
+          height: canvasHeight } }}
     />
   );
 }
@@ -2877,8 +2812,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   // ── Crash recovery banner (inline notification, not a card) ──
   // Calm but noticeable: soft tinted background + left accent bar gives the
   // banner proper visual hierarchy (accent → text → action) without heavy chrome.
@@ -2890,180 +2824,150 @@ function createStyles(colors: ThemeColors) {
     paddingTop: 50,
     zIndex: 100,
     backgroundColor: 'rgba(201, 164, 106, 0.08)',
-    borderLeftWidth: 3,
-  },
+    borderLeftWidth: 3 },
   recoveryText: {
     flex: 1,
     fontSize: 14,
-    marginLeft: 8,
-  },
+    marginLeft: 8 },
   recoveryBtn: {
     backgroundColor: 'rgba(201, 164, 106, 0.15)',
     borderRadius: Radius.sm,
     paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
+    paddingVertical: 6 },
   recoveryBtnText: {
     fontSize: 14,
-    fontWeight: '600',
-  },
+    fontWeight: '600' },
   recoveryDismiss: {
     padding: 8,
-    marginLeft: 4,
-  },
+    marginLeft: 4 },
   // ── Full-screen canvas stage ──
   canvasStage: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   // ── Top bar (BlurView + gradient scrim) ──
   topBarContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 100,
-  },
+    zIndex: 100 },
   topBarScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: 140,
-    zIndex: -1,
-  },
+    zIndex: -1 },
   topBarScrimOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: 140,
-    zIndex: -1,
-  },
+    zIndex: -1 },
   topBar: {
     height: 56,
     paddingHorizontal: Space.sm,
-    borderBottomWidth: 0,
-  },
+    borderBottomWidth: 0 },
   topBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   topBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   topCenter: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   titleText: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.bodyStrong.size,
     color: '#fff',
-    ...GlyphShadow.title,
-  },
+    ...GlyphShadow.title },
   doneText: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.bodyStrong.size,
     color: '#fff',
-    ...GlyphShadow.glyph,
-  },
+    ...GlyphShadow.glyph },
   topRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   topLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   topCenterGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   topRightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   publishBtn: {
     borderRadius: RadiusRoleValue.pillAvatar,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   publishBtnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   unsavedDot: {
     width: 7,
     height: 7,
     borderRadius: RadiusRoleValue.pillAvatar,
     marginLeft: -Space.xs,
-    marginTop: Space.xs + 2,
-  },
+    marginTop: Space.xs + 2 },
   // ── Frame progress segments (quieter in editor) ──
   pageSegmentsContainer: {
     position: 'absolute',
     left: Space.sm,
     right: Space.sm,
-    zIndex: 110,
-  },
+    zIndex: 110 },
   pageSegmentsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   pageSegmentTarget: {
     flex: 1,
     height: 14,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   pageSegmentTrack: {
     height: 2,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'rgba(255,255,255,0.18)',
     overflow: 'hidden',
-    flexDirection: 'row',
-  },
+    flexDirection: 'row' },
   pageSegmentFill: {
     height: 2,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   pageSegmentAdd: {
     width: 22,
     height: 22,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   pageSegmentToggle: {
     width: 22,
     height: 22,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   // ── Canvas loading overlay ──
   canvasLoadingOverlay: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 50,
-  },
+    zIndex: 50 },
   canvasLoadingPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3071,30 +2975,25 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
     borderRadius: EditorRadius.plate,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   canvasLoadingText: {
     fontFamily: FontFamily.medium,
-    fontSize: TypographyV2.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   // ── Empty canvas hint ──
   canvasEmptyHint: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 40,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   canvasEmptyHintTitle: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.bodyStrong.size,
-    color: 'rgba(255,255,255,0.45)',
-  },
+    color: 'rgba(255,255,255,0.45)' },
   // ── Safe zone overlay ──
   safeZoneOverlay: {
     ...StyleSheet.absoluteFill,
-    zIndex: 45,
-  },
+    zIndex: 45 },
   safeZoneTop: {
     position: 'absolute',
     left: 0,
@@ -3105,8 +3004,7 @@ function createStyles(colors: ThemeColors) {
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingBottom: 4,
-  },
+    paddingBottom: 4 },
   safeZoneBottom: {
     position: 'absolute',
     left: 0,
@@ -3117,16 +3015,14 @@ function createStyles(colors: ThemeColors) {
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: 4,
-  },
+    paddingTop: 4 },
   safeZoneContent: {
     position: 'absolute',
     left: 0,
     right: 0,
     borderWidth: Stroke.standard,
     borderColor: 'rgba(201,164,106,0.25)',
-    borderStyle: 'dashed',
-  },
+    borderStyle: 'dashed' },
   safeZoneLabel: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3134,13 +3030,11 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   safeZoneLabelText: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.meta.size,
-    letterSpacing: 0.3,
-  },
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: 0.3 },
   // ── Bottom gradient scrim ──
   bottomScrimContainer: {
     position: 'absolute',
@@ -3148,68 +3042,57 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     height: 180,
-    zIndex: 95,
-  },
+    zIndex: 95 },
   bottomScrim: {
-    flex: 1,
-  },
+    flex: 1 },
   // ── Bottom tool rail (default mode) ──
   bottomRailContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 100,
-  },
+    zIndex: 100 },
   bottomRailScrim: {
     position: 'absolute',
     top: -80,
     left: 0,
     right: 0,
     height: 80,
-    zIndex: -1,
-  },
+    zIndex: -1 },
   bottomRailContent: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     gap: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   frameCountBtn: {
     minWidth: 48,
     height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   frameCountText: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.body.size,
     color: '#fff',
-    ...GlyphShadow.glyph,
-  },
+    ...GlyphShadow.glyph },
   railDivider: {
     width: 1,
     height: 28,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.12)' },
   railMoreBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   // ── Overflow menu ──
   overflowContainer: {
     ...StyleSheet.absoluteFill,
     zIndex: 220,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   overflowMenu: {
     borderTopLeftRadius: EditorRadius.sheet,
     borderTopRightRadius: EditorRadius.sheet,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   overflowHeader: {
     minHeight: 56,
     paddingLeft: Space.md,
@@ -3217,27 +3100,22 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.12)',
-  },
+    borderBottomColor: 'rgba(255,255,255,0.12)' },
   overflowTitle: {
     flex: 1,
     color: '#fff',
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   overflowClose: {
     width: 48,
     height: 48,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   overflowClosePressed: {
-    opacity: 0.56,
-  },
+    opacity: 0.56 },
   overflowScrollContent: {
     paddingTop: Space.xs,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   overflowSectionLabel: {
     color: 'rgba(255,255,255,0.5)',
     fontFamily: FontFamily.semibold,
@@ -3246,21 +3124,17 @@ function createStyles(colors: ThemeColors) {
     textTransform: 'uppercase',
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   overflowDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: 'rgba(255,255,255,0.12)',
-    marginVertical: Space.xs,
-  },
+    marginVertical: Space.xs },
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.48)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.48)' },
   // ── ContextToolRail inline ──
   contextRail: {
-    flex: 1,
-  },
+    flex: 1 },
   // ── Timeline ──
   timelineContainer: {
     position: 'absolute',
@@ -3271,68 +3145,56 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     gap: Space.xs,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   timelinePlaybackBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xxs,
-  },
+    paddingVertical: Space.xxs },
   timelinePlayBtn: {
     width: 36,
     height: 36,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   timelineTimecode: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.meta.size,
     color: 'rgba(255,255,255,0.85)',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   timelinePlaybackSpacer: {
-    flex: 1,
-  },
+    flex: 1 },
   timelineUndoRedoBtn: {
     width: 32,
     height: 32,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   timelineDoneBtn: {
     minWidth: 44,
     minHeight: 32,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
-    marginLeft: Space.xs,
-  },
+    marginLeft: Space.xs },
   timelineDoneText: {
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   timelineOverlayWrap: {
-    marginTop: Space.xxs,
-  },
+    marginTop: Space.xxs },
   timelineWaveformWrap: {
-    marginTop: Space.xxs,
-  },
+    marginTop: Space.xxs },
   // ── Effects sheet ──
   effectsSheetBackdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'transparent',
     zIndex: 200,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   effectsSheet: {
     borderTopLeftRadius: EditorRadius.sheet,
     borderTopRightRadius: EditorRadius.sheet,
     maxHeight: '50%',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   effectsSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3340,43 +3202,34 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.12)',
-  },
+    borderBottomColor: 'rgba(255,255,255,0.12)' },
   effectsSheetTitle: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.bodyStrong.size,
-    color: '#fff',
-  },
+    color: '#fff' },
   effectsSheetDone: {
     minWidth: 44,
     minHeight: 44,
     justifyContent: 'center',
-    alignItems: 'flex-end',
-  },
+    alignItems: 'flex-end' },
   effectsSheetDoneText: {
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   effectsSheetScroll: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   effectsSectionLabel: {
     fontFamily: FontFamily.medium,
     fontSize: TypographyV2.meta.size,
     color: 'rgba(255,255,255,0.5)',
     paddingHorizontal: Space.md,
     marginBottom: Space.xs,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   effectsAdjustWrap: {
     marginTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.08)',
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   effectsAutoRow: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
-  });
+    paddingVertical: Space.xs } });
 }

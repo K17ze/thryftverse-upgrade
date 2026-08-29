@@ -6,11 +6,11 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useHaptic } from '../../hooks/useHaptic';
 import type { ThemeColors } from '../../theme/ThemeContext';
@@ -94,8 +94,7 @@ export function Tooltip({ label, floating, colors, onShow, visible }: TooltipPro
 
   const tooltipStyle = useAnimatedStyle(() => ({
     transform: [{ scale: tooltipScaleSV.value }],
-    opacity: tooltipOpacitySV.value,
-  }));
+    opacity: tooltipOpacitySV.value }));
 
   return (
     <Reanimated.View
@@ -124,13 +123,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 1,
     borderRadius: Radius.md,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   tooltipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.1,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.1 } });
 
 export default Tooltip;

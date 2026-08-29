@@ -6,7 +6,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Radius, Space, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Radius, Space, Typography, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -23,16 +24,14 @@ import {
   type CapabilityGrantConfig,
   type ResponseLength,
   type Tone,
-  type TriggerMode,
-} from '../platform/agents/agentDefinition';
+  type TriggerMode } from '../platform/agents/agentDefinition';
 import {
   PROVIDER_CONFIGS,
   type AIProvider,
   type ConnectedProvider,
   type DiscoveredModel,
   discoverModels,
-  getConnectedProviders,
-} from '../services/aiProviderApi';
+  getConnectedProviders } from '../services/aiProviderApi';
 import { validateBotFromApi } from '../services/botsApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BotBuilder'>;
@@ -79,8 +78,7 @@ const RISK_DOT: Record<RiskLevel, string> = {
   low: 'checkmark-circle',
   medium: 'create-outline',
   high: 'megaphone-outline',
-  critical: 'warning-outline',
-};
+  critical: 'warning-outline' };
 
 const ACTIVE_CAPABILITIES: ReadonlySet<AgentCapability> = new Set([
   'chat.draft_reply',
@@ -159,8 +157,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
       const nextDefaults = new Set(buildInitialCapabilityGrants(next).filter((g) => g.enabled).map((g) => g.capability));
       return current.map((g) => ({
         ...g,
-        enabled: categoryTouched ? g.enabled : nextDefaults.has(g.capability),
-      }));
+        enabled: categoryTouched ? g.enabled : nextDefaults.has(g.capability) }));
     });
   };
 
@@ -249,8 +246,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
     const planned = capabilityGrants.filter((g) => !ACTIVE_CAPABILITIES.has(g.capability));
     return RISK_GROUPS.map((group) => ({
       ...group,
-      grants: planned.filter((g) => CAPABILITY_RISK_LABELS[g.capability].risk === group.risk),
-    })).filter((group) => group.grants.length > 0);
+      grants: planned.filter((g) => CAPABILITY_RISK_LABELS[g.capability].risk === group.risk) })).filter((group) => group.grants.length > 0);
   }, [capabilityGrants]);
 
   const nameError = name.length > 0 && name.trim().length < 2 ? 'Use at least 2 characters.' : undefined;
@@ -298,8 +294,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
         category: botData.category,
         permissions: botData.permissions,
         isDraft: false,
-        agentConfig: botData.agentConfig,
-      });
+        agentConfig: botData.agentConfig });
       setValidationResult(result);
     } catch {
       setValidationResult(null);
@@ -328,18 +323,15 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
     starterPrompts: [starterOne, starterTwo].map((item) => item.trim()).filter(Boolean),
     providerConnection: {
       providerId,
-      modelId: modelId.trim(),
-    },
+      modelId: modelId.trim() },
     capabilityGrants,
     memoryPolicy: {
       conversationContext,
       maxTurns: conversationContext ? maxTurns : 0,
-      longTermMemory: false,
-    },
+      longTermMemory: false },
     isDraft: false,
     createdAt: existingBot ? new Date(0).toISOString() : new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
+    updatedAt: new Date().toISOString() });
 
   const mapDefinitionToBotData = (
     def: AgentDefinition
@@ -355,8 +347,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
       tone: def.tone,
       reasoningEffort,
       historyLimit: def.memoryPolicy.conversationContext ? def.memoryPolicy.maxTurns : 0,
-      starterPrompts: def.starterPrompts,
-    };
+      starterPrompts: def.starterPrompts };
     return {
       slug: slug || existingBot?.slug || 'agent',
       name: def.name,
@@ -369,8 +360,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
         def.capabilityGrants.filter((g) => g.enabled && ACTIVE_CAPABILITIES.has(g.capability))
       ),
       isDraft: def.isDraft,
-      agentConfig,
-    };
+      agentConfig };
   };
 
   const handleSave = async (isDraft: boolean) => {
@@ -604,8 +594,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
                 options={connectedProviders.map((p) => ({
                   value: p.provider,
                   label: p.config.name,
-                  detail: p.config.description,
-                }))}
+                  detail: p.config.description }))}
                 selected={providerId}
                 onSelect={(value) => {
                   setProviderId(value);
@@ -620,8 +609,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
                 options={discoveredModels.map((m) => ({
                   value: m.providerModelId,
                   label: m.displayName,
-                  detail: m.deprecated ? 'Deprecated by provider' : m.providerModelId,
-                }))}
+                  detail: m.deprecated ? 'Deprecated by provider' : m.providerModelId }))}
                 selected={modelId}
                 onSelect={(value) => setModelId(value)}
               />
@@ -845,8 +833,7 @@ function CollapsibleStep({
   alwaysOpen,
   colors,
   styles,
-  children,
-}: {
+  children }: {
   stepNumber: number;
   title: string;
   detail: string;
@@ -906,8 +893,7 @@ function CapabilityRow({
   risk,
   enabled,
   onToggle,
-  planned,
-}: {
+  planned }: {
   label: string;
   risk: RiskLevel;
   enabled: boolean;
@@ -969,8 +955,7 @@ function CapabilityRow({
 function OptionGrid({
   options,
   selected,
-  onSelect,
-}: {
+  onSelect }: {
   options: Array<{ value: string; label: string }>;
   selected: string;
   onSelect: (value: string) => void;
@@ -1003,8 +988,7 @@ function OptionGrid({
 function ChoiceList({
   options,
   selected,
-  onSelect,
-}: {
+  onSelect }: {
   options: Array<{ value: string; label: string; detail: string }>;
   selected: string;
   onSelect: (value: string) => void;
@@ -1047,79 +1031,65 @@ function createStyles(colors: ThemeColors) {
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   // Progressive disclosure — collapsible steps
   stepSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   stepHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: Control.hit,
     paddingVertical: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   stepHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flex: 1,
-  },
+    flex: 1 },
   stepNumber: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     width: Control.icon,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   stepHeaderText: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   stepTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   stepDetail: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   stepBody: {
     gap: Space.md - 2,
     paddingTop: Space.xs,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   // Publish section (Step 5)
   publishSection: {
     gap: Space.sm,
     paddingTop: Space.md,
     marginTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   publishHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   publishTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   publishHint: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   validationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   validateBtn: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -1127,33 +1097,27 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     minHeight: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   validateBtnText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   validationResult: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   validationStatus: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   validationError: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   multilineShort: { minHeight: Control.hit * 2, alignItems: 'flex-start' },
   instructionsInput: { minHeight: 156, alignItems: 'flex-start' },
   multilineInput: { textAlignVertical: 'top', paddingTop: Space.sm + Space.xs },
   fieldLabel: {
     color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   option: {
     minHeight: Control.hit,
@@ -1162,14 +1126,12 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   optionActive: { borderColor: colors.textPrimary, backgroundColor: colors.textPrimary },
   optionText: {
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   optionTextActive: { color: colors.textInverse, fontFamily: Typography.family.semibold },
   choiceList: {},
   choiceRow: { minHeight: Control.hit + Space.lg, flexDirection: 'row', alignItems: 'center', gap: Space.md },
@@ -1177,14 +1139,12 @@ function createStyles(colors: ThemeColors) {
   choiceTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   choiceDetail: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   radio: {
     width: Control.icon,
@@ -1193,8 +1153,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.textMuted,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   radioActive: { borderColor: colors.textPrimary },
   radioDot: { width: Space.sm + Space.xs, height: Space.sm + Space.xs, borderRadius: Radius.md, backgroundColor: colors.textPrimary },
   invocationPreview: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
@@ -1202,48 +1161,41 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   caution: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
-    paddingTop: Space.xs - 2,
-  },
+    paddingTop: Space.xs - 2 },
   cautionText: {
     flex: 1,
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight - 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight - 1 },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs },
   loadingText: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   riskGroup: { gap: Space.sm },
   riskGroupHeader: { gap: Space.xs - 2 },
   riskGroupTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   riskGroupTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   capabilityGroup: { gap: Space.sm },
   capabilityGroupTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   plannedHeader: { gap: Space.xs - 2 },
   plannedHint: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight - 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight - 1 },
   permissionList: {},
   permissionRow: { paddingVertical: Space.sm, gap: Space.xs, flexDirection: 'row', alignItems: 'center' },
   permissionCopy: { flex: 1, minHeight: Control.hit, justifyContent: 'center' },
@@ -1252,22 +1204,18 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   comingSoonBadge: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs - 2,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   comingSoonText: {
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   actions: { flexDirection: 'row', gap: Space.sm },
-  action: { flex: 1 },
-  });
+  action: { flex: 1 } });
 }

@@ -19,7 +19,8 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control } from '../../../theme/designTokens';
+import { Space, Radius, Control } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { CachedImage } from '../../CachedImage';
@@ -51,8 +52,7 @@ export function SellerInfoCard({
   isFollowPending = false,
   onFollow,
   onMessage,
-  onViewShop,
-}: SellerInfoCardProps) {
+  onViewShop }: SellerInfoCardProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -66,25 +66,21 @@ export function SellerInfoCard({
   const stats: StatCell[] = [];
   if (seller.rating != null) {
     stats.push({
-      value: `${seller.rating.toFixed(1)}${seller.reviewCount != null ? ` (${seller.reviewCount})` : ''}`,
-    });
+      value: `${seller.rating.toFixed(1)}${seller.reviewCount != null ? ` (${seller.reviewCount})` : ''}` });
   }
   if (seller.completedSales != null) {
     stats.push({
       value: seller.completedSales >= 1000
         ? `${(seller.completedSales / 1000).toFixed(1)}k sold`
-        : `${seller.completedSales} sold`,
-    });
+        : `${seller.completedSales} sold` });
   }
   if (seller.responseRate != null) {
     stats.push({
-      value: `${Math.round(seller.responseRate * 100)}% responds`,
-    });
+      value: `${Math.round(seller.responseRate * 100)}% responds` });
   }
   if (seller.dispatchTimeLabel) {
     stats.push({
-      value: seller.dispatchTimeLabel,
-    });
+      value: seller.dispatchTimeLabel });
   }
 
   const verificationTier = resolveVerificationTier(seller.verified, seller.verificationTier);
@@ -184,8 +180,7 @@ export function SellerInfoCard({
                   styles.actionText,
                   {
                     color: isFollowing ? colors.textSecondary : colors.brand,
-                    opacity: isFollowPending ? 0.6 : 1,
-                  },
+                    opacity: isFollowPending ? 0.6 : 1 },
                 ]}
               >
                 {isFollowPending ? 'Following…' : isFollowing ? 'Following' : 'Follow'}
@@ -202,18 +197,15 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + Space.xs,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   pressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.985 }],
-  },
+    transform: [{ scale: 0.985 }] },
   avatar: {
     width: 48,
     height: 48,
@@ -221,68 +213,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   avatarImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   avatarInitial: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   identityText: {
     flex: 1,
     gap: Space.xs / 2,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   name: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   location: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   shopChevron: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2,
     flexShrink: 0,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   shopLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // Concise trust line — single inline text, no KPI card chrome.
   // Per spec 12: avoid transforming seller trust into a KPI card.
   trustLine: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.medium,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   actionHitTarget: {
     minHeight: 44,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   actionText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily } });

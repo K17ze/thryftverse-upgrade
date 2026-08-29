@@ -2,8 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -12,7 +11,8 @@ import { AppButton } from '../components/ui/AppButton';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { Space, Typography, Type } from '../theme/designTokens';
+import { Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { confirmPasswordReset } from '../services/authApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ResetPassword'>;
@@ -264,58 +264,50 @@ function createStyles(colors: ThemeColors) {
     content: { flex: 1, paddingHorizontal: Space.lg },
     contentContainer: { justifyContent: 'center', flexGrow: 1, paddingBottom: Space.xl },
     title: {
-      fontSize: Type.display.size + Space.sm + Space.xs,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.display.size + Space.sm + Space.xs,
+      fontFamily: TypographyV2.display.fontFamily,
       color: colors.textPrimary,
-      lineHeight: Type.display.lineHeight + 10,
-      letterSpacing: Type.display.letterSpacing * 2,
-      marginBottom: Space.lg,
-    },
+      lineHeight: TypographyV2.display.lineHeight + 10,
+      letterSpacing: TypographyV2.display.letterSpacing * 2,
+      marginBottom: Space.lg },
     subtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary,
       marginBottom: Space.xl,
-      lineHeight: Type.subtitle.lineHeight,
-    },
+      lineHeight: TypographyV2.sectionTitle.lineHeight },
     form: { marginBottom: Space.xl },
     inputGroup: { marginBottom: Space.lg },
     footer: { paddingBottom: Space.xl },
     errorText: {
       color: colors.danger,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      marginBottom: Space.xs,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginBottom: Space.xs },
     offlineText: {
       color: colors.textMuted,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginBottom: Space.sm,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginBottom: Space.sm },
     stateContainer: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.lg,
-    },
+      paddingHorizontal: Space.lg },
     stateTitle: {
-      fontSize: Type.display.size + Space.sm + Space.xs,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.display.size + Space.sm + Space.xs,
+      fontFamily: TypographyV2.display.fontFamily,
       color: colors.textPrimary,
-      lineHeight: Type.display.lineHeight + 10,
-      letterSpacing: Type.display.letterSpacing * 2,
+      lineHeight: TypographyV2.display.lineHeight + 10,
+      letterSpacing: TypographyV2.display.letterSpacing * 2,
       marginTop: Space.lg,
       marginBottom: Space.md,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     stateBody: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
-      lineHeight: Type.subtitle.lineHeight,
-      maxWidth: 300,
-    },
-  });
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      maxWidth: 300 } });
 }

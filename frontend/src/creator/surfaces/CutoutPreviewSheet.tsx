@@ -38,8 +38,7 @@ import {
   type LayoutChangeEvent,
   type GestureResponderEvent,
   type PanResponderGestureState,
-  type DimensionValue,
-} from 'react-native';
+  type DimensionValue } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,9 +49,9 @@ import Reanimated, {
   withSpring,
   withTiming,
   runOnJS,
-  useReducedMotion,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, FontFamily, Stroke, IconGrammar } from '../../theme/designTokens';
+  useReducedMotion } from 'react-native-reanimated';
+import { Space, Radius, Typography, FontFamily, Stroke, IconGrammar } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
@@ -62,8 +61,7 @@ import {
   sourceChecksum,
   type CutoutResult,
   type CutoutMask,
-  type CutoutCapability,
-} from '../core/cutout/CutoutService';
+  type CutoutCapability } from '../core/cutout/CutoutService';
 import { MaskedPreview } from '../core/cutout/MaskCompositor';
 import type { MaskStroke } from '../core/cutout/MaskRenderer';
 
@@ -100,8 +98,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
 
   const style = useAnimatedStyle(() => ({
     backgroundColor: colors.surfaceAlt,
-    opacity: 0.5 + 0.3 * shimmerSV.value,
-  }));
+    opacity: 0.5 + 0.3 * shimmerSV.value }));
 
   return (
     <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
@@ -114,10 +111,10 @@ function CutoutPreviewSkeleton({ width, height }: { width: number; height: numbe
   return (
     <View style={{ alignItems: 'center', paddingVertical: Space.sm }}>
       <SkeletonBlock width={width} height={height} radius={Radius.md} />
-      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary, marginTop: Space.md }}>
+      <Text style={{ fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textPrimary, marginTop: Space.md }}>
         Removing background…
       </Text>
-      <Text style={{ fontFamily: Typography.family.regular, fontSize: Type.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs }}>
+      <Text style={{ fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs }}>
         Detecting the subject and generating an alpha mask.
       </Text>
     </View>
@@ -140,8 +137,7 @@ function Checkerboard({ size }: { size: { width: number; height: number } }) {
             top: r * CHECKER_SIZE,
             width: CHECKER_SIZE,
             height: CHECKER_SIZE,
-            backgroundColor: isLight ? CHECKER_LIGHT : CHECKER_DARK,
-          }}
+            backgroundColor: isLight ? CHECKER_LIGHT : CHECKER_DARK }}
         />,
       );
     }
@@ -176,8 +172,7 @@ export function CutoutPreviewSheet({
   visible,
   imageUri,
   onClose,
-  onConfirm,
-}: CutoutPreviewSheetProps) {
+  onConfirm }: CutoutPreviewSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -356,15 +351,13 @@ export function CutoutPreviewSheet({
         const stroke: MaskStroke = {
           mode,
           points: curr,
-          brushSize: BRUSH_RADIUS * 2,
-        };
+          brushSize: BRUSH_RADIUS * 2 };
         setStrokes((prev) => [...prev, stroke]);
         // Rasterize into the CutoutService mask surface for export.
         if (mask) {
           const scaledPoints = curr.map((p) => ({
             x: (p.x / displaySize.width) * mask.width,
-            y: (p.y / displaySize.height) * mask.height,
-          }));
+            y: (p.y / displaySize.height) * mask.height }));
           if (mode === 'erase') {
             cutoutService.eraseStroke(mask, scaledPoints, BRUSH_RADIUS * 2 * (mask.width / displaySize.width));
           } else {
@@ -407,8 +400,7 @@ export function CutoutPreviewSheet({
           strokes.slice(0, -1).forEach((s) => {
             const scaledPoints = s.points.map((p) => ({
               x: (p.x / displaySize.width) * newMask.width,
-              y: (p.y / displaySize.height) * newMask.height,
-            }));
+              y: (p.y / displaySize.height) * newMask.height }));
             const scaledBrush = s.brushSize * (newMask.width / displaySize.width);
             if (s.mode === 'erase') {
               cutoutService.eraseStroke(newMask, scaledPoints, scaledBrush);
@@ -480,15 +472,13 @@ export function CutoutPreviewSheet({
       const maskUri = await cutoutService.exportMask(mask);
       const maskRef = cutoutService.buildMaskRef(mask, featherPx, invert, {
         sourceChecksum: sourceChecksum(imageUri),
-        strokeCount: strokes.length,
-      });
+        strokeCount: strokes.length });
       const result: CutoutResult = {
         uri: imageUri, // original image — NOT replaced
         maskUri,
         maskRef,
         featherPx,
-        invert,
-      };
+        invert };
       onConfirm(result);
     } catch (err) {
       setError(
@@ -519,8 +509,7 @@ export function CutoutPreviewSheet({
   const modeUnderlineStyle = useAnimatedStyle(() => ({
     left: modeUnderlineXSV.value,
     width: modeUnderlineWSV.value,
-    opacity: modeUnderlineOpacitySV.value,
-  }));
+    opacity: modeUnderlineOpacitySV.value }));
 
   return (
     <SheetContainer visible={visible} onClose={onClose} maxHeight={0.8}>
@@ -612,8 +601,7 @@ export function CutoutPreviewSheet({
                           {
                             width: previewSize.width,
                             height: previewSize.height,
-                            borderColor: brushMode ? currentBrushColor : colors.border,
-                          },
+                            borderColor: brushMode ? currentBrushColor : colors.border },
                         ]}
                       >
                         <Checkerboard size={{ width: previewSize.width, height: previewSize.height }} />
@@ -646,8 +634,7 @@ export function CutoutPreviewSheet({
                   {
                     backgroundColor: 'transparent',
                     borderColor: colors.border,
-                    opacity: canRefine && strokes.length > 0 ? 1 : 0.4,
-                  },
+                    opacity: canRefine && strokes.length > 0 ? 1 : 0.4 },
                 ]}
                 accessibilityLabel="Reset mask"
                 accessibilityHint="Clears all brush strokes and starts over"
@@ -679,8 +666,7 @@ export function CutoutPreviewSheet({
                   {
                     backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
                     borderColor: colors.border,
-                    opacity: canRefine ? 1 : 0.4,
-                  },
+                    opacity: canRefine ? 1 : 0.4 },
                 ]}
                 accessibilityLabel="Hold to compare original"
                 accessibilityRole="button"
@@ -700,8 +686,7 @@ export function CutoutPreviewSheet({
                   {
                     backgroundColor: invert ? colors.brand : 'transparent',
                     borderColor: invert ? colors.brand : colors.border,
-                    opacity: canRefine ? 1 : 0.4,
-                  },
+                    opacity: canRefine ? 1 : 0.4 },
                 ]}
                 accessibilityLabel="Invert mask"
                 accessibilityRole="button"
@@ -736,8 +721,7 @@ export function CutoutPreviewSheet({
                     onLayout={!isRestore ? (e) => {
                       modeTabLayouts.current.set(btn.id as BrushMode, {
                         x: e.nativeEvent.layout.x,
-                        width: e.nativeEvent.layout.width,
-                      });
+                        width: e.nativeEvent.layout.width });
                       if (brushMode === btn.id) {
                         modeUnderlineXSV.value = e.nativeEvent.layout.x;
                         modeUnderlineWSV.value = e.nativeEvent.layout.width;
@@ -754,8 +738,7 @@ export function CutoutPreviewSheet({
                         styles.modeTabText,
                         {
                           color: selected ? colors.brand : colors.textSecondary,
-                          opacity: !canRefine ? 0.4 : 1,
-                        },
+                          opacity: !canRefine ? 0.4 : 1 },
                       ]}
                       numberOfLines={1}
                     >
@@ -831,8 +814,7 @@ export function CutoutPreviewSheet({
               styles.footerConfirm,
               {
                 backgroundColor: colors.brand,
-                opacity: !mask || processing ? 0.4 : 1,
-              },
+                opacity: !mask || processing ? 0.4 : 1 },
             ]}
             accessibilityLabel="Apply cutout"
             accessibilityRole="button"
@@ -867,8 +849,7 @@ function FeatherSlider({
   onChange,
   trackColor,
   fillColor,
-  thumbColor,
-}: FeatherSliderProps) {
+  thumbColor }: FeatherSliderProps) {
   const [width, setWidth] = useState(0);
   const range = max - min;
   const clamped = Math.min(max, Math.max(min, value));
@@ -901,8 +882,7 @@ function FeatherSlider({
           onChange(valueFromX(thumbPosition + g.dx));
         },
         onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false,
-      }),
+        onPanResponderTerminationRequest: () => false }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [thumbPosition, valueFromX, onChange],
   );
@@ -927,37 +907,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   closeBtn: {
     width: 36,
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   // ── Message / state container ──
   messageContainer: {
     alignItems: 'center',
     paddingHorizontal: Space.lg,
     paddingVertical: Space.xl,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   messageTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    textAlign: 'center' },
   messageBody: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     textAlign: 'center',
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   retryBtn: {
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
@@ -965,51 +939,42 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     minHeight: 44,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   retryBtnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   // ── Preview ──
   previewContainer: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   previewRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   previewCell: {
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   previewFrame: {
     borderRadius: Radius.md,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   gestureRoot: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   hint: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     textAlign: 'center',
     marginTop: Space.md,
-    lineHeight: Type.meta.lineHeight,
-    paddingHorizontal: Space.sm,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    paddingHorizontal: Space.sm },
   // ── Control row (Refine / Hold to Compare / Invert) ──
   controlRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: Space.sm,
     marginTop: Space.md,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   controlBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -1020,108 +985,88 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   controlBtnLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Mode selector row — text-only tabs with underline ──
   modeRow: {
     flexDirection: 'row',
     marginTop: Space.sm,
     paddingHorizontal: Space.xs,
-    position: 'relative',
-  },
+    position: 'relative' },
   modeTab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.sm,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   modeTabText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   modeUnderline: {
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   // ── Edge Softness slider ──
   sliderRow: {
     marginTop: Space.md,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   sliderHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   sliderLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   sliderValue: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-  },
+    fontSize: TypographyV2.meta.size },
   sliderTrackWrap: {
     height: 28,
     justifyContent: 'center',
-    position: 'relative',
-  },
+    position: 'relative' },
   sliderTrack: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: 3,
-    borderRadius: Radius.none,
-  },
+    borderRadius: Radius.none },
   sliderFill: {
     position: 'absolute',
     left: 0,
     height: 3,
-    borderRadius: Radius.none,
-  },
+    borderRadius: Radius.none },
   sliderThumb: {
     position: 'absolute',
     width: 20,
     height: 20,
     marginLeft: -10,
     borderRadius: Radius.full,
-    top: 4,
-  },
+    top: 4 },
   // ── Footer — premium Cancel / Apply buttons ──
   footer: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   footerBtn: {
     flex: 1,
     height: 50,
     borderRadius: Radius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   footerCancel: {
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   footerCancelText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   footerConfirm: {
     // backgroundColor set inline
   },
   footerConfirmText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size } });

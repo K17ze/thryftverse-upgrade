@@ -6,8 +6,7 @@ import {
   Dimensions,
   RefreshControl,
   ImageStyle,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -15,7 +14,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -31,8 +31,7 @@ import {
   fetchMoodboards,
   fetchPublicMoodboards,
   MOODBOARD_DEMO_MODE,
-  type Moodboard,
-} from '../services/moodboardApi';
+  type Moodboard } from '../services/moodboardApi';
 import { useFeatureFlag } from '../analytics';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -84,8 +83,7 @@ const MASONRY_ASPECT_RATIOS = [1.2, 1.0, 1.35, 0.95] as const;
 const CoverCollage = React.memo(function CoverCollage({
   moodboard,
   width,
-  height,
-}: {
+  height }: {
   moodboard: Moodboard;
   width: number;
   height: number;
@@ -143,8 +141,7 @@ const CoverCollage = React.memo(function CoverCollage({
 // ---------------------------------------------------------------------------
 const UserMoodboardCard = React.memo(function UserMoodboardCard({
   moodboard,
-  onPress,
-}: {
+  onPress }: {
   moodboard: Moodboard;
   onPress: () => void;
 }) {
@@ -191,8 +188,7 @@ const UserMoodboardCard = React.memo(function UserMoodboardCard({
 const PublicMoodboardCard = React.memo(function PublicMoodboardCard({
   moodboard,
   onPress,
-  cardHeight,
-}: {
+  cardHeight }: {
   moodboard: Moodboard;
   onPress: () => void;
   cardHeight: number;
@@ -372,8 +368,7 @@ export default function MoodboardHomeScreen() {
     haptic.selection();
     navigation.navigate('CreatorStudio', {
       type: 'poster',
-      openTemplates: true,
-    });
+      openTemplates: true });
   }, [haptic, navigation]);
 
   const handleGoBack = useCallback(() => {
@@ -669,8 +664,7 @@ export default function MoodboardHomeScreen() {
         contentContainerStyle={{
           paddingHorizontal: Math.max(MASONRY_PADDING - MASONRY_GAP / 2, 0),
           paddingTop: insets.top + Space.sm,
-          paddingBottom: Space.xxl,
-        }}
+          paddingBottom: Space.xxl }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -696,18 +690,15 @@ function useStyles() {
       StyleSheet.create({
         container: {
           flex: 1,
-          backgroundColor: colors.background,
-        },
+          backgroundColor: colors.background },
         stateContainer: {
           flex: 1,
           backgroundColor: colors.background,
           justifyContent: 'center',
           alignItems: 'center',
-          paddingHorizontal: Space.lg,
-        },
+          paddingHorizontal: Space.lg },
         listContent: {
-          paddingBottom: Space.xxl,
-        },
+          paddingBottom: Space.xxl },
         // ── Offline banner ──
         offlineBanner: {
           flexDirection: 'row',
@@ -717,13 +708,11 @@ function useStyles() {
           paddingVertical: Space.sm,
           backgroundColor: colors.surfaceAlt,
           borderBottomWidth: Stroke.hairline,
-          borderBottomColor: colors.border,
-        },
+          borderBottomColor: colors.border },
         offlineBannerText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textSecondary },
         // ── Demo banner ──
         demoBanner: {
           flexDirection: 'row',
@@ -733,43 +722,37 @@ function useStyles() {
           paddingVertical: Space.sm,
           backgroundColor: colors.surface,
           borderBottomWidth: Stroke.hairline,
-          borderBottomColor: colors.borderSubtle,
-        },
+          borderBottomColor: colors.borderSubtle },
         demoBannerText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textSecondary,
-          flex: 1,
-        },
+          flex: 1 },
         // ── Header ──
         headerRow: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: Space.md,
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         backButton: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
           justifyContent: 'center',
-          marginLeft: -Space.xs,
-        },
+          marginLeft: -Space.xs },
         headerTitle: {
-          fontSize: Type.title.size,
-          lineHeight: Type.title.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.screenTitle.size,
+          lineHeight: TypographyV2.screenTitle.lineHeight,
+          fontFamily: TypographyV2.screenTitle.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.title.letterSpacing,
+          letterSpacing: TypographyV2.screenTitle.letterSpacing,
           flex: 1,
-          textAlign: 'center',
-        },
+          textAlign: 'center' },
         headerActions: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         studioButton: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -777,13 +760,11 @@ function useStyles() {
           backgroundColor: colors.brandSubtle,
           paddingHorizontal: Space.sm + 2,
           paddingVertical: Space.sm,
-          borderRadius: Radius.full,
-        },
+          borderRadius: Radius.full },
         studioButtonText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.semibold,
-          color: colors.brand,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.brand },
         createButton: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -791,48 +772,40 @@ function useStyles() {
           backgroundColor: colors.brand,
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
-          borderRadius: Radius.full,
-        },
+          borderRadius: Radius.full },
         createButtonText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.semibold,
-          color: colors.textInverse,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textInverse },
         // ── Search ──
         searchWrap: {
           paddingHorizontal: Space.md,
           paddingTop: Space.xs,
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         searchInputContainer: {
           minHeight: 40,
-          borderRadius: Radius.lg,
-        },
+          borderRadius: Radius.lg },
         searchInput: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.regular,
-          paddingVertical: 8,
-        },
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
+          paddingVertical: 8 },
         searchEmptyWrap: {
           alignItems: 'center',
           gap: Space.sm,
           paddingVertical: Space.xxl,
-          paddingHorizontal: Space.lg,
-        },
+          paddingHorizontal: Space.lg },
         searchEmptyTitle: {
-          fontSize: Type.bodyStrong.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textPrimary,
           textAlign: 'center',
-          letterSpacing: Type.body.letterSpacing,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing },
         searchEmptySubtitle: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.regular,
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
           color: colors.textMuted,
           textAlign: 'center',
-          lineHeight: Type.body.lineHeight,
-        },
+          lineHeight: TypographyV2.body.lineHeight },
         // Beta badge — additive indicator gated by the moodboard_beta flag.
         // A compact label on the Create button so users know the collage
         // tooling is in beta. Absent when the flag is off.
@@ -842,136 +815,110 @@ function useStyles() {
           paddingVertical: 1,
           borderRadius: Radius.sm,
           // TODO: no textInverseSubtle token available
-          backgroundColor: `${colors.textInverse}24`,
-        },
+          backgroundColor: `${colors.textInverse}24` },
         betaBadgeText: {
-          fontSize: Type.meta.size,
-          lineHeight: Type.meta.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.meta.size,
+          lineHeight: TypographyV2.meta.lineHeight,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textInverse,
           letterSpacing: 0.3,
-          textTransform: 'uppercase',
-        },
+          textTransform: 'uppercase' },
         // ── Section wrappers ──
         sectionWrap: {
-          marginBottom: Space.lg,
-        },
+          marginBottom: Space.lg },
         sectionHeaderWrap: {
           paddingHorizontal: Space.md,
           paddingTop: Space.lg,
-          paddingBottom: Space.md,
-        },
+          paddingBottom: Space.md },
         sectionEyebrow: {
-          fontSize: Type.label.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.label.size,
+          fontFamily: TypographyV2.label.fontFamily,
           color: colors.textMuted,
-          letterSpacing: Type.label.letterSpacing,
-          marginBottom: Space.xs,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing,
+          marginBottom: Space.xs },
         sectionTitle: {
-          fontSize: Type.subtitle.size,
-          lineHeight: Type.subtitle.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.sectionTitle.size,
+          lineHeight: TypographyV2.sectionTitle.lineHeight,
+          fontFamily: TypographyV2.sectionTitle.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.subtitle.letterSpacing,
-        },
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing },
         railContent: {
           paddingHorizontal: Space.md,
-          gap: Space.md,
-        },
+          gap: Space.md },
         // ── User moodboard card ──
         userCard: {
           borderRadius: Radius.lg,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         userCardImageWrap: {
           borderRadius: Radius.lg,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         userCardMeta: {
           paddingHorizontal: Space.sm,
           paddingVertical: Space.sm,
-          gap: Space.xs - 2,
-        },
+          gap: Space.xs - 2 },
         userCardMetaRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs / 2 + 1,
-        },
+          gap: Space.xs / 2 + 1 },
         userCardTitle: {
-          fontSize: Type.bodyStrong.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.body.letterSpacing,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing },
         userCardCount: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
-          color: colors.textMuted,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textMuted },
         userCardMetaDot: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
-          color: colors.textMuted,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textMuted },
         userCardUpdated: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
-          color: colors.textMuted,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textMuted },
         coverPlaceholder: {
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surfaceAlt },
         // ── Public moodboard card ──
         publicCard: {
-          marginBottom: MASONRY_GAP,
-        },
+          marginBottom: MASONRY_GAP },
         publicCardImageWrap: {
           borderRadius: Radius.lg,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         publicCardMeta: {
           paddingTop: Space.sm,
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         publicCardTitle: {
-          fontSize: Type.bodyStrong.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.body.letterSpacing,
-          lineHeight: Type.body.lineHeight,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing,
+          lineHeight: TypographyV2.body.lineHeight },
         publicCardCuratorRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         publicCardAvatar: {
           width: Space.md,
           height: Space.md,
-          borderRadius: Radius.full,
-        } as ImageStyle,
+          borderRadius: Radius.full } as ImageStyle,
         publicCardCurator: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textSecondary,
-          flex: 1,
-        },
+          flex: 1 },
         // ── Masonry ──
         masonryGrid: {
           flexDirection: 'row',
           paddingHorizontal: MASONRY_PADDING,
-          gap: MASONRY_GAP,
-        },
+          gap: MASONRY_GAP },
         masonryColumn: {
-          gap: 0,
-        },
+          gap: 0 },
         // ── Inline empty prompt ──
         inlineEmptyWrap: {
           paddingHorizontal: Space.md,
           paddingTop: Space.lg,
-          paddingBottom: Space.xl,
-        },
+          paddingBottom: Space.xl },
         inlineEmptyCard: {
           alignItems: 'center',
           gap: Space.sm,
@@ -980,35 +927,29 @@ function useStyles() {
           borderRadius: Radius.xl,
           backgroundColor: colors.surface,
           borderWidth: Stroke.hairline,
-          borderColor: colors.border,
-        },
+          borderColor: colors.border },
         inlineEmptyTitle: {
-          fontSize: Type.subtitle.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.sectionTitle.size,
+          fontFamily: TypographyV2.sectionTitle.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.subtitle.letterSpacing,
-        },
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing },
         inlineEmptySubtitle: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.regular,
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
           color: colors.textMuted,
           textAlign: 'center',
-          lineHeight: Type.body.lineHeight,
-        },
+          lineHeight: TypographyV2.body.lineHeight },
         inlineEmptyCta: {
           marginTop: Space.xs,
           backgroundColor: colors.brand,
           paddingHorizontal: Space.xl,
           paddingVertical: Space.sm + 2,
-          borderRadius: Radius.full,
-        },
+          borderRadius: Radius.full },
         inlineEmptyCtaText: {
-          fontSize: Type.bodyStrong.size,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.bodyStrong.size,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textInverse,
-          letterSpacing: LetterSpacing.wide,
-        },
-      }),
+          letterSpacing: LetterSpacing.wide } }),
     [colors],
   );
 }

@@ -13,8 +13,7 @@ import Reanimated, {
   withSpring,
   cancelAnimation,
   Easing,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Canvas as SkiaCanvas,
@@ -27,9 +26,9 @@ import {
   useVideo as useSkiaVideo,
   Fit as SkiaFit,
   fitbox as skiaFitbox,
-  rect as skiaRect,
-} from '@shopify/react-native-skia';
-import { Space, Radius, Type, Typography, IconGrammar, Stroke, Elevation} from '../theme/designTokens';
+  rect as skiaRect } from '@shopify/react-native-skia';
+import { Space, Radius, Typography, IconGrammar, Stroke, Elevation} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -46,32 +45,27 @@ import { getVisibleLayersSorted, hasFullBleedMedia, isDefaultBackground } from '
 import {
   evaluateScene,
   type ResolvedLayer,
-  type ResolvedScene,
-} from './engine/evaluateScene';
+  type ResolvedScene } from './engine/evaluateScene';
 import {
   getRenderProfile,
   type RenderProfile,
-  type RenderProfileId,
-} from './engine/renderProfiles';
+  type RenderProfileId } from './engine/renderProfiles';
 // Playback pipeline — single clock, keyframe evaluator, effect evaluator
 import type { PlaybackClock } from './core/playback/PlaybackClock';
 import { evaluateKeyframes } from './core/playback/KeyframeEvaluator';
 import {
   evaluateCompositionEffectStack,
   multiplyMatrix,
-  type EvaluatedEffect,
-} from './core/playback/EffectEvaluator';
+  type EvaluatedEffect } from './core/playback/EffectEvaluator';
 import {
   getActiveAdjustmentLayers,
-  applyAdjustmentLayersToClip,
-} from './core/playback/AdjustmentLayerEvaluator';
+  applyAdjustmentLayersToClip } from './core/playback/AdjustmentLayerEvaluator';
 import { getCanvasLabel, CANVAS_ACCESSIBILITY_ACTIONS } from './core/a11y/CanvasAccessibilityLabels';
 // Shared layer primitives — single source of truth for accent colours,
 // context menus, and gesture handling across poster + creator surfaces.
 import {
   getLayerAccentColor,
-  getLayerCategoryLabel,
-} from '../components/poster/shared/layerAccents';
+  getLayerCategoryLabel } from '../components/poster/shared/layerAccents';
 import { ContextMenu, type ContextMenuAction } from '../components/poster/shared/ContextMenu';
 import { SafeZoneOverlay } from './surfaces/SafeZoneOverlay';
 import { GestureBadge } from './surfaces/GestureBadge';
@@ -193,8 +187,7 @@ export function CreatorCanvas({
   manipulationActiveSV,
   onManipulationChange,
   isInTrashZoneSV,
-  onTrashZoneEnter,
-}: CreatorCanvasProps) {
+  onTrashZoneEnter }: CreatorCanvasProps) {
   const { canvas } = document;
   const visibleLayers = getVisibleLayersSorted(page);
   const { colors } = useAppTheme();
@@ -224,8 +217,7 @@ export function CreatorCanvas({
         timeMs: currentTimeMs,
         viewport: { width: canvasWidth, height: canvasHeight },
         profile: renderProfile,
-        compareOriginal,
-      }),
+        compareOriginal }),
     [document, page, currentTimeMs, canvasWidth, canvasHeight, renderProfile, compareOriginal],
   );
   // Lookup: layerId → resolved layer, so LayerRenderer/MediaLayerContent
@@ -266,16 +258,14 @@ export function CreatorCanvas({
         id: 'lock',
         label: isLocked ? 'Unlock' : 'Lock',
         icon: isLocked ? 'lock-open-outline' : 'lock-closed-outline',
-        onPress: () => onLayerToggleLock(id),
-      });
+        onPress: () => onLayerToggleLock(id) });
     }
     // Flip: reset rotation to 0 (2D flip equivalent)
     actions.push({
       id: 'flip',
       label: 'Flip',
       icon: 'swap-horizontal-outline',
-      onPress: () => onLayerTransformChange?.(id, { rotation: 0 }),
-    });
+      onPress: () => onLayerTransformChange?.(id, { rotation: 0 }) });
     if (onLayerDelete) {
       actions.push({ id: 'delete', label: 'Delete', icon: 'trash-outline', danger: true, onPress: () => onLayerDelete(id) });
     }
@@ -337,8 +327,7 @@ export function CreatorCanvas({
         {
           width: canvasWidth,
           height: canvasHeight,
-          borderRadius: canvasRadius,
-        },
+          borderRadius: canvasRadius },
       ]}
       accessibilityLabel={getCanvasLabel(visibleLayers.length, mode)}
       accessibilityRole="image"
@@ -497,8 +486,7 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
 
   const animatedIconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleSV.value }],
-    opacity: opacitySV.value,
-  }));
+    opacity: opacitySV.value }));
 
   return (
     <View style={styles.emptyState} pointerEvents="none" accessibilityLabel="Empty canvas, tap a tool to start" accessibilityRole="text">
@@ -592,8 +580,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
   onManipulationChange,
   isInTrashZoneSV,
   onTrashZoneEnter,
-  compareOriginal,
-}: LayerRendererProps) {
+  compareOriginal }: LayerRendererProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
@@ -928,8 +915,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
         { rotate: `${rotationSV.value}deg` },
       ],
       opacity: effectiveOpacity,
-      zIndex: layer.zIndex,
-    };
+      zIndex: layer.zIndex };
   });
 
   // ── Temporal visibility & keyframe evaluation ───────────────────
@@ -1077,8 +1063,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
       : colors.brand,
     borderRadius: layerRadius,
     opacity: selectionOpacity.value,
-    borderStyle: layer.locked ? 'dashed' as const : 'solid' as const,
-  }));
+    borderStyle: layer.locked ? 'dashed' as const : 'solid' as const }));
 
   if (mode === 'edit') {
     return (
@@ -1155,8 +1140,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
         height,
         transform: [{ rotate: `${previewRotation}deg` }],
         opacity: effectiveOpacity,
-        zIndex: layer.zIndex,
-      }}
+        zIndex: layer.zIndex }}
       pointerEvents="none"
       accessibilityLabel={`${getLayerCategoryLabel(layer.type)} layer${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}`}
       accessibilityRole="image"
@@ -1284,8 +1268,7 @@ function SkiaVideoLayerContent({
   isLooping,
   volume,
   onError,
-  colors,
-}: {
+  colors }: {
   layer: Extract<CreatorLayer, { type: 'media' }>;
   width: number;
   height: number;
@@ -1318,14 +1301,12 @@ function SkiaVideoLayerContent({
   const { currentFrame, rotation, size } = useSkiaVideo(payload.mediaUri, {
     paused,
     looping,
-    volume,
-  });
+    volume });
 
   const contentFitMap: Record<string, SkiaFit> = {
     cover: 'cover',
     contain: 'contain',
-    fill: 'fill',
-  };
+    fill: 'fill' };
   const fit = contentFitMap[payload.contentFit] ?? 'cover';
 
   const hasColorMatrix = !!effectGraph?.colorMatrix && effectGraph.colorMatrix.length === 20;
@@ -1439,8 +1420,7 @@ function MediaLayerContent({
   currentTimeMs,
   siblingLayers,
   compareOriginal,
-  resolvedLayer,
-}: {
+  resolvedLayer }: {
   layer: Extract<CreatorLayer, { type: 'media' }>;
   width: number;
   height: number;
@@ -1644,8 +1624,7 @@ function MediaLayerContent({
     const contentFitMap: Record<string, SkiaFit> = {
       cover: 'cover',
       contain: 'contain',
-      fill: 'fill',
-    };
+      fill: 'fill' };
     const fit = contentFitMap[payload.contentFit] ?? 'cover';
 
     return (
@@ -1765,8 +1744,7 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: animOpacity.value,
-    transform: [{ translateY: animTranslateY.value }],
-  }));
+    transform: [{ translateY: animTranslateY.value }] }));
 
   // Per-style typography — real visual distinction, not just font size
   // Instagram 2025-2026: 10 fonts with distinct visual character
@@ -1774,83 +1752,72 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
     headline: {
       // Anton — display/impact for cover statements
       fontFamily: 'Anton_400Regular',
-      fontSize: Type.title.size + 4,
-      lineHeight: (Type.title.size + 4) * 1.15,
+      fontSize: TypographyV2.screenTitle.size + 4,
+      lineHeight: (TypographyV2.screenTitle.size + 4) * 1.15,
       textShadowColor: 'rgba(0,0,0,0.4)',
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 4,
-    },
+      textShadowRadius: 4 },
     editorial: {
       // Playfair Display Bold — editorial serif for issue/collection titles
       fontFamily: 'PlayfairDisplay_700Bold',
-      fontSize: Type.title.size + 1,
-      lineHeight: (Type.title.size + 1) * 1.2,
+      fontSize: TypographyV2.screenTitle.size + 1,
+      lineHeight: (TypographyV2.screenTitle.size + 1) * 1.2,
       textShadowColor: 'rgba(0,0,0,0.35)',
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 3,
-    },
+      textShadowRadius: 3 },
     clean: {
       // Inter Regular — clean modern sans (lighter weight)
       fontFamily: 'Inter_400Regular',
-      fontSize: Type.body.size + 1,
-      lineHeight: (Type.body.size + 1) * 1.35,
+      fontSize: TypographyV2.body.size + 1,
+      lineHeight: (TypographyV2.body.size + 1) * 1.35,
       textShadowColor: 'rgba(0,0,0,0.3)',
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 2,
-    },
+      textShadowRadius: 2 },
     compact: {
       // Inter SemiBold — uppercase labels (kept as-is)
       fontFamily: 'Inter_600SemiBold',
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.size * 1.3,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.size * 1.3,
       letterSpacing: 0.8,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
     handwritten: {
       // Caveat — genuine handwriting font
       fontFamily: 'Caveat_400Regular',
-      fontSize: Type.body.size + 2,
-      lineHeight: (Type.body.size + 2) * 1.3,
-    },
+      fontSize: TypographyV2.body.size + 2,
+      lineHeight: (TypographyV2.body.size + 2) * 1.3 },
     bubble: {
       // Playfair Display Regular — editorial serif for a restrained,
       // non-template feel (replaces round script Pacifico)
       fontFamily: 'PlayfairDisplay_400Regular',
-      fontSize: Type.bodyStrong.size + 6,
-      lineHeight: (Type.bodyStrong.size + 6) * 1.2,
-      letterSpacing: 0.5,
-    },
+      fontSize: TypographyV2.bodyStrong.size + 6,
+      lineHeight: (TypographyV2.bodyStrong.size + 6) * 1.2,
+      letterSpacing: 0.5 },
     deco: {
       // Anton — strong display (replaces retro Lobster for a more
       // cohesive, less template-like feel)
       fontFamily: 'Anton_400Regular',
-      fontSize: Type.bodyStrong.size + 2,
-      lineHeight: (Type.bodyStrong.size + 2) * 1.3,
-      letterSpacing: 1.5,
-    },
+      fontSize: TypographyV2.bodyStrong.size + 2,
+      lineHeight: (TypographyV2.bodyStrong.size + 2) * 1.3,
+      letterSpacing: 1.5 },
     poster: {
       // Bebas Neue — condensed display for poster titles
       fontFamily: 'BebasNeue_400Regular',
-      fontSize: Type.title.size - 2,
-      lineHeight: (Type.title.size - 2) * 1.1,
-      letterSpacing: -0.5,
-    },
+      fontSize: TypographyV2.screenTitle.size - 2,
+      lineHeight: (TypographyV2.screenTitle.size - 2) * 1.1,
+      letterSpacing: -0.5 },
     squeeze: {
       // Bebas Neue — condensed display (tighter feel)
       fontFamily: 'BebasNeue_400Regular',
-      fontSize: Type.body.size,
-      lineHeight: Type.body.size * 1.1,
-      letterSpacing: -0.3,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.size * 1.1,
+      letterSpacing: -0.3 },
     signature: {
       // Playfair Display Regular italic — refined serif signature
       // (replaces generic Dancing Script for a more editorial feel)
       fontFamily: 'PlayfairDisplay_400Regular',
       fontStyle: 'italic',
-      fontSize: Type.bodyStrong.size + 2,
-      lineHeight: (Type.bodyStrong.size + 2) * 1.4,
-    },
-  };
+      fontSize: TypographyV2.bodyStrong.size + 2,
+      lineHeight: (TypographyV2.bodyStrong.size + 2) * 1.4 } };
 
   // Text effect styles (Instagram 2025-2026)
   const effectStyle: TextStyle = {};
@@ -2168,8 +2135,7 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
   const { payload } = layer;
   const fillColor = payload.fillColor ?? colors.brand;
   const subtleShadow = {
-    ...Elevation.floating,
-  };
+    ...Elevation.floating };
   const iconSize = Math.min(width, height);
 
   switch (payload.shape) {
@@ -2182,8 +2148,7 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
             borderRadius: width / 2,
             backgroundColor: fillColor,
             opacity: payload.opacity,
-            ...subtleShadow,
-          }}
+            ...subtleShadow }}
           accessibilityLabel="Decorative circle shape"
           accessibilityRole="image"
         />
@@ -2197,8 +2162,7 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
             borderRadius: Radius.md,
             backgroundColor: fillColor,
             opacity: payload.opacity,
-            ...subtleShadow,
-          }}
+            ...subtleShadow }}
           accessibilityLabel="Decorative square shape"
           accessibilityRole="image"
         />
@@ -2212,8 +2176,7 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
             borderRadius: Radius.sm,
             backgroundColor: fillColor,
             opacity: payload.opacity,
-            marginTop: height / 2 - 2,
-          }}
+            marginTop: height / 2 - 2 }}
         />
       );
     case 'arrow':
@@ -2252,8 +2215,7 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
             borderRightColor: 'transparent',
             borderBottomColor: fillColor,
             opacity: payload.opacity,
-            alignSelf: 'center',
-          }}
+            alignSelf: 'center' }}
         />
       );
     case 'hexagon':
@@ -2353,8 +2315,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
         borderRadius: Radius.lg,
         backgroundColor: 'rgba(0,0,0,0.75)',
         minWidth: 160,
-        maxWidth: '100%',
-      }}
+        maxWidth: '100%' }}
       accessibilityLabel={`Music, ${payload.trackName}${payload.artistName ? ` by ${payload.artistName}` : ''}`}
       accessibilityRole="button"
     >
@@ -2365,8 +2326,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
             width: 40,
             height: 40,
             borderRadius: Radius.sm,
-            ...Elevation.modal,
-          }}
+            ...Elevation.modal }}
           contentFit="cover"
           cachePolicy="memory-disk"
           recyclingKey={payload.artworkUrl}
@@ -2379,17 +2339,16 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
           borderRadius: Radius.sm,
           backgroundColor: 'rgba(201,164,106,0.2)',
           justifyContent: 'center',
-          alignItems: 'center',
-        }}>
+          alignItems: 'center' }}>
           <Ionicons name="musical-notes" size={IconGrammar.metadata} color="rgba(201,164,106,0.8)" aria-hidden={true} />
         </View>
       )}
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: '#fff' }} numberOfLines={1}>
+        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: '#fff' }} numberOfLines={1}>
           {payload.trackName}
         </Text>
         {payload.artistName ? (
-          <Text style={{ fontFamily: Typography.family.regular, fontSize: Type.meta.size, color: 'rgba(255,255,255,0.6)' }} numberOfLines={1}>
+          <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: 'rgba(255,255,255,0.6)' }} numberOfLines={1}>
             {payload.artistName}
           </Text>
         ) : null}
@@ -2400,8 +2359,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
         borderRadius: Radius.full,
         backgroundColor: 'rgba(255,255,255,0.12)',
         justifyContent: 'center',
-        alignItems: 'center',
-      }}>
+        alignItems: 'center' }}>
         <Ionicons name="play" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
       </View>
     </View>
@@ -2420,10 +2378,9 @@ function LinkLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'lin
       paddingVertical: 10,
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor,
-      minWidth: 120,
-    }} accessibilityLabel={`Link, ${payload.ctaText}`} accessibilityRole="link">
+      minWidth: 120 }} accessibilityLabel={`Link, ${payload.ctaText}`} accessibilityRole="link">
       <Ionicons name="link-outline" size={IconGrammar.metadata} color={payload.textColor} aria-hidden={true} />
-      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
         {payload.ctaText}
       </Text>
     </View>
@@ -2442,10 +2399,9 @@ function LocationLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
       backgroundColor: 'rgba(0,0,0,0.6)',
-      minWidth: 100,
-    }} accessibilityLabel={`Location, ${payload.placeName}`} accessibilityRole="link">
+      minWidth: 100 }} accessibilityLabel={`Location, ${payload.placeName}`} accessibilityRole="link">
       <Ionicons name="location-outline" size={IconGrammar.metadata} color="#fff" aria-hidden={true} />
-      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: '#fff' }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: '#fff' }} numberOfLines={1}>
         {payload.placeName}
       </Text>
     </View>
@@ -2464,9 +2420,8 @@ function HashtagLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor,
-      minWidth: 80,
-    }} accessibilityLabel={`Hashtag, ${payload.tag}`} accessibilityRole="link">
-      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+      minWidth: 80 }} accessibilityLabel={`Hashtag, ${payload.tag}`} accessibilityRole="link">
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
         #{payload.tag}
       </Text>
     </View>
@@ -2491,10 +2446,9 @@ function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tim
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
-      minWidth: 80,
-    }} accessibilityLabel={`Time, ${timeStr}`} accessibilityRole="text">
+      minWidth: 80 }} accessibilityLabel={`Time, ${timeStr}`} accessibilityRole="text">
       <Ionicons name="time-outline" size={IconGrammar.metadata} color={payload.textColor} aria-hidden={true} />
-      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
         {timeStr}
       </Text>
     </View>
@@ -2513,15 +2467,14 @@ function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       paddingVertical: 10,
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
-      minWidth: 120,
-    }} accessibilityLabel={`Weather, ${payload.temperature}° ${payload.condition}${payload.locationName ? `, ${payload.locationName}` : ''}`} accessibilityRole="text">
-      <Text style={{ fontSize: Type.priceList.size }}>{payload.emoji}</Text>
+      minWidth: 120 }} accessibilityLabel={`Weather, ${payload.temperature}° ${payload.condition}${payload.locationName ? `, ${payload.locationName}` : ''}`} accessibilityRole="text">
+      <Text style={{ fontSize: TypographyV2.priceList.size }}>{payload.emoji}</Text>
       <View style={{ gap: 1 }}>
-        <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
           {payload.temperature}° {payload.condition}
         </Text>
         {payload.locationName ? (
-          <Text style={{ fontFamily: Typography.family.regular, fontSize: 10, color: payload.textColor, opacity: 0.7 }} numberOfLines={1}>
+          <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: 10, color: payload.textColor, opacity: 0.7 }} numberOfLines={1}>
             {payload.locationName}
           </Text>
         ) : null}
@@ -2541,8 +2494,7 @@ function SelectionHandles({
   rotationSV,
   onScaleChange,
   onRotationChange,
-  onCommit,
-}: {
+  onCommit }: {
   handleScaleSV: ReturnType<typeof useSharedValue<number>>;
   colors: ReturnType<typeof useAppTheme>['colors'];
   layerLocked: boolean;
@@ -2557,8 +2509,7 @@ function SelectionHandles({
   const startRotation = useSharedValue(0);
 
   const animatedHandleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: handleScaleSV.value }],
-  }));
+    transform: [{ scale: handleScaleSV.value }] }));
 
   // ── Corner handle: drag to resize (scale) ──
   // The handle is at a corner. Dragging away from center = scale up,
@@ -2618,16 +2569,14 @@ function SelectionHandles({
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: handleColor,
-    ...Elevation.modal,
-  };
+    ...Elevation.modal };
 
   // Invisible hit zone — 44pt for touch compliance
   const hitZone: ViewStyle = {
     position: 'absolute',
     width: 44,
     height: 44,
-    borderRadius: Radius.full,
-  };
+    borderRadius: Radius.full };
 
   return (
     <Reanimated.View style={[StyleSheet.absoluteFill, animatedHandleStyle]} accessibilityLabel="Layer selection handles" accessibilityRole="adjustable">
@@ -2666,8 +2615,7 @@ function SelectionHandles({
           marginLeft: -1,
           width: 2,
           height: 18,
-          backgroundColor: handleColor,
-        }}
+          backgroundColor: handleColor }}
         pointerEvents="none"
       />
       <GestureDetector gesture={rotationPan}>
@@ -2686,8 +2634,7 @@ function AlignmentGuides({
   canvasHeight,
   colors,
   smartGuides,
-  centerGuideVisible,
-}: {
+  centerGuideVisible }: {
   canvasWidth: number;
   canvasHeight: number;
   colors: ReturnType<typeof useAppTheme>['colors'];
@@ -2709,8 +2656,7 @@ function AlignmentGuides({
             top: canvasHeight / 2 - 0.5,
             height: 1,
             backgroundColor: colors.brand,
-            opacity: 0.5,
-          }} />
+            opacity: 0.5 }} />
           {/* Vertical centre line */}
           <View style={{
             position: 'absolute',
@@ -2719,8 +2665,7 @@ function AlignmentGuides({
             left: canvasWidth / 2 - 0.5,
             width: 1,
             backgroundColor: colors.brand,
-            opacity: 0.5,
-          }} />
+            opacity: 0.5 }} />
           {/* Center dot at intersection */}
           <View style={{
             position: 'absolute',
@@ -2730,8 +2675,7 @@ function AlignmentGuides({
             height: 6,
             borderRadius: Radius.full,
             backgroundColor: colors.brand,
-            opacity: 0.6,
-          }} />
+            opacity: 0.6 }} />
         </>
       )}
       {/* Safe-zone edges — 1px dashed, muted at 25% opacity */}
@@ -2754,38 +2698,31 @@ function AlignmentGuides({
 const styles = StyleSheet.create({
   canvas: {
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   backgroundPressLayer: {
     ...StyleSheet.absoluteFill,
-    zIndex: 0,
-  },
+    zIndex: 0 },
   layerInner: {
     width: '100%',
     height: '100%',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   // Empty state — premium designed surface
   emptyState: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   emptyStateIconWrap: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   emptyStateTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.title.size,
-    color: 'rgba(255,255,255,0.85)',
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    color: 'rgba(255,255,255,0.85)' },
   emptyStateSubtitle: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    fontSize: TypographyV2.body.size,
     color: 'rgba(255,255,255,0.4)',
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   // Locked badge
   lockedBadge: {
     position: 'absolute',
@@ -2795,9 +2732,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+    alignItems: 'center' } });
 
 const mediaStyles = StyleSheet.create({
   videoBadge: {
@@ -2807,9 +2742,7 @@ const mediaStyles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: Radius.sm,
     paddingHorizontal: Space.xs,
-    paddingVertical: 2,
-  },
-});
+    paddingVertical: 2 } });
 
 const textStyles = StyleSheet.create({
   container: {
@@ -2818,15 +2751,12 @@ const textStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   text: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size + 1,
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: TypographyV2.body.size + 1,
     textAlign: 'center',
-    flexWrap: 'wrap',
-  },
-});
+    flexWrap: 'wrap' } });
 
 function createProductStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -2837,40 +2767,32 @@ function createProductStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
     gap: 2,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   title: {
     color: colors.scrimTextPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: TypographyV2.meta.size },
   price: {
     color: colors.brand,
-    fontFamily: Typography.family.bold,
-    fontSize: Type.body.size,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.body.size },
   soldPrice: {
-    color: colors.danger,
-  },
+    color: colors.danger },
   deletedPrice: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   imageContainer: {
     borderRadius: Radius.md,
     overflow: 'hidden',
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   thumbnail: {
     width: '100%',
     height: '100%',
-    position: 'absolute',
-  },
+    position: 'absolute' },
   imageOverlay: {
     position: 'absolute',
     bottom: 0,
@@ -2879,18 +2801,15 @@ function createProductStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
-    gap: 1,
-  },
+    gap: 1 },
   imageTitle: {
     color: '#fff',
-    fontFamily: Typography.family.semibold,
-    fontSize: 10,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: 10 },
   imagePrice: {
     color: colors.brand,
-    fontFamily: Typography.family.bold,
-    fontSize: Type.caption.size,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: TypographyV2.meta.size },
   soldBadge: {
     position: 'absolute',
     top: Space.sm,
@@ -2898,13 +2817,11 @@ function createProductStyles(colors: ThemeColors) {
     backgroundColor: colors.danger,
     borderRadius: Radius.sm,
     paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
+    paddingVertical: 2 },
   soldBadgeText: {
     color: '#fff',
-    fontFamily: Typography.family.bold,
-    fontSize: Type.meta.size,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.meta.size },
   hotspotContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2913,28 +2830,23 @@ function createProductStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     paddingHorizontal: Space.smMd,
     paddingVertical: 6,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   hotspotDot: {
     width: 7,
     height: 7,
     borderRadius: Radius.full,
     backgroundColor: '#fff',
     borderWidth: Stroke.standard,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   hotspotLabel: {
     color: '#fff',
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.meta.size,
-    flex: 1,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.meta.size,
+    flex: 1 },
   hotspotPrice: {
     color: colors.brand,
-    fontFamily: Typography.family.bold,
-    fontSize: Type.meta.size,
-  },
-  });
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.meta.size } });
 }
 
 function createMentionStyles(colors: ThemeColors) {
@@ -2945,14 +2857,11 @@ function createMentionStyles(colors: ThemeColors) {
       paddingHorizontal: Space.smMd,
       paddingVertical: Space.xs,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     text: {
       color: colors.scrimTextPrimary,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
-  });
+      fontSize: TypographyV2.body.size } });
 }
 
 function createLookStyles(colors: ThemeColors) {
@@ -2965,14 +2874,11 @@ function createLookStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     text: {
       color: colors.scrimTextPrimary,
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-    },
-  });
+      fontSize: TypographyV2.meta.size } });
 }
 
 function createVoteStyles(colors: ThemeColors) {
@@ -2985,22 +2891,19 @@ function createVoteStyles(colors: ThemeColors) {
       gap: 8,
       minWidth: 160,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
       flexWrap: 'wrap',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     question: {
       color: colors.scrimTextPrimary,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       textAlign: 'center',
-      flexShrink: 1,
-    },
+      flexShrink: 1 },
     timerBadge: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -3008,19 +2911,16 @@ function createVoteStyles(colors: ThemeColors) {
       backgroundColor: 'rgba(255,255,255,0.2)',
       borderRadius: Radius.md,
       paddingHorizontal: 6,
-      paddingVertical: 2,
-    },
+      paddingVertical: 2 },
     timerText: {
       color: colors.scrimTextPrimary,
-      fontFamily: Typography.family.medium,
-      fontSize: 10,
-    },
+      fontFamily: TypographyV2.body.fontFamily,
+      fontSize: 10 },
     optionsRow: {
       flexDirection: 'row',
       gap: 6,
       flexWrap: 'wrap',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     option: {
       backgroundColor: 'rgba(255,255,255,0.18)',
       borderRadius: Radius.sm,
@@ -3029,17 +2929,14 @@ function createVoteStyles(colors: ThemeColors) {
       alignItems: 'center',
       minWidth: 60,
       flex: 1,
-      maxWidth: '48%',
-    },
+      maxWidth: '48%' },
     optionFirst: {
       // Both options equal weight — no visual hierarchy difference
     },
     optionText: {
       color: colors.scrimTextPrimary,
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size + 1,
-    },
-  });
+      fontSize: TypographyV2.meta.size + 1 } });
 }
 
 function createQuizStyles(colors: ThemeColors) {
@@ -3050,25 +2947,20 @@ function createQuizStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md + 2,
       paddingVertical: Space.sm + 2,
       gap: 10,
-      minWidth: 180,
-    },
+      minWidth: 180 },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
-    },
+      gap: 6 },
     emoji: {
-      fontSize: Type.heading.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size },
     question: {
       color: colors.scrimTextPrimary,
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-      flex: 1,
-    },
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      fontSize: TypographyV2.body.size,
+      flex: 1 },
     optionsCol: {
-      gap: 6,
-    },
+      gap: 6 },
     option: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -3078,31 +2970,25 @@ function createQuizStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'rgba(255,255,255,0.08)',
-    },
+      borderColor: 'rgba(255,255,255,0.08)' },
     optionCorrect: {
       backgroundColor: 'rgba(201,164,106,0.25)',
-      borderColor: 'rgba(201,164,106,0.6)',
-    },
+      borderColor: 'rgba(201,164,106,0.6)' },
     optionText: {
       color: colors.scrimTextPrimary,
-      fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size + 1,
-      flex: 1,
-    },
+      fontFamily: TypographyV2.body.fontFamily,
+      fontSize: TypographyV2.meta.size + 1,
+      flex: 1 },
     optionTextCorrect: {
       color: colors.antiqueGold,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
     correctBadge: {
       width: 18,
       height: 18,
       borderRadius: Radius.full,
       backgroundColor: colors.antiqueGold,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
-  });
+      alignItems: 'center' } });
 }
 
 function createQuestionStyles(colors: ThemeColors) {
@@ -3112,14 +2998,12 @@ function createQuestionStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md + 2,
       paddingVertical: Space.sm + 2,
       minWidth: 180,
-      maxWidth: '100%',
-    },
+      maxWidth: '100%' },
     prompt: {
       color: colors.scrimTextPrimary,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      marginBottom: Space.sm,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      marginBottom: Space.sm },
     inputAffordance: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -3127,23 +3011,19 @@ function createQuestionStyles(colors: ThemeColors) {
       backgroundColor: 'rgba(255,255,255,0.12)',
       borderRadius: Radius.md,
       paddingHorizontal: Space.sm + 2,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     placeholder: {
       flex: 1,
       color: 'rgba(255,255,255,0.55)',
-      fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontSize: TypographyV2.meta.size },
     sendHint: {
       width: 18,
       height: 18,
       borderRadius: Radius.full,
       backgroundColor: 'rgba(255,255,255,0.15)',
       justifyContent: 'center',
-      alignItems: 'center',
-    },
-  });
+      alignItems: 'center' } });
 }
 
 function createSliderStyles(colors: ThemeColors) {
@@ -3154,38 +3034,32 @@ function createSliderStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md + 2,
       paddingVertical: Space.sm + 2,
       minWidth: 200,
-      maxWidth: '100%',
-    },
+      maxWidth: '100%' },
     question: {
       color: colors.scrimTextPrimary,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       marginBottom: 10,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     sliderRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
-    },
+      gap: 10 },
     emoji: {
-      fontSize: Type.display.size,
-    },
+      fontSize: TypographyV2.display.size },
     track: {
       flex: 1,
       height: 6,
       borderRadius: Radius.full,
       backgroundColor: 'rgba(255,255,255,0.15)',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     trackFill: {
       position: 'absolute',
       left: 0,
       top: 0,
       bottom: 0,
       width: '50%',
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     thumb: {
       width: 14,
       height: 14,
@@ -3194,14 +3068,11 @@ function createSliderStyles(colors: ThemeColors) {
       borderWidth: 2,
       position: 'absolute',
       left: '50%',
-      marginLeft: -7,
-    },
+      marginLeft: -7 },
     endLabel: {
       color: 'rgba(255,255,255,0.7)',
-      fontFamily: Typography.family.medium,
-      fontSize: Type.meta.size,
-    },
-  });
+      fontFamily: TypographyV2.display.fontFamily,
+      fontSize: TypographyV2.meta.size } });
 }
 
 const countdownStyles = StyleSheet.create({
@@ -3211,24 +3082,19 @@ const countdownStyles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     minWidth: 150,
     maxWidth: '100%',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   iconRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   label: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size - 1,
+    fontSize: TypographyV2.meta.size - 1,
     letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   time: {
-    fontFamily: Typography.family.bold,
-    fontSize: Type.title.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.screenTitle.size,
     fontVariant: ['tabular-nums'],
-    letterSpacing: 0.5,
-  },
-});
+    letterSpacing: 0.5 } });

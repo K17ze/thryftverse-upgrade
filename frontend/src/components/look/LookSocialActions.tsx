@@ -3,15 +3,15 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import {
   likeLookOnApi,
   unlikeLookOnApi,
   saveLookOnApi,
-  unsaveLookOnApi,
-} from '../../services/looksApi';
+  unsaveLookOnApi } from '../../services/looksApi';
 
 export interface LookSocialActionsProps {
   lookId: string;
@@ -36,8 +36,7 @@ export function LookSocialActions({
   isAuthenticated,
   onCommentPress,
   onSharePress,
-  onSignInRequired,
-}: LookSocialActionsProps) {
+  onSignInRequired }: LookSocialActionsProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -198,19 +197,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: Space.lg,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   actionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary } });

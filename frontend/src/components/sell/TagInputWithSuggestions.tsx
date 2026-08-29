@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, Control } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import type { AutocompleteSuggestion } from '../../services/searchAutocompleteApi';
 import { haptics } from '../../utils/haptics';
@@ -37,8 +38,7 @@ function TagInputWithSuggestions({
   tagSuggestionsVisible,
   onSuggestionsVisibleChange,
   onSuggestionsClear,
-  onSuggestionPick,
-}: TagInputWithSuggestionsProps) {
+  onSuggestionPick }: TagInputWithSuggestionsProps) {
   const { colors } = useAppTheme();
 
   const renderTagSuggestion: ListRenderItem<AutocompleteSuggestion> = useCallback(
@@ -112,8 +112,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Space.xs + 2,
     alignItems: 'center',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   tagChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -121,26 +120,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
     borderRadius: RadiusRoleValue.compactControl,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   tagText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   tagInput: {
     flex: 1,
     minWidth: Space.xxl + Space.lg,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.body.letterSpacing,
-    paddingVertical: Space.xs,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    paddingVertical: Space.xs },
   tagAutocompleteWrap: {
-    position: 'relative',
-  },
+    position: 'relative' },
   tagSuggestionDropdown: {
     position: 'absolute',
     top: '100%',
@@ -152,21 +147,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     zIndex: 1000,
     elevation: 1000,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   tagSuggestionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 44,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   tagSuggestionText: {
     flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
-});
+    letterSpacing: TypographyV2.body.letterSpacing } });

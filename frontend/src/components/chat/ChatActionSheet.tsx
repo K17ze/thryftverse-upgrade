@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
-import { View, Text, StyleSheet, Modal, Pressable } from "react-native";
+
+import { TypographyV2 } from '../../theme/typography.v2';import { View, Text, StyleSheet, Modal, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Space, Radius, Type, Typography, Elevation } from "../../theme/designTokens";
+import { Space, Radius, Elevation } from "../../theme/designTokens";
 import { useAppTheme } from "../../theme/ThemeContext";
 import { AnimatedPressable } from "../AnimatedPressable";
 
@@ -25,8 +26,7 @@ interface ActionDef {
 export function ChatActionSheet({
   visible,
   onClose,
-  onSelect,
-}: ChatActionSheetProps) {
+  onSelect }: ChatActionSheetProps) {
   const { colors } = useAppTheme();
   const actions = useMemo<ActionDef[]>(
     () => [
@@ -34,20 +34,17 @@ export function ChatActionSheet({
         id: "gallery",
         icon: "images-outline",
         label: "Photo & Video",
-        description: "Choose from your library",
-      },
+        description: "Choose from your library" },
       {
         id: "camera",
         icon: "camera-outline",
         label: "Camera",
-        description: "Take a new photo or video",
-      },
+        description: "Take a new photo or video" },
       {
         id: "agent",
         icon: "sparkles-outline",
         label: "Add assistant",
-        description: "Deploy an AI assistant into this chat",
-      },
+        description: "Deploy an AI assistant into this chat" },
     ],
     [],
   );
@@ -141,8 +138,7 @@ export function ChatActionSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: "flex-end",
-  },
+    justifyContent: "flex-end" },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
@@ -150,70 +146,57 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.xxl,
     gap: Space.md,
-    ...Elevation.floating,
-  },
+    ...Elevation.floating },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.full,
     alignSelf: "center",
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   header: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   subtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: 2 },
   list: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: Space.smMd,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm + 2,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   rowDisabled: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   rowText: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   rowLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   rowDescription: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   disabledBadge: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   disabledBadgeText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   cancelBtn: {
     borderRadius: Radius.lg,
     paddingVertical: Space.md + 2,
@@ -221,11 +204,8 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: 44,
-    justifyContent: "center",
-  },
+    justifyContent: "center" },
   cancelText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily } });

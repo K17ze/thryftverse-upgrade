@@ -13,19 +13,16 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import {
   LANGUAGE_OPTIONS,
-  SupportedLanguageOption,
-} from '../preferences/settingsPreferences';
+  SupportedLanguageOption } from '../preferences/settingsPreferences';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import {
   getPushPermissionStatus,
   requestPushPermissionWithContext,
-  resetPushPermissionAskedFlag,
-} from '../lib/pushPermission';
+  resetPushPermissionAskedFlag } from '../lib/pushPermission';
 import {
   getThemePreferenceLabel,
   ThemePreference,
-  updateThemePreference,
-} from '../theme/themePreference';
+  updateThemePreference } from '../theme/themePreference';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { t } from '../i18n';
@@ -38,7 +35,7 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 
-import { Space, FontFamily, Radius, Type } from '../theme/designTokens';
+import { Space, FontFamily, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useFeatureFlag, type FeatureFlagKey } from '../analytics';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
@@ -116,45 +113,37 @@ function FeatureFlagRow({ flagKey }: { flagKey: FeatureFlagKey }) {
 const flagStyles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   heading: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.meta.letterSpacing,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   flagName: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
-    flex: 1,
-  },
+    flex: 1 },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xxs,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xxs + 1,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   statusDot: {
     width: 7,
     height: 7,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   statusText: {
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.semibold,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold } });
 
 interface DestinationMeta {
   key: keyof RootStackParamList;
@@ -236,8 +225,7 @@ export default function SettingsScreen({ navigation }: Props) {
     biometricEnabled,
     setBiometricEnabled,
     biometricLoginEnabled,
-    setBiometricLoginEnabled,
-  } = useSettingsPreferences();
+    setBiometricLoginEnabled } = useSettingsPreferences();
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = React.useState(false);
   const [themePickerVisible, setThemePickerVisible] = React.useState(false);
@@ -285,8 +273,7 @@ export default function SettingsScreen({ navigation }: Props) {
     currencyCode,
     displayModeLabel,
     setCurrencyCode,
-    cycleDisplayMode,
-  } = useCurrencyPref();
+    cycleDisplayMode } = useCurrencyPref();
 
   const currencyOptions = React.useMemo(
     () =>
@@ -958,36 +945,29 @@ export default function SettingsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   searchField: {
-    height: 48,
-  },
+    height: 48 },
   // ── Search empty state ──
   emptySearch: {
     paddingVertical: Space.lg,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   emptySearchText: {
     fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
-  },
+    fontFamily: FontFamily.regular },
   // ── Account health indicator ──
   healthRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   healthPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xxs + 1,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xxs + 1,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   healthPillText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-});
+    letterSpacing: TypographyV2.meta.letterSpacing } });

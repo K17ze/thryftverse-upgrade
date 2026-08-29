@@ -2,14 +2,14 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   SellerBadgeType,
   SellerBadgeInfo,
   SELLER_BADGES,
   deriveSellerBadges,
-  SellerTrustSummary,
-} from '../../platform/product';
+  SellerTrustSummary } from '../../platform/product';
 
 interface BadgeChipProps {
   badge: SellerBadgeInfo;
@@ -50,8 +50,7 @@ export function SellerStandardsBadges({
   sellerTrust,
   size = 'md',
   align = 'left',
-  limit,
-}: SellerStandardsBadgesProps) {
+  limit }: SellerStandardsBadgesProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const earnedBadges = React.useMemo(
@@ -83,11 +82,9 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   containerCenter: {
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -97,21 +94,16 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brandSubtle,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.brandBorder,
-  },
+    borderColor: colors.brandBorder },
   chipSm: {
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 - 1,
-    gap: Space.xs / 2 - 1,
-  },
+    gap: Space.xs / 2 - 1 },
   chipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.brand,
-    letterSpacing: 0.1,
-  },
+    letterSpacing: 0.1 },
   chipTextSm: {
-    fontSize: 10,
-  },
-  });
+    fontSize: 10 } });
 }

@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, Control } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { SupportContextKind } from '../../contracts/support';
 
 // ─── Context icon mapping (one icon family, outline resting state) ──────────
@@ -15,8 +16,7 @@ const CONTEXT_ICON: Record<SupportContextKind, keyof typeof Ionicons.glyphMap> =
   auction: 'trophy-outline',
   coown_asset: 'diamond-outline',
   catalog_import: 'download-outline',
-  media_job: 'image-outline',
-};
+  media_job: 'image-outline' };
 
 const CONTEXT_LABEL: Record<SupportContextKind, string> = {
   general: 'General enquiry',
@@ -27,8 +27,7 @@ const CONTEXT_LABEL: Record<SupportContextKind, string> = {
   auction: 'Auction',
   coown_asset: 'Co-Own asset',
   catalog_import: 'Import',
-  media_job: 'Media',
-};
+  media_job: 'Media' };
 
 export interface SupportContextHeaderProps {
   contextKind: SupportContextKind;
@@ -63,8 +62,7 @@ export function SupportContextHeader({
   imageUrl,
   status,
   dateLabel,
-  onPress,
-}: SupportContextHeaderProps) {
+  onPress }: SupportContextHeaderProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -120,8 +118,7 @@ function PressableBorderless({
   onPress,
   label,
   hint,
-  children,
-}: {
+  children }: {
   onPress: () => void;
   label: string;
   hint: string;
@@ -144,57 +141,48 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     thumb: {
       width: 36,
       height: 36,
       borderRadius: Radius.sm,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     thumbPlaceholder: {
       width: 36,
       height: 36,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     textCol: {
       flex: 1,
-      minWidth: 0,
-    },
+      minWidth: 0 },
     title: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-    },
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     subtitle: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: 1,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: 1 },
     trailing: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
       color: colors.textMuted,
-      letterSpacing: Type.meta.letterSpacing,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       flexShrink: 0,
       maxWidth: 120,
-      textAlign: 'right',
-    },
-  });
+      textAlign: 'right' } });
 }

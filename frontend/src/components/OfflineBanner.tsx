@@ -17,11 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedStyle,
   withTiming,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../theme/motionTokens';
@@ -40,8 +40,7 @@ const DEFAULT_MESSAGE = 'You are offline. Showing cached content.';
 export function OfflineBanner({
   message,
   onRetry,
-  compact = false,
-}: OfflineBannerProps) {
+  compact = false }: OfflineBannerProps) {
   const { colors } = useAppTheme();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
@@ -53,9 +52,7 @@ export function OfflineBanner({
     return {
       opacity: withTiming(isOffline ? 1 : 0, {
         duration: Motion.duration.normal,
-        easing: Easing.out(Easing.ease),
-      }),
-    };
+        easing: Easing.out(Easing.ease) }) };
   }, [isOffline, reducedMotion]);
 
   if (!isOffline) return null;
@@ -69,8 +66,7 @@ export function OfflineBanner({
           styles.compact,
           {
             backgroundColor: colors.warningSubtle,
-            borderColor: colors.warningBorder,
-          },
+            borderColor: colors.warningBorder },
           opacityStyle,
         ]}
         accessibilityRole="alert"
@@ -109,8 +105,7 @@ export function OfflineBanner({
         {
           backgroundColor: colors.warningSubtle,
           borderTopColor: colors.warningBorder,
-          borderBottomColor: colors.warningBorder,
-        },
+          borderBottomColor: colors.warningBorder },
         opacityStyle,
       ]}
       accessibilityRole="alert"
@@ -151,25 +146,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   text: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   retryBtn: {
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   retryText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   compact: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -177,12 +168,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   compactText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing } });

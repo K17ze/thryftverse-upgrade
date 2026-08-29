@@ -6,15 +6,14 @@ import {
   TextInput,
   Pressable,
   Dimensions,
-  Image,
-} from 'react-native';
+  Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, DockConstants, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, FontFamily, DockConstants, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { AppInput } from '../components/ui/AppInput';
@@ -40,8 +39,7 @@ import {
   formatShippingSummary,
   formatReviewSummary,
   sanitizeShareCountInput,
-  type PickerMode,
-} from '../utils/sellScreenLogic';
+  type PickerMode } from '../utils/sellScreenLogic';
 import { haptics } from '../utils/haptics';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import type { MediaUploadAsset } from '../utils/mediaUploadAsset';
@@ -62,8 +60,7 @@ import type { AutocompleteSuggestion } from '../services/searchAutocompleteApi';
 import {
   evaluateListingCompleteness,
   type ListingFieldValues,
-  type ListingFieldKey,
-} from '../contracts/listingCategoryPolicy';
+  type ListingFieldKey } from '../contracts/listingCategoryPolicy';
 import { t } from '../i18n';
 import { useSellFormState } from '../hooks/sell/useSellFormState';
 import { useListingPublishPipeline } from '../hooks/sell/useListingPublishPipeline';
@@ -143,8 +140,7 @@ export default function SellScreen() {
     autofillChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     autofillChipLabel: { color: colors.textMuted },
     autofillChipValue: { color: colors.textPrimary },
-    autofillApplyBtn: { borderColor: colors.brandBorder, backgroundColor: colors.brandSubtle },
-  }), [colors]);
+    autofillApplyBtn: { borderColor: colors.brandBorder, backgroundColor: colors.brandSubtle } }), [colors]);
 
   const updateSellDraft = useStore((s) => s.updateSellDraft);
   const currentUser = useStore((s) => s.currentUser);
@@ -157,18 +153,15 @@ export default function SellScreen() {
     title, desc, price, originalPrice, tags, tagInput, category, brand, size, condition,
     shippingMethod, shippingPayer, shippingSheetOpen, listingMode, coOwnEnabled,
     shareCountInput, sharePriceInput, offeringWindowHours, authPhotos,
-    startingBid, reservePrice, auctionDurationHours,
-  } = values;
+    startingBid, reservePrice, auctionDurationHours } = values;
   const {
     setTitle, setDesc, setPrice, setOriginalPrice, setTags, setTagInput, setCategory,
     setBrand, setSize, setCondition, setShippingMethod, setShippingPayer, setShippingSheetOpen,
     setListingMode, setCoOwnEnabled, setShareCountInput, setSharePriceInput, setOfferingWindowHours,
-    setAuthPhotos, setStartingBid, setReservePrice, setAuctionDurationHours,
-  } = setters;
+    setAuthPhotos, setStartingBid, setReservePrice, setAuctionDurationHours } = setters;
 
   const {
-    tagSuggestions, tagSuggestionsVisible, setTagSuggestionsVisible, setTagSuggestions,
-  } = useTagAutocomplete(tagInput);
+    tagSuggestions, tagSuggestionsVisible, setTagSuggestionsVisible, setTagSuggestions } = useTagAutocomplete(tagInput);
 
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
 
@@ -249,8 +242,7 @@ export default function SellScreen() {
       category: categories.filter((n) => n.parentId === null).map((n) => n.name),
       brand: brands.map((n) => n.name),
       size: sizes.map((n) => n.name),
-      condition: conditions.map((n) => n.name),
-    }),
+      condition: conditions.map((n) => n.name) }),
     [categories, conditions, sizes, brands],
   );
 
@@ -305,8 +297,7 @@ export default function SellScreen() {
       condition: condition || null,
       images: photos.length > 0 ? photos : null,
       shippingMethod: shippingMethod || null,
-      shippingPayer: shippingPayer || null,
-    };
+      shippingPayer: shippingPayer || null };
     return evaluateListingCompleteness(values);
   }, [title, desc, numericPrice, category, brand, size, condition, photos, shippingMethod, shippingPayer]);
 
@@ -332,8 +323,7 @@ export default function SellScreen() {
     condition: 'condition',
     images: 'photos',
     shippingMethod: 'shipping method',
-    shippingPayer: 'shipping payer',
-  };
+    shippingPayer: 'shipping payer' };
 
   const completenessLabel = completeness.canActivate
     ? 'Ready to publish'
@@ -391,8 +381,7 @@ export default function SellScreen() {
         width: asset.width,
         height: asset.height,
         durationMs: asset.durationMs,
-        status: 'draft',
-      };
+        status: 'draft' };
       const next = [...prev, draftItem].slice(0, 10);
       // Keep photos in sync for backward compat
       setPhotos(next.map((m) => m.uri));
@@ -414,8 +403,7 @@ export default function SellScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsMultipleSelection: true,
         allowsEditing: false,
-        quality: 0.9,
-      });
+        quality: 0.9 });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const assets = result.assets.map(convertPickerAsset);
         const existing = mediaDraftItems.map((m) => ({
@@ -427,8 +415,7 @@ export default function SellScreen() {
           fileSize: m.fileSize,
           width: m.width,
           height: m.height,
-          durationMs: m.durationMs,
-        }));
+          durationMs: m.durationMs }));
         const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
 
         if (validation.errors.length > 0) {
@@ -457,8 +444,7 @@ export default function SellScreen() {
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All,
-        quality: 0.9,
-      });
+        quality: 0.9 });
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = convertPickerAsset(result.assets[0]);
         const existing = mediaDraftItems.map((m) => ({
@@ -470,8 +456,7 @@ export default function SellScreen() {
           fileSize: m.fileSize,
           width: m.width,
           height: m.height,
-          durationMs: m.durationMs,
-        }));
+          durationMs: m.durationMs }));
         const validation = validateMediaAssets([asset], existing, { maxTotalCount: 10 });
         if (validation.errors.length > 0) {
           setErrorMsg(validation.errors.map((e) => e.message).join('. '));
@@ -578,8 +563,7 @@ export default function SellScreen() {
     setMediaDraftItems,
     setPhotos,
     setErrors,
-    setErrorMsg,
-  });
+    setErrorMsg });
 
   /* -- picker helpers -- */
   const getPickerOptions = useCallback(() => {
@@ -637,10 +621,8 @@ export default function SellScreen() {
         description: desc.trim() || undefined,
         photos,
         shippingMethod: shippingMethod || undefined,
-        shippingPayer: shippingPayer || undefined,
-      },
-      origin: 'sell',
-    });
+        shippingPayer: shippingPayer || undefined },
+      origin: 'sell' });
   }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, navigation]);
 
   return (
@@ -1559,8 +1541,7 @@ export default function SellScreen() {
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
-  },
+    flex: 1 },
 
   /* -- nav header -- */
   navHeader: {
@@ -1569,40 +1550,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   navCloseBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   navTitle: {
     fontSize: TypographyV2.priceList.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.priceList.letterSpacing,
-  },
+    letterSpacing: TypographyV2.priceList.letterSpacing },
   navDraftStatus: {
     minWidth: Space.xl + Space.sm,
-    alignItems: 'flex-end',
-  },
+    alignItems: 'flex-end' },
   navDraftSavedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   navDraftText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontFamily: FontFamily.semibold },
 
   /* -- scroll -- */
   scroll: {
-    flex: 1,
-  },
+    flex: 1 },
   scrollContent: {
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
 
   /* -- sections -- */
   autofillCard: {
@@ -1610,42 +1583,36 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     padding: Space.md,
     borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: 0,
-  },
+    borderWidth: 0 },
   autofillHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   autofillTitle: {
     flex: 1,
     fontSize: TypographyV2.bodyStrong.size,
     lineHeight: TypographyV2.bodyStrong.lineHeight,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   autofillDesc: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   autofillRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.xs + 2,
-    borderBottomWidth: Stroke.hairline,
-  },
+    borderBottomWidth: Stroke.hairline },
   autofillRowLabel: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
     textTransform: 'uppercase',
-    letterSpacing: TypographyV2.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
   autofillRowValue: {
     flex: 1,
     marginLeft: Space.sm,
@@ -1653,22 +1620,19 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   autofillChipLabel: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
     textTransform: 'uppercase',
-    letterSpacing: TypographyV2.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
   autofillChipValue: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   autofillApplyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1678,44 +1642,37 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: 0,
     alignSelf: 'flex-start',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   autofillApplyText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   sectionSpacing: {
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   /* Section spacing 24pt (Space.lg). Section heading is a restrained eyebrow. */
   sectionGroup: {
     paddingTop: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   sectionHeading: {
     fontSize: TypographyV2.label.size,
     lineHeight: TypographyV2.label.lineHeight,
     fontFamily: FontFamily.bold,
     textTransform: 'uppercase',
     letterSpacing: TypographyV2.label.letterSpacing,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
 
   /* -- fields -- */
   /* Field spacing 16pt: paddingVertical 8 + hairline marginTop 8 = 16pt rhythm. */
   fieldGroup: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   /* Labels: TypographyV2.bodyStrong — clear, legible, heavier than input text. */
   fieldLabel: {
     fontSize: TypographyV2.bodyStrong.size,
     lineHeight: TypographyV2.bodyStrong.lineHeight,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   /* Inputs: TypographyV2.body — comfortable reading weight. */
   fieldInput: {
     fontSize: TypographyV2.body.size,
@@ -1724,31 +1681,26 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.body.letterSpacing,
     paddingVertical: Space.sm,
     paddingHorizontal: 0,
-    minHeight: Control.hit + Space.sm,
-  },
+    minHeight: Control.hit + Space.sm },
   fieldInputMultiline: {
     minHeight: Space.xxl + Space.xl,
     textAlignVertical: 'top',
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   /* Hints: TypographyV2.meta — supportive but recessed. */
   fieldHelper: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   fieldError: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   hairline: {
     height: StyleSheet.hairlineWidth,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
 
   /* -- picker rows -- */
   pickerRow: {
@@ -1756,19 +1708,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
-    minHeight: Control.hit + Space.sm,
-  },
+    minHeight: Control.hit + Space.sm },
   pickerRowInner: {
-    flex: 1,
-  },
+    flex: 1 },
   pickerValue: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  pickerPlaceholder: {
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
+  pickerPlaceholder: {},
 
   /* -- price input -- */
   /* The price field is the financial center of the listing — larger
@@ -1777,50 +1725,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.sm,
-    minHeight: Control.hit + Space.sm,
-  },
+    minHeight: Control.hit + Space.sm },
   currencySymbol: {
     fontSize: TypographyV2.priceHero.size,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
-    marginRight: Space.xs + 2,
-  },
+    marginRight: Space.xs + 2 },
   priceInput: {
     fontSize: TypographyV2.priceHero.size,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
     minWidth: Space.xxl + Space.lg + Space.sm,
-    padding: 0,
-  },
+    padding: 0 },
   discountPreview: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   soldCompsHint: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     marginTop: Space.xs,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   soldCompsText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     flex: 1,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   soldCompsAction: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontFamily: FontFamily.semibold },
 
   /* -- toggles -- */
   toggleRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   togglePill: {
     flex: 1,
     flexDirection: 'row',
@@ -1830,34 +1770,27 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
-  togglePillActive: {
-  },
+    minHeight: Control.hit },
+  togglePillActive: {},
   toggleText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontFamily: FontFamily.medium },
   toggleTextActive: {
-    fontFamily: FontFamily.bold,
-  },
+    fontFamily: FontFamily.bold },
 
   /* -- co-own auth photos -- */
   authPhotoRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   authThumb: {
     width: Space.xxl + Space.xs,
     height: Space.xxl + Space.xs,
     borderRadius: RadiusRoleValue.mediaThumbnail,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   authThumbImage: {
     width: Space.xxl + Space.xs,
-    height: Space.xxl + Space.xs,
-  },
+    height: Space.xxl + Space.xs },
   authThumbRemove: {
     position: 'absolute',
     top: -6,
@@ -1866,8 +1799,7 @@ const styles = StyleSheet.create({
     height: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   authAddBtn: {
     width: Space.xxl + Space.xs,
     height: Space.xxl + Space.xs,
@@ -1875,8 +1807,7 @@ const styles = StyleSheet.create({
     borderWidth: Stroke.standard,
     borderStyle: 'dashed',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
 
   /* -- inline error -- */
   inlineErrorRow: {
@@ -1884,13 +1815,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   inlineErrorText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontFamily: FontFamily.semibold },
 
   /* -- compact review summary (auction/co_own) -- */
   /* Per audit 04 P1: compact review state before publish for high-value
@@ -1900,15 +1829,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   reviewSummaryText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* -- contextual authenticity prompts -- */
   /* Per audit 04 P1: contextual prompts by category/value.
@@ -1916,20 +1843,17 @@ const styles = StyleSheet.create({
   contextualPrompts: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   contextualPromptRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   contextualPromptText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* -- contextual photo assistant (consolidated) -- */
   /* One system replacing the former contextualHintRow, PhotoGuideCollapse,
@@ -1940,33 +1864,28 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   photoAssistantToggleText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   photoAssistantTips: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   photoAssistantTip: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* -- price suggestion block -- */
   priceSuggestionBlock: {
     marginTop: Space.xs,
-    gap: 0,
-  },
+    gap: 0 },
 
   /* -- seller proceeds estimate -- */
   /* Per audit 04 P1: seller-proceeds preview beside price.
@@ -1977,50 +1896,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   proceedsLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   proceedsLabel: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.medium,
-    marginTop: 0,
-  },
+    marginTop: 0 },
   proceedsRight: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   proceedsAmount: {
     fontSize: TypographyV2.priceList.size,
     lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: FontFamily.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   proceedsFeeHint: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    marginTop: 0,
-  },
+    marginTop: 0 },
 
   /* -- field validation -- */
   fieldLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   fieldRequiredHint: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* -- contextual hints (field-specific, not a dashboard) -- */
   contextualHintRow: {
@@ -2028,15 +1939,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   contextualHintText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* -- category-aware completeness indicator (flat inline) -- */
   completenessRow: {
@@ -2044,24 +1953,20 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   completenessTextWrap: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   completenessLabel: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   completenessHint: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* -- shipping summary row + bottom sheet -- */
   shippingSummaryRow: {
@@ -2074,84 +1979,70 @@ const styles = StyleSheet.create({
     borderBottomColor: '#00000000', // themed inline
   },
   shippingSummaryLabel: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: Type.bodyStrong.lineHeight,
-    marginBottom: Space.xxs,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    marginBottom: Space.xxs },
   shippingSummaryValue: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   /* -- draft hint (flat inline) -- */
   draftHintRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 2,
-  },
+    paddingVertical: Space.xs + 2 },
   draftHintText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* -- quick actions row (transparent targets, no chrome) -- */
   sellQuickActions: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   sellQuickAction: {
     flex: 1,
     alignItems: 'center',
     gap: Space.xs - 2,
     paddingVertical: Space.sm,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   sellQuickActionLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* -- import a shop row (flat, hairline-separated, 44pt target) -- */
   importShopRow: {
     paddingHorizontal: Space.md,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   importShopSeparator: {
     height: Stroke.hairline,
-    marginBottom: Space.sm + Space.xs,
-  },
+    marginBottom: Space.sm + Space.xs },
   importShopContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   importShopText: {
     flex: 1,
     justifyContent: 'center',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   importShopTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   importShopSubtitle: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

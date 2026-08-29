@@ -4,10 +4,10 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Type, Radius, Stroke } from '../../theme/designTokens';
+import { Typography, Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface TabItem {
@@ -80,8 +80,7 @@ export function MyProfileTabRail({ tabs, activeKey, onChange }: MyProfileTabRail
 
   const underlineStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: underlineTranslateX.value }],
-    width: underlineWidth.value,
-  }));
+    width: underlineWidth.value }));
 
   return (
     <View style={styles.container}>
@@ -128,44 +127,35 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      position: 'relative',
-    },
+      position: 'relative' },
     tab: {
       flex: 1,
       height: 44,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     tabContent: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs + 1,
-    },
+      gap: Space.xs + 1 },
     label: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     labelActive: {
       fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     count: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      minWidth: 14,
-    },
+      minWidth: 14 },
     countActive: {
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     underline: {
       position: 'absolute',
       bottom: 0,
       height: Stroke.emphasis,
       backgroundColor: colors.brand,
-      borderRadius: Radius.sm,
-    },
-  });
+      borderRadius: Radius.sm } });
 }

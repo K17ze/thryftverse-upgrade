@@ -3,7 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Typography, Space, Type } from '../../theme/designTokens';
+import { Typography, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface Props {
   kicker?: string;
@@ -18,8 +19,7 @@ export function DiscoverySectionHeader({
   title,
   actionLabel,
   onAction,
-  style,
-}: Props) {
+  style }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
@@ -54,38 +54,31 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
-    gap: 8,
-  },
+    gap: 8 },
   textBlock: {
     flex: 1,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   kicker: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
     marginBottom: 2,
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.priceList.size,
+    fontSize: TypographyV2.priceList.size,
     color: colors.textPrimary,
     letterSpacing: -0.4,
-    lineHeight: 26,
-  },
+    lineHeight: 26 },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingVertical: 6,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   actionLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.brand,
-    letterSpacing: -0.2,
-  },
-});
+    letterSpacing: -0.2 } });

@@ -29,26 +29,23 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   cancelAnimation,
-  useReducedMotion,
-} from 'react-native-reanimated';
+  useReducedMotion } from 'react-native-reanimated';
 
 import {
   Space,
   Radius,
-  Type,
   Typography,
   FontFamily,
   Control,
-  Stroke,
-} from '../../../theme/designTokens';
+  Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -58,8 +55,7 @@ import { Motion } from '../../../theme/motionTokens';
 import {
   VoiceoverRecorder,
   VoiceoverDependencyError,
-  type VoiceoverClip,
-} from '../../core/audio';
+  type VoiceoverClip } from '../../core/audio';
 import type { MeteringListener } from '../../core/audio/VoiceoverRecorder';
 
 // ── Constants ─────────────────────────────────────────────────────────
@@ -103,8 +99,7 @@ function formatTimer(ms: number): string {
 export function VoiceoverRecorderSheet({
   visible,
   onClose,
-  onConfirm,
-}: VoiceoverRecorderSheetProps): React.ReactElement {
+  onConfirm }: VoiceoverRecorderSheetProps): React.ReactElement {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const hookReducedMotion = useHookReducedMotion();
@@ -319,8 +314,7 @@ export function VoiceoverRecorderSheet({
   // Static ring — solid appearance, no continuous pulse (AGENTS.md §17).
   const ringStyle = useAnimatedStyle(() => {
     return {
-      opacity: ringOpacitySV.value,
-    };
+      opacity: ringOpacitySV.value };
   });
 
   // ── Render ────────────────────────────────────────────────────────
@@ -366,8 +360,7 @@ export function VoiceoverRecorderSheet({
                   {
                     color: isRecording
                       ? colors.danger
-                      : colors.textPrimary,
-                  },
+                      : colors.textPrimary },
                 ]}
                 accessibilityLabel={`Recording time ${formatTimer(elapsedMs)}`}
               >
@@ -442,8 +435,7 @@ export function VoiceoverRecorderSheet({
                       width: RING_BASE_SIZE,
                       height: RING_BASE_SIZE,
                       borderRadius: RING_BASE_SIZE / 2,
-                      borderColor: colors.danger,
-                    },
+                      borderColor: colors.danger },
                     ringStyle,
                   ]}
                   pointerEvents="none"
@@ -547,8 +539,7 @@ function RecordButton({
   disabled,
   onPress,
   reducedMotion,
-  haptic,
-}: RecordButtonProps): React.ReactElement {
+  haptic }: RecordButtonProps): React.ReactElement {
   const pressedSV = useSharedValue(0);
   const isRecording = phase === 'recording';
   const isPaused = phase === 'paused';
@@ -606,8 +597,7 @@ function RecordButton({
             borderWidth: Stroke.emphasis,
             borderColor: colors.danger,
             justifyContent: 'center',
-            alignItems: 'center',
-          },
+            alignItems: 'center' },
           animatedStyle,
         ]}
       >
@@ -617,8 +607,7 @@ function RecordButton({
               width: size * 0.3,
               height: size * 0.3,
               borderRadius: Radius.sm,
-              backgroundColor: iconColor,
-            }}
+              backgroundColor: iconColor }}
           />
         ) : isPaused ? (
           <View
@@ -626,8 +615,7 @@ function RecordButton({
               width: size * 0.3,
               height: size * 0.3,
               borderRadius: Radius.sm,
-              backgroundColor: iconColor,
-            }}
+              backgroundColor: iconColor }}
           />
         ) : (
           <Ionicons name="mic" size={size * 0.4} color={iconColor} />
@@ -650,8 +638,7 @@ const WaveformVisualization = React.memo(function WaveformVisualization({
   bars,
   color,
   maxHeight,
-  minHeight,
-}: WaveformVisualizationProps): React.ReactElement {
+  minHeight }: WaveformVisualizationProps): React.ReactElement {
   const barWidth = 100 / bars.length;
   return (
     <View
@@ -661,8 +648,7 @@ const WaveformVisualization = React.memo(function WaveformVisualization({
         justifyContent: 'center',
         height: maxHeight,
         width: '100%',
-        gap: Space.xxs,
-      }}
+        gap: Space.xxs }}
     >
       {bars.map((level, i) => {
         const height = Math.max(minHeight, level * maxHeight);
@@ -674,8 +660,7 @@ const WaveformVisualization = React.memo(function WaveformVisualization({
               height,
               backgroundColor: color,
               borderRadius: Radius.none,
-              opacity: 0.4 + 0.6 * level,
-            }}
+              opacity: 0.4 + 0.6 * level }}
           />
         );
       })}
@@ -698,8 +683,7 @@ function SecondaryButton({
   label,
   colors,
   styles,
-  onPress,
-}: SecondaryButtonProps): React.ReactElement {
+  onPress }: SecondaryButtonProps): React.ReactElement {
   return (
     <PressScale
       onPress={onPress}
@@ -719,8 +703,7 @@ function SecondaryButton({
 
 function UnavailableState({
   colors,
-  styles,
-}: {
+  styles }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }): React.ReactElement {
@@ -742,8 +725,7 @@ function UnavailableState({
 
 function DeniedState({
   colors,
-  styles,
-}: {
+  styles }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }): React.ReactElement {
@@ -766,87 +748,72 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     content: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     // ── Timer ──
     timerContainer: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.sm,
-      paddingVertical: Space.lg,
-    },
+      paddingVertical: Space.lg },
     timer: {
       fontFamily: FontFamily.medium,
       fontSize: 32,
       fontVariant: ['tabular-nums'],
-      letterSpacing: 2,
-    },
+      letterSpacing: 2 },
     recordingIndicator: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     recordingDot: {
       width: Space.sm,
       height: Space.sm,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     recordingLabel: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.caption.size,
-      letterSpacing: 1,
-    },
+      fontSize: TypographyV2.meta.size,
+      letterSpacing: 1 },
     // ── Waveform ──
     waveformContainer: {
       height: WAVEFORM_MAX_HEIGHT + Space.md,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     waveformPlaceholder: {
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     waveformHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      textAlign: 'center',
-    },
+      fontSize: TypographyV2.meta.size,
+      textAlign: 'center' },
     meteringNotice: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       textAlign: 'center',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     // ── Record button ──
     recordButtonContainer: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.lg,
-      minHeight: RING_BASE_SIZE + Space.md,
-    },
+      minHeight: RING_BASE_SIZE + Space.md },
     pulseRing: {
       position: 'absolute',
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     // ── Secondary controls ──
     secondaryControls: {
       flexDirection: 'row',
@@ -854,8 +821,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.sm,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     secondaryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -864,41 +830,33 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     secondaryBtnText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     doneBtn: {
       alignItems: 'center',
       justifyContent: 'center',
       height: 50,
       borderRadius: Radius.lg,
-      paddingHorizontal: Space.lg,
-    },
+      paddingHorizontal: Space.lg },
     doneBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     // ── Empty states ──
     emptyBody: {
       paddingVertical: Space.xl,
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      textAlign: 'center',
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      textAlign: 'center' },
     emptySubtitle: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       textAlign: 'center',
-      paddingHorizontal: Space.lg,
-    },
-  });
+      paddingHorizontal: Space.lg } });
 }
 
 // ── Memoised style factory ────────────────────────────────────────────

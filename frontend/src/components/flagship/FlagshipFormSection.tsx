@@ -22,7 +22,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, Typography } from '../../theme/designTokens';
+import { Space, Radius, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type FlagshipFormSectionVariant = 'flat' | 'grouped' | 'state' | 'critical';
 
@@ -46,8 +47,7 @@ export function FlagshipFormSection({
   style,
   variant,
   tone = 'neutral',
-  noCard,
-}: FlagshipFormSectionProps) {
+  noCard }: FlagshipFormSectionProps) {
   const { colors } = useAppTheme();
 
   if (noCard !== undefined) {
@@ -109,24 +109,21 @@ function resolveCriticalTint(colors: ReturnType<typeof useAppTheme>['colors'], t
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   sectionTitle: {
-    fontSize: Type.label.size,
+    fontSize: TypographyV2.label.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: 0.3,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
-    lineHeight: Type.label.lineHeight,
-  },
+    lineHeight: TypographyV2.label.lineHeight },
   sectionDescription: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginBottom: Space.smMd,
     marginLeft: Space.xs,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   flat: {
     // No border, no background — plain canvas. Grouping via spacing.
   },
@@ -134,19 +131,15 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     overflow: 'hidden',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   state: {
     borderRadius: Radius.lg,
     overflow: 'hidden',
     borderLeftWidth: 3,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   critical: {
     borderRadius: Radius.lg,
     overflow: 'hidden',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-});
+    paddingVertical: Space.sm } });

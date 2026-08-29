@@ -31,15 +31,13 @@ import {
   PanResponder,
   GestureResponderEvent,
   PanResponderGestureState,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Keyframe, KeyframeProperty, KeyframeEasing } from './KeyframeTypes';
 import {
   KEYFRAME_PROPERTY_LABELS,
   KEYFRAME_EASING_LABELS,
-  DEFAULT_KEYFRAME_EASING,
-} from './KeyframeTypes';
+  DEFAULT_KEYFRAME_EASING } from './KeyframeTypes';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import {
@@ -49,9 +47,8 @@ import {
   Control,
   FontFamily,
   FontSize,
-  LetterSpacing,
-  Type,
-} from '../../../theme/designTokens';
+  LetterSpacing } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 
 export interface KeyframeEditorProps {
@@ -74,8 +71,7 @@ export function KeyframeEditor({
   keyframes,
   onAddKeyframe,
   onUpdateKeyframe,
-  onRemoveKeyframe,
-}: KeyframeEditorProps) {
+  onRemoveKeyframe }: KeyframeEditorProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
 
@@ -127,8 +123,7 @@ export function KeyframeEditor({
         property: activeProperty,
         timeMs,
         value: activeProperty === 'opacity' ? 1 : activeProperty === 'scale' ? 1 : 0,
-        easing: DEFAULT_KEYFRAME_EASING,
-      });
+        easing: DEFAULT_KEYFRAME_EASING });
     },
     [xToTime, haptic, onAddKeyframe, layerId, activeProperty],
   );
@@ -170,8 +165,7 @@ export function KeyframeEditor({
         },
         onPanResponderRelease: () => {
           haptic.selection();
-        },
-      }),
+        } }),
     [selectedId, trackWidth, xToTime, onUpdateKeyframe, haptic],
   );
 
@@ -195,8 +189,7 @@ export function KeyframeEditor({
                   styles.propertyLabel,
                   {
                     color: active ? colors.brand : colors.textSecondary,
-                    textDecorationLine: active ? 'underline' : 'none',
-                  },
+                    textDecorationLine: active ? 'underline' : 'none' },
                 ]}
               >
                 {KEYFRAME_PROPERTY_LABELS[prop]}
@@ -236,8 +229,7 @@ export function KeyframeEditor({
                   {
                     left,
                     backgroundColor: isSelected ? colors.brand : colors.surfaceElevated,
-                    borderColor: isSelected ? colors.brand : colors.textMuted,
-                  },
+                    borderColor: isSelected ? colors.brand : colors.textMuted },
                 ]}
               />
             );
@@ -303,8 +295,7 @@ export function KeyframeEditor({
                         styles.easingLabel,
                         {
                           color: active ? colors.brand : colors.textSecondary,
-                          textDecorationLine: active ? 'underline' : 'none',
-                        },
+                          textDecorationLine: active ? 'underline' : 'none' },
                       ]}
                     >
                       {KEYFRAME_EASING_LABELS[ease]}
@@ -382,101 +373,84 @@ function formatValue(value: number, property: KeyframeProperty): string {
 const styles = StyleSheet.create({
   container: {
     paddingVertical: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   propertyRow: {
     flexDirection: 'row',
     gap: Space.xs,
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   propertyButton: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   propertyLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    letterSpacing: LetterSpacing.normal,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: LetterSpacing.normal },
   timelineWrap: {
     borderTopWidth: Stroke.hairline,
     borderBottomWidth: Stroke.hairline,
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   timelineTrack: {
     height: TIMELINE_HEIGHT,
     justifyContent: 'center',
-    position: 'relative',
-  },
+    position: 'relative' },
   timelineLine: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: Stroke.hairline,
-  },
+    height: Stroke.hairline },
   diamond: {
     position: 'absolute',
     width: DIAMOND_SIZE,
     height: DIAMOND_SIZE,
     transform: [{ rotate: '45deg' }],
     borderWidth: Stroke.emphasis,
-    borderRadius: Radius.none,
-  },
+    borderRadius: Radius.none },
   inspector: {
     borderTopWidth: Stroke.hairline,
     paddingTop: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   inspectorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   inspectorLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    letterSpacing: LetterSpacing.normal,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: LetterSpacing.normal },
   valueControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   stepButton: {
     width: Control.chrome,
     height: Control.chrome,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   valueText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     letterSpacing: LetterSpacing.normal,
     minWidth: 56,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   easingRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.md,
     flex: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   easingButton: {
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   easingLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    letterSpacing: LetterSpacing.normal,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: LetterSpacing.normal },
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -484,15 +458,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingVertical: Space.sm,
     borderRadius: Radius.lg,
-    minHeight: 50,
-  },
+    minHeight: 50 },
   deleteLabel: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: '#FFFFFF',
-    letterSpacing: LetterSpacing.normal,
-  },
-});
+    letterSpacing: LetterSpacing.normal } });
 
 // Keep ViewStyle referenced for typed style composition without unused-import
 // errors at compile time.

@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Type, Radius, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS, deriveSellerBadges, SELLER_BADGES } from '../../platform/product';
 import type { PublicProfileTrader } from '../../services/profileApi';
@@ -65,8 +66,7 @@ export function ProfileTrustSignals({
   soldCount = 0,
   traderClassification = null,
   align = 'left',
-  hideSoldChip = false,
-}: ProfileTrustSignalsProps) {
+  hideSoldChip = false }: ProfileTrustSignalsProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const chips: TrustChipProps[] = [];
@@ -79,8 +79,7 @@ export function ProfileTrustSignals({
     chips.push({
       icon: info.icon as keyof typeof Ionicons.glyphMap,
       label: info.label,
-      tone: info.color === 'success' ? 'success' : 'default',
-    });
+      tone: info.color === 'success' ? 'success' : 'default' });
   }
 
   // DSA Article 30 trader classification — factual, not decorative.
@@ -90,8 +89,7 @@ export function ProfileTrustSignals({
     chips.push({
       icon: traderClassification.classification === 'trader' ? 'briefcase' : 'person',
       label: traderClassification.classification === 'trader' ? 'Business' : 'Private',
-      tone: 'muted',
-    });
+      tone: 'muted' });
   }
 
   // Rating — prefer seller trust rating, fall back to public profile stats
@@ -100,8 +98,7 @@ export function ProfileTrustSignals({
   if (rating !== null && rating !== undefined && reviews > 0) {
     chips.push({
       icon: 'star',
-      label: `${rating.toFixed(1)} (${reviews})`,
-    });
+      label: `${rating.toFixed(1)} (${reviews})` });
   } else if (rating !== null && rating !== undefined) {
     chips.push({ icon: 'star', label: rating.toFixed(1) });
   }
@@ -140,8 +137,7 @@ export function ProfileTrustSignals({
       chips.push({
         icon: badge.icon as keyof typeof Ionicons.glyphMap,
         label: badge.label,
-        tone: 'success',
-      });
+        tone: 'success' });
     }
   }
 
@@ -166,27 +162,21 @@ function createStyles(colors: ThemeColors) {
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   containerCenter: {
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   chipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   separator: {
     width: 3,
     height: 3,
     borderRadius: Radius.full,
-    backgroundColor: colors.borderSubtle,
-  },
-  });
+    backgroundColor: colors.borderSubtle } });
 }

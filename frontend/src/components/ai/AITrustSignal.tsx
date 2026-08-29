@@ -36,11 +36,11 @@ import {
   StyleSheet,
   StyleProp,
   ViewStyle,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AITrustBadge, type AIConfidence } from './AITrustBadge';
 
 export type { AIConfidence } from './AITrustBadge';
@@ -65,8 +65,7 @@ const CONFIDENCE_LABEL: Record<AIConfidence, string> = {
   high: 'High confidence',
   medium: 'Medium confidence',
   low: 'Low confidence',
-  exploratory: 'Exploratory',
-};
+  exploratory: 'Exploratory' };
 
 /** Dot colour per confidence level. Uses semantic theme tokens, not raw hex. */
 function dotColorFor(confidence: AIConfidence, colors: ThemeColors): string {
@@ -95,8 +94,7 @@ export function AITrustSignal({
   context,
   expandedReasoning,
   isDemo,
-  style,
-}: AITrustSignalProps) {
+  style }: AITrustSignalProps) {
   const { colors } = useAppTheme();
   const [expanded, setExpanded] = useState(false);
 
@@ -231,94 +229,78 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderWidth: Stroke.hairline,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    minHeight: 24,
-  },
+    minHeight: 24 },
   confidenceGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   dot: {
     width: 8,
     height: 8,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   confidenceLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    flexShrink: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    flexShrink: 1 },
   demoPill: {
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: 1,
     borderWidth: StyleSheet.hairlineWidth,
-    marginLeft: Space.xs,
-  },
+    marginLeft: Space.xs },
   demoText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'uppercase' },
   actionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   undoBtn: {
     minHeight: 32,
     paddingHorizontal: Space.xs,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   undoText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   expandBtn: {
     width: 28,
     height: 28,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   sourceText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   contextText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   reasoningWrap: {
     marginTop: Space.xs,
     paddingTop: Space.xs,
-    borderTopWidth: Stroke.hairline,
-  },
+    borderTopWidth: Stroke.hairline },
   reasoningText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 4,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 4,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing } });
 
 export { AITrustBadge };

@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Type, FontFamily, Control } from '../../theme/designTokens';
+import { Space, FontFamily, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { ConversationOwnershipState } from '../../contracts/support';
 
 export interface SupportHandoffStateProps {
@@ -23,8 +24,7 @@ export interface SupportHandoffStateProps {
  */
 export function SupportHandoffState({
   ownershipState,
-  queueTeam,
-}: SupportHandoffStateProps) {
+  queueTeam }: SupportHandoffStateProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -62,20 +62,16 @@ function createStyles(colors: ThemeColors) {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     message: {
       flex: 1,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight } });
 }

@@ -6,8 +6,7 @@ import {
   StatusBar,
   Dimensions,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +14,8 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
-import { Typography, Radius, Type, Space, FontSize, Stroke, Control } from '../theme/designTokens';
+import { Typography, Radius, Space, FontSize, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -75,8 +75,7 @@ export default function AuthLandingScreen() {
     clientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || 'dev-client-id-placeholder',
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID || 'dev-android-client-id-placeholder',
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID,
-  });
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID });
 
   const handleMagicLink = useCallback(
     async (url: string | null) => {
@@ -106,8 +105,7 @@ export default function AuthLandingScreen() {
       try {
         const result = await consumeMagicLink({
           token,
-          email,
-        });
+          email });
         login(result.storeUser);
         setTwoFactorEnabled(result.user.twoFactorEnabled);
         navigation.replace('MainTabs');
@@ -162,8 +160,7 @@ export default function AuthLandingScreen() {
         token,
         email: magicLinkEmailRef.current,
         twoFactorCode: magicLinkUseRecovery ? undefined : twoFactorCode,
-        recoveryCode: magicLinkUseRecovery ? recoveryCode : undefined,
-      });
+        recoveryCode: magicLinkUseRecovery ? recoveryCode : undefined });
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
@@ -279,8 +276,7 @@ export default function AuthLandingScreen() {
         email: result.user.email,
         username: result.user.username,
         role: result.user.role,
-        emailVerified: result.user.emailVerified,
-      } as never);
+        emailVerified: result.user.emailVerified } as never);
       setTwoFactorEnabled(false);
       navigation.replace('MainTabs');
     } catch (err) {
@@ -309,8 +305,7 @@ export default function AuthLandingScreen() {
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
+        ] });
 
       if (!credential.identityToken) {
         throw new Error('Missing Apple identity token');
@@ -670,8 +665,7 @@ export default function AuthLandingScreen() {
                   // composition.
                   const result = await loginWithPassword({
                     email: 'marie@seed.test',
-                    password: 'seed12345',
-                  });
+                    password: 'seed12345' });
                   login(result.storeUser);
                   setTwoFactorEnabled(result.user.twoFactorEnabled);
                   // Hydrate the full profile (avatar, displayName, bio, …)
@@ -710,55 +704,46 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   safeArea: {
     flex: 1,
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   content: {
     paddingHorizontal: Space.lg - 2,
-    paddingBottom: Space.md + 2,
-  },
+    paddingBottom: Space.md + 2 },
   title: {
     fontSize: FontSize.giant,
     fontFamily: Typography.family.extrabold,
     color: colors.textPrimary,
     lineHeight: FontSize.giant + 2,
     letterSpacing: -2,
-    marginBottom: Space.smMd,
-  },
+    marginBottom: Space.smMd },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.size + 4,
-    letterSpacing: 0.24,
-  },
+    lineHeight: TypographyV2.meta.size + 4,
+    letterSpacing: 0.24 },
   trustRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    marginTop: Space.md + 4,
-  },
+    marginTop: Space.md + 4 },
   trustText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   trustLink: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     letterSpacing: 0.2,
-    textDecorationLine: 'underline',
-  },
+    textDecorationLine: 'underline' },
   footer: {
     paddingHorizontal: Space.lg + 4,
     paddingBottom: Space.sm + 6,
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -770,15 +755,13 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     backgroundColor: colors.dangerSubtle,
     borderWidth: Stroke.standard,
-    borderColor: colors.dangerBorder,
-  },
+    borderColor: colors.dangerBorder },
   errorBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    lineHeight: Type.caption.size + 2,
-  },
+    lineHeight: TypographyV2.meta.size + 2 },
   twoFactorNotice: {
     paddingHorizontal: Space.lg + 4,
     paddingVertical: Space.md + 2,
@@ -787,111 +770,94 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   twoFactorNoticeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   twoFactorNoticeIcon: {
     width: Control.icon,
     height: Control.icon,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   twoFactorNoticeTitle: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   twoFactorNoticeBody: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.size + 4,
-    marginBottom: Space.sm + 2,
-  },
+    lineHeight: TypographyV2.meta.size + 4,
+    marginBottom: Space.sm + 2 },
   twoFactorNoticePrimaryBtn: {
     backgroundColor: colors.brand,
     height: Space.xl + Space.xl + 4,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   twoFactorNoticePrimaryText: {
     color: colors.textInverse,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.2,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 0.2 },
   twoFactorNoticeCancel: {
     alignSelf: 'center',
     marginTop: Space.sm,
     paddingVertical: Space.xs,
     paddingHorizontal: Space.md,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   twoFactorNoticeCancelText: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   twoFactorNoticeInput: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   twoFactorNoticeToggle: {
     alignSelf: 'flex-start',
     paddingVertical: Space.xs,
     paddingHorizontal: Space.xs,
     marginBottom: Space.xs,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   twoFactorNoticeToggleText: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    textDecorationLine: 'underline',
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textDecorationLine: 'underline' },
   twoFactorNoticeError: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    lineHeight: Type.caption.size + 2,
-    marginBottom: Space.sm,
-  },
+    lineHeight: TypographyV2.meta.size + 2,
+    marginBottom: Space.sm },
   primaryBtn: {
     backgroundColor: colors.brand,
     height: Space.xl + Space.xl + 8,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   primaryText: {
     color: colors.textInverse,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.2,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 0.2 },
   secondaryBtn: {
     height: Space.xl + Space.xl + 4,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   secondaryText: {
     color: colors.textSecondary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 0.1 },
   socialFullBtn: {
     flexDirection: 'row',
     height: Space.xl + Space.xl + 4,
@@ -901,56 +867,47 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm + 2,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   socialFullText: {
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 0.1 },
   socialDivider: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     marginTop: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   socialDividerLine: {
     flex: 1,
     height: Stroke.hairline,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
   socialDividerText: {
     color: colors.textMuted,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   socialBtnDisabled: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   magicLinkLoadingText: {
     marginTop: Space.sm,
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     textAlign: 'center',
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   termsText: {
     color: colors.textMuted,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
-    lineHeight: Type.caption.lineHeight,
-    marginTop: Space.xs,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    marginTop: Space.xs },
   termsLink: {
     color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
-    textDecorationLine: 'underline',
-  },
+    textDecorationLine: 'underline' },
   devBypassBtn: {
     marginTop: Space.smMd,
     paddingVertical: Space.sm + 2,
@@ -959,13 +916,10 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.successSubtle,
     borderWidth: Stroke.standard,
     borderColor: colors.successBorder,
-    alignSelf: 'center',
-  },
+    alignSelf: 'center' },
   devBypassText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.success,
-    textAlign: 'center',
-  },
-});
+    textAlign: 'center' } });
 }

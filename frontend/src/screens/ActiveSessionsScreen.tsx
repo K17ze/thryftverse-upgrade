@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type , Typography, Stroke  } from '../theme/designTokens';
+import { Space, Radius, Stroke  } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { AppButton } from '../components/ui/AppButton';
@@ -16,8 +17,7 @@ import {
   fetchActiveSessions,
   revokeSession,
   revokeOtherSessions,
-  type SessionInfo,
-} from '../services/accountApi';
+  type SessionInfo } from '../services/accountApi';
 import { haptics } from '../utils/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ActiveSessions'>;
@@ -106,8 +106,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         } finally {
           setRevokingId(null);
         }
-      },
-    });
+      } });
   }, [show]);
 
   const handleEndAllOthers = useCallback(() => {
@@ -134,8 +133,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         } finally {
           setRevokingOthers(false);
         }
-      },
-    });
+      } });
   }, [sessions, show, loadSessions]);
 
   const currentSessions = sessions.filter((s) => s.isCurrent);
@@ -282,100 +280,84 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   scrollContent: {
-    paddingBottom: Space.xxl,
-  },
+    paddingBottom: Space.xxl },
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd,
     padding: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
+    borderBottomColor: colors.borderSubtle },
   sessionRowLast: {
-    borderBottomWidth: 0,
-  },
+    borderBottomWidth: 0 },
   deviceIcon: {
     width: Space.xxl,
     height: Space.xxl,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   sessionText: {
-    flex: 1,
-  },
+    flex: 1 },
   sessionName: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   sessionMeta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: Space.xs / 2,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   currentBadge: {
     backgroundColor: colors.successSubtle,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   currentBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.success,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   emptyGroup: {
     alignItems: 'center',
     paddingVertical: Space.xl,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   emptyTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   emptyBody: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: Type.caption.lineHeight,
-    paddingHorizontal: Space.md,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    paddingHorizontal: Space.md },
   trustSurface: {
     borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.lg,
     marginHorizontal: Space.md,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   trustHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   trustTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    flex: 1,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    flex: 1 },
   trustBody: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -384,16 +366,12 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     padding: Space.md,
     marginHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   errorText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    flex: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    flex: 1 },
   endAllContainer: {
     paddingHorizontal: Space.md,
-    marginTop: Space.md,
-  },
-});
+    marginTop: Space.md } });
 }

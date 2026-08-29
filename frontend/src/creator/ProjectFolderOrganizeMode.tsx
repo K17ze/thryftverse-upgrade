@@ -23,8 +23,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
-  Alert,
-} from 'react-native';
+  Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -34,9 +33,9 @@ import Reanimated, {
   withTiming,
   runOnJS,
   Easing,
-  useReducedMotion,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Stroke} from '../theme/designTokens';
+  useReducedMotion } from 'react-native-reanimated';
+import { Space, Radius, Typography, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -44,8 +43,7 @@ import { useMotionConfig } from '../hooks/useMotionConfig';
 import { PressScale } from './CreatorAnimations';
 import {
   useProjectFolderStore,
-  findFolderForProject,
-} from './core/projectStore/ProjectFolderStore';
+  findFolderForProject } from './core/projectStore/ProjectFolderStore';
 import type { ProjectFolder } from './core/projectStore/ProjectFolderTypes';
 
 // ── Props ───────────────────────────────────────────────────────────
@@ -75,8 +73,7 @@ type ManageMode =
 export function ProjectFolderOrganizeMode({
   visible,
   onClose,
-  projects,
-}: ProjectFolderOrganizeModeProps) {
+  projects }: ProjectFolderOrganizeModeProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
@@ -320,8 +317,7 @@ export function ProjectFolderOrganizeMode({
     top: dragY.value - 30,
     transform: [{ scale: dragScale.value }],
     opacity: draggingProjectId ? 0.9 : 0,
-    zIndex: 1000,
-  }));
+    zIndex: 1000 }));
 
   // ── Render ──
   return (
@@ -376,8 +372,7 @@ export function ProjectFolderOrganizeMode({
                   x: e.nativeEvent.layout.x,
                   y: e.nativeEvent.layout.y,
                   width: e.nativeEvent.layout.width,
-                  height: e.nativeEvent.layout.height,
-                };
+                  height: e.nativeEvent.layout.height };
               }}
               style={[
                 styles.dropZone,
@@ -426,8 +421,7 @@ export function ProjectFolderOrganizeMode({
                       x: e.nativeEvent.layout.x,
                       y: e.nativeEvent.layout.y,
                       width: e.nativeEvent.layout.width,
-                      height: e.nativeEvent.layout.height,
-                    });
+                      height: e.nativeEvent.layout.height });
                   }}
                   style={[
                     styles.dropZone,
@@ -603,8 +597,7 @@ const DraggableProjectRow = React.memo(function DraggableProjectRow({
   styles,
   panGesture,
   onDragStart,
-  isDragging,
-}: DraggableProjectRowProps) {
+  isDragging }: DraggableProjectRowProps) {
   const haptic = useHaptic();
   const longPress = useMemo(
     () =>
@@ -652,8 +645,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -661,30 +653,25 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     closeBtn: {
       width: 44,
       height: 44,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     headerTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.title.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.screenTitle.size,
+      color: colors.textPrimary },
     headerSpacer: {
-      width: 44,
-    },
+      width: 44 },
     hint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     newFolderBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -694,74 +681,62 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       backgroundColor: colors.brandSubtle,
       marginBottom: Space.md,
-      minHeight: 44,
-    },
+      minHeight: 44 },
     newFolderText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.brand },
     scrollArea: {
-      flex: 1,
-    },
+      flex: 1 },
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     dropZone: {
       borderRadius: Radius.lg,
       backgroundColor: colors.surfaceAlt,
       padding: Space.sm,
       marginBottom: Space.sm,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'transparent',
-    },
+      borderColor: 'transparent' },
     dropZoneActive: {
       borderColor: colors.brand,
       borderWidth: 2,
-      backgroundColor: colors.brandSubtle,
-    },
+      backgroundColor: colors.brandSubtle },
     dropZoneHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       marginBottom: Space.xs,
-      minHeight: 44,
-    },
+      minHeight: 44 },
     dropZoneTitle: {
       flex: 1,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textPrimary },
     dropZoneCount: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
       backgroundColor: colors.surface,
       paddingHorizontal: Space.sm,
       paddingVertical: 2,
       borderRadius: Radius.full,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     folderNameBtn: {
       flex: 1,
       minHeight: 44,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     folderActionBtn: {
       width: 44,
       height: 44,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     emptyHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       paddingVertical: Space.sm,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     projectRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -771,17 +746,14 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       minHeight: 44,
       backgroundColor: colors.surface,
-      marginBottom: Space.xxs,
-    },
+      marginBottom: Space.xxs },
     projectRowDragging: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     projectTitle: {
       flex: 1,
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.textPrimary },
     dragItem: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -791,38 +763,33 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       backgroundColor: colors.brand,
       width: 120,
-      height: 44,
-    },
+      height: 44 },
     dragItemText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textInverse,
-      flex: 1,
-    },
+      flex: 1 },
     // ── Manage mode ──
     managePanel: {
       flex: 1,
       padding: Space.lg,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     manageTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
+      fontSize: TypographyV2.sectionTitle.size,
       color: colors.textPrimary,
       textAlign: 'center',
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     manageBody: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
       textAlign: 'center',
       marginTop: Space.xs,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     nameInput: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textPrimary,
       borderWidth: Stroke.standard,
       borderColor: colors.border,
@@ -830,8 +797,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
       marginBottom: Space.md,
-      minHeight: 44,
-    },
+      minHeight: 44 },
     manageConfirmBtn: {
       backgroundColor: colors.brand,
       paddingVertical: Space.md,
@@ -839,16 +805,13 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       marginBottom: Space.sm,
       minHeight: 44,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     manageConfirmDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     manageConfirmText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textInverse },
     manageDangerBtn: {
       backgroundColor: colors.danger,
       paddingVertical: Space.md,
@@ -856,24 +819,19 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       marginBottom: Space.sm,
       minHeight: 44,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     manageDangerText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textInverse },
     manageCancelBtn: {
       paddingVertical: Space.md,
       borderRadius: Radius.lg,
       alignItems: 'center',
       minHeight: 44,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     manageCancelText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-      color: colors.textSecondary,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      color: colors.textSecondary } });
 }

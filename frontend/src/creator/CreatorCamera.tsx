@@ -10,22 +10,21 @@ import {
   Linking,
   ScrollView,
   AppState,
-  AppStateStatus,
-} from 'react-native';
+  AppStateStatus } from 'react-native';
 import {
   Camera,
   type CameraRef,
   useCameraDevice,
   usePhotoOutput,
-  useVideoOutput,
-} from 'react-native-vision-camera';
+  useVideoOutput } from 'react-native-vision-camera';
 import { SkiaCamera, type SkiaCameraRef } from 'react-native-vision-camera-skia';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Typography, Radius, Type, Space, Stroke} from '../theme/designTokens';
+import { Typography, Radius, Space, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -45,8 +44,7 @@ import Reanimated, {
   Easing,
   runOnJS,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 import { FocusReticle } from './camera/FocusReticle';
 import { RecordingRing } from './camera/RecordingRing';
 import { ShutterButton } from './camera/ShutterButton';
@@ -62,8 +60,7 @@ import { useCreatorCapturePermissions } from './capture/useCreatorCapturePermiss
 import {
   useCaptureViewport,
   viewPointToViewportNormalized,
-  type CaptureViewport,
-} from './capture/CaptureViewport';
+  type CaptureViewport } from './capture/CaptureViewport';
 import { isCapabilitySupported } from './capabilities/registry';
 
 // ── CreatorCamera ────────────────────────────────────────────────────
@@ -184,8 +181,7 @@ export default function CreatorCamera({
   onClose,
   renderBottomOverlay,
   renderTopRightAccessory,
-  onViewportChange,
-}: CreatorCameraProps) {
+  onViewportChange }: CreatorCameraProps) {
   const { show } = useToast();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -320,8 +316,7 @@ export default function CreatorCamera({
   const authoredAspectRatio = isPoster ? 3 / 4 : isVisualSearch ? undefined : 9 / 16;
   const { viewport, onViewportLayout } = useCaptureViewport({
     authoredAspectRatio,
-    showFramingGuides,
-  });
+    showFramingGuides });
 
   // Notify the parent of viewport changes so the camera→editor transition
   // snapshot can include the source content transform (the guide frame rect
@@ -346,20 +341,17 @@ export default function CreatorCamera({
 
   // ── Flip rotation: rotateY 0→180→360 for double-tap camera switch ──
   const cameraFlipStyle = useAnimatedStyle(() => ({
-    transform: [{ rotateY: `${flipRotation.value}deg` }],
-  }));
+    transform: [{ rotateY: `${flipRotation.value}deg` }] }));
 
   // ── Zoom indicator: spring appearance ──
   const zoomIndicatorStyle = useAnimatedStyle(() => ({
     opacity: zoomIndicatorOpacity.value,
-    transform: [{ scale: zoomIndicatorScale.value }],
-  }));
+    transform: [{ scale: zoomIndicatorScale.value }] }));
 
   // ── Countdown: spring scale (1.5→1.0 bouncy) + fade ──
   const countdownTextStyle = useAnimatedStyle(() => ({
     opacity: countdownOpacity.value,
-    transform: [{ scale: countdownScale.value }],
-  }));
+    transform: [{ scale: countdownScale.value }] }));
 
   // ── Permission entrance: spring slide-up + fade when denied ──
   useEffect(() => {
@@ -390,8 +382,7 @@ export default function CreatorCamera({
         const page = await MediaLibrary.getAssetsAsync({
           mediaType: ['photo', 'video'],
           sortBy: [['creationTime', false]],
-          first: 10,
-        });
+          first: 10 });
         if (!cancelled && page.assets.length > 0) {
           const uris = page.assets.map((a) => a.uri).filter(Boolean);
           setRecentImages(uris);
@@ -603,8 +594,7 @@ export default function CreatorCamera({
               uri,
               kind: 'video',
               durationMs,
-              mimeType: 'video/mp4',
-            };
+              mimeType: 'video/mp4' };
             if (cameraEffect !== 'none') {
               media.cameraEffect = cameraEffect;
             }
@@ -616,8 +606,7 @@ export default function CreatorCamera({
                 backgroundUri: greenScreenSettings.backgroundUri,
                 keyColor: greenScreenSettings.keyColor,
                 tolerance: greenScreenSettings.tolerance,
-                feather: greenScreenSettings.feather,
-              };
+                feather: greenScreenSettings.feather };
             }
             setMultiCaptures((prev) => [...prev, media]);
           } else {
@@ -802,8 +791,7 @@ export default function CreatorCamera({
       const photoMetadata: CapturedMediaMetadata = {
         width: photo.width,
         height: photo.height,
-        mimeType: getPhotoMimeType(photo.containerFormat),
-      };
+        mimeType: getPhotoMimeType(photo.containerFormat) };
       const filePath = await photo.saveToTemporaryFileAsync();
       const photoUri = `file://${filePath}`;
       photo.dispose();
@@ -834,8 +822,7 @@ export default function CreatorCamera({
             id: makeStableId('capture'),
             uri: photoUri,
             kind: 'image',
-            ...photoMetadata,
-          };
+            ...photoMetadata };
           if (cameraEffect !== 'none') {
             media.cameraEffect = cameraEffect;
           }
@@ -854,8 +841,7 @@ export default function CreatorCamera({
             id: makeStableId('capture'),
             uri: photoUri,
             kind: 'image',
-            ...photoMetadata,
-          };
+            ...photoMetadata };
           if (cameraEffect !== 'none') {
             media.cameraEffect = cameraEffect;
           }
@@ -1007,8 +993,7 @@ export default function CreatorCamera({
       id: makeStableId('capture'),
       uri,
       kind,
-      ...metadata,
-    };
+      ...metadata };
     // Attach speed metadata for video captures (1× is the default and
     // omitted to keep backward-compatible payloads clean)
     if (kind === 'video' && speedMode !== DEFAULT_SPEED) {
@@ -1025,8 +1010,7 @@ export default function CreatorCamera({
         backgroundUri: greenScreenSettings.backgroundUri,
         keyColor: greenScreenSettings.keyColor,
         tolerance: greenScreenSettings.tolerance,
-        feather: greenScreenSettings.feather,
-      };
+        feather: greenScreenSettings.feather };
     }
     return media;
   }, [speedMode, greenScreenSettings, cameraEffect]);
@@ -1116,8 +1100,7 @@ export default function CreatorCamera({
         {
           responsiveness: isRecording ? 'steady' : 'snappy',
           adaptiveness: 'continuous',
-          autoResetAfter: 5,
-        },
+          autoResetAfter: 5 },
       ).catch(() => {
         // Focus request failed — the reticle still showed as a tap
         // indicator, but we don't surface an error toast for a focus
@@ -1146,8 +1129,11 @@ export default function CreatorCamera({
   }
 
   // ── No camera device available (simulator or no camera) ──
+  // Distinct from permission-denied: Settings cannot add camera hardware,
+  // so we render the `unavailable` state — a camera-outline icon, an
+  // informational message, and a gallery fallback (no Settings CTA).
   if (!device) {
-    return <PermissionState status="denied" isPoster={isPoster} entrance={permissionEntrance} onEnable={handleOpenSettings} onGallery={onGallery} />;
+    return <PermissionState status="unavailable" isPoster={isPoster} entrance={permissionEntrance} onEnable={handleOpenSettings} onGallery={onGallery} />;
   }
 
   // ── Camera viewfinder ──
@@ -1249,8 +1235,7 @@ export default function CreatorCamera({
             top: Math.max(insets.top, 16) + 72,
             bottom: Math.max(insets.bottom, 16) + (renderBottomOverlay ? 184 : 140),
             left: isVisualSearch ? 52 : isPoster ? 24 : 36,
-            right: isVisualSearch ? 52 : isPoster ? 24 : 36,
-          },
+            right: isVisualSearch ? 52 : isPoster ? 24 : 36 },
         ]}
         onLayout={onViewportLayout}
         pointerEvents="none"
@@ -1277,8 +1262,7 @@ export default function CreatorCamera({
                 left: viewport.viewRect.x,
                 top: viewport.viewRect.y,
                 width: viewport.viewRect.width,
-                height: viewport.viewRect.height,
-              },
+                height: viewport.viewRect.height },
             ]}
           >
             <View style={styles.bracketTL} />
@@ -1636,21 +1620,18 @@ const styles = StyleSheet.create({
   // ── Camera initialization loading overlay ──
   cameraInitOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.6)' },
   cameraInitSpinnerWrap: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   cameraInitSpinner: {
     width: 28,
     height: 28,
     borderRadius: 14,
     borderWidth: 2.5,
     borderColor: 'rgba(255,255,255,0.2)',
-    borderTopColor: 'rgba(255,255,255,0.9)',
-  },
+    borderTopColor: 'rgba(255,255,255,0.9)' },
   // ── Camera-overlay whites ──────────────────────────────────────────
   // The camera preview is always dark regardless of app theme, so overlay
   // controls (brackets, crosshair, grid, labels, shutter ring, review
@@ -1662,69 +1643,59 @@ const styles = StyleSheet.create({
   // via inline overrides above.
   btnPressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   // Gradient overlays
   topGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 140,
-  },
+    height: 140 },
   bottomGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 160,
-  },
+    height: 160 },
   // One geometry owner for rule-of-thirds, framing corners and crosshair.
   captureGuideViewport: {
-    position: 'absolute',
-  },
+    position: 'absolute' },
   // Framing frame — the aspect-ratio-fitted guide rect inside the measured
   // viewport. Brackets and crosshair are positioned relative to this frame
   // so they describe the actual capture crop, not the available space.
   framingFrame: {
-    position: 'absolute',
-  },
+    position: 'absolute' },
   // Grid overlay (rule-of-thirds)
   gridOverlay: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   gridLineV1: {
     position: 'absolute',
     left: '33.33%',
     top: 0,
     bottom: 0,
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.3)' },
   gridLineV2: {
     position: 'absolute',
     left: '66.66%',
     top: 0,
     bottom: 0,
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.3)' },
   gridLineH1: {
     position: 'absolute',
     top: '33.33%',
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.3)' },
   gridLineH2: {
     position: 'absolute',
     top: '66.66%',
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.3)' },
   // Pinch zoom indicator — subtle pill at bottom center
   zoomIndicator: {
     position: 'absolute',
@@ -1733,32 +1704,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.6)' },
   zoomIndicatorText: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.body.size,
-    color: '#fff',
-  },
+    fontSize: TypographyV2.body.size,
+    color: '#fff' },
   // Capture flash — full-screen white overlay
   captureFlash: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#fff',
-  },
+    backgroundColor: '#fff' },
   // Countdown overlay
   countdownOverlay: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   countdownText: {
     fontFamily: Typography.family.bold,
     fontSize: 96,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-  },
+    textShadowRadius: 8 },
   // Corner brackets — refined 2pt stroke, smaller and more elegant
   bracketTL: {
     position: 'absolute',
@@ -1769,8 +1735,7 @@ const styles = StyleSheet.create({
     borderTopWidth: CORNER_STROKE,
     borderLeftWidth: CORNER_STROKE,
     borderColor: 'rgba(255,255,255,0.85)',
-    borderTopLeftRadius: 8,
-  },
+    borderTopLeftRadius: 8 },
   bracketTR: {
     position: 'absolute',
     top: 0,
@@ -1780,8 +1745,7 @@ const styles = StyleSheet.create({
     borderTopWidth: CORNER_STROKE,
     borderRightWidth: CORNER_STROKE,
     borderColor: 'rgba(255,255,255,0.85)',
-    borderTopRightRadius: 8,
-  },
+    borderTopRightRadius: 8 },
   bracketBL: {
     position: 'absolute',
     bottom: 0,
@@ -1791,8 +1755,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: CORNER_STROKE,
     borderLeftWidth: CORNER_STROKE,
     borderColor: 'rgba(255,255,255,0.85)',
-    borderBottomLeftRadius: 8,
-  },
+    borderBottomLeftRadius: 8 },
   bracketBR: {
     position: 'absolute',
     bottom: 0,
@@ -1802,8 +1765,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: CORNER_STROKE,
     borderRightWidth: CORNER_STROKE,
     borderColor: 'rgba(255,255,255,0.85)',
-    borderBottomRightRadius: 8,
-  },
+    borderBottomRightRadius: 8 },
   // Crosshair — centered in the framing guide area
   crosshair: {
     position: 'absolute',
@@ -1814,20 +1776,17 @@ const styles = StyleSheet.create({
     marginLeft: -12,
     marginTop: -12,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   crosshairH: {
     position: 'absolute',
     width: 24,
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.5)' },
   crosshairV: {
     position: 'absolute',
     width: 2,
     height: 24,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.5)' },
   // Top bar
   topBar: {
     position: 'absolute',
@@ -1838,25 +1797,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   topRightControls: {
     flexDirection: 'row',
-    gap: 8,
-  },
+    gap: 8 },
   // Top bar buttons — transparent (AGENTS.md §4: ordinary controls default to transparent)
   topIconBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Flash active state — subtle accent background so the user can read
   // the toggle state at a glance without a heavy fill.
   topIconBtnActive: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.12)' },
   // ── Multi-snap staging tray ──
   // A persistent horizontal row of captured thumbnails below the top bar.
   // Reads as a staging area (Snapchat pattern), not a chrome panel: flat
@@ -1866,15 +1821,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     right: 12,
-    zIndex: 15,
-  },
+    zIndex: 15 },
   stagingTrayContent: {
     gap: 6,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   stagingThumbWrap: {
-    position: 'relative',
-  },
+    position: 'relative' },
   // 40pt thumbnail — smaller than the 44pt gallery thumb so the tray stays
   // compact and does not compete with the viewfinder. 2pt white/90 ring.
   stagingThumb: {
@@ -1882,8 +1834,7 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: Radius.sm,
     borderWidth: Stroke.emphasis,
-    borderColor: 'rgba(255,255,255,0.9)',
-  },
+    borderColor: 'rgba(255,255,255,0.9)' },
   // Order index badge — bottom-left, the verified multi-select pattern.
   stagingOrderBadge: {
     position: 'absolute',
@@ -1895,13 +1846,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   stagingOrderText: {
     color: '#fff',
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   // Remove glyph — top-right, signals the tap-to-drop action.
   stagingRemoveBadge: {
     position: 'absolute',
@@ -1912,8 +1861,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Done button — finishes multi-capture and enters the editor.
   // Snapchat Multi Snap "Edit & Send" pattern: a compact pill with a
   // checkmark that commits the accumulated batch. Translucent dark fill
@@ -1927,13 +1875,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.18)',
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
+    borderColor: 'rgba(255,255,255,0.3)' },
   stagingDoneText: {
     color: '#fff',
     fontSize: 12,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   // Bottom bar — gallery (left) | shutter (center) | flip (right).
   // The viewfinder dominates; controls are compact and purposeful.
   bottomBar: {
@@ -1946,8 +1892,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: Space.lg,
     paddingTop: 10,
-    minHeight: 100,
-  },
+    minHeight: 100 },
   // Flip camera — transparent 44pt target (AGENTS.md §4: ordinary controls
   // default to transparent). No persistent dark plate; the bottom scrim
   // provides legibility over bright previews.
@@ -1955,8 +1900,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Recording badge — timer + red dot at top.
   // A full-width wrapper centers the badge so it stays centered
   // whether or not the muted indicator adds width.
@@ -1964,8 +1908,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   recordingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1973,8 +1916,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: 6,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.6)' },
   recordingDot: {
     width: 8,
     height: 8,
@@ -1983,24 +1925,20 @@ const styles = StyleSheet.create({
   },
   recordingTimerText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: '#fff',
-  },
+    fontSize: TypographyV2.body.size,
+    color: '#fff' },
   // Muted recording indicator — mic-off icon shown when recording without audio
   mutedIndicator: {
     marginLeft: 2,
-    opacity: 0.8,
-  },
+    opacity: 0.8 },
   // Quick-review overlay
   reviewOverlay: {
     ...StyleSheet.absoluteFill,
     // backgroundColor applied inline via colors.background (theme token)
-    zIndex: 100,
-  },
+    zIndex: 100 },
   reviewImage: {
     ...StyleSheet.absoluteFill,
-    resizeMode: 'contain',
-  },
+    resizeMode: 'contain' },
   // Top scrim for the review overlay — ensures any top chrome is legible
   // over bright captures (white backgrounds, light product photography).
   reviewTopScrim: {
@@ -2008,8 +1946,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 100,
-  },
+    height: 100 },
   reviewActions: {
     position: 'absolute',
     bottom: 0,
@@ -2019,17 +1956,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: Space.xl,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   reviewBtn: {
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   reviewBtnLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: 'rgba(255,255,255,0.85)',
-  },
+    fontSize: TypographyV2.meta.size,
+    color: 'rgba(255,255,255,0.85)' },
   reviewPrimaryBtn: {
     width: 72,
     height: 72,
@@ -2037,11 +1971,10 @@ const styles = StyleSheet.create({
     // backgroundColor applied inline via colors.textPrimary (theme token)
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
-  },
+    gap: 2 },
   reviewPrimaryLabel: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     // color applied inline via colors.background (theme token)
   },
   // ── Hands-free mode badge ──
@@ -2056,12 +1989,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: 6,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.6)' },
   handsFreeBadgeText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Green screen active badge ──
   // Shows the selected background thumbnail + truthful "post-capture" label.
   greenScreenBadge: {
@@ -2073,16 +2004,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: 6,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.6)' },
   greenScreenThumb: {
     width: 20,
     height: 20,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   greenScreenBadgeText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: 'rgba(255,255,255,0.85)',
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    color: 'rgba(255,255,255,0.85)' } });

@@ -8,15 +8,15 @@ import Reanimated, {
   useAnimatedReaction,
   runOnJS,
   withSpring,
-  SharedValue,
-} from 'react-native-reanimated';
+  SharedValue } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from './AnimatedPressable';
 import { isVideoUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Typography, Radius, Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { REDUCED_SPRING } from '../theme/motionTokens';
@@ -164,8 +164,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
         { translateX: position.value },
         { scale: withSpring(isDragging.value ? 1.1 : 1, reducedMotion ? REDUCED_SPRING : spring.press) }
       ],
-      shadowOpacity: withSpring(isDragging.value ? 0.3 : 0, reducedMotion ? REDUCED_SPRING : spring.press),
-    };
+      shadowOpacity: withSpring(isDragging.value ? 0.3 : 0, reducedMotion ? REDUCED_SPRING : spring.press) };
   });
 
   const accessibilityActions = reorderEnabled ? [
@@ -235,8 +234,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     paddingVertical: Space.md,
-    height: ITEM_SIZE + 60,
-  },
+    height: ITEM_SIZE + 60 },
   itemWrap: {
     width: ITEM_SIZE,
     height: ITEM_SIZE,
@@ -245,13 +243,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     overflow: 'hidden',
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 15,
-  },
+    shadowRadius: 15 },
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.xl,
-  },
+    borderRadius: Radius.xl },
   addBtn: {
     position: 'absolute',
     width: ITEM_SIZE,
@@ -261,8 +257,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderColor: colors.border,
     borderStyle: 'dashed',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   videoBadge: {
     position: 'absolute',
     top: 6,
@@ -272,8 +267,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.lg,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverBadge: {
     position: 'absolute',
     bottom: 0,
@@ -281,18 +275,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     right: 0,
     backgroundColor: colors.brand,
     paddingVertical: 2,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   coverText: {
     color: colors.background,
     fontSize: 10,
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   hintText: {
     color: colors.textMuted,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
-    marginTop: Space.md,
-  },
-});
+    marginTop: Space.md } });

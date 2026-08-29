@@ -7,8 +7,7 @@ import {
   StatusBar,
   Linking,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -29,8 +28,7 @@ import {
   formatEtaWindowFromSnapshot,
   parseEstimatedDeliveryDate,
   isStaleTrackingEvent,
-  formatPackageSummary,
-} from '../utils/orderDetailLogic';
+  formatPackageSummary } from '../utils/orderDetailLogic';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -38,7 +36,8 @@ import { useOrderDetail } from '../hooks/useOrderDetail';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
-import { Space, Typography, Radius, Type, Stroke, Control, ZIndex } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control, ZIndex } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { buildTrackingUrl } from '../services/shippingProviderRegistry';
 import { getListingCoverUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
@@ -64,8 +63,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
 import {
   resolveCapabilities,
-  type OrderCapability,
-} from '../components/orders/orderCapabilities';
+  type OrderCapability } from '../components/orders/orderCapabilities';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
@@ -120,8 +118,7 @@ export default function OrderDetailScreen() {
     shippingLabelBtnText: { color: colors.brand },
     txDivider: { backgroundColor: colors.border },
     supportLabel: { color: colors.textPrimary },
-    supportSub: { color: colors.textMuted },
-  }), [colors]);
+    supportSub: { color: colors.textMuted } }), [colors]);
 
   const currentUser = useStore((state) => state.currentUser);
   const getSupportTicketsForOrder = useStore((state) => state.getSupportTicketsForOrder);
@@ -137,8 +134,7 @@ export default function OrderDetailScreen() {
     isMountedRef,
     refreshOrder,
     handleCancel,
-    handleDeliver,
-  } = useOrderDetail(orderId);
+    handleDeliver } = useOrderDetail(orderId);
 
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
@@ -251,8 +247,7 @@ export default function OrderDetailScreen() {
       const seller = backendOrder.seller ?? (existingListing?.seller ? {
         id: existingListing.seller.id,
         username: existingListing.seller.username,
-        avatar: existingListing.seller.avatar,
-      } : null);
+        avatar: existingListing.seller.avatar } : null);
 
       if (!seller) return null;
 
@@ -260,8 +255,7 @@ export default function OrderDetailScreen() {
         role: 'Seller' as const,
         id: seller.id,
         username: seller.username ?? t('orderDetail.role.sellerFallback', { id: seller.id.slice(0, 8) }),
-        avatar: seller.avatar,
-      };
+        avatar: seller.avatar };
     }
 
     if (isSeller) {
@@ -273,8 +267,7 @@ export default function OrderDetailScreen() {
         role: 'Buyer' as const,
         id: buyer.id,
         username: buyer.username ?? t('orderDetail.role.buyerFallback', { id: buyer.id.slice(0, 8) }),
-        avatar: buyer.avatar,
-      };
+        avatar: buyer.avatar };
     }
 
     return null;
@@ -297,8 +290,7 @@ export default function OrderDetailScreen() {
       // to the actual value. Until then, the timeline does not claim a review
       // exists when it may not.
       hasReview: false,
-      deliveredAt: backendOrder.deliveredAt,
-    });
+      deliveredAt: backendOrder.deliveredAt });
   }, [backendOrder, normalisedStatus, parcelEvents, openTicket]);
 
   // --- Shipment details ---
@@ -390,8 +382,7 @@ export default function OrderDetailScreen() {
         {
           id: 'carrier_not_scanned',
           label: t('orderDetail.issue.carrierNotScanned.label'),
-          description: t('orderDetail.issue.carrierNotScanned.desc'),
-        },
+          description: t('orderDetail.issue.carrierNotScanned.desc') },
       ];
     }
 
@@ -401,8 +392,7 @@ export default function OrderDetailScreen() {
         {
           id: 'delivery_delayed',
           label: t('orderDetail.issue.deliveryDelayed.label'),
-          description: t('orderDetail.issue.deliveryDelayed.desc'),
-        },
+          description: t('orderDetail.issue.deliveryDelayed.desc') },
       ];
     }
 
@@ -412,13 +402,11 @@ export default function OrderDetailScreen() {
         {
           id: 'parcel_not_found',
           label: t('orderDetail.issue.parcelNotFound.label'),
-          description: t('orderDetail.issue.parcelNotFound.desc'),
-        },
+          description: t('orderDetail.issue.parcelNotFound.desc') },
         {
           id: 'item_problem',
           label: t('orderDetail.issue.itemProblem.label'),
-          description: t('orderDetail.issue.itemProblem.desc'),
-        },
+          description: t('orderDetail.issue.itemProblem.desc') },
       ];
     }
 
@@ -428,8 +416,7 @@ export default function OrderDetailScreen() {
         {
           id: 'track_return',
           label: t('orderDetail.issue.trackReturn.label'),
-          description: t('orderDetail.issue.trackReturn.desc'),
-        },
+          description: t('orderDetail.issue.trackReturn.desc') },
       ];
     }
 
@@ -484,8 +471,7 @@ export default function OrderDetailScreen() {
     navigation.navigate('OrderSupport', {
       orderId,
       categoryId: category.id,
-      categoryLabel: category.label,
-    });
+      categoryLabel: category.label });
   }, [navigation, orderId]);
 
   // --- Action availability (canonical resolver) ---
@@ -505,8 +491,7 @@ export default function OrderDetailScreen() {
       hasReview: false,
       hasTracking: Boolean(backendOrder.trackingNumber || parcelEvents.length > 0),
       fulfilmentSnapshot: backendOrder.fulfilmentSnapshot ?? null,
-      isSubmitting: orderMutation !== null,
-    });
+      isSubmitting: orderMutation !== null });
   }, [backendOrder, isKnown, isBuyer, openTicket, parcelEvents.length, orderMutation]);
 
   const mutationLocked = orderMutation !== null;
@@ -526,16 +511,14 @@ export default function OrderDetailScreen() {
             label: t('orderDetail.action.completePayment'),
             onPress: () => { haptics.heavyPress(); navigation.navigate('Checkout', { orderId }); },
             variant: 'primary',
-            accessibilityLabel: t('orderDetail.action.completePaymentA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.completePaymentA11y') };
         case 'dispatch':
           // Seller paid → guided fulfilment. NEVER a direct generic mark-shipped.
           return {
             label: t('orderDetail.action.shipItem'),
             onPress: () => { haptics.heavyPress(); navigation.navigate('SellerFulfilment', { orderId }); },
             variant: 'primary',
-            accessibilityLabel: t('orderDetail.action.shipItemA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.shipItemA11y') };
         case 'track_order':
           return {
             label: t('orderDetail.action.trackParcel'),
@@ -549,30 +532,26 @@ export default function OrderDetailScreen() {
               }
             },
             variant: 'primary',
-            accessibilityLabel: t('orderDetail.action.trackParcelA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.trackParcelA11y') };
         case 'inspect':
           // Buyer delivered → check your item before confirming/reviewing.
           return {
             label: t('orderDetail.action.checkItem'),
             onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
             variant: 'primary',
-            accessibilityLabel: t('orderDetail.action.checkItemA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.checkItemA11y') };
         case 'leave_review':
           return {
             label: t('orderDetail.action.leaveReview'),
             onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
             variant: 'primary',
-            accessibilityLabel: t('orderDetail.action.leaveReviewA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.leaveReviewA11y') };
         case 'view_review':
           return {
             label: t('orderDetail.action.viewReview'),
             onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
             variant: 'secondary',
-            accessibilityLabel: t('orderDetail.action.viewReviewA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.viewReviewA11y') };
         case 'confirm_delivery':
           // Demoted secondary — releases escrowed funds (high-consequence).
           return {
@@ -586,14 +565,12 @@ export default function OrderDetailScreen() {
                 confirmLabel: t('orderDetail.action.confirmReceipt'),
                 cancelLabel: t('orderDetail.action.notYet'),
                 onConfirm: handleDeliver,
-                variant: 'default',
-              });
+                variant: 'default' });
             },
             variant: 'secondary',
             loading: orderMutation === 'deliver',
             disabled: mutationLocked && orderMutation !== 'deliver',
-            accessibilityLabel: 'Confirm delivery — releases funds to seller',
-          };
+            accessibilityLabel: 'Confirm delivery — releases funds to seller' };
         case 'cancel':
           return {
             label: t('orderDetail.action.cancelOrder'),
@@ -608,28 +585,24 @@ export default function OrderDetailScreen() {
                 confirmLabel: t('orderDetail.action.cancelOrder'),
                 cancelLabel: t('orderDetail.action.keepOrder'),
                 onConfirm: handleCancel,
-                variant: 'danger',
-              });
+                variant: 'danger' });
             },
             variant: 'destructive',
             loading: orderMutation === 'cancel',
             disabled: mutationLocked && orderMutation !== 'cancel',
-            accessibilityLabel: t('orderDetail.action.cancelOrder'),
-          };
+            accessibilityLabel: t('orderDetail.action.cancelOrder') };
         case 'report_issue':
           return {
             label: t('orderDetail.action.reportIssue'),
             onPress: () => { haptics.tap(); setIssueSelectorVisible(true); },
             variant: 'secondary',
-            accessibilityLabel: t('orderDetail.action.reportIssueA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.reportIssueA11y') };
         case 'view_resolution':
           return {
             label: t('orderDetail.action.viewResolution'),
             onPress: () => { haptics.tap(); navigation.navigate('SupportTicketDetail', { ticketId: openTicket?.id ?? '' }); },
             variant: 'secondary',
-            accessibilityLabel: t('orderDetail.action.viewResolutionA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.viewResolutionA11y') };
         case 'contact':
           if (!counterparty) return undefined;
           return {
@@ -640,19 +613,16 @@ export default function OrderDetailScreen() {
                 conversationId: `${counterparty.id}_${backendOrder.listingId}`,
                 focusQuery: counterparty.username,
                 partnerUserId: counterparty.id,
-                itemId: backendOrder.listingId,
-              });
+                itemId: backendOrder.listingId });
             },
             variant: 'secondary',
-            accessibilityLabel: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }),
-          };
+            accessibilityLabel: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }) };
         case 'view_receipt':
           return {
             label: t('orderDetail.action.viewReceipt'),
             onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
             variant: 'secondary',
-            accessibilityLabel: t('orderDetail.action.viewReceiptA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.viewReceiptA11y') };
         default:
           return undefined;
       }
@@ -660,8 +630,7 @@ export default function OrderDetailScreen() {
 
     return {
       primary: buildAction(primary),
-      secondary: buildAction(secondary) ?? undefined,
-    };
+      secondary: buildAction(secondary) ?? undefined };
   }, [backendOrder, isKnown, capabilities, carrierTrackingUrl, handleTrackOnCarrierSite, handleDeliver, handleCancel, navigation, orderId, isBuyer, counterparty, openTicket, orderMutation, mutationLocked]);
 
   // --- Copy tracking number ---
@@ -708,8 +677,7 @@ export default function OrderDetailScreen() {
       key: 'receipt',
       label: t('orderDetail.action.viewReceipt'),
       icon: 'receipt-outline',
-      onPress: () => navigation.navigate('OrderReceipt', { orderId }),
-    });
+      onPress: () => navigation.navigate('OrderReceipt', { orderId }) });
 
     // Guided dispatch is now the primary footer action when the seller can
     // ship — do not duplicate it in overflow (audit finding #1/#9).
@@ -723,25 +691,21 @@ export default function OrderDetailScreen() {
           conversationId: `${counterparty.id}_${backendOrder?.listingId}`,
           focusQuery: counterparty.username,
           partnerUserId: counterparty.id,
-          itemId: backendOrder?.listingId,
-        }),
-      });
+          itemId: backendOrder?.listingId }) });
     }
 
     actions.push({
       key: 'support',
       label: t('orderDetail.overflow.getHelp'),
       icon: 'help-circle-outline',
-      onPress: () => navigation.navigate('OrderSupport', { orderId }),
-    });
+      onPress: () => navigation.navigate('OrderSupport', { orderId }) });
 
     if (isBuyer) {
       actions.push({
         key: 'buyer_protection',
         label: t('orderDetail.overflow.buyerProtection'),
         icon: 'shield-checkmark-outline',
-        onPress: () => navigation.navigate('BuyerProtection', { orderId }),
-      });
+        onPress: () => navigation.navigate('BuyerProtection', { orderId }) });
     }
 
 
@@ -751,8 +715,7 @@ export default function OrderDetailScreen() {
         label: t('orderDetail.action.viewResolution'),
         icon: 'folder-open-outline',
         onPress: () => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id }),
-        variant: 'primary',
-      });
+        variant: 'primary' });
     }
 
     if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
@@ -761,8 +724,7 @@ export default function OrderDetailScreen() {
         label: t('orderDetail.overflow.writeReview'),
         icon: 'star-outline',
         onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
-        variant: 'primary',
-      });
+        variant: 'primary' });
     }
 
     return actions;
@@ -782,8 +744,7 @@ export default function OrderDetailScreen() {
             paddingTop: insets.top,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: colors.border,
-          }}
+            borderBottomColor: colors.border }}
         />
         <OrderDetailSkeleton />
       </SafeAreaView>
@@ -802,8 +763,7 @@ export default function OrderDetailScreen() {
             paddingTop: insets.top,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: colors.border,
-          }}
+            borderBottomColor: colors.border }}
         />
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} aria-hidden={true} />
@@ -834,8 +794,7 @@ export default function OrderDetailScreen() {
             paddingTop: insets.top,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: colors.border,
-          }}
+            borderBottomColor: colors.border }}
         />
         <View style={styles.errorContainer}>
           <Ionicons name="document-outline" size={28} color={colors.textMuted} aria-hidden={true} />
@@ -860,8 +819,7 @@ export default function OrderDetailScreen() {
           paddingTop: insets.top,
           paddingBottom: Space.sm,
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        }}
+          borderBottomColor: colors.border }}
         rightAction={
           <View style={styles.headerRight}>
             <Pressable
@@ -973,8 +931,7 @@ export default function OrderDetailScreen() {
                 conversationId: `${cp.id}_${listingId}`,
                 focusQuery: cp.username,
                 partnerUserId: cp.id,
-                itemId: listingId,
-              });
+                itemId: listingId });
             }}
           />
         ) : null}
@@ -999,8 +956,7 @@ export default function OrderDetailScreen() {
                 confirmLabel: 'Confirm receipt',
                 cancelLabel: 'Not yet',
                 onConfirm: handleDeliver,
-                variant: 'default',
-              });
+                variant: 'default' });
             }}
             onReportIssue={() => {
               haptics.tap();
@@ -1194,194 +1150,159 @@ export default function OrderDetailScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   headerBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   headerBtnPressed: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   retryBtnPressed: {
     opacity: 0.85,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   counterpartyBtnPressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   supportRowPressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   scrollContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   loadingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   errorTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    textAlign: 'center' },
   errorBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center',
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   retryBtn: {
     paddingVertical: Space.md - 2,
     paddingHorizontal: Space.xl,
     borderRadius: Radius.lg,
     minHeight: Space.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   retryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   statusHeader: {
     paddingVertical: Space.md,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   // Order number — clear reference, captionElevated with tabular-nums
   orderNumber: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   statusBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 1,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   statusDot: {
     width: Space.sm - 1,
     height: Space.sm - 1,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   statusBadgeText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   statusLabel: {
-    fontSize: Type.priceHero.size,
-    lineHeight: Type.priceHero.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceHero.letterSpacing,
-  },
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: TypographyV2.priceHero.fontFamily,
+    letterSpacing: TypographyV2.priceHero.letterSpacing },
   statusExplanation: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   lastUpdated: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs / 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs / 2 },
   refreshErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   refreshErrorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   retryLink: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.lg,
-  },
+    marginVertical: Space.lg },
   sectionLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   counterpartySection: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   counterpartyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   counterpartyIdentity: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   counterpartyAvatar: {
     width: Space.xxl,
     height: Space.xxl,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   counterpartyName: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   counterpartyActions: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   counterpartyBtn: {
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
@@ -1389,17 +1310,14 @@ const styles = StyleSheet.create({
     borderWidth: Stroke.standard,
     minHeight: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   counterpartyBtnText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   timelineSection: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   etaBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1409,36 +1327,30 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   etaIconWrap: {
     width: 28,
     height: 28,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   etaContent: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   etaLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    opacity: 0.6,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    opacity: 0.6 },
   etaValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   etaService: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    opacity: 0.5,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    opacity: 0.5 },
   staleBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1447,14 +1359,12 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   staleText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    opacity: 0.7,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    opacity: 0.7 },
   escrowBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1464,82 +1374,69 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   escrowTextWrap: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   escrowTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   escrowSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   escrowCountdown: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginTop: Space.xs / 2,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   shipmentSection: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Space.sm,
-    gap: Space.md,
-  },
+    gap: Space.md },
   detailLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   detailValue: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textAlign: 'right',
-    flex: 1,
-  },
+    flex: 1 },
   detailValueLink: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   copyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   shippingLabelBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingVertical: Space.sm + 2,
     marginTop: Space.xs,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   shippingLabelBtnText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // ─── Text link (Track on carrier site) — text action, not a button ───
   textLinkRow: {
     flexDirection: 'row',
@@ -1547,198 +1444,161 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingVertical: Space.sm,
     marginTop: Space.xs,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   textLink: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // ─── Latest event summary — one muted text line, not a card ───
   latestEventLine: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    marginBottom: Space.sm,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginBottom: Space.sm },
   transactionSection: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   txDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
-  },
+    marginVertical: Space.sm },
   supportSection: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   supportRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   supportInfo: {
-    flex: 1,
-  },
+    flex: 1 },
   supportLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   supportSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs / 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs / 2 },
   // ─── Package contents ───
   packageContentsWrap: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   packageContentsLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginBottom: Space.xs },
   packageContentsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   packageThumb: {
     width: 40,
     height: 40,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   packageContentsText: {
     flex: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   packageContentsTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   packageContentsSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ─── Issue category selector ───
   issueSheetBackdrop: {
     ...StyleSheet.absoluteFill,
     zIndex: ZIndex.modal,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   issueSheetBackdropPress: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   issueSheet: {
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
     paddingBottom: Space.xl,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   issueSheetTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   issueSheetSub: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.sm,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    marginBottom: Space.sm },
   issueContextHeader: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.size + 4,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.size + 4,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
     marginTop: Space.sm,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   issueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   issueRowPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   issueRowText: {
     flex: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   issueRowLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   issueRowDesc: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   issueCancelBtn: {
     paddingVertical: Space.sm + 2,
     marginTop: Space.sm,
     alignItems: 'center',
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   issueCancelBtnPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   issueCancelBtnText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   // ─── Completed order summary ───
   completedSection: {
     paddingVertical: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   completedTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-    marginBottom: Space.sm,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    marginBottom: Space.sm },
   completedActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   completedActionPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   completedActionText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing } });

@@ -8,8 +8,7 @@ import { View,
   useWindowDimensions,
   ScrollView,
   RefreshControl,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -43,7 +42,8 @@ import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 
-import { Space, Radius, Elevation, Type, Typography, AspectRatio, Control } from '../theme/designTokens';
+import { Space, Radius, Elevation, Typography, AspectRatio, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 const GRID_SPACING = 16;
 
 const BROWSE_SORT_PREF_KEY = 'thryftverse:browse-sort-pref:v1';
@@ -117,8 +117,7 @@ export default function BrowseScreen() {
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     backBtn: { width: Control.hit, height: Control.hit, alignItems: 'center', justifyContent: 'center' },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
     gridToggleBtn: { width: Control.hit, height: Control.hit, alignItems: 'center', justifyContent: 'center' },
@@ -127,21 +126,18 @@ export default function BrowseScreen() {
     titleContainer: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.md,
-    },
+      paddingBottom: Space.md },
     hugeTitle: {
-      fontSize: Type.title.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.screenTitle.size,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.title.letterSpacing,
-      lineHeight: Type.title.lineHeight,
-    },
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
+      lineHeight: TypographyV2.screenTitle.lineHeight },
     itemCountText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     itemCountPill: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -151,8 +147,7 @@ export default function BrowseScreen() {
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       marginTop: Space.xs + 2,
-      alignSelf: 'flex-start',
-    },
+      alignSelf: 'flex-start' },
 
     filterBar: { paddingBottom: Space.md },
     filterRow: { paddingHorizontal: Space.md, gap: Space.sm, alignItems: 'center' },
@@ -163,12 +158,10 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     filterPillActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
-    filterPillTextActive: { color: colors.textPrimary, fontSize: Type.caption.size, fontFamily: Typography.family.semibold },
+      backgroundColor: colors.surfaceAlt },
+    filterPillTextActive: { color: colors.textPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     filterPillOutline: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -176,16 +169,13 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: 'transparent',
-    },
-    filterPillText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
+      backgroundColor: 'transparent' },
+    filterPillText: { color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     saveSearchPillActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     saveSearchTextActive: {
       color: colors.brand,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     sortTrigger: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -193,13 +183,11 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     sortTriggerActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
-    sortTriggerText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
-    sortTriggerTextActive: { color: colors.textPrimary, fontFamily: Typography.family.semibold },
+      backgroundColor: colors.surfaceAlt },
+    sortTriggerText: { color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
+    sortTriggerTextActive: { color: colors.textPrimary, fontFamily: TypographyV2.meta.fontFamily },
     sortMenu: {
       marginHorizontal: Space.md,
       marginBottom: Space.sm,
@@ -207,8 +195,7 @@ export default function BrowseScreen() {
       overflow: 'hidden',
       backgroundColor: colors.surface,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     sortMenuItem: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -216,25 +203,21 @@ export default function BrowseScreen() {
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     sortMenuItemText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     sortMenuItemTextActive: {
       color: colors.brand,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     activeBadgeRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       alignItems: 'center',
       paddingHorizontal: Space.md,
       gap: Space.xs,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     activeBadge: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -242,41 +225,34 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     activeBadgeText: {
       color: colors.textPrimary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     activeBadgeClose: {
       width: Control.iconCompact,
       height: Control.iconCompact,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     activeBadgeDivider: {
       width: StyleSheet.hairlineWidth,
       height: Space.md,
       backgroundColor: colors.borderSubtle,
-      marginHorizontal: Space.xs / 2,
-    },
+      marginHorizontal: Space.xs / 2 },
     clearAllBtn: {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     clearAllText: {
       color: colors.textSecondary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     syncRetryBanner: {
       marginHorizontal: Space.md,
-      marginBottom: Space.sm + 2,
-    },
+      marginBottom: Space.sm + 2 },
 
     gridContent: { paddingHorizontal: Space.md, paddingBottom: 100 },
     rowWrapper: { justifyContent: 'space-between', marginBottom: Space.xl },
@@ -285,18 +261,14 @@ export default function BrowseScreen() {
       flexWrap: 'wrap',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      rowGap: Space.xl,
-    },
+      rowGap: Space.xl },
     loadingCard: {
-      width: itemWidth,
-    },
+      width: itemWidth },
     loadingCardOffset: {
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     loadingCardBody: {
       marginTop: Space.sm + 2,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
 
     gridItem: { width: itemWidth },
     imageWrap: {
@@ -304,17 +276,14 @@ export default function BrowseScreen() {
       borderRadius: Radius.sm,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
-      marginBottom: Space.smMd,
-    },
+      marginBottom: Space.smMd },
     gridImageContainer: {
       width: '100%',
       aspectRatio: AspectRatio.portrait,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     gridImage: { width: '100%', height: '100%' },
     sharedImageLayer: {
-      ...StyleSheet.absoluteFill,
-    },
+      ...StyleSheet.absoluteFill },
     likeBtn: {
       position: 'absolute',
       top: Space.sm + 2,
@@ -323,66 +292,56 @@ export default function BrowseScreen() {
       height: Control.hit,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
 
     infoWrap: { paddingHorizontal: Space.xs },
     priceRow: {
       flexDirection: 'row',
       alignItems: 'flex-end',
       justifyContent: 'space-between',
-      marginBottom: Space.xs,
-    },
-    priceText: { color: colors.textPrimary, fontSize: Type.body.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
-    brandText: { color: colors.textSecondary, fontSize: Type.caption.size, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
-    sizeText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
+      marginBottom: Space.xs },
+    priceText: { color: colors.textPrimary, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, fontVariant: ['tabular-nums'] },
+    brandText: { color: colors.textSecondary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textTransform: 'uppercase' },
+    sizeText: { color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     sellerActionRow: {
       marginTop: Space.sm,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     sellerIdentityChip: {
       flex: 1,
       minHeight: Space.lg + Space.xs,
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs + 2,
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
     sellerActionAvatarWrap: {
       width: Control.iconCompact,
       height: Control.iconCompact,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     sellerActionAvatar: {
       width: Control.iconCompact,
       height: Control.iconCompact,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     sellerActionAvatarFallback: {
       width: Control.iconCompact,
       height: Control.iconCompact,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     sellerActionHandle: {
       flex: 1,
       color: colors.textSecondary,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     sellerMessageBtn: {
       width: Space.lg + Space.xs,
       height: Space.lg + Space.xs,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
-  }), [colors, itemWidth]);
+      justifyContent: 'center' } }), [colors, itemWidth]);
 
   const navigation = useNavigation<any>();
   const route = useRoute<BrowseRoute>();
@@ -455,8 +414,7 @@ export default function BrowseScreen() {
       'Price: Low to High': 'price_asc',
       'Price: High to Low': 'price_desc',
       'Most liked': 'most_liked',
-      'Ending soon': 'ending_soon',
-    };
+      'Ending soon': 'ending_soon' };
 
     const hasBackendFilters =
       browseFilters.query.trim().length > 0 ||
@@ -485,8 +443,7 @@ export default function BrowseScreen() {
       minPrice: browseFilters.priceMin ?? undefined,
       maxPrice: browseFilters.priceMax ?? undefined,
       sort: sortMap[browseFilters.sort] || 'newest',
-      sustainableOnly: browseFilters.sustainableOnly,
-    })
+      sustainableOnly: browseFilters.sustainableOnly })
       .then((result) => {
         if (cancelled) return;
         setBackendListings(result.listings);
@@ -510,8 +467,7 @@ export default function BrowseScreen() {
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
-    },
-  });
+    } });
 
   const handleRefresh = async () => {
     haptic.patterns.refresh();
@@ -550,8 +506,7 @@ export default function BrowseScreen() {
       condition: 'Any',
       sustainableOnly: false,
       priceMin: null,
-      priceMax: null,
-    });
+      priceMax: null });
   }, [updateBrowseFilters]);
 
   // Save search — only available when there's a query or category to save
@@ -572,10 +527,8 @@ export default function BrowseScreen() {
         sizes: browseFilters.sizes,
         condition: browseFilters.condition,
         sort: browseFilters.sort,
-        category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
-      },
-      alertsEnabled: true,
-    });
+        category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined },
+      alertsEnabled: true });
     show('Search saved with alerts enabled', 'success');
   }, [saveSearchLabel, browseFilters, categoryId, addSavedSearch, show]);
 

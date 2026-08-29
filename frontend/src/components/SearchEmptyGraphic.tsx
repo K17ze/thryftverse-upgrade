@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Type } from '../theme/designTokens';
+import { Typography, Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 interface Props {
   query?: string;
@@ -38,20 +39,16 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 60,
-      gap: 12,
-    },
+      gap: 12 },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textPrimary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     subtitle: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       textAlign: 'center',
-      maxWidth: 220,
-    },
-  });
+      maxWidth: 220 } });
 }

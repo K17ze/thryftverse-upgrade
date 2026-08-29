@@ -1,7 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Type, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface NativePagerPage {
   key: string;
@@ -22,8 +23,7 @@ export function NativePager({
   activeIndex,
   onIndexChange,
   tabBarStyle = 'full',
-  testID,
-}: NativePagerProps) {
+  testID }: NativePagerProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
@@ -84,45 +84,35 @@ export function NativePager({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   tabBar: {
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   tabBarCompact: {
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   tab: {
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   tabActive: {},
   tabText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   tabTextActive: {
     color: colors.brand,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   tabIndicator: {
     position: 'absolute',
     bottom: 0,
     width: 30,
     height: 2,
     backgroundColor: colors.brand,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   pager: {
-    flex: 1,
-  },
+    flex: 1 },
   page: {
-    flex: 1,
-  },
-  });
+    flex: 1 } });
 }

@@ -21,17 +21,15 @@ import {
   ScrollView,
   StyleSheet,
   type ViewStyle,
-  type TextStyle,
-} from 'react-native';
+  type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Control,
-  Stroke,
-} from '../../../theme/designTokens';
+  Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -39,8 +37,7 @@ import {
   CreatorColorPicker,
   fromHexString,
   toHexString,
-  normalize,
-} from '../../color/';
+  normalize } from '../../color/';
 import type { CreatorColor, RecentColor } from '../../color/';
 import {
   getAllPalettes,
@@ -49,8 +46,7 @@ import {
   loadCustomPalette,
   saveCustomPalette,
   type Palette,
-  type PaletteName,
-} from './DrawingPaletteSystem';
+  type PaletteName } from './DrawingPaletteSystem';
 
 // ── Props ──────────────────────────────────────────────────────────────
 
@@ -80,8 +76,7 @@ export function DrawingPaletteBar({
   onColorCommit,
   recents = [],
   onCommitRecent,
-  accessibilityLabel = 'Drawing palette',
-}: DrawingPaletteBarProps) {
+  accessibilityLabel = 'Drawing palette' }: DrawingPaletteBarProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -181,8 +176,7 @@ export function DrawingPaletteBar({
     const custom: Palette = {
       name: 'custom',
       label: 'Custom',
-      colors: customColors,
-    };
+      colors: customColors };
     return [...predefined, custom];
   }, [customColors]);
 
@@ -224,8 +218,7 @@ export function DrawingPaletteBar({
             styles.customColorBtn,
             {
               backgroundColor: showColorPicker ? colors.brandSubtle : colors.surfaceAlt,
-              borderColor: showColorPicker ? colors.brand : colors.borderSubtle,
-            },
+              borderColor: showColorPicker ? colors.brand : colors.borderSubtle },
           ]}
         >
           <Ionicons
@@ -245,8 +238,7 @@ export function DrawingPaletteBar({
             styles.paletteSwitchBtn,
             {
               backgroundColor: colors.surfaceAlt,
-              borderColor: colors.borderSubtle,
-            },
+              borderColor: colors.borderSubtle },
           ]}
         >
           <Ionicons
@@ -358,15 +350,13 @@ export function DrawingPaletteBar({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: {
-      gap: Space.sm,
-    } as ViewStyle,
+      gap: Space.sm } as ViewStyle,
     swatchRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: SWATCH_GAP,
       paddingVertical: Space.xxs,
-      paddingRight: Space.md,
-    } as ViewStyle,
+      paddingRight: Space.md } as ViewStyle,
     swatchOuter: {
       width: SWATCH_SIZE,
       height: SWATCH_SIZE,
@@ -375,21 +365,18 @@ function createStyles(colors: ThemeColors) {
       borderColor: 'transparent',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: Stroke.standard,
-    } as ViewStyle,
+      padding: Stroke.standard } as ViewStyle,
     swatchFill: {
       width: SWATCH_SIZE - Stroke.standard * 2 - Stroke.emphasis * 2,
       height: SWATCH_SIZE - Stroke.standard * 2 - Stroke.emphasis * 2,
-      borderRadius: Radius.full,
-    } as ViewStyle,
+      borderRadius: Radius.full } as ViewStyle,
     customColorBtn: {
       width: SWATCH_SIZE,
       height: SWATCH_SIZE,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
       alignItems: 'center',
-      justifyContent: 'center',
-    } as ViewStyle,
+      justifyContent: 'center' } as ViewStyle,
     paletteSwitchBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -397,61 +384,51 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      gap: Space.xs,
-    } as ViewStyle,
+      gap: Space.xs } as ViewStyle,
     paletteSwitchLabel: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textSecondary,
-    } as TextStyle,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textSecondary } as TextStyle,
     colorPickerSection: {
       gap: Space.sm,
-      paddingTop: Space.xs,
-    } as ViewStyle,
+      paddingTop: Space.xs } as ViewStyle,
     saveCustomBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       alignSelf: 'flex-start',
       height: Control.hit,
-      paddingHorizontal: Space.sm,
-    } as ViewStyle,
+      paddingHorizontal: Space.sm } as ViewStyle,
     saveCustomText: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.brand,
-    } as TextStyle,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.brand } as TextStyle,
     // ── Palette sheet ──
     sheetContainer: {
       flex: 1,
-      paddingHorizontal: Space.md,
-    } as ViewStyle,
+      paddingHorizontal: Space.md } as ViewStyle,
     sheetHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    } as ViewStyle,
+      paddingVertical: Space.sm } as ViewStyle,
     sheetTitle: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    } as TextStyle,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary } as TextStyle,
     sheetClose: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    } as ViewStyle,
+      justifyContent: 'center' } as ViewStyle,
     paletteList: {
-      paddingVertical: Space.sm,
-    } as ViewStyle,
+      paddingVertical: Space.sm } as ViewStyle,
     // Flattened row — no inner card background; hairline separator between rows.
     paletteRow: {
       flexDirection: 'row',
@@ -460,31 +437,25 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.xs,
       borderBottomWidth: Stroke.hairline,
-      borderColor: colors.borderSubtle,
-    } as ViewStyle,
+      borderColor: colors.borderSubtle } as ViewStyle,
     paletteRowLabel: {
       flex: 1,
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textPrimary,
-    } as TextStyle,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textPrimary } as TextStyle,
     paletteRowSwatches: {
       flexDirection: 'row',
-      gap: Space.xs,
-    } as ViewStyle,
+      gap: Space.xs } as ViewStyle,
     // Preview swatch thumbnail — canvas-specific size; no design token maps to it.
     paletteRowSwatch: {
       width: 20,
       height: 20,
       borderRadius: Radius.full,
       borderWidth: Stroke.hairline,
-      borderColor: colors.borderSubtle,
-    } as ViewStyle,
+      borderColor: colors.borderSubtle } as ViewStyle,
     paletteRowEmpty: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.meta.size,
-      color: colors.textMuted,
-    } as TextStyle,
-  });
+      fontSize: TypographyV2.meta.size,
+      color: colors.textMuted } as TextStyle });
 }

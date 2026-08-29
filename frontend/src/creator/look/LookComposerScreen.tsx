@@ -9,15 +9,15 @@ import {
   Keyboard,
   useWindowDimensions,
   LayoutChangeEvent,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, Radius, Type, Typography, FontFamily, FontSize, Control, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Typography, FontFamily, FontSize, Control, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { BlurView } from 'expo-blur';
@@ -25,7 +25,7 @@ import { makeStableId } from '../../utils/createStableId';
 import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
 import type { CreatorLayer } from '../composition';
-import { computeLookLayout, hasFullBleedMedia, LOOK_DEFAULT_ASPECT_RATIO, safeValidateDocument } from '../composition';
+import { computeLookLayout, LOOK_DEFAULT_ASPECT_RATIO, safeValidateDocument } from '../composition';
 import { layerTypeLabel } from '../shared/layerUtils';
 import { CreatorCanvas } from '../CreatorCanvas';
 import { CreatorLayersSheet } from '../CreatorLayersSheet';
@@ -118,8 +118,7 @@ function SlideUpSurface({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value * 300 }],
-  }));
+    transform: [{ translateY: translateY.value * 300 }] }));
   return <Reanimated.View style={animStyle}>{children}</Reanimated.View>;
 }
 
@@ -161,8 +160,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     updateCanvas,
     hasPendingRecovery,
     recoverCrashedProject,
-    dismissRecovery,
-  } = useCreator();
+    dismissRecovery } = useCreator();
 
   // ── Sheet / overlay state ──────────────────────────────────────────
   const [showLayers, setShowLayers] = useState(false);
@@ -265,9 +263,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 label: t.label,
                 listingId: t.listingId,
                 x: t.x,
-                y: t.y,
-              })),
-            });
+                y: t.y })) });
         if (sourceMode === 'remix') {
           setDocument({
             ...baseDoc,
@@ -275,10 +271,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
             metadata: {
               ...baseDoc.metadata,
               sourceDocumentId: res.look.id,
-              sourceCreatorId: res.look.creatorId,
-            },
-            updatedAt: new Date().toISOString(),
-          });
+              sourceCreatorId: res.look.creatorId },
+            updatedAt: new Date().toISOString() });
           setEditingLookId(null);
         } else {
           setDocument(baseDoc);
@@ -304,35 +298,24 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // ── Canvas geometry ───────────────────────────────────────────────
-  // The 4:5 aspect ratio is the EXPORT ratio, not the edit surface ratio.
-  // When a full-bleed media layer (width=1, height=1) is present, the
-  // media IS the canvas surface — it should fill the available screen
-  // height (minus top bar + bottom tool dock chrome) so there is no black
-  // card framing the media. The media uses contentFit="cover" to fill the
-  // canvas. Without full-bleed media, the canvas keeps its 4:5 shape and
-  // centers vertically in the neutral workspace.
+  // The authored coordinate space is always the document's canvas aspect
+  // ratio (4:5 for looks). The edit surface letterboxes around this
+  // authored space — it never mutates the document geometry to match the
+  // physical screen. Full-bleed media is achieved by the media layer's
+  // contentFit="cover" filling the authored canvas, not by changing the
+  // canvas dimensions. This ensures editor, viewer, thumbnail, and export
+  // all use the same coordinate space.
   const canvasWidth = screenWidth;
-  const fullBleed = hasFullBleedMedia(page);
-  // Chrome heights mirror the safe-zone values used below (top bar 56pt +
-  // status inset; bottom tool dock 120pt + home inset).
-  const topChrome = insets.top + 56;
-  const bottomChrome = insets.bottom + 120;
   const canvasHeight = useMemo(() => {
-    if (fullBleed) {
-      // Fill the available vertical space between top bar and bottom dock.
-      const available = screenHeight - topChrome - bottomChrome;
-      return Math.max(Math.floor(available), Math.floor(screenWidth / document.canvas.aspectRatio));
-    }
+    // Always use the authored aspect ratio — never the physical screen ratio.
     return Math.floor(screenWidth / document.canvas.aspectRatio);
-  }, [fullBleed, screenHeight, topChrome, bottomChrome, screenWidth, document.canvas.aspectRatio]);
+  }, [screenWidth, document.canvas.aspectRatio]);
 
-  // Canvas vertical position. Full-bleed: pinned just below the top bar.
-  // Otherwise: vertically centered in the viewport.
+  // Canvas vertical position: vertically centered in the viewport.
   const canvasVerticalOffset = useMemo(() => {
-    if (fullBleed) return topChrome;
     if (canvasHeight >= screenHeight) return 0;
     return Math.floor((screenHeight - canvasHeight) / 2);
-  }, [fullBleed, topChrome, canvasHeight, screenHeight]);
+  }, [canvasHeight, screenHeight]);
 
   // ── Truthful back — offers Save Draft / Discard / Keep Editing ─────
   const handleBack = useCallback(() => {
@@ -357,11 +340,9 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
             message: 'Try again.',
             confirmLabel: 'OK',
             variant: 'default',
-            onConfirm: () => {},
-          });
+            onConfirm: () => {} });
         }
-      },
-    });
+      } });
   }, [isDirty, navigation, saveDraft]);
 
   // ── Multi-select: exit helper ──────────────────────────────────────
@@ -530,8 +511,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   // highlight.
   const isInTrashZoneSV = useSharedValue(0);
   const chromeFadeStyle = useAnimatedStyle(() => ({
-    opacity: withSpring(manipulationActiveSV.value === 1 ? 0.15 : 1, { damping: 20, stiffness: 200 }),
-  }));
+    opacity: withSpring(manipulationActiveSV.value === 1 ? 0.15 : 1, { damping: 20, stiffness: 200 }) }));
 
   // ── Entry screen media handling ────────────────────────────────────
   // For Look, each asset becomes an auto-arranged media layer on page 0
@@ -574,10 +554,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         // the effect stack so the renderer applies the color matrix.
         // The effect ID matches the filter system's ImageFilter names.
         ...(asset.cameraEffect ? {
-          effects: [{ type: 'filter' as const, id: asset.cameraEffect, amount: 1 }],
-        } : {}),
-      },
-    }));
+          effects: [{ type: 'filter' as const, id: asset.cameraEffect, amount: 1 }] } : {}) } }));
     const arranged = computeLookLayout(mediaLayers);
     const firstMedia = arranged.find((layer) => layer.type === 'media');
     setEntryPinnedUri(media[0]?.uri ?? null);
@@ -591,10 +568,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           left: vp.viewRect.x,
           top: vp.viewRect.y,
           width: vp.viewRect.width,
-          height: vp.viewRect.height,
-        },
-        aspectRatio: vp.authoredAspectRatio,
-      });
+          height: vp.viewRect.height },
+        aspectRatio: vp.authoredAspectRatio });
     } else {
       setEntrySourceTransform(null);
     }
@@ -602,13 +577,11 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       left: (firstMedia.x - firstMedia.width / 2) * canvasWidth,
       top: canvasVerticalOffset + (firstMedia.y - firstMedia.height / 2) * canvasHeight,
       width: firstMedia.width * canvasWidth,
-      height: firstMedia.height * canvasHeight,
-    } : null);
+      height: firstMedia.height * canvasHeight } : null);
     const newDoc = {
       ...document,
       pages: [{ id: document.pages[0]?.id ?? 'page_1', layers: arranged }],
-      updatedAt: new Date().toISOString(),
-    };
+      updatedAt: new Date().toISOString() };
     setDocument(newDoc);
     setEntryComplete(true);
   }, [canvasHeight, canvasVerticalOffset, canvasWidth, document, setDocument]);
@@ -675,8 +648,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       listingId: item.listingId,
       snapshotTitle: item.snapshotTitle,
       snapshotImageUrl: item.snapshotImageUrl,
-      snapshotPriceGbp: item.snapshotPriceGbp,
-    });
+      snapshotPriceGbp: item.snapshotPriceGbp });
   }, [addLookProduct]);
 
   // ── Source tray: drag-to-canvas product drop ──
@@ -703,8 +675,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       snapshotImageUrl: item.snapshotImageUrl,
       snapshotPriceGbp: item.snapshotPriceGbp,
       x,
-      y,
-    });
+      y });
     haptic.medium();
   }, [addLookProduct, haptic]);
 
@@ -811,8 +782,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     autoAdjustActive,
     handleAutoAdjust,
     handleAIEffectApply,
-    handleAIEffectRemove,
-  } = useLookEffects(selectedLayer, updateLayer);
+    handleAIEffectRemove } = useLookEffects(selectedLayer, updateLayer);
 
   // ── Auto layout bar (LookAutoLayoutBar) ─────────────────────────────
   // handleAutoLayoutSelect is declared below, after `mediaLayers` is
@@ -868,8 +838,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     handleOverlapCycle,
     handleMultiFront,
     handleMultiBack,
-    handleMultiAlign,
-  } = useLookMultiSelect(
+    handleMultiAlign } = useLookMultiSelect(
     page,
     selectedLayerIds,
     multiSelectMode,
@@ -879,8 +848,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       bringSelectedToFront,
       sendSelectedToBack,
       toggleLayerInSelection,
-      selectLayer,
-    },
+      selectLayer },
     haptic,
   );
 
@@ -931,8 +899,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         setShowAlignPicker,
         setCropTarget,
         navigate: (route: string) => navigation.navigate(route),
-        haptic,
-      }),
+        haptic }),
     [
       selectedLayer,
       cutoutSupported,
@@ -962,6 +929,17 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       haptic,
       navigation,
     ],
+  );
+
+  // ── Context overflow tools ──────────────────────────────────────────
+  // Resolved from the active context's tool group — these are the
+  // selection-specific actions (Effects, Cutout, Front, Back, Duplicate,
+  // Delete, etc.) that belong in the "More" menu ahead of the global
+  // editor tools. Each tool's `onPress` is already wired in
+  // buildLookToolGroups; we wrap it to also dismiss the overflow menu.
+  const contextOverflowTools = useMemo(
+    () => getOverflowTools(activeToolContext, toolGroups),
+    [activeToolContext, toolGroups],
   );
 
   // ── Layout preview rail (autoCompose) ───────────────────────────────
@@ -1021,8 +999,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         height: layer.height,
         rotation: layer.rotation,
         zIndex: layer.zIndex,
-        scale: layer.scale,
-      }, `Apply ${layoutId} layout`, true);
+        scale: layer.scale }, `Apply ${layoutId} layout`, true);
     });
     setAutoLayoutId(layoutId);
   }, [mediaLayers, canvasWidth, canvasHeight, commitLayerTransform]);
@@ -1054,8 +1031,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     height: t.height,
     rotation: t.rotation,
     zIndex: t.zIndex,
-    scale: 1,
-  }), []);
+    scale: 1 }), []);
 
   const handleLayoutSelect = useCallback((id: LayoutId) => {
     const layout = allLayouts.find((l) => l.id === id);
@@ -1223,8 +1199,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 screenHeight={screenHeight}
                 onCommit={(text) => {
                   updateLayer(editingTextLayer.id, {
-                    payload: { ...editingTextLayer.payload, text },
-                  } as Partial<CreatorLayer>, 'Edit text content');
+                    payload: { ...editingTextLayer.payload, text } } as Partial<CreatorLayer>, 'Edit text content');
                 }}
                 onDismiss={() => setEditingTextLayerId(null)}
               />
@@ -1597,7 +1572,11 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         </SlideUpSurface>
       )}
 
-      {/* ── Overflow menu (compact) ───────────────────────────────────── */}
+      {/* ── Overflow menu (context tools + global tools) ───────────────── */}
+      {/* Context-specific overflow tools (Effects, Cutout, Front, Back,
+          Duplicate, Delete, etc.) appear first, followed by a hairline
+          separator, then the global editor tools (Layers, Background,
+          Preview, Drafts, Accessibility, Safe Zone, Settings, Help). */}
       {showOverflow && (
         <View style={[styles.overflowContainer, { top: insets.top + 52 }]}>
           <View style={[styles.overflowMenu, { borderColor: EditorMaterial.plate.hairline }]}>
@@ -1608,6 +1587,23 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
               style={[StyleSheet.absoluteFill, { borderRadius: EditorRadius.plate }]}
             />
             <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay, borderRadius: EditorRadius.plate }]} />
+            {/* ── Context-specific overflow tools ── */}
+            {contextOverflowTools.map((tool) => (
+              <OverflowItem
+                key={tool.id}
+                icon={tool.icon}
+                glyph={tool.glyph}
+                label={tool.label}
+                disabled={tool.disabled}
+                colors={colors}
+                onPress={() => { tool.onPress(); setShowOverflow(false); }}
+              />
+            ))}
+            {/* ── Hairline separator ── */}
+            {contextOverflowTools.length > 0 && (
+              <View style={[styles.overflowSectionDivider, { backgroundColor: colors.border }]} />
+            )}
+            {/* ── Global editor tools ── */}
             <OverflowItem
               icon="layers-outline"
               label="Layers"
@@ -1725,8 +1721,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         layers={(page?.layers ?? []).map((l) => ({
           id: l.id,
           label: layerTypeLabel(l.type, 'look'),
-          zIndex: l.zIndex,
-        })) as ZOrderLayer[]}
+          zIndex: l.zIndex })) as ZOrderLayer[]}
         selectedLayerId={selectedLayerId}
         onClose={() => setShowA11yZOrder(false)}
         onReorder={(layerId, direction) => reorderLayer(layerId, direction)}
@@ -1759,9 +1754,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                   ...cropTarget.payload,
                   mediaUri: newUri,
                   mediaFinalizationId: undefined,
-                  mediaAssetId: undefined,
-                },
-              });
+                  mediaAssetId: undefined } });
             }
             setCropTarget(null);
           }}
@@ -1786,9 +1779,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 payload: {
                   ...cutoutTarget.payload,
                   mediaUri: newUri,
-                  contentFit: 'contain',
-                },
-              });
+                  contentFit: 'contain' } });
             }
             setCutoutTarget(null);
           }}
@@ -1814,10 +1805,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 payload: {
                   ...cutoutPreviewTarget.payload,
                   mediaUri: result.uri,
-                  contentFit: 'contain',
-                },
-                maskRef: result.maskRef?.uri,
-              } as Partial<CreatorLayer>, 'Apply cutout');
+                  contentFit: 'contain' },
+                maskRef: result.maskRef?.uri } as Partial<CreatorLayer>, 'Apply cutout');
             }
             setCutoutPreviewTarget(null);
           }}
@@ -1838,8 +1827,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
               swapLookAsset(editingLayer.id, {
                 mediaUri: layer.payload.mediaUri,
                 mediaType: layer.payload.mediaType,
-                contentFit: layer.payload.contentFit,
-              });
+                contentFit: layer.payload.contentFit });
             } else if (editingLayer.type === 'product' && layer.type === 'product') {
               // Link/change item — update the product layer in place
               updateLayer(editingLayer.id, layer, 'Change item');
@@ -1873,8 +1861,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       pinnedMediaDestination={entryPinnedDestination}
       sourceContentTransform={entrySourceTransform}
       destinationContentTransform={entryPinnedDestination ? {
-        frame: entryPinnedDestination,
-      } : null}
+        frame: entryPinnedDestination } : null}
     />
   );
 }
@@ -1887,8 +1874,7 @@ const LayoutPanel = React.memo(function LayoutPanel({
   title,
   onClose,
   colors,
-  children,
-}: {
+  children }: {
   title: string;
   onClose: () => void;
   colors: ReturnType<typeof useAppTheme>['colors'];
@@ -1967,8 +1953,7 @@ function LookComposerScreenWithProvider(props: {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
-  },
+    backgroundColor: '#0a0a0a' },
   // ── Crash recovery banner (inline notification, not a card) ──
   // Calm but noticeable: soft tinted background + left accent bar gives the
   // banner proper visual hierarchy (accent → text → action) without heavy chrome.
@@ -1980,40 +1965,33 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     backgroundColor: 'rgba(201, 164, 106, 0.08)',
     borderLeftWidth: 3,
-    borderLeftColor: '#C9A46A',
-  },
+    borderLeftColor: '#C9A46A' },
   recoveryText: {
     flex: 1,
     fontSize: 14,
-    marginLeft: 8,
-  },
+    marginLeft: 8 },
   recoveryBtn: {
     backgroundColor: 'rgba(201, 164, 106, 0.15)',
     borderRadius: Radius.sm,
     paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
+    paddingVertical: 6 },
   recoveryBtnText: {
     color: '#C9A46A',
     fontSize: 14,
-    fontWeight: '600',
-  },
+    fontWeight: '600' },
   recoveryDismiss: {
     padding: 8,
-    marginLeft: 4,
-  },
+    marginLeft: 4 },
   // ── Canvas stage ──
   canvasStage: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   // ── Top bar ──
   topBarContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 100,
-  },
+    zIndex: 100 },
   // Gradient scrim behind the top bar so chrome reads over the canvas
   // without a hard edge — "Liquid Glass" translucent separation.
   topBarScrim: {
@@ -2022,88 +2000,73 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 120,
-    zIndex: -1,
-  },
+    zIndex: -1 },
   topBar: {
     height: 56,
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   topBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   topBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   topCenter: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   titleText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    ...GlyphShadow.title,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    ...GlyphShadow.title },
   doneText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    ...GlyphShadow.glyph,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    ...GlyphShadow.glyph },
   topRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   topLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   topCenterGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   topRightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   publishBtn: {
     borderRadius: RadiusRoleValue.pillAvatar,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   publishBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   unsavedDot: {
     width: 7,
     height: 7,
     borderRadius: RadiusRoleValue.pillAvatar,
     marginLeft: -Space.xs,
-    marginTop: Space.xs + 2,
-  },
+    marginTop: Space.xs + 2 },
   // ── Canvas loading overlay ──
   canvasLoadingOverlay: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 50,
-  },
+    zIndex: 50 },
   canvasLoadingPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2113,28 +2076,23 @@ const styles = StyleSheet.create({
     borderRadius: EditorRadius.plate,
     borderWidth: Stroke.standard,
     borderColor: EditorMaterial.plate.hairline,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   canvasLoadingText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   // ── Empty canvas hint ──
   canvasEmptyHint: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 40,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   canvasEmptyCta: {
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   canvasEmptyHintTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   // ── AI Effects button (inline button, not a card) ──
   // Premium button: subtle tinted fill + refined hairline border + radius.
   aiEffectsBtn: {
@@ -2148,21 +2106,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(201, 164, 106, 0.08)',
     borderWidth: Stroke.standard,
     borderColor: 'rgba(201, 164, 106, 0.2)',
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   aiEffectsBtnText: {
     flex: 1,
     fontSize: FontSize.body,
-    fontFamily: FontFamily.semibold,
-  },
+    fontFamily: FontFamily.semibold },
   // ── Bottom surface container (shared by all surfaces) ──
   bottomBarContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 100,
-  },
+    zIndex: 100 },
   // Gradient scrim above the bottom bar content gives the tools visual
   // separation from the canvas without a hard border.
   bottomBarScrim: {
@@ -2171,52 +2126,46 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 80,
-    zIndex: -1,
-  },
+    zIndex: -1 },
   bottomBar: {
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   toolRail: {
-    flex: 1,
-  },
+    flex: 1 },
   // ── Layout panel ──
   layoutPanel: {
-    maxHeight: '70%',
-  },
+    maxHeight: '70%' },
   layoutPanelContent: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   layoutEmptyText: {
     fontFamily: FontFamily.regular,
     fontSize: FontSize.body,
     textAlign: 'center',
     paddingVertical: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   // ── Effects surface ──
   effectsSurface: {
     borderTopLeftRadius: EditorRadius.sheet,
     borderTopRightRadius: EditorRadius.sheet,
     maxHeight: '85%',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   // ── Overflow menu ──
   overflowContainer: {
     position: 'absolute',
     right: Space.sm,
-    zIndex: 120,
-  },
+    zIndex: 120 },
   overflowMenu: {
     borderRadius: EditorRadius.plate,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
     minWidth: 180,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,
-    zIndex: -1,
-  },
+    zIndex: -1 },
+  overflowSectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: Space.xs,
+    marginHorizontal: Space.sm },
   // ── Effects surface (shared header styles) ──
   effectsSheetHeader: {
     flexDirection: 'row',
@@ -2224,64 +2173,52 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   effectsSheetTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   effectsSheetDone: {
     minWidth: 44,
     minHeight: 44,
     justifyContent: 'center',
-    alignItems: 'flex-end',
-  },
+    alignItems: 'flex-end' },
   effectsSheetDoneText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   effectsSheetScroll: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   effectsSectionLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     paddingHorizontal: Space.md,
     marginBottom: Space.xs,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   effectsAdjustWrap: {
     marginTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   effectsAutoRow: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   // ── Multi-select ──
   selectionCountBadge: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   selectionCountText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   canvasDimOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.25)',
-    zIndex: 35,
-  },
+    zIndex: 35 },
   // ── Align picker ──
   alignPickerContainer: {
     position: 'absolute',
     left: Space.sm,
     right: Space.sm,
     zIndex: 101,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   alignPicker: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2289,8 +2226,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   alignPickerItem: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -2298,10 +2234,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     minWidth: 48,
     minHeight: 48,
-    gap: 2,
-  },
+    gap: 2 },
   alignPickerLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-  },
-});
+    fontSize: TypographyV2.meta.size } });

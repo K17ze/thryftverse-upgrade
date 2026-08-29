@@ -9,8 +9,7 @@ import {
   Image,
   ScrollView,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +17,8 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
@@ -31,8 +31,7 @@ import { makeStableId } from '../utils/createStableId';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import {
   createListingOnApi,
-  createListingImageOnApi,
-} from '../services/listingsApi';
+  createListingImageOnApi } from '../services/listingsApi';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { consumeEnhancementResult } from '../services/enhancementResultHandoff';
 import { SmartSellCard } from '../components/sell/SmartSellCard';
@@ -41,16 +40,13 @@ import { ListingPreviewCard } from '../components/sell/ListingPreviewCard';
 import { SustainabilityTags } from '../components/sell/SustainabilityTags';
 import {
   fetchSmartSellPolicy,
-  type SmartSellPolicy,
-} from '../services/smartSellApi';
+  type SmartSellPolicy } from '../services/smartSellApi';
 import {
   type FieldSuggestion,
-  type ListingField,
-} from '../services/aiListingApi';
+  type ListingField } from '../services/aiListingApi';
 import {
   scoreListing,
-  type ListingQualityScore,
-} from '../services/listingQualityApi';
+  type ListingQualityScore } from '../services/listingQualityApi';
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
@@ -112,8 +108,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     analyze,
     clearError,
     reset: resetSuggestion,
-    getField,
-  } = useAIListingSuggestion(photoUris);
+    getField } = useAIListingSuggestion(photoUris);
 
   // -- Consume enhancement result when returning from AIPhotoEnhancement ----
   // The enhancement modal writes the result to a module-level handoff store
@@ -162,14 +157,12 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         allowsMultipleSelection: true,
         selectionLimit: 8,
         quality: 0.85,
-        exif: false,
-      });
+        exif: false });
       if (result.canceled) return;
       const assets = result.assets.map((a) => ({
         uri: a.uri,
         width: a.width,
-        height: a.height,
-      }));
+        height: a.height }));
       setPhotos((prev) => [...prev, ...assets].slice(0, 8));
     } catch {
       showError('Pick failed', 'Could not pick photos. Try again.');
@@ -188,8 +181,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.85,
         allowsEditing: false,
-        exif: false,
-      });
+        exif: false });
       if (result.canceled) return;
       const asset = result.assets[0];
       if (!asset) return;
@@ -350,8 +342,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         mimeType: 'image/jpeg',
         kind: 'image' as const,
         width: p.width,
-        height: p.height,
-      }));
+        height: p.height }));
       queue.addAssets(assets);
       await queue.run();
       const queueItems = queue.getItems();
@@ -382,8 +373,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         shippingMethod: 'standard',
         shippingPayer: 'buyer',
         materialComposition: materialComposition.trim() || undefined,
-        weightKg: weightKg ? parseFloat(weightKg) : undefined,
-      });
+        weightKg: weightKg ? parseFloat(weightKg) : undefined });
 
       for (let i = 0; i < uploadedUrls.length; i++) {
         const verifiedUpload = queueItems.find(
@@ -397,8 +387,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
           sortOrder: i,
           mediaWidth: verifiedUpload.asset.width,
           mediaHeight: verifiedUpload.asset.height,
-          finalizationId: verifiedUpload.finalizationId!,
-        });
+          finalizationId: verifiedUpload.finalizationId! });
       }
 
       queue.reset();
@@ -416,8 +405,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         price: numericPrice,
         categoryId: category,
         photoUri: coverImage,
-        smartSellEnabled: smartSellPolicy.enabled,
-      });
+        smartSellEnabled: smartSellPolicy.enabled });
     } catch (e: unknown) {
       const isNetwork =
         isOffline ||
@@ -446,8 +434,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         | import('../services/listingsApi').ListingCondition
         | undefined,
       brand: brand || undefined,
-      shippingMethod: 'standard',
-    });
+      shippingMethod: 'standard' });
   }, [photoUris, title, description, price, category, condition, brand]);
 
   const numericPriceForPreview = Number(sanitizeDecimalInput(price)) || 0;
@@ -486,8 +473,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         onBack={() => navigation.goBack()}
         style={{
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        }}
+          borderBottomColor: colors.border }}
       />
 
       <KeyboardAvoidingView
@@ -930,8 +916,7 @@ function SuggestionRow({ suggestion, onAccept, onDismiss, colors, styles, compac
 function FieldLabel({
   label,
   colors,
-  styles,
-}: {
+  styles }: {
   label: string;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -964,8 +949,7 @@ function PhotoCaptureSection({
   onRemovePhoto,
   onEnhancePhoto,
   colors,
-  styles,
-}: PhotoCaptureSectionProps) {
+  styles }: PhotoCaptureSectionProps) {
   const thumbSize = (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3;
 
   return (
@@ -1038,8 +1022,7 @@ function PhotoCaptureSection({
 // ===========================================================================
 
 function ListingFormSkeleton({
-  styles,
-}: {
+  styles }: {
   styles: ReturnType<typeof createStyles>;
 }) {
   return (
@@ -1049,10 +1032,10 @@ function ListingFormSkeleton({
       accessibilityState={{ busy: true }}
     >
       <View style={styles.skeletonFieldGroup}>
-        <PremiumSkeletonTile width="30%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
+        <PremiumSkeletonTile width="30%" height={TypographyV2.meta.size + 2} borderRadius={Radius.sm} />
         <PremiumSkeletonTile
           width="100%"
-          height={Type.body.size + Space.sm * 2 + 4}
+          height={TypographyV2.body.size + Space.sm * 2 + 4}
           borderRadius={Radius.md}
           style={styles.skeletonFieldBlock}
         />
@@ -1060,19 +1043,19 @@ function ListingFormSkeleton({
 
       <View style={[styles.fieldRow, styles.skeletonFieldGroup]}>
         <View style={{ flex: 1, marginRight: Space.sm }}>
-          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={TypographyV2.meta.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
-            height={Type.body.size + Space.sm * 2 + 4}
+            height={TypographyV2.body.size + Space.sm * 2 + 4}
             borderRadius={Radius.md}
             style={styles.skeletonFieldBlock}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={TypographyV2.meta.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
-            height={Type.body.size + Space.sm * 2 + 4}
+            height={TypographyV2.body.size + Space.sm * 2 + 4}
             borderRadius={Radius.md}
             style={styles.skeletonFieldBlock}
           />
@@ -1081,19 +1064,19 @@ function ListingFormSkeleton({
 
       <View style={[styles.fieldRow, styles.skeletonFieldGroup]}>
         <View style={{ flex: 1, marginRight: Space.sm }}>
-          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={TypographyV2.meta.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
-            height={Type.body.size + Space.sm * 2 + 4}
+            height={TypographyV2.body.size + Space.sm * 2 + 4}
             borderRadius={Radius.md}
             style={styles.skeletonFieldBlock}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={TypographyV2.meta.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
-            height={Type.body.size + Space.sm * 2 + 4}
+            height={TypographyV2.body.size + Space.sm * 2 + 4}
             borderRadius={Radius.md}
             style={styles.skeletonFieldBlock}
           />
@@ -1109,8 +1092,7 @@ function ListingFormSkeleton({
 
 function EmptyState({
   colors,
-  styles,
-}: {
+  styles }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
@@ -1197,8 +1179,7 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
           {
             backgroundColor: colors.background,
             paddingBottom: insets.bottom + Space.md,
-            borderTopColor: colors.border,
-          },
+            borderTopColor: colors.border },
         ]}
         onPress={(e) => e.stopPropagation()}
         accessibilityRole="button"
@@ -1246,45 +1227,37 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: {
-      flex: 1,
-    },
+      flex: 1 },
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
     // Photo capture
     photoSection: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     photoGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       marginHorizontal: -Space.sm / 2,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     photoThumb: {
       margin: Space.sm / 2,
       borderRadius: Radius.md,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     photoImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     coverBadge: {
       position: 'absolute',
       top: Space.xs,
       left: Space.xs,
       paddingHorizontal: Space.xs,
       paddingVertical: Space.xs,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     coverBadgeText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '700',
-      letterSpacing: LetterSpacing.wide + 0.18,
-    },
+      letterSpacing: LetterSpacing.wide + 0.18 },
     photoRemoveBtn: {
       position: 'absolute',
       top: Space.xs,
@@ -1292,8 +1265,7 @@ function createStyles(colors: ThemeColors) {
       width: Control.hit - Space.lg,
       height: Control.hit - Space.lg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     photoEnhanceBtn: {
       position: 'absolute',
       bottom: Space.xs,
@@ -1303,17 +1275,14 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     photoEnhanceText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '700',
-      letterSpacing: LetterSpacing.wide + 0.08,
-    },
+      letterSpacing: LetterSpacing.wide + 0.08 },
     captureRow: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     captureBtn: {
       flex: 1,
       flexDirection: 'row',
@@ -1323,42 +1292,36 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm + 2,
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     captureBtnText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+      fontWeight: '600' },
     // Form fields
     fieldLabel: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '500',
       marginBottom: Space.xs,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     fieldInput: {
       borderWidth: Stroke.standard,
       borderRadius: Radius.md,
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm + 2,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.body.fontFamily,
-      minHeight: Control.hit + Space.sm,
-    },
+      minHeight: Control.hit + Space.sm },
     fieldTextarea: {
       borderWidth: Stroke.standard,
       borderRadius: Radius.md,
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm + 2,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.body.fontFamily,
-      minHeight: Space.xxl + Space.xxl + Space.sm,
-    },
+      minHeight: Space.xxl + Space.xxl + Space.sm },
     fieldRow: {
-      flexDirection: 'row',
-    },
+      flexDirection: 'row' },
     pickerField: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1367,31 +1330,26 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm + 2,
-      minHeight: Control.hit + Space.sm,
-    },
+      minHeight: Control.hit + Space.sm },
     pickerValue: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.body.fontFamily,
-      flex: 1,
-    },
+      flex: 1 },
     priceRangeHint: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       marginTop: Space.xs,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     attentionHint: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       marginTop: Space.xs,
-      lineHeight: Type.meta.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     impactHelperText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       marginTop: Space.xs,
-      lineHeight: Type.meta.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     // Suggestion row — inline, restrained
     suggestionRow: {
       flexDirection: 'row',
@@ -1401,52 +1359,42 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.sm + 2,
       borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     suggestionRowCompact: {
-      paddingVertical: Space.xs + 2,
-    },
+      paddingVertical: Space.xs + 2 },
     suggestionContent: {
-      flex: 1,
-    },
+      flex: 1 },
     suggestionCandidate: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.body.fontFamily,
-      lineHeight: Type.body.lineHeight,
-    },
+      lineHeight: TypographyV2.body.lineHeight },
     suggestionEvidence: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      marginTop: Space.xxs,
-    },
+      marginTop: Space.xxs },
     suggestionActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     suggestionAcceptBtn: {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.sm,
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     suggestionAcceptText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+      fontWeight: '600' },
     // Smart Sell
     smartSellWrap: {
       marginTop: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     // Tags
     tagsWrap: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.xs,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     tagChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1454,13 +1402,11 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
-      borderWidth: Stroke.hairline,
-    },
+      borderWidth: Stroke.hairline },
     tagText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+      fontWeight: '600' },
     tagInputWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1468,137 +1414,113 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
-      borderWidth: Stroke.hairline,
-    },
+      borderWidth: Stroke.hairline },
     tagInput: {
       minWidth: Space.xxl + Space.lg - 2,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      padding: 0,
-    },
+      padding: 0 },
     // Section labels
     sectionLabelWrap: {
       marginTop: Space.md,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     sectionLabel: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '600',
       letterSpacing: LetterSpacing.wide + 0.28,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
     // Skeleton
     skeletonFieldGroup: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     skeletonFieldBlock: {
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     // Empty state
     emptyState: {
       alignItems: 'center',
       paddingVertical: Space.xl,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     emptyIcon: {
       width: Space.xxl + Space.lg,
       height: Space.xxl + Space.lg,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     emptyTitle: {
-      fontSize: Type.subtitle.size,
+      fontSize: TypographyV2.sectionTitle.size,
       fontFamily: TypeStyles.title.fontFamily,
       fontWeight: '700',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     emptyDesc: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.body.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
-      lineHeight: Type.body.lineHeight,
-    },
+      lineHeight: TypographyV2.body.lineHeight },
     // Error banner
     errorBanner: {
       borderRadius: Radius.md,
       borderWidth: Stroke.hairline,
       padding: Space.sm + 2,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     errorHeader: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     errorText: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypeStyles.body.fontFamily },
     errorRetryBtn: {
       alignSelf: 'flex-start',
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
       borderRadius: Radius.sm,
       borderWidth: Stroke.standard,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     errorRetryText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+      fontWeight: '600' },
     // Footer
     footer: {
       borderTopWidth: StyleSheet.hairlineWidth,
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.md,
-    },
-  });
+      paddingBottom: Space.md } });
 }
 
 const pickerStyles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingTop: Space.sm,
     paddingHorizontal: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   handle: {
     width: Space.xxl + Space.sm,
     height: Stroke.standard * 4,
     borderRadius: Radius.sm,
     backgroundColor: 'transparent',
     alignSelf: 'center',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   title: {
-    fontSize: Type.subtitle.size,
+    fontSize: TypographyV2.sectionTitle.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     fontWeight: '600',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   rowText: {
-    fontSize: Type.body.size,
-    fontFamily: TypeStyles.body.fontFamily,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypeStyles.body.fontFamily } });

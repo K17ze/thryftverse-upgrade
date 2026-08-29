@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type, Control } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type ListingMode = 'sell_now' | 'co_own' | 'auction';
 
@@ -109,8 +110,7 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     // ── Compact format row ──
     // Per audit 04: progressive disclosure, not three equal tabs.
     // Flat inline row — no surface fill, no border (per §4 surface budget).
@@ -120,52 +120,42 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
-      minHeight: Control.hit + Space.sm,
-    },
+      minHeight: Control.hit + Space.sm },
     formatRowLeft: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm + 2,
-      flexShrink: 1,
-    },
+      flexShrink: 1 },
     formatIcon: {
-      flexShrink: 0,
-    },
+      flexShrink: 0 },
     formatTextWrap: {
       flexShrink: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     formatLabel: {
-      fontSize: Type.label.size,
-      lineHeight: Type.label.lineHeight,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      fontFamily: TypographyV2.label.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
-    },
+      letterSpacing: TypographyV2.label.letterSpacing },
     formatValue: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     formatRowRight: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      flexShrink: 0,
-    },
+      flexShrink: 0 },
     formatChange: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.brand },
     modeDescription: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       marginTop: Space.xs,
-      paddingHorizontal: Space.xs,
-    },
-  });
+      paddingHorizontal: Space.xs } });
 }

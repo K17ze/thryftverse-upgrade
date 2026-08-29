@@ -16,7 +16,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Type, Typography, Radius, Stroke } from '../theme/designTokens';
+import { Space, Typography, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
 import { haptics } from '../utils/haptics';
@@ -104,8 +105,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   filterChip: {
     paddingVertical: Space.sm - 2,
     paddingHorizontal: Space.md,
@@ -113,15 +113,11 @@ const styles = StyleSheet.create({
     borderWidth: Stroke.standard,
     borderColor: 'transparent',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   filterChipText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   listWrap: {
-    flex: 1,
-  },
-});
+    flex: 1 } });

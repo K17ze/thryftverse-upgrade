@@ -2,15 +2,15 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Space, Type, TypeStyles, Radius } from '../../theme/designTokens';
+import { Space, TypeStyles, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Meta } from '../ui/Text';
 
 export function ChatInfoSection({
   title,
   children,
-  danger,
-}: {
+  danger }: {
   title: string;
   children: React.ReactNode;
   danger?: boolean;
@@ -43,8 +43,7 @@ export function ChatInfoRow({
   danger,
   showChevron,
   isLast,
-  trailing,
-}: {
+  trailing }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   subtitle?: string;
@@ -108,43 +107,34 @@ export function ChatInfoRow({
 
 const styles = StyleSheet.create({
   section: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   sectionLabel: {
     marginLeft: Space.xs,
-    fontSize: Type.meta.size,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   row: {
     minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.sm + 2,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   iconTarget: {
     width: 32,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   copy: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   label: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily },
   subtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: TypeStyles.body.fontFamily,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypeStyles.body.fontFamily },
   detail: {
     maxWidth: '38%',
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
-    textAlign: 'right',
-  },
-});
+    textAlign: 'right' } });

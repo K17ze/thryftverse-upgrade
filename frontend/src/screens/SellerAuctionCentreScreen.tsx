@@ -7,8 +7,7 @@ import {
   StatusBar,
   Text,
   ScrollView,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList, type ListRenderItem, type FlashListRef } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
@@ -26,8 +25,7 @@ import {
   resolveTimeLabel,
   resolveUrgency,
   buildAuctionAccessibilityLabel,
-  type AuctionHomeItem,
-} from '../utils/auctionHomeLogic';
+  type AuctionHomeItem } from '../utils/auctionHomeLogic';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { CachedImage } from '../components/CachedImage';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -35,12 +33,12 @@ import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { RetryState } from '../components/RetryState';
-import { Space, Radius, Typography, Type, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
 
   listAuctions,
-  type MarketAuction,
-} from '../services/marketApi';
+  type MarketAuction } from '../services/marketApi';
 import { t } from '../i18n';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -85,8 +83,7 @@ function toViewModel(api: MarketAuction): AuctionHomeItem {
     cancelledAt: api.cancelledAt ?? null,
     settledAt: api.settledAt ?? null,
     lifecycle: api.lifecycle,
-    terminalReason: api.terminalReason,
-  };
+    terminalReason: api.terminalReason };
 }
 
 interface SellerStats {
@@ -124,8 +121,7 @@ const TERMINAL_REASON_MAP: Record<string, string> = {
   payment_failure: 'Payment was not completed',
   admin_cancelled: 'Cancelled after review',
   duplicate_listing: 'Cancelled after review',
-  prohibited_item: 'Cancelled after review',
-};
+  prohibited_item: 'Cancelled after review' };
 
 function mapTerminalReason(reason: string | null): string {
   if (!reason) return 'Cancelled';
@@ -168,8 +164,7 @@ function resolveStatePresentation(
       leadingColor: colors.textMuted,
       actionLabel: 'View details',
       showLiveDot: false,
-      useDangerState: false,
-    };
+      useDangerState: false };
   }
   if (isSold) {
     return {
@@ -179,8 +174,7 @@ function resolveStatePresentation(
       leadingColor: colors.textSecondary,
       actionLabel: 'View sale',
       showLiveDot: false,
-      useDangerState: false,
-    };
+      useDangerState: false };
   }
   if (isUnsold) {
     return {
@@ -190,8 +184,7 @@ function resolveStatePresentation(
       leadingColor: colors.textMuted,
       actionLabel: 'Review result',
       showLiveDot: false,
-      useDangerState: false,
-    };
+      useDangerState: false };
   }
   if (isLive) {
     const finalUrgency = urgency === 'finalMinutes';
@@ -202,8 +195,7 @@ function resolveStatePresentation(
       leadingColor: finalUrgency ? colors.danger : colors.textSecondary,
       actionLabel: 'View bids',
       showLiveDot: true,
-      useDangerState: finalUrgency,
-    };
+      useDangerState: finalUrgency };
   }
   if (isScheduled) {
     return {
@@ -213,8 +205,7 @@ function resolveStatePresentation(
       leadingColor: colors.textSecondary,
       actionLabel: 'View schedule',
       showLiveDot: false,
-      useDangerState: false,
-    };
+      useDangerState: false };
   }
   return {
     stateLabel: 'Ended',
@@ -223,8 +214,7 @@ function resolveStatePresentation(
     leadingColor: colors.textMuted,
     actionLabel: 'Review result',
     showLiveDot: false,
-    useDangerState: false,
-  };
+    useDangerState: false };
 }
 
 // ── Inventory row — horizontal, operations-studio layout ──
@@ -234,8 +224,7 @@ function SellerAuctionRow({
   onPress,
   formatFromFiat,
   fxRates,
-  currencyCode,
-}: {
+  currencyCode }: {
   item: AuctionHomeItem;
   clockMs: number;
   onPress: () => void;
@@ -341,8 +330,7 @@ function SellerSummary({
   stats,
   formatFromFiat,
   fxRates,
-  currencyCode,
-}: {
+  currencyCode }: {
   stats: SellerStats;
   formatFromFiat: (amount: number, currency?: any, opts?: any) => string;
   fxRates: any;
@@ -545,8 +533,7 @@ export default function SellerAuctionCentreScreen() {
     if (layout && tabScrollRef.current) {
       tabScrollRef.current.scrollTo({
         x: Math.max(0, layout.x - 40),
-        animated: false,
-      });
+        animated: false });
     }
   }, [activeTab]);
 
@@ -595,25 +582,19 @@ export default function SellerAuctionCentreScreen() {
       scheduled: {
         title: 'No auctions scheduled',
         message: 'Create an auction when you are ready to sell.',
-        cta: 'Create Auction',
-      },
+        cta: 'Create Auction' },
       live: {
         title: 'Nothing live right now',
-        message: 'Scheduled auctions will appear here when they begin.',
-      },
+        message: 'Scheduled auctions will appear here when they begin.' },
       sold: {
         title: 'No completed sales yet',
-        message: 'Auctions sold with bids will appear here.',
-      },
+        message: 'Auctions sold with bids will appear here.' },
       unsold: {
         title: 'No unsold auctions',
-        message: 'Auctions ending without bids will appear here.',
-      },
+        message: 'Auctions ending without bids will appear here.' },
       cancelled: {
         title: 'No cancelled auctions',
-        message: 'Cancelled auctions will remain available here.',
-      },
-    };
+        message: 'Cancelled auctions will remain available here.' } };
     const cfg = emptyConfig[activeTab];
     return (
       <View style={styles.inlineStateWrap}>
@@ -661,8 +642,7 @@ export default function SellerAuctionCentreScreen() {
               onLayout={(e) => {
                 tabLayoutsRef.current[tab.key] = {
                   x: e.nativeEvent.layout.x,
-                  width: e.nativeEvent.layout.width,
-                };
+                  width: e.nativeEvent.layout.width };
               }}
               accessibilityRole="tab"
               accessibilityLabel={tab.label}
@@ -873,161 +853,133 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   // ── Header ──
   header: {
     paddingBottom: Space.sm,
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   headerIconBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   headerIconPressed: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   headerTitleWrap: {
     flex: 1,
-    marginLeft: Space.xs,
-  },
+    marginLeft: Space.xs },
   headerTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.priceHero.size,
-    lineHeight: Type.priceHero.lineHeight,
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
     color: colors.textPrimary,
-    letterSpacing: Type.priceHero.letterSpacing,
-  },
+    letterSpacing: TypographyV2.priceHero.letterSpacing },
   headerSubtitle: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
     marginTop: Space.xs / 4,
-    letterSpacing: -0.1,
-  },
+    letterSpacing: -0.1 },
   // ── Seller summary — one integrated surface ──
   summary: {
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   summaryContext: {
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   summaryContextText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     color: colors.textMuted,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   summaryPrimary: {
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   summaryPrimaryValue: {
-    fontSize: Type.display.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.display.letterSpacing,
+    fontSize: TypographyV2.display.size,
+    fontFamily: TypographyV2.display.fontFamily,
+    letterSpacing: TypographyV2.display.letterSpacing,
     fontVariant: ['tabular-nums'],
-    lineHeight: Type.display.lineHeight,
-  },
+    lineHeight: TypographyV2.display.lineHeight },
   summaryPrimaryLabel: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
     marginTop: Space.xs / 2 + 1,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
   summaryPrimaryDivider: {
     width: StyleSheet.hairlineWidth,
     height: Space.xl + Space.xl + 4,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
   summarySecondary: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   summarySecondaryItem: {
     alignItems: 'center',
-    flex: 1,
-  },
+    flex: 1 },
   summarySecondaryValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.priceList.letterSpacing,
-  },
+    letterSpacing: TypographyV2.priceList.letterSpacing },
   summarySecondaryLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     color: colors.textMuted,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs / 2 + 1,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // ── Tab bar — text-first, underline indicator, sticky container ──
   tabBarContainer: {
     backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   tabBar: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     gap: Space.md,
     height: Control.hit,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   tab: {
     height: Control.hit,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
     paddingHorizontal: Space.xs / 2,
-    position: 'relative',
-  },
+    position: 'relative' },
   tabPressed: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   tabText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   tabTextActive: {
     color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   tabCount: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   tabCountActive: {
-    color: colors.textSecondary,
-  },
+    color: colors.textSecondary },
   tabIndicator: {
     position: 'absolute',
     bottom: -Stroke.hairline,
@@ -1035,41 +987,34 @@ function createStyles(colors: ThemeColors) {
     right: Space.xs / 2,
     height: Stroke.emphasis,
     backgroundColor: colors.textPrimary,
-    borderRadius: Stroke.hairline,
-  },
+    borderRadius: Stroke.hairline },
   // ── List ──
   listContent: {
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   // ── Inventory row — horizontal, operations studio ──
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.md,
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   rowImageWrap: {
     position: 'relative',
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   rowImageContainer: {
     width: ROW_IMAGE_SIZE,
-    height: ROW_IMAGE_SIZE,
-  },
+    height: ROW_IMAGE_SIZE },
   rowImage: {
     width: ROW_IMAGE_SIZE,
-    height: ROW_IMAGE_SIZE,
-  },
+    height: ROW_IMAGE_SIZE },
   rowImagePlaceholder: {
     width: ROW_IMAGE_SIZE,
     height: ROW_IMAGE_SIZE,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   rowLiveDot: {
     position: 'absolute',
     top: Space.xs + 2,
@@ -1079,167 +1024,140 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.sm,
     backgroundColor: colors.danger,
     borderWidth: Stroke.emphasis,
-    borderColor: colors.background,
-  },
+    borderColor: colors.background },
   rowBody: {
     flex: 1,
     minHeight: ROW_IMAGE_SIZE,
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   rowIdentity: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   rowTitle: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
     color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   rowStateText: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.label.letterSpacing,
-    paddingTop: Space.xs / 2 + 1,
-  },
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    paddingTop: Space.xs / 2 + 1 },
   rowBrand: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs / 2 },
   rowHairline: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginVertical: Space.sm - 2,
-  },
+    marginVertical: Space.sm - 2 },
   rowOperational: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   rowValueCol: {
     flex: 1,
-    gap: Space.xs / 4,
-  },
+    gap: Space.xs / 4 },
   rowIze: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.priceList.letterSpacing,
-  },
+    letterSpacing: TypographyV2.priceList.letterSpacing },
   rowValuePrefix: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
     color: colors.textSecondary,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
   rowLocal: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   rowActionCol: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 4,
-    paddingBottom: Space.xs / 4,
-  },
+    paddingBottom: Space.xs / 4 },
   rowActionLabel: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.1 },
   rowActionChevron: {
-    marginTop: Space.xs / 4,
-  },
+    marginTop: Space.xs / 4 },
   rowLeadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   rowLeading: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   rowBidCount: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     color: colors.textMuted,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   rowSeparator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginHorizontal: Space.md,
-  },
+    marginHorizontal: Space.md },
   // ── Loading ──
   loadingWrap: {
     paddingTop: Space.md,
-    gap: Space.md,
-  },
+    gap: Space.md },
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.md,
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   loadingBody: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   loadingTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   loadingHairline: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginVertical: Space.xs,
-  },
+    marginVertical: Space.xs },
   // ── Inline empty / error states ──
   inlineStateWrap: {
     paddingTop: Space.xl * 2,
     paddingHorizontal: Space.md,
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   inlineStateTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: -0.3,
-  },
+    letterSpacing: -0.3 },
   inlineStateMessage: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.body.fontFamily,
     marginTop: Space.xs + 2,
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   inlineCtaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1250,24 +1168,19 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.brand,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   inlineCtaPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   inlineCtaText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand },
   inlineCtaIcon: {
-    marginTop: Space.xs / 4,
-  },
+    marginTop: Space.xs / 4 },
   // ── Load more ──
   loadMoreWrap: {
     paddingVertical: Space.lg,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   loadMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1277,13 +1190,11 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
+    backgroundColor: colors.surface },
   loadMoreText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.brand,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   // ── Floating CTA ──
   floatingCta: {
     position: 'absolute',
@@ -1294,12 +1205,7 @@ function createStyles(colors: ThemeColors) {
         shadowColor: colors.shadow,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.12,
-        shadowRadius: 12,
-      },
+        shadowRadius: 12 },
       android: {
-        elevation: 4,
-      },
-    }),
-  },
-  });
+        elevation: 4 } }) } });
 }

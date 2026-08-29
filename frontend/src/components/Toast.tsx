@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useToast, ToastType } from '../context/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Typography, Radius, Space, Type, Elevation } from '../theme/designTokens';
+import { Typography, Radius, Space, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, Easing } from 'react-native-reanimated';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -15,8 +16,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import {
   setSoftAskPresenter,
   SOFT_ASK_COPY,
-  type PushPermissionContext,
-} from '../lib/pushPermission';
+  type PushPermissionContext } from '../lib/pushPermission';
 
 // Info toast uses the antiqueGold accent — a ThryftVerse signature color.
 // Success and error use theme tokens.
@@ -24,8 +24,7 @@ function getTypeConfig(colors: ReturnType<typeof useAppTheme>['colors']): Record
   return {
     success: { borderColor: colors.success, icon: 'checkmark-circle', iconColor: colors.success },
     error: { borderColor: colors.danger, icon: 'alert-circle', iconColor: colors.danger },
-    info: { borderColor: colors.antiqueGold, icon: 'information-circle', iconColor: colors.antiqueGold },
-  };
+    info: { borderColor: colors.antiqueGold, icon: 'information-circle', iconColor: colors.antiqueGold } };
 }
 
 interface ToastItemProps {
@@ -66,8 +65,7 @@ function ToastItem({ id, message, type }: ToastItemProps) {
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   return (
     <Reanimated.View style={[styles.toast, { borderLeftColor: config.borderColor }, animStyle]}>
@@ -109,8 +107,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     left: 16,
     right: 16,
     zIndex: 9999,
-    gap: 8,
-  },
+    gap: 8 },
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -121,8 +118,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingVertical: 14,
     borderLeftWidth: 4,
     gap: 12,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   message: {
     flex: 1,
     fontSize: Typography.size.body,
@@ -130,12 +126,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     // Warm off-white text on always-dark toast — intentional
     color: colors.textPrimary,
     letterSpacing: Typography.tracking.normal,
-    lineHeight: 19,
-  },
+    lineHeight: 19 },
   closeBtn: {
-    padding: 2,
-  },
-});
+    padding: 2 } });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Push permission soft-ask pre-prompt (flagship research §M4 / §2)
@@ -242,31 +235,24 @@ const softAskStyles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   icon: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    textAlign: 'center' },
   body: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight,
     textAlign: 'center',
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   actions: {
     width: '100%',
     marginTop: Space.md,
     gap: Space.sm,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   allowBtn: {
-    width: '100%',
-  },
-});
+    width: '100%' } });

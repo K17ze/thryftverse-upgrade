@@ -4,11 +4,11 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -33,8 +33,7 @@ export function ProductDetailHeader({
   onBack,
   onShare,
   isFav,
-  onToggleFav,
-}: ProductDetailHeaderProps) {
+  onToggleFav }: ProductDetailHeaderProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -136,52 +135,41 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    zIndex: 50,
-  },
+    zIndex: 50 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   iconBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   titleSection: {
-    flex: 1,
-  },
+    flex: 1 },
   brand: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: 0.3,
-  },
+    letterSpacing: 0.3 },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   priceRow: {
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   price: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary } });
 }

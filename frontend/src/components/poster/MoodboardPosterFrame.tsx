@@ -10,7 +10,8 @@ import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { CachedImage } from '../CachedImage';
 import { fetchMoodboardDetail, getThemeById, type Moodboard } from '../../services/moodboardApi';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface MoodboardPosterFrameProps {
   moodboardId: string;
@@ -50,26 +51,22 @@ export function MoodboardPosterFrame({ moodboardId, width, height }: MoodboardPo
         center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
         errorText: {
           color: colors.textSecondary,
-          fontSize: Type.body.size,
-          lineHeight: Type.body.lineHeight,
-        },
+          fontSize: TypographyV2.body.size,
+          lineHeight: TypographyV2.body.lineHeight },
         titleOverlay: {
           position: 'absolute',
           top: Space.sm,
           left: Space.sm,
           padding: Space.sm,
           backgroundColor: 'rgba(0,0,0,0.4)',
-          borderRadius: Radius.sm,
-        },
+          borderRadius: Radius.sm },
         titleText: {
           color: '#FFFFFF',
-          fontSize: Type.meta.size,
-          lineHeight: Type.meta.lineHeight,
-          fontWeight: Type.meta.weight as '400' | '500' | '600' | '700',
-          letterSpacing: Type.meta.letterSpacing,
-          maxWidth: width - Space.sm * 4,
-        },
-      }),
+          fontSize: TypographyV2.meta.size,
+          lineHeight: TypographyV2.meta.lineHeight,
+          fontWeight: TypographyV2.meta.weight as '400' | '500' | '600' | '700',
+          letterSpacing: TypographyV2.meta.letterSpacing,
+          maxWidth: width - Space.sm * 4 } }),
     [width, height, colors],
   );
 
@@ -90,8 +87,7 @@ export function MoodboardPosterFrame({ moodboardId, width, height }: MoodboardPo
             width: size,
             height: size,
             transform: [{ rotate: `${item.position.rotation}deg` }],
-            borderRadius: Radius.md,
-          }}
+            borderRadius: Radius.md }}
         />
       );
     });

@@ -3,17 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
+import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useVoicePlayer } from '../../hooks/chat/useVoicePlayer';
 import {
   requestVoicePlaybackUrlOnApi,
-  fetchVoiceMessageDetailsOnApi,
-} from '../../services/chatApi';
+  fetchVoiceMessageDetailsOnApi } from '../../services/chatApi';
 
 export interface VoiceMessageBubbleProps {
   messageId: string;
@@ -60,8 +59,7 @@ export function VoiceMessageBubble({
   container,
   codec,
   moderationState = 'pending',
-  accessibilityLabel,
-}: VoiceMessageBubbleProps) {
+  accessibilityLabel }: VoiceMessageBubbleProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors, isMe), [colors, isMe]);
@@ -130,8 +128,7 @@ export function VoiceMessageBubble({
         waveform: waveformSamples ?? null,
         playbackUrl: null,
         expiresAt: null,
-        moderationState,
-      });
+        moderationState });
       setIsLoadingUrl(true);
       const url = await ensurePlaybackUrl();
       setIsLoadingUrl(false);
@@ -224,8 +221,7 @@ export function VoiceMessageBubble({
                     styles.bar,
                     {
                       height: BAR_MIN_HEIGHT + fraction * (BAR_MAX_HEIGHT - BAR_MIN_HEIGHT),
-                      backgroundColor: active ? activeBarColor : barColor,
-                    },
+                      backgroundColor: active ? activeBarColor : barColor },
                   ]}
                 />
               );
@@ -285,73 +281,59 @@ const createStyles = (colors: ThemeColors, isMe: boolean) =>
       gap: Space.sm,
       minWidth: 180,
       maxWidth: 260,
-      paddingVertical: 2,
-    },
+      paddingVertical: 2 },
     playBtn: {
       width: 32,
       height: 32,
       borderRadius: Radius.full,
       backgroundColor: isMe ? colors.scrimTextTertiary : colors.surfaceElevated,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     waveform: {
       flex: 1,
       height: BAR_MAX_HEIGHT,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     barRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 2,
-      height: BAR_MAX_HEIGHT,
-    },
+      height: BAR_MAX_HEIGHT },
     bar: {
       flex: 1,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     progressOverlay: {
       ...StyleSheet.absoluteFill,
-      opacity: 0,
-    },
+      opacity: 0 },
     progressLineTrack: {
       height: 3,
       borderRadius: Radius.full,
       // TODO: no textSecondarySubtle token available
       backgroundColor: isMe ? colors.scrimTextTertiary : `${colors.textSecondary}30`,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     progressLine: {
       height: 3,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     meta: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     duration: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: isMe ? colors.scrimTextSecondary : colors.textMuted,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     speedPill: {
       paddingHorizontal: Space.xs + 2,
       paddingVertical: 2,
       borderRadius: Radius.full,
       // TODO: no textSecondarySubtle token available
-      backgroundColor: isMe ? colors.scrimTextTertiary : `${colors.textSecondary}15`,
-    },
+      backgroundColor: isMe ? colors.scrimTextTertiary : `${colors.textSecondary}15` },
     speedText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: isMe ? colors.textInverse : colors.textPrimary,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     error: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      color: colors.danger,
-    },
-  });
+      color: colors.danger } });

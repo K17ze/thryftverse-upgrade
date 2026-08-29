@@ -10,7 +10,8 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppInput } from '../components/ui/AppInput';
-import { Space, Radius, Type, Typography, Stroke, Control, FontFamily, PressScale } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control, FontFamily, PressScale } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
   buildSupportEntryContext,
   type SupportConversation,
@@ -18,14 +19,12 @@ import {
   type SupportKnowledgeSearchResult,
   type SupportEntryContext,
   type CaseOperationalState,
-  type ConversationOwnershipState,
-} from '../contracts/support';
+  type ConversationOwnershipState } from '../contracts/support';
 import {
   getSupportBootstrap,
   createSupportConversation,
   searchSupportKnowledge,
-  requestSupportHandoff,
-} from '../services/supportConversationApi';
+  requestSupportHandoff } from '../services/supportConversationApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HelpSupport'>;
 
@@ -38,8 +37,7 @@ const CASE_STATE_LABEL: Record<CaseOperationalState, string> = {
   in_review: 'In review',
   awaiting_external: 'Awaiting external',
   resolved: 'Resolved',
-  closed: 'Closed',
-};
+  closed: 'Closed' };
 
 // ── Conversation ownership state → human-readable label ──
 const CONVERSATION_STATE_LABEL: Record<ConversationOwnershipState, string> = {
@@ -48,8 +46,7 @@ const CONVERSATION_STATE_LABEL: Record<ConversationOwnershipState, string> = {
   human_active: 'Agent responding',
   awaiting_customer: 'Awaiting your reply',
   resolved: 'Resolved',
-  closed: 'Closed',
-};
+  closed: 'Closed' };
 
 // ── Category shortcuts ──
 interface CategoryShortcut {
@@ -180,8 +177,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
         const conversation = await createSupportConversation(context);
         navigation.navigate('SupportConversation', {
           conversationId: conversation.id,
-          contextKind: context.kind,
-        });
+          contextKind: context.kind });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unable to start conversation';
         show(message, 'error');
@@ -200,8 +196,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
       await requestSupportHandoff(conversation.id, 'User requested human agent from Help & Support');
       navigation.navigate('SupportConversation', {
         conversationId: conversation.id,
-        contextKind: 'general',
-      });
+        contextKind: 'general' });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unable to reach an agent right now';
       show(message, 'error');
@@ -215,8 +210,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
       navigation.navigate('SupportConversation', {
         conversationId: conversation.id,
         contextKind: conversation.contextKind,
-        contextId: conversation.contextId ?? undefined,
-      });
+        contextId: conversation.contextId ?? undefined });
     },
     [navigation]
   );
@@ -534,124 +528,103 @@ export default function HelpSupportScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scroll: {
-      flex: 1,
-    },
+      flex: 1 },
     scrollContent: {
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     // ── Search ──
     searchWrap: {
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     searchInputContainer: {
       backgroundColor: colors.surface,
-      borderRadius: Radius.xl,
-    },
+      borderRadius: Radius.xl },
     // ── Search results ──
     searchResultsWrap: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     searchLoadingWrap: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.lg,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     searchLoadingText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     searchErrorWrap: {
       paddingVertical: Space.lg,
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     searchErrorText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
       color: colors.danger,
       textAlign: 'center',
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     searchErrorHint: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       textAlign: 'center',
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     searchEmptyWrap: {
       paddingVertical: Space.lg,
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     searchEmptyText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
       color: colors.textSecondary,
       textAlign: 'center',
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     searchEmptyHint: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       textAlign: 'center',
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     // ── Article rows ──
     articleRow: {
-      paddingVertical: Space.md - Space.xs,
-    },
+      paddingVertical: Space.md - Space.xs },
     rowBorder: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     articleTitle: {
       flex: 1,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     articleTitleRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     articleSnippet: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      marginTop: Space.xs,
-    },
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginTop: Space.xs },
     articleExpandedFooter: {
       marginTop: Space.sm,
       gap: Space.xs,
       paddingTop: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     articleMeta: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     articleContactLink: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.semibold,
       color: colors.brand,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     // ── Category shortcuts ──
     categoryRow: {
       flexDirection: 'row',
@@ -659,40 +632,33 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     categoryText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
       color: colors.brand,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     categoryDot: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     // ── Bootstrap states ──
     bootstrapLoadingWrap: {
       paddingVertical: Space.lg,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     bootstrapErrorWrap: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     bootstrapErrorText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       textAlign: 'center',
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     // ── Contact button ──
     contactWrap: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     contactButton: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -703,30 +669,25 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
       borderColor: colors.brandBorder,
       backgroundColor: colors.brandSubtle,
-      minHeight: Control.hit + Space.xs,
-    },
+      minHeight: Control.hit + Space.xs },
     contactButtonText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.semibold,
       color: colors.brand,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-    },
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     // ── Header right ──
     headerRightText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
       color: colors.brand,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     // ── Version ──
     version: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       textAlign: 'center',
       marginTop: Space.lg,
       marginBottom: Space.md,
-      letterSpacing: Type.meta.letterSpacing,
-    },
-  });
+      letterSpacing: TypographyV2.meta.letterSpacing } });
 }

@@ -11,9 +11,9 @@ import Reanimated, {
   runOnJS,
   useReducedMotion,
   Easing,
-  type SharedValue,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
+  type SharedValue } from 'react-native-reanimated';
+import { Space, Radius, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
@@ -51,8 +51,7 @@ const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ioni
   location: 'location-outline',
   hashtag: 'pricetag-outline',
   time: 'time-outline',
-  weather: 'partly-sunny-outline',
-};
+  weather: 'partly-sunny-outline' };
 
 const THUMB = 40;
 const ROW_HEIGHT = 56;
@@ -124,8 +123,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
     if (!reduceMotion) {
       LayoutAnimation.configureNext({
         duration: 300,
-        update: { type: LayoutAnimation.Types.easeInEaseOut },
-      });
+        update: { type: LayoutAnimation.Types.easeInEaseOut } });
     }
     reorderLayer(id, dir);
   }, [haptic, reorderLayer, reduceMotion]);
@@ -146,8 +144,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
       LayoutAnimation.configureNext({
         duration: 250,
         update: { type: LayoutAnimation.Types.easeInEaseOut },
-        delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-      });
+        delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity } });
     }
     removeLayer(id);
   }, [haptic, reduceMotion, removeLayer]);
@@ -179,8 +176,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
         LayoutAnimation.configureNext({
           duration: 300,
           update: { type: LayoutAnimation.Types.easeInEaseOut },
-          delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-        });
+          delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity } });
       }
       switch (action) {
         case 'front':
@@ -237,8 +233,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                 if (!reduceMotion) {
                   LayoutAnimation.configureNext({
                     duration: 200,
-                    update: { type: LayoutAnimation.Types.easeInEaseOut },
-                  });
+                    update: { type: LayoutAnimation.Types.easeInEaseOut } });
                 }
                 reorderLayer(layerId, dir as 'forward' | 'backward');
                 if (count < steps) {
@@ -365,8 +360,7 @@ function LayerRow({
   onQuickDelete,
   onQuickLock,
   onOverflow,
-  panGesture,
-}: LayerRowProps) {
+  panGesture }: LayerRowProps) {
   const rowAnimatedStyle = useAnimatedStyle(() => {
     if (!dragY || reduceMotion) {
       return { transform: [{ translateY: 0 }], opacity: 1, zIndex: 0, elevation: 0 };
@@ -375,8 +369,7 @@ function LayerRow({
       transform: [{ translateY: dragY.value }],
       opacity: 0.92,
       zIndex: 100,
-      elevation: 8,
-    };
+      elevation: 8 };
   });
 
   // Refined thumbnail appearance: subtle opacity fade (0→1, 150ms, ease-out).
@@ -397,8 +390,7 @@ function LayerRow({
         styles.layerRow,
         {
           borderBottomColor: colors.borderSubtle,
-          opacity: layer.locked ? 0.5 : (layer.hidden ? 0.3 : 1),
-        },
+          opacity: layer.locked ? 0.5 : (layer.hidden ? 0.3 : 1) },
         isDragging && styles.layerRowDragging,
       ]}
     >
@@ -565,14 +557,12 @@ function LayerRow({
           icon: layer.locked ? 'lock-open-outline' : 'lock-closed',
           label: layer.locked ? 'Unlock' : 'Lock',
           onPress: () => onQuickLock(layer.id),
-          color: colors.commerceTrust,
-        }}
+          color: colors.commerceTrust }}
         rightAction={{
           icon: 'trash-outline',
           label: 'Delete',
           onPress: () => onQuickDelete(layer.id),
-          color: colors.danger,
-        }}
+          color: colors.danger }}
         swipeThreshold={80}
       >
         {rowContent}
@@ -600,8 +590,7 @@ function LayerOverflowActionSheet({
   colors,
   reduceMotion,
   onClose,
-  onAction,
-}: LayerOverflowActionSheetProps) {
+  onAction }: LayerOverflowActionSheetProps) {
   const translateY = useSharedValue(400);
   const backdropOpacity = useSharedValue(0);
   const mounted = useRef(false);
@@ -628,12 +617,10 @@ function LayerOverflowActionSheet({
   }, [layer, reduceMotion, translateY, backdropOpacity]);
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
+    opacity: backdropOpacity.value }));
 
   if (!layer && !mounted.current) return null;
 
@@ -655,8 +642,7 @@ function LayerOverflowActionSheet({
           {
             backgroundColor: colors.surface,
             borderTopLeftRadius: Radius.xl,
-            borderTopRightRadius: Radius.xl,
-          },
+            borderTopRightRadius: Radius.xl },
           sheetStyle,
         ]}
       >
@@ -716,53 +702,43 @@ const overflowStyles = StyleSheet.create({
     right: 0,
     paddingTop: Space.xs,
     paddingBottom: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   handleContainer: {
     alignItems: 'center',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   handle: {
     width: 32,
     height: 4,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-    marginTop: Space.sm,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    marginTop: Space.sm },
   subtitle: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     marginTop: Space.xxs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.md,
     borderRadius: Radius.md,
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   optionText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   cancelRow: {
     alignItems: 'center',
     paddingVertical: Space.md,
     borderRadius: Radius.md,
     marginTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'transparent',
-  },
+    borderTopColor: 'transparent' },
   cancelText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
-});
+    fontSize: TypographyV2.body.size } });
 
 function capitalizeFirst(s: string): string {
   return s.length > 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s;
@@ -863,56 +839,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   closeBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   doneBtn: {
     height: Control.hit,
     paddingHorizontal: Space.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   doneBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   reorderHint: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     textAlign: 'center',
     paddingVertical: Space.xs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   scrollBody: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   scrollContent: {
-    paddingBottom: Space.lg,
-  },
+    paddingBottom: Space.lg },
   emptyState: {
     alignItems: 'center',
     paddingVertical: Space.xl,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   emptyText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   emptySubtext: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   layerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -920,50 +885,42 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     paddingHorizontal: Space.smMd,
     borderBottomWidth: Stroke.hairline,
-    minHeight: ROW_HEIGHT,
-  },
+    minHeight: ROW_HEIGHT },
   layerRowDragging: {
     opacity: 0.7,
     borderRadius: Radius.lg,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   dragHandle: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   selectionAccent: {
     position: 'absolute',
     left: 0,
     top: Space.xs,
     bottom: Space.xs,
     width: Stroke.emphasis,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   rowMain: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   thumbnail: {
     width: THUMB,
     height: THUMB,
     borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   thumbnailHidden: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   thumbnailImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   videoBadge: {
     position: 'absolute',
     bottom: Space.xxs,
@@ -972,8 +929,7 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   lockBadge: {
     position: 'absolute',
     top: Space.xxs,
@@ -982,39 +938,31 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   layerInfo: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   layerNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   layerName: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    flex: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    flex: 1 },
   rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   actionBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   actionBtnLarge: {
     width: 48,
     height: 48,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.md,
-  },
-});
+    borderRadius: Radius.md } });

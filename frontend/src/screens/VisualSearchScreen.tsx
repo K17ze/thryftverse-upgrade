@@ -6,8 +6,7 @@ import {
   Image,
   ScrollView,
   TextInput,
-  RefreshControl,
-} from 'react-native';
+  RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
@@ -18,7 +17,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
-import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
@@ -135,8 +135,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.92,
-      });
+        quality: 0.92 });
       if (!result.canceled && result.assets?.[0]?.uri) {
         haptic.light();
         setPreviewFailed(false);
@@ -170,8 +169,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       minPrice: typeof minPriceNum === 'number' && !Number.isNaN(minPriceNum) ? minPriceNum : undefined,
       maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined,
       sort: 'similarity' as const,
-      limit: 48,
-    };
+      limit: 48 };
   }, [description, selectedCategory, brand, minPrice, maxPrice]);
 
   // Client-side fallback filter over cached listings — mirrors BrowseScreen logic.
@@ -213,8 +211,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     }
     try {
       return await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+        encoding: FileSystem.EncodingType.Base64 });
     } catch {
       return null;
     }
@@ -243,8 +240,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         ...payload,
         imageBase64: imageBase64 ?? undefined,
         imageUrl: isRemote ? imageUri : undefined,
-        signal: controller.signal,
-      });
+        signal: controller.signal });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (!isMountedRef.current || mySequence !== requestSequenceRef.current) return;
@@ -379,10 +375,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         sort: 'Newest',
         category: selectedCategory ?? undefined,
         minPrice: typeof minPriceNum === 'number' && !Number.isNaN(minPriceNum) ? minPriceNum : undefined,
-        maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined,
-      },
-      alertsEnabled: false,
-    });
+        maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined },
+      alertsEnabled: false });
     show('Search saved (alerts off)', 'success');
   }, [imageUri, saveSearchLabel, brand, selectedCategory, minPrice, maxPrice, addSavedSearch, show, haptic]);
 
@@ -663,9 +657,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         ? {
             suggestedActions: availableCategories.slice(0, 4).map(({ category }) => ({
               label: category,
-              onPress: () => handleBrowseCategory(category, category),
-            })),
-          }
+              onPress: () => handleBrowseCategory(category, category) })) }
         : {})}
     />
   );
@@ -866,16 +858,14 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   queryThumbWrap: {
     width: Space.xxl + Space.xxl + Space.xs,
     height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
-    position: 'relative',
-  },
+    position: 'relative' },
   queryThumb: { width: '100%', height: '100%' },
   queryThumbRemove: {
     position: 'absolute',
@@ -886,8 +876,7 @@ function createStyles(colors: ThemeColors) {
     width: Control.icon,
     height: Control.icon,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   queryActions: { flexDirection: 'row', gap: Space.sm },
   queryActionBtn: {
     flexDirection: 'row',
@@ -898,13 +887,11 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   queryActionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
 
   // ── Refinement bar ────────────────────────────────────────────────────
   refinementWrap: {
@@ -914,15 +901,13 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   refinementLabel: {
-    fontSize: Type.label.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.label.size,
+    fontFamily: TypographyV2.label.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   textInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -932,16 +917,14 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   textInputIcon: { marginRight: 2 },
   textInput: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    padding: 0,
-  },
+    padding: 0 },
 
   // ── Category rail ─────────────────────────────────────────────────────
   categoryRail: { marginHorizontal: -Space.xs },
@@ -952,30 +935,25 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   categoryPillActive: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   categoryPillText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   categoryPillTextActive: {
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
 
   // ── Filter row ────────────────────────────────────────────────────────
   filterRow: { flexDirection: 'row', gap: Space.sm },
   filterInputWrap: { flex: 1, gap: Space.xs },
   filterInputLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: LetterSpacing.wide + 0.18,
-  },
+    letterSpacing: LetterSpacing.wide + 0.18 },
   filterInput: {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs + 2,
@@ -983,29 +961,25 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
 
   // ── Brand suggestions ─────────────────────────────────────────────────
   suggestionRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Space.xs + 2 },
   suggestionLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   suggestionChip: {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   suggestionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
 
   // ── Refinement actions ────────────────────────────────────────────────
   refinementActions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.xs },
@@ -1014,13 +988,11 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   clearBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
 
   // ── Honest note ───────────────────────────────────────────────────────
   honestNote: {
@@ -1031,15 +1003,13 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs + 2,
     marginBottom: Space.sm,
     backgroundColor: colors.surface,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   honestNoteText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.size + 3,
-  },
+    lineHeight: TypographyV2.meta.size + 3 },
 
   // ── Offline / partial banners ─────────────────────────────────────────
   offlineBanner: {
@@ -1052,38 +1022,32 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   offlineBannerText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   partialIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   partialIndicatorText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
 
   // ── Results ───────────────────────────────────────────────────────────
   resultsSection: { flex: 1, marginTop: Space.lg },
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   skeletonTile: {
     width: '48%',
-    flexGrow: 1,
-  },
+    flexGrow: 1 },
 
   // ── Empty / error ─────────────────────────────────────────────────────
   emptyState: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.xl, paddingHorizontal: Space.md },
@@ -1094,29 +1058,25 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   emptyTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   emptyText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: Type.caption.size + 4,
-  },
+    lineHeight: TypographyV2.meta.size + 4 },
   emptyAction: { marginTop: Space.xs },
 
   // ── Category chips (capture surface) ──────────────────────────────────
   categoryChipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1126,17 +1086,13 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xxl,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   categoryChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   categoryChipCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted } });
 }

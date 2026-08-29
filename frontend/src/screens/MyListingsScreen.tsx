@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { TypeStyles, Space, Radius, Type, Typography } from '../theme/designTokens';
+import { TypeStyles, Space, Radius, Typography } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
@@ -195,8 +196,7 @@ export default function MyListingsScreen() {
       totalActiveValue,
       totalSoldValue,
       avgActivePrice,
-      avgSoldPrice,
-    };
+      avgSoldPrice };
   }, [listings]);
 
   // ── Tab counts for filter badges ──
@@ -205,8 +205,7 @@ export default function MyListingsScreen() {
     active: analytics.activeCount,
     draft: analytics.draftCount,
     sold: analytics.soldCount,
-    paused: analytics.pausedCount,
-  }), [listings, analytics]);
+    paused: analytics.pausedCount }), [listings, analytics]);
 
   // ── Filtered listings based on active tab ──
   const filteredListings = useMemo(() => {
@@ -435,71 +434,59 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   body: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   list: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     gap: Space.sm,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   headerSection: {
     gap: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   statTile: {
     width: '48%',
     flexGrow: 1,
     gap: 2,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   statTileValue: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   statTileLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   quickActionsRow: {
     flexDirection: 'row',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   quickActionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   quickActionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
 
   /* ── Filter tab bar ── */
   filterBar: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingVertical: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -507,57 +494,47 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs + 2,
     paddingHorizontal: Space.xs,
     borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
+    borderBottomColor: 'transparent' },
   filterTabText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   filterTabTextActive: {
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   filterTabCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   filterTabIndicator: {
     position: 'absolute',
     bottom: 0,
     left: Space.xs,
     right: Space.xs,
     height: 2,
-    borderRadius: 1,
-  },
+    borderRadius: 1 },
 
   /* ── Filtered empty state ── */
   filteredEmpty: {
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xxl,
-  },
+    paddingVertical: Space.xxl },
   filteredEmptyTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   filteredEmptyAction: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
 
   listingsHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   listingsHeaderText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: Type.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
 
   /* ── Listing row ── */
   row: {
@@ -566,89 +543,72 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   rowImageWrap: {
     width: Space.xxl + Space.md,
     height: Space.xxl + Space.md,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   rowImage: {
     width: Space.xxl + Space.md,
-    height: Space.xxl + Space.md,
-  },
+    height: Space.xxl + Space.md },
   rowImageFallback: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   rowBody: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   rowTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   rowPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   rowMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   statusBadge: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2,
     borderRadius: Radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   statusText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'capitalize',
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textTransform: 'capitalize' },
   rowCategory: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
 
   /* ── Engagement metrics in row ── */
   engagementRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   engagementItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   engagementText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
 
   /* ── Missing details warning ── */
   missingDetailsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xxs,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   missingDetailsText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.warning,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.warning } });
 }

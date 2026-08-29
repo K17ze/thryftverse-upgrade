@@ -10,8 +10,7 @@ import {
   LayoutAnimation,
   Platform,
   AppState,
-  type AppStateStatus,
-} from 'react-native';
+  type AppStateStatus } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Reanimated, {
@@ -20,9 +19,9 @@ import Reanimated, {
   withSpring,
   withTiming,
   useReducedMotion,
-  Easing,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Stroke, IconGrammar } from '../theme/designTokens';
+  Easing } from 'react-native-reanimated';
+import { Space, Radius, Typography, Stroke, IconGrammar } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
@@ -45,8 +44,7 @@ import {
   validateForPublish,
   serialiseToLookPayload,
   serialiseToPosterPayload,
-  PublishGuard,
-} from './compositionContract';
+  PublishGuard } from './compositionContract';
 import { queryClient, queryKeys } from '../platform/server';
 import { CreatorDraftService } from './drafts';
 import { useStore } from '../store/useStore';
@@ -133,12 +131,10 @@ function replaceUriInDoc(
           const evidence = field === 'mediaUri'
             ? {
                 mediaFinalizationId: receipt?.finalizationId,
-                mediaAssetId: receipt?.mediaAssetId,
-              }
+                mediaAssetId: receipt?.mediaAssetId }
             : {
                 thumbnailFinalizationId: receipt?.finalizationId,
-                thumbnailMediaAssetId: receipt?.mediaAssetId,
-              };
+                thumbnailMediaAssetId: receipt?.mediaAssetId };
           return { ...layer, payload: { ...layer.payload, [field]: newUri, ...evidence } };
         }
         if (layer.type === 'product' && field === 'snapshotImageUrl') {
@@ -148,9 +144,7 @@ function replaceUriInDoc(
               ...layer.payload,
               snapshotImageUrl: newUri,
               snapshotMediaFinalizationId: receipt?.finalizationId,
-              snapshotMediaAssetId: receipt?.mediaAssetId,
-            },
-          };
+              snapshotMediaAssetId: receipt?.mediaAssetId } };
         }
         if (layer.type === 'look' && field === 'snapshotImageUrl') {
           return {
@@ -159,15 +153,11 @@ function replaceUriInDoc(
               ...layer.payload,
               snapshotImageUrl: newUri,
               snapshotMediaFinalizationId: receipt?.finalizationId,
-              snapshotMediaAssetId: receipt?.mediaAssetId,
-            },
-          };
+              snapshotMediaAssetId: receipt?.mediaAssetId } };
         }
         return layer;
-      }),
-    })),
-    updatedAt: new Date().toISOString(),
-  };
+      }) })),
+    updatedAt: new Date().toISOString() };
 }
 
 // ── Upload UI helpers ──────────────────────────────────────────────
@@ -285,8 +275,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   const progressWidth = useSharedValue(0);
 
   const progressAnimatedStyle = useAnimatedStyle(() => ({
-    width: `${Math.round(progressWidth.value * 100)}%`,
-  }));
+    width: `${Math.round(progressWidth.value * 100)}%` }));
 
   // Sync real upload byte progress to the progress bar during upload.
   useEffect(() => {
@@ -407,8 +396,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
               mimeType,
               assetType: ref.assetType,
               maxRetries: 5,
-              folder: document.type === 'look' ? 'looks' : 'posters',
-            });
+              folder: document.type === 'look' ? 'looks' : 'posters' });
           }
 
           // Wait for all jobs to complete (or fail). Real progress is
@@ -487,8 +475,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
                 assetId: layer.payload.mediaAssetId,
                 mediaType: layer.payload.mediaType ?? 'image',
                 suppliedUrl: layer.payload.mediaUri,
-                role: workingDoc.type === 'look' ? 'primary' : `frame:${page.id}`,
-              });
+                role: workingDoc.type === 'look' ? 'primary' : `frame:${page.id}` });
             }
           }
         }
@@ -505,8 +492,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         expectedMedia,
         compositionDocument: workingDoc.type === 'look'
           ? lookPayload?.compositionDocument
-          : posterPayload?.compositionDocument,
-      };
+          : posterPayload?.compositionDocument };
 
       // ── Branch: schedule vs publish now ──
       // When scheduledFor is set, create a server-owned schedule row.
@@ -517,8 +503,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         publicationRequestStarted = true;
         await schedulePublication(workingDoc.id, {
           dueAt: workingDoc.metadata.scheduledFor,
-          publishCommand,
-        });
+          publishCommand });
 
         publishGuardRef.current.complete(workingDoc.id);
         progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
@@ -631,8 +616,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
                 assetId: layer.payload.mediaAssetId,
                 mediaType: layer.payload.mediaType ?? 'image',
                 suppliedUrl: layer.payload.mediaUri,
-                role: document.type === 'look' ? 'primary' : `frame:${page.id}`,
-              });
+                role: document.type === 'look' ? 'primary' : `frame:${page.id}` });
             }
           }
         }
@@ -645,12 +629,10 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           ? 'private'
           : (document.metadata.visibility as 'public' | 'private'),
         expiresInHours: document.metadata.expiresInHours ?? 24,
-        expectedMedia,
-      };
+        expectedMedia };
       await schedulePublication(document.id, {
         dueAt: document.metadata.scheduledFor,
-        publishCommand: retryCommand,
-      });
+        publishCommand: retryCommand });
       progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
       setScheduleError('');
       setStage('success');
@@ -798,8 +780,7 @@ function SharingStateView({
   stage,
   uploadedBytes,
   totalBytes,
-  onCancel,
-}: SharingStateViewProps) {
+  onCancel }: SharingStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const showByteProgress = stage === 'uploading' && totalBytes > 0;
   const showCancel = stage === 'uploading' && !!onCancel;
@@ -849,8 +830,7 @@ function ErrorStateView({
   reduceMotion,
   springCfg,
   errorMessage,
-  onRetry,
-}: ErrorStateViewProps) {
+  onRetry }: ErrorStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const opacity = useSharedValue(0);
 
@@ -863,8 +843,7 @@ function ErrorStateView({
   }, [reduceMotion, springCfg, opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
+    opacity: opacity.value }));
 
   return (
     <Reanimated.View style={[localStyles.centerState, animatedStyle]}>
@@ -903,8 +882,7 @@ function UnknownOutcomeView({
   springCfg,
   detail,
   isChecking,
-  onCheck,
-}: UnknownOutcomeViewProps) {
+  onCheck }: UnknownOutcomeViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const opacity = useSharedValue(0);
 
@@ -973,8 +951,7 @@ function ScheduleFailedView({
   scheduleError,
   onRetrySchedule,
   onAcceptImmediate,
-  onView,
-}: ScheduleFailedViewProps) {
+  onView }: ScheduleFailedViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const opacity = useSharedValue(0);
 
@@ -987,8 +964,7 @@ function ScheduleFailedView({
   }, [reduceMotion, springCfg, opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
+    opacity: opacity.value }));
 
   return (
     <Reanimated.View style={[localStyles.centerState, animatedStyle]}>
@@ -1059,8 +1035,7 @@ function QuietSuccessView({
   springCfg,
   documentType,
   onView,
-  onCreateNew,
-}: QuietSuccessViewProps) {
+  onCreateNew }: QuietSuccessViewProps) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const contentOpacity = useSharedValue(reduceMotion ? 1 : 0);
 
@@ -1073,8 +1048,7 @@ function QuietSuccessView({
   }, [reduceMotion, contentOpacity, springCfg]);
 
   const contentStyle = useAnimatedStyle(() => ({
-    opacity: contentOpacity.value,
-  }));
+    opacity: contentOpacity.value }));
 
   return (
     <Reanimated.View style={[styles.centerState, contentStyle]}>
@@ -1113,8 +1087,7 @@ function PublishReview({
   document,
   onPublish,
   onSaveDraft,
-  onOpenPreview,
-}: {
+  onOpenPreview }: {
   document: ReturnType<typeof useCreator>['document'];
   onPublish: () => void;
   onSaveDraft: () => Promise<void>;
@@ -1159,8 +1132,7 @@ function PublishReview({
   }, [activeAudienceIndex, reduceMotion, segmentTranslateX]);
 
   const segmentIndicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: segmentTranslateX.value * segmentWidth.value }],
-  }));
+    transform: [{ translateX: segmentTranslateX.value * segmentWidth.value }] }));
 
   // ── Caption validation ──────────────────────────────────────────
   // Caption is optional for looks but recommended; for posters with no media,
@@ -1185,8 +1157,7 @@ function PublishReview({
 
   const captionErrorStyle = useAnimatedStyle(() => ({
     opacity: captionErrorOpacity.value,
-    transform: [{ translateY: captionErrorTranslateY.value }],
-  }));
+    transform: [{ translateY: captionErrorTranslateY.value }] }));
 
   const handleCaptionBlur = useCallback(() => {
     setCaptionBlurred(true);
@@ -1475,27 +1446,22 @@ function createStyles(colors: ThemeColorsType) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      color: colors.textPrimary },
     closeBtn: {
       width: 44,
       height: 44,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     scrollBody: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     scrollContent: {
       paddingBottom: Space.xl,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     // ── Subtle section labels ──
     // Small, muted, regular weight — NOT uppercase eyebrows. These help
     // the user scan the sheet without adding visual noise.
@@ -1503,94 +1469,78 @@ function createStyles(colors: ThemeColorsType) {
       fontSize: 11,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     // ── Hairline separator between sections ──
     sectionSeparator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginVertical: Space.md,
-    },
+      marginVertical: Space.md },
     previewContainer: {
       alignItems: 'center',
       paddingVertical: Space.sm,
-      gap: Space.md,
-    },
+      gap: Space.md },
     previewScroll: {
-      marginHorizontal: -Space.md,
-    },
+      marginHorizontal: -Space.md },
     previewPageWrapper: {
       marginHorizontal: Space.md,
       borderRadius: Radius.lg,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     textInput: {
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textPrimary,
-      minHeight: 60,
-    },
+      minHeight: 60 },
     captionField: {
       borderBottomWidth: Stroke.hairline,
       borderBottomColor: colors.border,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     captionFieldError: {
-      borderBottomColor: colors.danger,
-    },
+      borderBottomColor: colors.danger },
     captionInput: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textPrimary,
       minHeight: 84,
       textAlignVertical: 'top',
-      padding: 0,
-    },
+      padding: 0 },
     captionCount: {
       alignSelf: 'flex-end',
       fontFamily: Typography.family.medium,
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     captionErrorWrap: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     captionErrorText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-      color: colors.danger,
-    },
+      fontSize: TypographyV2.meta.size,
+      color: colors.danger },
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.smMd,
-    },
+      paddingVertical: Space.smMd },
     toggleLabel: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.textPrimary },
     toggleLabelWrap: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     cameraRollRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: Space.smMd,
-    },
+      paddingVertical: Space.smMd },
     // ── Audience segmented control ──
     audienceSegmented: {
       flexDirection: 'row',
@@ -1598,8 +1548,7 @@ function createStyles(colors: ThemeColorsType) {
       borderRadius: Radius.lg,
       padding: Space.xs,
       marginBottom: Space.sm,
-      position: 'relative',
-    },
+      position: 'relative' },
     audienceSegmentIndicator: {
       position: 'absolute',
       top: Space.xs,
@@ -1607,8 +1556,7 @@ function createStyles(colors: ThemeColorsType) {
       left: Space.xs,
       width: `${100 / 3}%`,
       backgroundColor: colors.brand,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     audienceSegmentItem: {
       flex: 1,
       flexDirection: 'row',
@@ -1616,35 +1564,28 @@ function createStyles(colors: ThemeColorsType) {
       justifyContent: 'center',
       gap: Space.xs,
       paddingVertical: Space.sm,
-      zIndex: 1,
-    },
+      zIndex: 1 },
     audienceSegmentText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      color: colors.textSecondary },
     audienceSegmentTextActive: {
       color: colors.textInverse,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     // ── Cover selection ──
     coverScroll: {
-      marginHorizontal: -Space.md,
-    },
+      marginHorizontal: -Space.md },
     coverContainer: {
       paddingHorizontal: Space.md,
       gap: Space.sm,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     coverThumbWrap: {
       borderRadius: Radius.lg,
       overflow: 'hidden',
       borderWidth: Stroke.emphasis,
-      borderColor: 'transparent',
-    },
+      borderColor: 'transparent' },
     coverThumbActive: {
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     coverBadge: {
       position: 'absolute',
       top: 4,
@@ -1654,12 +1595,10 @@ function createStyles(colors: ThemeColorsType) {
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     scheduleRow: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     schedulePill: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1668,63 +1607,52 @@ function createStyles(colors: ThemeColorsType) {
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     schedulePillActive: {
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     schedulePillText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.textSecondary },
     scheduleDateTime: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     scheduleDateTimeText: {
       flex: 1,
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.textPrimary },
     actionRow: {
       gap: Space.sm,
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     draftBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
       height: 44,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     draftBtnText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.textSecondary },
     publishBtn: {
       width: '100%',
       height: 50,
       borderRadius: Radius.md,
       backgroundColor: colors.brand,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     publishBtnDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     publishBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     // Offline banner — shown when device has no connectivity.
     // Uses warning color (amber) to signal caution without alarm.
     offlineBanner: {
@@ -1735,31 +1663,26 @@ function createStyles(colors: ThemeColorsType) {
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
       backgroundColor: colors.warningSubtle,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     offlineBannerText: {
       flex: 1,
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     centerState: {
       alignItems: 'center',
       paddingVertical: Space.xl,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     centerStateTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.title.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.screenTitle.size,
+      color: colors.textPrimary },
     centerStateText: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     // ── Progress bar — calm, thin, full-width ──
     progressBarTrack: {
       width: '100%',
@@ -1767,22 +1690,18 @@ function createStyles(colors: ThemeColorsType) {
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       overflow: 'hidden',
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     progressBarFillContainer: {
       height: '100%',
       borderRadius: Radius.full,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     progressBarGradient: {
-      flex: 1,
-    },
+      flex: 1 },
     progressByteLabel: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     cancelUploadBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1790,13 +1709,11 @@ function createStyles(colors: ThemeColorsType) {
       marginTop: Space.md,
       paddingVertical: Space.xs,
       paddingHorizontal: Space.md,
-      alignSelf: 'center',
-    },
+      alignSelf: 'center' },
     cancelUploadText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      color: colors.textSecondary },
     // ── Error state ──
     errorCircle: {
       width: 72,
@@ -1804,23 +1721,20 @@ function createStyles(colors: ThemeColorsType) {
       borderRadius: Radius.full,
       backgroundColor: colors.dangerSubtle,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     unknownCircle: {
       width: 72,
       height: 72,
       borderRadius: Radius.full,
       backgroundColor: colors.warningSubtle,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     unknownDetail: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       textAlign: 'center',
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     retryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1829,38 +1743,32 @@ function createStyles(colors: ThemeColorsType) {
       borderRadius: Radius.md,
       backgroundColor: colors.brand,
       justifyContent: 'center',
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     retryBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     // ── Success state ──
     successTitle: {
       fontFamily: Typography.family.bold,
-      fontSize: Type.subtitle.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      color: colors.textPrimary },
     successBtnGroup: {
       width: '100%',
       gap: Space.sm,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     viewBtn: {
       width: '100%',
       height: 50,
       borderRadius: Radius.md,
       backgroundColor: colors.brand,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     viewBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     createBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1870,59 +1778,50 @@ function createStyles(colors: ThemeColorsType) {
       height: 44,
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     createBtnText: {
       color: colors.brand,
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     // ── Schedule failed state ──
     scheduleFailedDetail: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       textAlign: 'center',
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     scheduleFailedViewBtn: {
       width: '100%',
       height: 44,
       borderRadius: Radius.md,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     scheduleFailedViewText: {
       color: colors.textSecondary,
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     // ── Re-authored PublishReview styles ──
     // Solid fill for progress bar (replaces gradient — a gradient on a
     // 4px bar is invisible decoration per AGENTS.md §4).
     progressBarFill: {
       height: '100%',
       borderRadius: Radius.full,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     // Main review container — fills the sheet, column layout.
     reviewBody: {
-      flex: 1,
-    },
+      flex: 1 },
     // Row containing cover thumbnail + caption input side by side.
     composerRow: {
       flexDirection: 'row',
       gap: Space.md,
       alignItems: 'flex-start',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     // Cover thumbnail — single tappable preview, 80×100px.
     coverThumb: {
       width: 80,
       height: 100,
       borderRadius: Radius.md,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     // Page count badge on cover — small, top-right.
     pageCountBadge: {
       position: 'absolute',
@@ -1934,35 +1833,29 @@ function createStyles(colors: ThemeColorsType) {
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 6,
-    },
+      paddingHorizontal: 6 },
     pageCountText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.meta.size,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      color: colors.textPrimary },
     // Caption column — fills remaining width next to cover thumb.
     captionColumn: {
-      flex: 1,
-    },
+      flex: 1 },
     // More options disclosure header — quiet, pressable.
     disclosureHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.smMd,
-    },
+      paddingVertical: Space.smMd },
     disclosureHeaderText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.textSecondary },
     // Disclosure body — expanded content for toggles, cover selection, schedule.
     disclosureBody: {
       paddingTop: Space.xs,
       paddingBottom: Space.sm,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     // Sticky footer — publish + save draft at the bottom.
     stickyFooter: {
       paddingHorizontal: Space.md,
@@ -1970,7 +1863,5 @@ function createStyles(colors: ThemeColorsType) {
       paddingBottom: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
-      gap: Space.xs,
-    },
-  });
+      gap: Space.xs } });
 }

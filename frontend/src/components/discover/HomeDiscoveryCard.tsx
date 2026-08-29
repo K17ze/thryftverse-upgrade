@@ -36,8 +36,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  type TextStyle,
-} from 'react-native';
+  type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -48,7 +47,8 @@ import { MediaPreview as CanonicalMediaPreview } from '../MediaPreview';
 import { useStore } from '../../store/useStore';
 import { useHaptic } from '../../hooks/useHaptic';
 import { ProductAnalytics } from '../../platform/product/productAnalytics';
-import { Space, FontFamily, Radius, Type, Control, GlyphShadow } from '../../theme/designTokens';
+import { Space, FontFamily, Radius, Control, GlyphShadow } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import type { HomeDiscoveryItemVM } from '../../presentation/homeDiscoveryViewModel';
 
@@ -71,8 +71,7 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
   formatPrice,
   onPress,
   onLongPress,
-  shouldPlay = false,
-}: HomeDiscoveryCardProps) {
+  shouldPlay = false }: HomeDiscoveryCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const toggleWishlist = useStore((state) => state.toggleWishlist);
@@ -112,8 +111,7 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
   );
   const formattedOriginalPrice = item.price.originalMinor
     ? formatPrice(item.price.originalMinor / 100, item.price.currency, {
-        displayMode: 'fiat',
-      })
+        displayMode: 'fiat' })
     : null;
 
   const accessibilityLabel = [
@@ -325,39 +323,32 @@ function getCategoryPlaceholderLabel(category: string | undefined, brand?: strin
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     card: {
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     pressable: {
-      width: '100%',
-    },
+      width: '100%' },
     mediaWrap: {
       position: 'relative',
       borderRadius: RadiusRoleValue.mediaThumbnail,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     sharedMedia: {
-      ...StyleSheet.absoluteFill,
-    },
+      ...StyleSheet.absoluteFill },
     media: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     mediaPlaceholder: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surfaceAlt,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     // Category label: 13sp, medium, letter-spaced — quiet but confident.
     mediaPlaceholderText: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.medium,
       color: colors.textMuted,
-      letterSpacing: 0.3,
-    } as TextStyle,
+      letterSpacing: 0.3 } as TextStyle,
     // Brand monogram: 36sp, light weight, low opacity — art-directed
     // typographic treatment. The initial IS the artwork, not a label.
     mediaPlaceholderMonogram: {
@@ -366,8 +357,7 @@ const createStyles = (colors: ThemeColors) =>
       fontFamily: FontFamily.light,
       color: colors.textMuted,
       opacity: 0.5,
-      letterSpacing: -0.5,
-    } as TextStyle,
+      letterSpacing: -0.5 } as TextStyle,
     // Save glyph: 44pt transparent hit area, 22pt visible icon, top-right
     saveButton: {
       position: 'absolute',
@@ -378,96 +368,82 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'transparent',
-      zIndex: 5,
-    },
+      zIndex: 5 },
     saveGlyph: {
       ...GlyphShadow.glyph,
-      textShadowColor: colors.shadow,
-    },
+      textShadowColor: colors.shadow },
     // ── Below-media metadata ──
     meta: {
       paddingTop: Space.xs + 1,
-      paddingHorizontal: Space.xxs,
-    },
+      paddingHorizontal: Space.xxs },
     // Identity: 14sp, medium weight, max 2 lines
     identity: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       fontFamily: FontFamily.medium,
       color: colors.textPrimary,
-      letterSpacing: -0.15,
-    } as TextStyle,
+      letterSpacing: -0.15 } as TextStyle,
     // Price row: current price + optional strikethrough original
     priceRow: {
       flexDirection: 'row',
       alignItems: 'baseline',
       gap: Space.xs,
-      marginTop: Space.xxs,
-    },
+      marginTop: Space.xxs },
     // Price: 15sp, semibold, tabular figures
     price: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
-      letterSpacing: -0.1,
-    } as TextStyle,
+      letterSpacing: -0.1 } as TextStyle,
     priceOriginal: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       textDecorationLine: 'line-through',
-      fontVariant: ['tabular-nums'],
-    } as TextStyle,
+      fontVariant: ['tabular-nums'] } as TextStyle,
     // Context: 12sp, secondary color, max one fact
     contextText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      marginTop: Space.xxs,
-    } as TextStyle,
+      marginTop: Space.xxs } as TextStyle,
     // Social proof: subtle likes row — 12sp muted with small heart glyph.
     // Only shown when likes > 10 to avoid noise on low-engagement tiles.
     likesRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 3,
-      marginTop: Space.xxs,
-    },
+      marginTop: Space.xxs },
     likesText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
-      fontVariant: ['tabular-nums'],
-    } as TextStyle,
+      fontVariant: ['tabular-nums'] } as TextStyle,
     // ── Overlay price (video tiles only) ──
     bottomScrim: {
       position: 'absolute',
       bottom: 0,
       left: 0,
       right: 0,
-      height: 40,
-    },
+      height: 40 },
     overlayPriceWrap: {
       position: 'absolute',
       bottom: Space.sm - 2,
       left: Space.xs + 1,
-      right: Space.xs + 1,
-    },
+      right: Space.xs + 1 },
     overlayPriceText: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       fontFamily: FontFamily.semibold,
       fontVariant: ['tabular-nums'],
       letterSpacing: -0.1,
       color: colors.scrimTextPrimary,
       ...GlyphShadow.glyph,
-      textShadowColor: colors.shadow,
-    } as TextStyle,
-  });
+      textShadowColor: colors.shadow } as TextStyle });
 
 export default HomeDiscoveryCard;

@@ -5,15 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -27,8 +27,7 @@ import {
   leaveGroupOnApi,
   promoteConversationMemberOnApi,
   demoteConversationMemberOnApi,
-  transferConversationOwnershipOnApi,
-} from '../services/chatApi';
+  transferConversationOwnershipOnApi } from '../services/chatApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
 
@@ -119,8 +118,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         id,
         name,
         isMe: id === currentUser?.id,
-        role,
-      };
+        role };
     });
   }, [conversation, currentUser?.id, participantNameLookup]);
 
@@ -192,8 +190,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
       const result = await addConversationMembersOnApi(conversationId, Array.from(selectedToAdd));
       upsertConversation({
         ...conversation!,
-        participantIds: result.participantIds,
-      });
+        participantIds: result.participantIds });
       show(`${selectedToAdd.size} member${selectedToAdd.size === 1 ? '' : 's'} added`, 'success');
       setSelectedToAdd(new Set());
       setAddQuery('');
@@ -222,16 +219,14 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
           const result = await removeConversationMemberOnApi(conversationId, memberId);
           upsertConversation({
             ...conversation!,
-            participantIds: result.participantIds,
-          });
+            participantIds: result.participantIds });
           show('Member removed', 'info');
         } catch (err) {
           show(parseApiError(err, 'Could not remove member. Try again.').message, 'error');
         } finally {
           setRemovingId(null);
         }
-      },
-    });
+      } });
   };
 
   const handlePromoteMember = (memberId: string, memberName: string) => {
@@ -254,16 +249,14 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                 (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
                   entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
               ),
-            ) as Record<string, 'owner' | 'admin' | 'member'>,
-          });
+            ) as Record<string, 'owner' | 'admin' | 'member'> });
           show(`${memberName} is now an admin.`, 'success');
         } catch (err) {
           show(parseApiError(err, 'Could not promote member.').message, 'error');
         } finally {
           setRemovingId(null);
         }
-      },
-    });
+      } });
   };
 
   const handleDemoteMember = (memberId: string, memberName: string) => {
@@ -286,16 +279,14 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                 (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
                   entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
               ),
-            ) as Record<string, 'owner' | 'admin' | 'member'>,
-          });
+            ) as Record<string, 'owner' | 'admin' | 'member'> });
           show(`${memberName} is now a member.`, 'info');
         } catch (err) {
           show(parseApiError(err, 'Could not demote member.').message, 'error');
         } finally {
           setRemovingId(null);
         }
-      },
-    });
+      } });
   };
 
   const handleTransferOwnership = (memberId: string, memberName: string) => {
@@ -319,16 +310,14 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                 (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
                   entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
               ),
-            ) as Record<string, 'owner' | 'admin' | 'member'>,
-          });
+            ) as Record<string, 'owner' | 'admin' | 'member'> });
           show(`Ownership transferred to ${memberName}.`, 'success');
         } catch (err) {
           show(parseApiError(err, 'Could not transfer ownership.').message, 'error');
         } finally {
           setRemovingId(null);
         }
-      },
-    });
+      } });
   };
 
   const handleMemberLongPress = (member: { id: string; name: string; role: MemberRole }) => {
@@ -341,23 +330,19 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
     if (member.role === 'member') {
       options.unshift({
         text: 'Promote to admin',
-        onPress: () => handlePromoteMember(member.id, member.name),
-      });
+        onPress: () => handlePromoteMember(member.id, member.name) });
       options.unshift({
         text: 'Remove from group',
         style: 'destructive',
-        onPress: () => handleRemoveMember(member.id, member.name),
-      });
+        onPress: () => handleRemoveMember(member.id, member.name) });
     } else if (member.role === 'admin') {
       options.unshift({
         text: 'Demote to member',
-        onPress: () => handleDemoteMember(member.id, member.name),
-      });
+        onPress: () => handleDemoteMember(member.id, member.name) });
       options.unshift({
         text: 'Remove from group',
         style: 'destructive',
-        onPress: () => handleRemoveMember(member.id, member.name),
-      });
+        onPress: () => handleRemoveMember(member.id, member.name) });
     }
 
     // Only owner can transfer ownership
@@ -365,8 +350,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
       options.unshift({
         text: 'Transfer ownership',
         style: 'destructive',
-        onPress: () => handleTransferOwnership(member.id, member.name),
-      });
+        onPress: () => handleTransferOwnership(member.id, member.name) });
     }
 
     // Map the action menu to ConfirmationSheet — first non-cancel button
@@ -379,8 +363,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         message: firstAction.text,
         confirmLabel: firstAction.text,
         variant: firstAction.style === 'destructive' ? 'danger' : 'default',
-        onConfirm: () => { firstAction.onPress?.(); },
-      });
+        onConfirm: () => { firstAction.onPress?.(); } });
     }
   };
 
@@ -405,8 +388,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         } finally {
           setIsLeaving(false);
         }
-      },
-    });
+      } });
   };
 
   if (!conversation || conversation.type !== 'group') {
@@ -424,8 +406,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
       owner: { bg: colors.brandSubtle, text: colors.brand },
       // TODO: replace `${colors.textPrimary}15` with textPrimarySubtle token when available
       admin: { bg: `${colors.textPrimary}15`, text: colors.textPrimary },
-      member: { bg: colors.surfaceAlt, text: colors.textMuted },
-    };
+      member: { bg: colors.surfaceAlt, text: colors.textMuted } };
     const labels = { owner: 'Owner', admin: 'Admin', member: 'Member' };
     return (
       <View style={[styles.roleBadge, { backgroundColor: roleColors[role].bg }]}>
@@ -661,53 +642,44 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   center: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   listCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   memberAvatar: {
     width: Space.xl + 8,
     height: Space.xl + 8,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   memberAvatarText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   memberText: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: Space.md + 40 + Space.sm,
-  },
+    marginLeft: Space.md + 40 + Space.sm },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -718,28 +690,23 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   searchInput: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   roleBadge: {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs - 2,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   roleBadgeText: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily },
   emptyWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -748,85 +715,69 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   emptyText: {
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   memberList: {
-    gap: 0,
-  },
+    gap: 0 },
   memberRowV2: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   memberRowContent: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   memberAvatarV2: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   memberAvatarTextV2: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   memberTextV2: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   nameRowV2: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   memberDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
     marginLeft: Space.md + 44 + Space.smMd,
-    marginRight: Space.md,
-  },
+    marginRight: Space.md },
   emptyWrapV2: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.xl,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   emptyTextV2: {
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   addRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd,
     paddingHorizontal: Space.md,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   addAvatar: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   addMembersSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   addMembersHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   addSearchRow: {
     flex: 1,
     flexDirection: 'row',
@@ -837,35 +788,28 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   cancelText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand },
   searchingRow: {
     paddingVertical: Space.sm,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   searchStatusText: {
     paddingVertical: Space.sm,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   searchResultList: {
-    gap: 0,
-  },
+    gap: 0 },
   searchResultRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     gap: Space.smMd,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   rowPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   selectCircle: {
     width: 24,
     height: 24,
@@ -873,8 +817,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   addConfirmBtn: {
     backgroundColor: colors.brand,
     borderRadius: Radius.lg,
@@ -882,32 +825,25 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: Control.hit,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   addConfirmText: {
     color: colors.surface,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   actionBtn: {
     minWidth: Control.hit,
     minHeight: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   actionPressed: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   removeText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
   leaveText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger } });
 }

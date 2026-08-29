@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Typography, Type, Space, Radius } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface RetryStateProps {
@@ -48,8 +49,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: colors.background,
-      paddingHorizontal: 40,
-    },
+      paddingHorizontal: 40 },
     iconBox: {
       width: 120,
       height: 120,
@@ -57,32 +57,26 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     title: {
-      fontSize: Type.priceHero.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceHero.size,
+      fontFamily: TypographyV2.priceHero.fontFamily,
       color: colors.textPrimary,
-      marginBottom: 12,
-    },
+      marginBottom: 12 },
     subtext: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
       marginBottom: 40,
-      lineHeight: 22,
-    },
+      lineHeight: 22 },
     retryBtn: {
       backgroundColor: colors.textPrimary,
       paddingHorizontal: 40,
       paddingVertical: 18,
-      borderRadius: Radius.xxl,
-    },
+      borderRadius: Radius.xxl },
     retryBtnText: {
       color: colors.background,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily } });
 }

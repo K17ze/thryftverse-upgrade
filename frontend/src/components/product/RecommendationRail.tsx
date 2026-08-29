@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, AspectRatio, Stroke} from '../../theme/designTokens';
+import { Typography, Space, Radius, AspectRatio, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { RecommendationSection, RecommendationLook } from '../../platform/product';
 import { isRecommendationLook } from '../../platform/product';
 import { ProductAnalytics } from '../../platform/product';
@@ -48,8 +48,7 @@ function RailCard({
   onPress,
   cardWidth,
   cardHeight,
-  showAccent,
-}: RailCardProps) {
+  showAccent }: RailCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat, currencyCode } = useFormattedPrice();
@@ -118,8 +117,7 @@ export function RecommendationRail({
   section,
   listingId,
   onPressItem,
-  onSeeAll,
-}: RecommendationRailProps) {
+  onSeeAll }: RecommendationRailProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
@@ -219,84 +217,69 @@ export function RecommendationRail({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     header: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     headerLeft: {
       flex: 1,
-      minWidth: 0,
-    },
+      minWidth: 0 },
     title: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      color: colors.textPrimary },
     subtitle: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     seeAllRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     seeAll: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     reasonRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingHorizontal: Space.md,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     reasonText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     listContent: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     card: {
-      width: 160,
-    },
+      width: 160 },
     cardAccent: {
       borderWidth: Stroke.standard,
       borderColor: colors.brand,
       borderRadius: Radius.xl,
-      padding: 2,
-    },
+      padding: 2 },
     cardImageWrap: {
       width: 160,
       height: 213,
       borderRadius: Radius.lg,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     cardImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     cardImageFallback: {
       width: '100%',
       height: '100%',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     cardSoldBadge: {
       position: 'absolute',
       bottom: Space.xs,
@@ -304,33 +287,27 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.success,
       paddingHorizontal: Space.xs,
       paddingVertical: 2,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     cardSoldText: {
       fontSize: 10,
       fontFamily: Typography.family.bold,
-      color: colors.background,
-    },
+      color: colors.background },
     cardBrand: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     cardTitle: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textPrimary,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     cardPrice: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      marginTop: Space.xs,
-    },
-  });
+      marginTop: Space.xs } });
 }

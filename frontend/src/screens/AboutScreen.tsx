@@ -6,8 +6,7 @@ import {
   Linking,
   Pressable,
   Share,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -19,7 +18,8 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 type Props = NativeStackScreenProps<RootStackParamList, 'About'>;
 
 // Number of taps on the version row required to toggle developer mode.
@@ -76,8 +76,7 @@ export default function AboutScreen({ navigation }: Props) {
     try {
       await Share.share({
         message: 'Check out Thryftverse — the marketplace for second-hand fashion. https://thryftverse.app',
-        title: 'Thryftverse',
-      });
+        title: 'Thryftverse' });
     } catch {}
   };
 
@@ -138,36 +137,29 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   heroCard: {
     alignItems: 'center',
-    marginVertical: Space.lg,
-  },
+    marginVertical: Space.lg },
   heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   heroText: {
-    flex: 1,
-  },
+    flex: 1 },
   brandIcon: {
     width: Space.xl + Space.xl,
     height: Space.xl + Space.xl,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   brandName: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   brandVersion: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs - 2,
-  },
-  });
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs - 2 } });
 }

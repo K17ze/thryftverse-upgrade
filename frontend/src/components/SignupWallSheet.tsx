@@ -5,7 +5,8 @@ import { BottomSheet } from './BottomSheet';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily } from '../theme/designTokens';
+import { Space, Radius, FontFamily } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import type { SignupAction } from '../hooks/useSignupWall';
 
 /**
@@ -21,34 +22,27 @@ const ACTION_COPY: Record<
   save_item: {
     title: 'Save items',
     body: 'Create a free account to save items to your closet and revisit them anytime.',
-    icon: 'bookmark-outline',
-  },
+    icon: 'bookmark-outline' },
   follow_seller: {
     title: 'Follow sellers',
     body: 'Sign up to follow your favourite sellers and see their new listings first.',
-    icon: 'person-add-outline',
-  },
+    icon: 'person-add-outline' },
   message_seller: {
     title: 'Message sellers',
     body: 'Sign up to ask sellers questions and negotiate offers.',
-    icon: 'chatbubble-outline',
-  },
+    icon: 'chatbubble-outline' },
   place_bid: {
     title: 'Place bids',
     body: 'Sign up to bid on auctions and win the items you love.',
-    icon: 'trending-up-outline',
-  },
+    icon: 'trending-up-outline' },
   purchase: {
     title: 'Buy items',
     body: 'Sign up to purchase items securely with buyer protection on every order.',
-    icon: 'cart-outline',
-  },
+    icon: 'cart-outline' },
   create_listing: {
     title: 'List items',
     body: 'Sign up to sell your own items and reach thousands of buyers.',
-    icon: 'pricetag-outline',
-  },
-};
+    icon: 'pricetag-outline' } };
 
 interface SignupWallSheetProps {
   visible: boolean;
@@ -73,8 +67,7 @@ export function SignupWallSheet({
   visible,
   action,
   onDismiss,
-  onSignUp,
-}: SignupWallSheetProps) {
+  onSignUp }: SignupWallSheetProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const copy = action ? ACTION_COPY[action] : null;
@@ -142,28 +135,24 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     icon: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     title: {
-      fontSize: Type.title.size,
-      lineHeight: Type.title.lineHeight,
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
       fontFamily: FontFamily.bold,
-      letterSpacing: Type.title.letterSpacing,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
       color: colors.textPrimary,
       textAlign: 'center',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     body: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.size + 6,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.size + 6,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
       textAlign: 'center',
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     signUpBtn: {
       backgroundColor: colors.brand,
       height: 52,
@@ -171,25 +160,20 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       width: '100%',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     signUpText: {
       color: colors.textInverse,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.bold,
-      letterSpacing: 0.2,
-    },
+      letterSpacing: 0.2 },
     laterBtn: {
       height: 48,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      width: '100%',
-    },
+      width: '100%' },
     laterText: {
       color: colors.textSecondary,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
-      letterSpacing: 0.1,
-    },
-  });
+      letterSpacing: 0.1 } });

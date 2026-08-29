@@ -5,13 +5,13 @@ import {
   StyleSheet,
   TextInput,
   ActivityIndicator,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useToast } from '../context/ToastContext';
-import { Typography, Space, Radius, Type, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -98,8 +98,7 @@ export default function WriteReviewScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.85,
-        selectionLimit: 4 - photoUris.length,
-      });
+        selectionLimit: 4 - photoUris.length });
       if (result.canceled || !result.assets?.length) return;
       setIsUploadingPhotos(true);
       const uploaded: string[] = [];
@@ -347,8 +346,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     paddingBottom: Space.xl,
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   // Order context — flat row, no card
   orderRow: {
     flexDirection: 'row',
@@ -356,91 +354,74 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingBottom: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   orderThumb: {
     width: 48,
     height: 48,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   orderInfo: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   orderTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   orderMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   // Rating — left-aligned, dominant
   ratingSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   ratingPrompt: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    color: colors.textPrimary },
   starsRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   ratingLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand },
   // Text — flat input, hairline border
   textSection: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   textInput: {
     minHeight: 120,
     maxHeight: 240,
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlignVertical: 'top',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: Radius.md,
-    padding: Space.md,
-  },
+    padding: Space.md },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   // Photos — hairline add tile, privacy guidance
   photoSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   photoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   photoTileWrap: {
-    position: 'relative',
-  },
+    position: 'relative' },
   photoTile: {
     width: 72,
     height: 72,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   photoRemoveBtn: {
     position: 'absolute',
     top: -4,
     right: -4,
     backgroundColor: colors.background,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   photoAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -449,63 +430,51 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: Radius.md,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   photoAddText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.brand,
-    flex: 1,
-  },
+    flex: 1 },
   photoAddHint: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   photoPrivacy: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   // Existing review state — flat, no card
   existingState: {
     gap: Space.sm,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   existingTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    color: colors.textPrimary },
   existingSub: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   existingComment: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.body.lineHeight + 4,
-    marginTop: Space.xs,
-  },
+    lineHeight: TypographyV2.body.lineHeight + 4,
+    marginTop: Space.xs },
   existingPhotos: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   existingPhoto: {
     width: 64,
     height: 64,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   footer: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  });
+    borderTopColor: colors.border } });
 }

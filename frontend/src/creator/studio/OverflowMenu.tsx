@@ -12,7 +12,8 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography, IconGrammar, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Typography, IconGrammar, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
@@ -46,8 +47,7 @@ export const OverflowItem = React.memo(function OverflowItem({
   onPress,
   disabled = false,
   danger = false,
-  selected = false,
-}: OverflowItemProps) {
+  selected = false }: OverflowItemProps) {
   const haptic = useHaptic();
   const contentColor = disabled
     ? (colors?.textMuted ?? 'rgba(255,255,255,0.4)')
@@ -127,8 +127,7 @@ export function OverflowMenu({
   onDrafts,
   onSettings,
   safeZoneVisible,
-  onToggleSafeZone,
-}: OverflowMenuProps) {
+  onToggleSafeZone }: OverflowMenuProps) {
   const { colors } = useAppTheme();
 
   if (!visible) return null;
@@ -147,8 +146,7 @@ export function OverflowMenu({
             backgroundColor: colors.surfaceElevated,
             borderColor: colors.border,
             top,
-            right: 12,
-          },
+            right: 12 },
         ]}
       >
         <OverflowItem
@@ -236,31 +234,25 @@ export default OverflowMenu;
 const styles = StyleSheet.create({
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,
-    zIndex: 200,
-  },
+    zIndex: 200 },
   overflowMenu: {
     position: 'absolute',
     minWidth: 220,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   overflowItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    minHeight: 48,
-  },
+    minHeight: 48 },
   overflowItemText: {
     flex: 1,
     fontFamily: Typography.family.medium,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   overflowDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.xs,
-  },
-});
+    marginVertical: Space.xs } });

@@ -3,15 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
   FadeOutDown,
   SlideInRight,
   useAnimatedStyle,
-  withTiming,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -24,7 +22,8 @@ import { Motion } from '../theme/motionTokens';
 import { useStore } from '../store/useStore';
 import { track, trackFunnelStep } from '../analytics/track';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 const ONBOARDING_KEY = '@thryftverse_onboarding_complete';
 
@@ -62,29 +61,25 @@ const SLIDES: OnboardingSlide[] = [
     iconBackground: 'discovery',
     title: 'Find pieces no one else has',
     body: 'Curated fashion from independent sellers — hand-listed, never mass-market.',
-    proof: 'Every piece is listed by a real seller, not a warehouse.',
-  },
+    proof: 'Every piece is listed by a real seller, not a warehouse.' },
   {
     icon: 'people-outline',
     iconBackground: 'commerceTrust',
     title: 'Own a piece of what you love',
     body: 'Buy units in high-value pieces. Trade them when you are ready — 1% platform fee.',
-    proof: 'Start with one unit. Build a portfolio of things you believe in.',
-  },
+    proof: 'Start with one unit. Build a portfolio of things you believe in.' },
   {
     icon: 'trophy-outline',
     iconBackground: 'antiqueGold',
     title: 'Win at the price you set',
     body: 'Real-time auctions with live countdowns. You set your max — we bid for you.',
-    proof: 'Get notified the moment you are outbid.',
-  },
+    proof: 'Get notified the moment you are outbid.' },
   {
     icon: 'leaf-outline',
     iconBackground: 'success',
     title: 'Turn your closet into credit',
     body: 'List in minutes, reach buyers who care. Give pre-loved items a second life.',
-    proof: 'Keep great fashion out of landfill — one piece at a time.',
-  },
+    proof: 'Keep great fashion out of landfill — one piece at a time.' },
 ];
 
 interface OnboardingDotProps {
@@ -304,79 +299,67 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   backTarget: {
     minHeight: Control.hit,
     minWidth: Control.hit,
     justifyContent: 'center',
     alignItems: 'flex-start',
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   stepEyebrow: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.caps,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   skipTarget: {
     minHeight: Control.hit,
     minWidth: Control.hit,
     justifyContent: 'center',
     alignItems: 'flex-end',
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   skipText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   contentWrap: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.xl,
-  },
+    paddingHorizontal: Space.xl },
   slideContent: {
     alignItems: 'center',
-    width: '100%',
-  },
+    width: '100%' },
   iconPanel: {
     width: Space.xxl + Space.lg,
     height: Space.xxl + Space.lg,
     borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   icon: {
-    marginBottom: 0,
-  },
+    marginBottom: 0 },
   title: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
     textAlign: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   body: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 4,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 4,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
     textAlign: 'center',
     maxWidth: 320,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   proofRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -385,28 +368,22 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
-    maxWidth: 320,
-  },
+    maxWidth: 320 },
   proofText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   footer: {
     paddingHorizontal: Space.lg,
     paddingBottom: Space.lg,
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   dotsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs + 2,
-    height: Space.sm + Space.xs,
-  },
+    height: Space.sm + Space.xs },
   primaryAction: {
-    width: '100%',
-  },
-});
+    width: '100%' } });

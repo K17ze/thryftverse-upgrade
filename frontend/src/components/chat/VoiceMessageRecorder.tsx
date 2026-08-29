@@ -5,10 +5,10 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
+import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useVoiceRecorder } from '../../hooks/chat/useVoiceRecorder';
@@ -55,8 +55,7 @@ export function VoiceMessageRecorder({
   onSend,
   onCancel,
   onRecordingStateChange,
-  disabled = false,
-}: VoiceMessageRecorderProps) {
+  disabled = false }: VoiceMessageRecorderProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -237,19 +236,16 @@ const createStyles = (colors: ThemeColors) =>
       height: 44,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.full,
-    } as ViewStyle,
+      borderRadius: Radius.full } as ViewStyle,
     micBtn: {
       width: 44,
       height: 44,
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
-      alignItems: 'center',
-    } as ViewStyle,
+      alignItems: 'center' } as ViewStyle,
     micBtnDisabled: {
-      backgroundColor: colors.surfaceAlt,
-    } as ViewStyle,
+      backgroundColor: colors.surfaceAlt } as ViewStyle,
     // ── Recording ────────────────────────────────────────────────────
     recordingContainer: {
       flex: 1,
@@ -262,52 +258,44 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: Radius.xl,
       backgroundColor: colors.surfaceAlt,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    } as ViewStyle,
+      borderColor: colors.border } as ViewStyle,
     recordingInner: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    } as ViewStyle,
+      gap: Space.sm } as ViewStyle,
     recDot: {
       width: 8,
       height: 8,
       borderRadius: Radius.full,
-      backgroundColor: colors.danger,
-    } as ViewStyle,
+      backgroundColor: colors.danger } as ViewStyle,
     meteringTrack: {
       width: 4,
       height: 20,
       justifyContent: 'center',
-      alignItems: 'center',
-    } as ViewStyle,
+      alignItems: 'center' } as ViewStyle,
     meteringBar: {
       width: 4,
       borderRadius: Radius.full,
-      backgroundColor: colors.danger,
-    } as ViewStyle,
+      backgroundColor: colors.danger } as ViewStyle,
     timer: {
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.textPrimary,
-      fontVariant: ['tabular-nums'],
-    } as ViewStyle,
+      fontVariant: ['tabular-nums'] } as ViewStyle,
     stopBtn: {
       width: 30,
       height: 30,
       borderRadius: Radius.md,
       backgroundColor: colors.brand,
       justifyContent: 'center',
-      alignItems: 'center',
-    } as ViewStyle,
+      alignItems: 'center' } as ViewStyle,
     cancelBtn: {
       width: 40,
       height: 40,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.full,
-    } as ViewStyle,
+      borderRadius: Radius.full } as ViewStyle,
     // ── Preview ──────────────────────────────────────────────────────
     previewContainer: {
       flex: 1,
@@ -320,38 +308,31 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: Radius.xl,
       backgroundColor: colors.surfaceAlt,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    } as ViewStyle,
+      borderColor: colors.border } as ViewStyle,
     previewInfo: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs + 1,
-    } as ViewStyle,
+      gap: Space.xs + 1 } as ViewStyle,
     previewDuration: {
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.textPrimary,
-      fontVariant: ['tabular-nums'],
-    } as ViewStyle,
+      fontVariant: ['tabular-nums'] } as ViewStyle,
     previewHint: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textMuted,
-    } as ViewStyle,
+      color: colors.textMuted } as ViewStyle,
     previewActionBtn: {
       width: 40,
       height: 40,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.full,
-    } as ViewStyle,
+      borderRadius: Radius.full } as ViewStyle,
     sendPreviewBtn: {
       width: 36,
       height: 36,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
       justifyContent: 'center',
-      alignItems: 'center',
-    } as ViewStyle,
-  });
+      alignItems: 'center' } as ViewStyle });

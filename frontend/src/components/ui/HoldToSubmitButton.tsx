@@ -17,10 +17,10 @@ import Reanimated, {
   withTiming,
   runOnJS,
   Easing,
-  cancelAnimation,
-} from 'react-native-reanimated';
+  cancelAnimation } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Radius, Typography, Type } from '../../theme/designTokens';
+import { Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -49,8 +49,7 @@ export function HoldToSubmitButton({
   iconName,
   disabled,
   onSubmit,
-  accessibilityLabel,
-}: HoldToSubmitButtonProps) {
+  accessibilityLabel }: HoldToSubmitButtonProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
@@ -101,8 +100,7 @@ export function HoldToSubmitButton({
   }, [disabled, requireHold, reducedMotion, triggerSubmit]);
 
   const ringStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: progress.value }],
-  }));
+    transform: [{ scale: progress.value }] }));
 
   const bgColor = disabled ? colors.surfaceAlt : colors.brand;
   const textColor = disabled ? colors.textMuted : colors.background;
@@ -154,8 +152,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   ring: {
     position: 'absolute',
     top: 0,
@@ -163,16 +160,12 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderWidth: 2,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
+    gap: 8 },
   label: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing } });

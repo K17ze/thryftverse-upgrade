@@ -1,6 +1,7 @@
 import React from 'react';
 import { AccessibilityRole, ActivityIndicator, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
-import { Type, Typography, Radius, Space, Stroke } from '../../theme/designTokens';
+import { Radius, Space, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -52,30 +53,26 @@ function resolveVariantTokens(variant: AppButtonVariant, colors: any): VariantTo
         backgroundColor: colors.surface,
         borderColor: colors.border,
         titleColor: colors.textPrimary,
-        subtitleColor: colors.textSecondary,
-      };
+        subtitleColor: colors.textSecondary };
     case 'ghost':
       return {
         backgroundColor: 'transparent',
         borderColor: 'transparent',
         titleColor: colors.textPrimary,
-        subtitleColor: colors.textSecondary,
-      };
+        subtitleColor: colors.textSecondary };
     case 'danger':
       return {
         backgroundColor: colors.danger,
         borderColor: colors.danger,
         titleColor: colors.background,
-        subtitleColor: colors.background,
-      };
+        subtitleColor: colors.background };
     case 'primary':
     default:
       return {
         backgroundColor: colors.brand,
         borderColor: colors.brand,
         titleColor: colors.background,
-        subtitleColor: colors.background,
-      };
+        subtitleColor: colors.background };
   }
 }
 
@@ -112,8 +109,7 @@ export function AppButton({
   hapticFeedback,
   accessibilityLabel,
   accessibilityHint,
-  accessibilityRole,
-}: AppButtonProps) {
+  accessibilityRole }: AppButtonProps) {
   const { colors } = useAppTheme();
   const tokens = resolveVariantTokens(variant, colors);
   const resolvedAlign = align ?? (subtitle ? 'start' : 'center');
@@ -130,8 +126,7 @@ export function AppButton({
         resolveSizeStyle(size),
         {
           backgroundColor: tokens.backgroundColor,
-          borderColor: tokens.borderColor,
-        },
+          borderColor: tokens.borderColor },
         resolvedAlign === 'start' && styles.alignStart,
         disabled && styles.disabled,
         style,
@@ -179,65 +174,51 @@ const styles = StyleSheet.create({
     borderWidth: Stroke.standard,
     overflow: 'hidden',
     justifyContent: 'center',
-    minWidth: 0,
-  },
+    minWidth: 0 },
   alignStart: {
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   disabled: {
-    opacity: 0.52,
-  },
+    opacity: 0.52 },
   sizeSm: {
     minHeight: 44,
     borderRadius: Radius.md,
-    paddingHorizontal: Space.sm + 2,
-  },
+    paddingHorizontal: Space.sm + 2 },
   sizeMd: {
     minHeight: 52,
     borderRadius: Radius.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   sizeLg: {
     minHeight: 56,
     borderRadius: Radius.xl,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   contentCentered: {
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Icon wrapper — transparent centering only. Per AGENTS.md §4, do not
   // render a visible grey circle around the glyph; the icon renders directly
   // with transparent background. The 44pt hit target is the button itself.
   iconWrap: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   textCol: {
     flex: 1,
     flexShrink: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   textColCentered: {
     alignItems: 'center',
     flex: 0,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   title: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   subtitle: {
     marginTop: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

@@ -5,22 +5,21 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedStyle,
   withTiming,
-  useSharedValue,
-} from 'react-native-reanimated';
+  useSharedValue } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { NativeStackScreenProps, type RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { Motion } from '../theme/motionTokens';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
@@ -44,8 +43,7 @@ import {
   validateBulkListing,
   submitBulkListings,
   type BulkListingItem,
-  type BulkListingResult,
-} from '../services/bulkListingApi';
+  type BulkListingResult } from '../services/bulkListingApi';
 import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BulkListing'>;
@@ -68,16 +66,14 @@ function emptyDraft(): BulkListingItem {
     size: '',
     images: [],
     status: 'pending',
-    errors: [],
-  };
+    errors: [] };
 }
 
 const STATUS_META: Record<ItemStatus, { label: string; colorKey: 'textMuted' | 'warning' | 'success' | 'danger' }> = {
   pending: { label: 'Pending', colorKey: 'textMuted' },
   validating: { label: 'Validating', colorKey: 'warning' },
   ready: { label: 'Ready', colorKey: 'success' },
-  error: { label: 'Error', colorKey: 'danger' },
-};
+  error: { label: 'Error', colorKey: 'danger' } };
 
 export default function BulkListingScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
@@ -150,8 +146,7 @@ export default function BulkListingScreen({ navigation }: Props) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
         allowsEditing: false,
-        quality: 0.9,
-      });
+        quality: 0.9 });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uris = result.assets.map((a) => a.uri);
         setForm((prev) => ({ ...prev, images: [...prev.images, ...uris].slice(0, 10) }));
@@ -176,8 +171,7 @@ export default function BulkListingScreen({ navigation }: Props) {
       const newItem: BulkListingItem = {
         ...trimmed,
         status: result.valid ? 'ready' : 'pending',
-        errors: result.errors,
-      };
+        errors: result.errors };
       setItems((prev) => [...prev, newItem]);
     }
     setSheetVisible(false);
@@ -260,8 +254,7 @@ export default function BulkListingScreen({ navigation }: Props) {
         setPublishResults(null);
         haptics.selection();
       },
-      variant: 'danger',
-    });
+      variant: 'danger' });
   }, [items.length]);
 
   const renderItem = useCallback(
@@ -476,8 +469,7 @@ const BulkRow = React.memo(function BulkRow({
   onTitleChange,
   onPriceChange,
   onEdit,
-  onDelete,
-}: RowProps) {
+  onDelete }: RowProps) {
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const meta = STATUS_META[item.status];
   const statusColor = colors[meta.colorKey];
@@ -489,8 +481,7 @@ const BulkRow = React.memo(function BulkRow({
   }, [expanded, rotate, reducedMotion]);
 
   const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotate.value * 180}deg` }],
-  }));
+    transform: [{ rotate: `${rotate.value * 180}deg` }] }));
 
   return (
     <View style={styles.rowWrap}>
@@ -628,8 +619,7 @@ function DraftForm({
   onOpenPicker,
   onSave,
   onCancel,
-  isEditing,
-}: DraftFormProps) {
+  isEditing }: DraftFormProps) {
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const validation = validateBulkListing(form);
 
@@ -783,30 +773,24 @@ function createStyles(colors: ThemeColors) {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     emptyBody: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     list: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     hairline: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginHorizontal: 0,
-    },
+      marginHorizontal: 0 },
     bulkBarWrap: {
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     bulkBar: {
       flexDirection: 'row',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     bulkAction: {
       flex: 1,
       flexDirection: 'row',
@@ -816,128 +800,101 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     bulkActionText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     statusSummaryRow: {
       flexDirection: 'row',
       gap: Space.md,
       marginTop: Space.xs,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     statusSummaryText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     rowWrap: {
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
-      paddingVertical: Space.sm + 2,
-    },
+      paddingVertical: Space.sm + 2 },
     thumbWrap: {
       width: Space.xxl + Space.xs,
       height: Space.xxl + Space.xs,
       borderRadius: Radius.md,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     thumb: {
       width: Space.xxl + Space.xs,
-      height: Space.xxl + Space.xs,
-    },
+      height: Space.xxl + Space.xs },
     thumbFallback: {
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     rowBody: {
       flex: 1,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     rowTitleRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     rowTitleInput: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      padding: 0,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      padding: 0 },
     rowPriceRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     pricePrefix: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     rowPriceInput: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       padding: 0,
-      minWidth: Space.xxl + Space.xs,
-    },
+      minWidth: Space.xxl + Space.xs },
     rowStatusRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     statusDot: {
       width: Space.xs / 2 + 1,
       height: Space.xs / 2 + 1,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     statusText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     metaText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     expandedBody: {
       paddingTop: Space.xs,
       paddingBottom: Space.sm,
       paddingLeft: (Space.xxl + Space.xs) + Space.md,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     errorList: {
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     errorText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     expandedMetaRow: {
       flexDirection: 'row',
-      gap: Space.md,
-    },
+      gap: Space.md },
     expandedMetaText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     expandedDesc: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     expandedActions: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     progressOverlay: {
       ...StyleSheet.absoluteFill,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     progressCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -945,44 +902,35 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
       borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     progressText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     // Form
     formWrap: {
       gap: Space.sm,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     formTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily },
     photoSection: {
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     photoRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     photoTile: {
       width: Space.xxl + Space.xxl,
       height: Space.xxl + Space.xxl,
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     photoImgWrap: {
       width: Space.xxl + Space.xxl,
-      height: Space.xxl + Space.xxl,
-    },
+      height: Space.xxl + Space.xxl },
     photoImg: {
       width: Space.xxl + Space.xxl,
-      height: Space.xxl + Space.xxl,
-    },
+      height: Space.xxl + Space.xxl },
     photoRemove: {
       position: 'absolute',
       top: Space.xs,
@@ -991,8 +939,7 @@ function createStyles(colors: ThemeColors) {
       height: Space.md + 2,
       borderRadius: Radius.lg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     photoAdd: {
       width: Space.xxl + Space.xxl,
       height: Space.xxl + Space.xxl,
@@ -1000,19 +947,15 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     photoAddText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     field: {
-      marginBottom: 0,
-    },
+      marginBottom: 0 },
     fieldRow: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     pickerField: {
       flex: 1,
       borderWidth: Stroke.standard,
@@ -1021,33 +964,25 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       gap: Space.xs / 2,
       minHeight: Control.hit + Space.sm,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     pickerLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     pickerValueRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-    },
+      justifyContent: 'space-between' },
     pickerValue: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     formErrorList: {
       gap: Space.xs / 2,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     formErrorText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     formActions: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginTop: Space.sm,
-    },
-  });
+      marginTop: Space.sm } });
 }

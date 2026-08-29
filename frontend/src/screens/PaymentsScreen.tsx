@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -16,8 +15,7 @@ import {
   CommercePaymentMethod,
   deleteUserPaymentMethod,
   listUserPaymentMethods,
-  setDefaultUserPaymentMethod,
-} from '../services/commerceApi';
+  setDefaultUserPaymentMethod } from '../services/commerceApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { useToast } from '../context/ToastContext';
 import { AppButton } from '../components/ui/AppButton';
@@ -31,7 +29,8 @@ import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { t } from '../i18n';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 type Props = NativeStackScreenProps<RootStackParamList, 'Payments'>;
 
 export default function PaymentsScreen({ navigation }: Props) {
@@ -97,8 +96,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             type: preferredMethod.type,
             label: preferredMethod.label,
             details: preferredMethod.details,
-            isDefault: preferredMethod.isDefault,
-          });
+            isDefault: preferredMethod.isDefault });
         } else {
           clearSavedPaymentMethod();
         }
@@ -182,8 +180,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           setBackendPaymentMethods(previous);
         }
       },
-      variant: 'danger',
-    });
+      variant: 'danger' });
   };
 
   const handlePaymentMethodPress = (method: CommercePaymentMethod) => {
@@ -195,8 +192,7 @@ export default function PaymentsScreen({ navigation }: Props) {
         confirmLabel: t('payments.alert.remove'),
         cancelLabel: t('payments.alert.cancel'),
         variant: 'danger',
-        onConfirm: () => handleRemovePaymentMethod(method),
-      });
+        onConfirm: () => handleRemovePaymentMethod(method) });
     } else {
       setConfirmSheet({
         visible: true,
@@ -205,8 +201,7 @@ export default function PaymentsScreen({ navigation }: Props) {
         confirmLabel: t('payments.alert.setAsDefault'),
         cancelLabel: t('payments.alert.cancel'),
         variant: 'default',
-        onConfirm: () => void handleSetDefault(method),
-      });
+        onConfirm: () => void handleSetDefault(method) });
     }
   };
 
@@ -472,14 +467,13 @@ export default function PaymentsScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   policyLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: Space.xs,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // ── Inline trust signal ──
   inlineTrustRow: {
     flexDirection: 'row',
@@ -488,36 +482,28 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   inlineTrustText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   addBtn: {
     borderRadius: Radius.md,
     marginTop: Space.xs,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   addPaymentMethodBtn: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   addBtnContent: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   addIconWrap: {
     width: Control.iconCompact,
     height: Control.iconCompact,
     borderRadius: Radius.lg,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   addText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary } });
 }

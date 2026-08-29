@@ -21,19 +21,16 @@ import {
   Pressable,
   PanResponder,
   LayoutChangeEvent,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
-  Typography,
   Stroke,
   Elevation,
-  Control,
-} from '../../../theme/designTokens';
+  Control } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { BottomSheet } from '../../BottomSheet';
 import { AppButton } from '../../ui/AppButton';
 import { CachedImage } from '../../CachedImage';
@@ -45,8 +42,7 @@ import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import {
   convertGbpToDisplayAmount,
   sanitizeDecimalInput,
-  calculateOfferSummaryFromDisplay,
-} from '../../../utils/currencyAuthoringFlows';
+  calculateOfferSummaryFromDisplay } from '../../../utils/currencyAuthoringFlows';
 import { createListingOfferOnApi } from '../../../services/listingOffersApi';
 import { fetchSmartSellConfig, SMART_SELL_PREVIEW_MODE } from '../../../services/smartSellApi';
 import { createStableId } from '../../../utils/createStableId';
@@ -97,8 +93,7 @@ export function MakeOfferSheet({
   onDismiss,
   listing,
   sellerId,
-  onSent,
-}: MakeOfferSheetProps) {
+  onSent }: MakeOfferSheetProps) {
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, fxRates } = useCurrencyContext();
@@ -212,8 +207,7 @@ export function MakeOfferSheet({
       },
       onPanResponderRelease: () => {
         if (!reducedMotion) haptics.tap();
-      },
-    }),
+      } }),
   ).current;
 
   const applyQuickPercentage = useCallback(
@@ -270,9 +264,7 @@ export function MakeOfferSheet({
         idempotencyKey: idempotencyKeyRef.current,
         metadata: {
           originalPriceGbp: askingPriceGbp,
-          source: 'detail_sheet',
-        },
-      });
+          source: 'detail_sheet' } });
 
       const focusQuery = `Offer: ${formatFromFiat(numericOfferGbp, currencyCode)} for ${listing.title}. Valid for ${DEFAULT_EXPIRY_HOURS}h.`;
       onSent({
@@ -287,9 +279,7 @@ export function MakeOfferSheet({
           price: numericOfferGbp,
           originalPrice: askingPriceGbp,
           expiresAt: offer.expiresAt,
-          counterRound: offer.counterRound,
-        },
-      });
+          counterRound: offer.counterRound } });
       onDismiss();
     } catch (err) {
       const isNetworkError =
@@ -384,8 +374,7 @@ export function MakeOfferSheet({
           min: minDisplay,
           max: maxDisplay,
           now: numericOfferDisplay,
-          text: offerDisplayFormatted,
-        }}
+          text: offerDisplayFormatted }}
         accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
         onAccessibilityAction={(e) => {
           if (e.nativeEvent.actionName === 'increment') accessibilityIncrement();
@@ -399,8 +388,7 @@ export function MakeOfferSheet({
               styles.trackFill,
               {
                 width: `${sliderFraction * 100}%`,
-                backgroundColor: colors.brand,
-              },
+                backgroundColor: colors.brand },
             ]}
           />
         </View>
@@ -412,8 +400,7 @@ export function MakeOfferSheet({
             {
               left: `${sliderFraction * 100}%`,
               backgroundColor: colors.brand,
-              borderColor: colors.surface,
-            },
+              borderColor: colors.surface },
           ]}
         />
       </View>
@@ -438,8 +425,7 @@ export function MakeOfferSheet({
                 styles.chip,
                 {
                   backgroundColor: isSelected ? colors.brand : colors.surfaceAlt,
-                  borderColor: isSelected ? colors.brand : colors.borderSubtle,
-                },
+                  borderColor: isSelected ? colors.brand : colors.borderSubtle },
                 pressed && styles.chipPressed,
               ]}
               accessibilityRole="button"
@@ -535,102 +521,85 @@ const styles = StyleSheet.create({
     paddingLeft: Space.md,
     paddingRight: Space.xs,
     paddingVertical: Space.sm,
-    minHeight: Control.hit + Space.sm,
-  },
+    minHeight: Control.hit + Space.sm },
   headerTextWrap: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily },
   subtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   closeTarget: {
     width: 44,
     height: 44,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   listingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   listingImage: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   listingText: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   listingTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   listingPrice: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   amountWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
     paddingTop: Space.md,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   amountValue: {
-    fontSize: Type.priceHero.size,
-    lineHeight: Type.priceHero.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceHero.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: TypographyV2.priceHero.fontFamily,
+    letterSpacing: TypographyV2.priceHero.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   discountChip: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   discountChipText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   sliderWrap: {
     position: 'relative',
     height: 44,
     justifyContent: 'center',
     paddingHorizontal: Space.md,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   track: {
     height: 8,
     borderRadius: Radius.full,
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   trackFill: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     left: 0,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   thumb: {
     position: 'absolute',
     width: 24,
@@ -639,40 +608,34 @@ const styles = StyleSheet.create({
     borderWidth: Stroke.standard,
     marginLeft: -12,
     top: 10,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   sweetSpotCaption: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   sweetSpotText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    flex: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    flex: 1 },
   discountChipsRow: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   expiryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   expiryText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   chip: {
     flex: 1,
     alignItems: 'center',
@@ -680,18 +643,15 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   chipPressed: {
     opacity: 0.85,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   chipText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] },
   manualWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -700,20 +660,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     borderRadius: Radius.xl,
     borderWidth: Stroke.standard,
-    minHeight: Control.hit + Space.xs,
-  },
+    minHeight: Control.hit + Space.xs },
   manualPrefix: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    marginRight: Space.xs,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    marginRight: Space.xs },
   manualInput: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     paddingVertical: Space.sm,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   smartSellBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -723,29 +680,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: Stroke.hairline,
-  },
+    borderWidth: Stroke.hairline },
   smartSellText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   errorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   sendButton: {
     marginHorizontal: Space.md,
-    marginTop: Space.md,
-  },
-});
+    marginTop: Space.md } });

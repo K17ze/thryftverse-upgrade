@@ -33,12 +33,10 @@ import { filterImageUris } from '../../utils/media';
 import {
   Space,
   Radius,
-  Type,
-  Typography,
   AspectRatio,
   PressScale,
-  Stroke,
-} from '../../theme/designTokens';
+  Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const NUM_COLUMNS = 3;
@@ -61,8 +59,7 @@ export function ClosetMediaMosaic({
   items,
   onPressItem,
   showSaveButton = false,
-  showWishlistButton = false,
-}: ClosetMediaMosaicProps) {
+  showWishlistButton = false }: ClosetMediaMosaicProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -117,8 +114,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
   tileHeight,
   onPress,
   showSaveButton = false,
-  showWishlistButton = false,
-}: TileProps) {
+  showWishlistButton = false }: TileProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -287,12 +283,10 @@ const createStyles = (colors: ThemeColors) =>
     grid: {
       flexDirection: 'row',
       paddingHorizontal: GRID_PADDING,
-      gap: GRID_GAP,
-    },
+      gap: GRID_GAP },
     column: {
       flex: 1,
-      gap: GRID_GAP,
-    },
+      gap: GRID_GAP },
     tileWrap: {
       // width is set inline per tile
     },
@@ -300,29 +294,25 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: Radius.lg,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
-      position: 'relative',
-    },
+      position: 'relative' },
     image: {
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     // Sold state
     soldScrim: {
       ...StyleSheet.absoluteFill,
       backgroundColor: colors.overlay,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     soldLabel: {
       position: 'absolute',
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.scrimTextPrimary,
       letterSpacing: 1,
       textTransform: 'uppercase',
       top: '50%',
       marginTop: -8,
-      alignSelf: 'center',
-    },
+      alignSelf: 'center' },
     // Price-drop badge
     priceDropBadge: {
       position: 'absolute',
@@ -334,68 +324,58 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: Space.xs + 1,
       paddingVertical: 2,
       borderRadius: Radius.sm,
-      backgroundColor: colors.danger,
-    },
+      backgroundColor: colors.danger },
     priceDropText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.scrimTextPrimary,
-      letterSpacing: 0.2,
-    },
+      letterSpacing: 0.2 },
     // Toggle row
     toggleRow: {
       position: 'absolute',
       top: 0,
       right: 0,
       flexDirection: 'row',
-      gap: 0,
-    },
+      gap: 0 },
     toggleHit: {
       width: 36,
       height: 36,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     toggleGlyph: {
       textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 4,
-    },
+      textShadowRadius: 4 },
     // Bottom price overlay
     bottomScrim: {
       position: 'absolute',
       bottom: 0,
       left: 0,
       right: 0,
-      height: 48,
-    },
+      height: 48 },
     priceOverlay: {
       position: 'absolute',
       bottom: Space.xs,
       left: Space.xs + 1,
-      right: Space.xs + 1,
-    },
+      right: Space.xs + 1 },
     // Brand label — recognition cue above price. In a closet the user is
     // re-scanning known items; brand is the fastest recognition signal.
     brandText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.scrimTextPrimary,
       letterSpacing: 0.1,
       textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
-      marginBottom: 1,
-    },
+      marginBottom: 1 },
     priceText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.scrimTextPrimary,
       letterSpacing: 0.1,
       textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 3,
-    },
-  });
+      textShadowRadius: 3 } });

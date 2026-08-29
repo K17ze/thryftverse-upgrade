@@ -14,8 +14,7 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -24,19 +23,17 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Stroke,
   Control,
-  DockConstants,
-} from '../theme/designTokens';
+  DockConstants } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import {
   fetchPublicationReceipt,
   CatalogImportError,
-  type PublicationReceiptDTO,
-} from '../services/catalogImportApi';
+  type PublicationReceiptDTO } from '../services/catalogImportApi';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'CatalogImportSummary'>;
@@ -144,8 +141,7 @@ export default function CatalogImportSummaryScreen() {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingBottom: insets.bottom + DockConstants.singleActionHeight + Space.lg,
-          },
+            paddingBottom: insets.bottom + DockConstants.singleActionHeight + Space.lg },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -218,8 +214,7 @@ export default function CatalogImportSummaryScreen() {
           {
             paddingBottom: insets.bottom + Space.sm,
             backgroundColor: colors.background,
-            borderTopColor: colors.borderSubtle,
-          },
+            borderTopColor: colors.borderSubtle },
         ]}
       >
         <View style={styles.dockRow}>
@@ -257,8 +252,7 @@ function ReceiptRow({
   colors,
   tone = 'default',
   showDot = false,
-  first = false,
-}: {
+  first = false }: {
   count: number;
   label: string;
   colors: ThemeColors;
@@ -303,57 +297,47 @@ const createReceiptRowStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     rowSeparator: {
       borderTopWidth: Stroke.hairline,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     count: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.numericMeta.size,
-      lineHeight: Type.numericMeta.lineHeight,
+      fontSize: TypographyV2.numericMeta.size,
+      lineHeight: TypographyV2.numericMeta.lineHeight,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
-      width: COUNT_COL_WIDTH,
-    },
+      width: COUNT_COL_WIDTH },
     labelWrap: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     successDot: {
       width: DOT_SIZE,
       height: DOT_SIZE,
       borderRadius: DOT_SIZE / 2,
-      backgroundColor: colors.success,
-    },
+      backgroundColor: colors.success },
     label: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight },
     labelStrong: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.itemTitle.size,
-      lineHeight: Type.itemTitle.lineHeight,
-      letterSpacing: Type.itemTitle.letterSpacing,
-    },
-  });
+      fontSize: TypographyV2.itemTitle.size,
+      lineHeight: TypographyV2.itemTitle.lineHeight,
+      letterSpacing: TypographyV2.itemTitle.letterSpacing } });
 
 // ── Back button — transparent 44pt hit, 22pt glyph, no chrome ────────────────
 const backHitStyle = {
   width: Control.hit,
   height: Control.hit,
   alignItems: 'center' as const,
-  justifyContent: 'center' as const,
-};
+  justifyContent: 'center' as const };
 
 function BackButton({
   colors,
-  onPress,
-}: {
+  onPress }: {
   colors: ThemeColors;
   onPress: () => void;
 }) {
@@ -374,54 +358,45 @@ function BackButton({
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     screen: {
-      flex: 1,
-    },
+      flex: 1 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     loadingWrap: {
       flex: 1,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     scrollContent: {
       paddingHorizontal: Space.md,
-      flexGrow: 1,
-    },
+      flexGrow: 1 },
     title: {
       fontFamily: FontFamily.bold,
-      fontSize: Type.title.size,
-      lineHeight: Type.title.lineHeight,
-      letterSpacing: Type.title.letterSpacing,
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
       color: colors.textPrimary,
       marginTop: Space.sm,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     receiptSection: {
       borderTopWidth: Stroke.hairline,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     unknownSection: {
       marginTop: Space.xl,
       paddingVertical: Space.md,
       paddingHorizontal: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     unknownHeading: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-      color: colors.warning,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      color: colors.warning },
     unknownBody: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary },
     checkResultButton: {
       alignSelf: 'flex-start',
       paddingVertical: Space.smMd,
@@ -432,14 +407,12 @@ const createStyles = (colors: ThemeColors) =>
       minHeight: Control.hit,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     checkResultText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textPrimary },
     dock: {
       position: 'absolute',
       left: 0,
@@ -447,35 +420,28 @@ const createStyles = (colors: ThemeColors) =>
       bottom: 0,
       paddingTop: Space.sm,
       paddingHorizontal: Space.md,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
+      borderTopWidth: StyleSheet.hairlineWidth },
     dockRow: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     dockButton: {
       flex: 1,
       height: DockConstants.primaryButtonHeight,
       borderRadius: Radius.sm,
       backgroundColor: colors.brand,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     dockButtonSecondary: {
       backgroundColor: 'transparent',
       borderWidth: Stroke.standard,
-      borderColor: colors.borderSubtle,
-    },
+      borderColor: colors.borderSubtle },
     dockButtonText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      color: colors.textInverse },
     dockButtonTextSecondary: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-      color: colors.textPrimary,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      color: colors.textPrimary } });

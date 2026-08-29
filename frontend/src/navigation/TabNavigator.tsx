@@ -8,7 +8,8 @@ import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TabParamList, RootStackParamList } from './types';
-import { Space, Radius, Typography, Type, Stroke, Elevation} from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Elevation} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -21,8 +22,7 @@ import { useTabScroll } from '../context/TabScrollContext';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -149,14 +149,12 @@ const CreateTabButton = ({
   onLongPress,
   testID,
   brandColor,
-  surfaceColor,
-}: CreateTabButtonProps) => {
+  surfaceColor }: CreateTabButtonProps) => {
   const { spring } = useMotionConfig();
   const scale = useSharedValue(1);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+    transform: [{ scale: scale.value }] }));
 
   return (
     <AnimatedPressableRe
@@ -207,8 +205,7 @@ function AnimatedTabBar(props: BottomTabBarProps) {
   const animatedStyle = useAnimatedStyle(() => {
     const targetY = tabBarVisible.value ? 0 : hideOffset;
     return {
-      transform: [{ translateY: withSpring(targetY, spring.glide) }],
-    };
+      transform: [{ translateY: withSpring(targetY, spring.glide) }] };
   });
 
   return (
@@ -265,8 +262,7 @@ export default function TabNavigator() {
     // an action, not a navigation destination, so the active tab is unchanged.
     navigation.navigate('CreatorStudio', {
       type: persistedCreateMode,
-      openEntry: true,
-    });
+      openEntry: true });
   }, [haptic, navigation, persistedCreateMode, requireAuth]);
 
   return (
@@ -282,11 +278,10 @@ export default function TabNavigator() {
           // Compact 10pt label below each icon. Active/inactive tint is
           // controlled by tabBarActiveTintColor / tabBarInactiveTintColor.
           tabBarLabelStyle: {
-            fontSize: Type.meta.size,
-            fontFamily: Typography.family.medium,
-            letterSpacing: Type.meta.letterSpacing,
-            marginTop: Space.xs,
-          },
+            fontSize: TypographyV2.meta.size,
+            fontFamily: TypographyV2.meta.fontFamily,
+            letterSpacing: TypographyV2.meta.letterSpacing,
+            marginTop: Space.xs },
           // Edge-to-edge transparent bar with frosted
           // glass blur background. Content scrolls behind the bar, and the
           // LiquidGlassBackdrop applies iOS 26 Liquid Glass on supported
@@ -298,8 +293,7 @@ export default function TabNavigator() {
             backgroundColor: 'transparent',
             height: NAV_HEIGHT + insets.bottom,
             paddingBottom: insets.bottom,
-            ...Elevation.none,
-          },
+            ...Elevation.none },
           tabBarBackground: () => (
             <LiquidGlassBackdrop
               intensity={isDark ? 70 : 90}
@@ -309,8 +303,7 @@ export default function TabNavigator() {
           ),
           tabBarItemStyle: tabStyles.tabBarItem,
           tabBarActiveTintColor: colors.textPrimary,
-          tabBarInactiveTintColor: colors.textMuted,
-        }}
+          tabBarInactiveTintColor: colors.textMuted }}
         screenListeners={{
           tabPress: (e: { target?: string; preventDefault?: () => void }) => {
             const currentTab = e.target?.split('-')[0] ?? '';
@@ -333,8 +326,7 @@ export default function TabNavigator() {
               haptic.patterns.tabSwitch();
               lastTabRef.current = currentTab;
             }
-          },
-        }}
+          } }}
       >
         <Tab.Screen
           name="Home"
@@ -345,8 +337,7 @@ export default function TabNavigator() {
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
             ),
-            tabBarAccessibilityLabel: 'Home',
-          }}
+            tabBarAccessibilityLabel: 'Home' }}
         />
         <Tab.Screen
           name="Explore"
@@ -357,8 +348,7 @@ export default function TabNavigator() {
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={focused ? 'search' : 'search-outline'} color={color} focused={focused} />
             ),
-            tabBarAccessibilityLabel: 'Explore',
-          }}
+            tabBarAccessibilityLabel: 'Explore' }}
         />
         <Tab.Screen
           name="Create"
@@ -372,8 +362,7 @@ export default function TabNavigator() {
                 brandColor={colors.brand}
                 surfaceColor={colors.surface}
               />
-            ),
-          }}
+            ) }}
           // P4-02: Prevent the tab navigator from ever navigating to the
           // Create "tab" — it is a placeholder slot for the central Create
           // action button, not a real destination. The custom tabBarButton
@@ -381,8 +370,7 @@ export default function TabNavigator() {
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
-            },
-          }}
+            } }}
         />
         <Tab.Screen
           name="Inbox"
@@ -400,8 +388,7 @@ export default function TabNavigator() {
             ),
             tabBarAccessibilityLabel: inboxBadgeCount > 0
               ? `Inbox, ${inboxBadgeCount > 99 ? '99+' : inboxBadgeCount} unread`
-              : 'Inbox',
-          }}
+              : 'Inbox' }}
           // Guest gating: messaging requires an account. Intercept the tab
           // press and show the soft signup wall instead of opening the inbox.
           listeners={
@@ -410,8 +397,7 @@ export default function TabNavigator() {
                   tabPress: (e) => {
                     e.preventDefault();
                     requireAuth('message_seller');
-                  },
-                }
+                  } }
               : undefined
           }
         />
@@ -429,8 +415,7 @@ export default function TabNavigator() {
               ? 'Sign in'
               : currentUser?.displayName
                 ? `Profile, ${currentUser.displayName}`
-                : 'Profile',
-          }}
+                : 'Profile' }}
           // Guest gating: tapping the Profile tab navigates directly to the
           // auth landing screen — a clear, self-explanatory sign-in entry
           // point rather than a gated wall.
@@ -441,8 +426,7 @@ export default function TabNavigator() {
                     e.preventDefault();
                     haptic.light();
                     navigation.navigate('AuthLanding');
-                  },
-                }
+                  } }
               : undefined
           }
         />
@@ -458,15 +442,13 @@ const tabStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 0,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   tabIconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
     width: 28,
-    height: 28,
-  },
+    height: 28 },
   badge: {
     position: 'absolute',
     top: -7,
@@ -477,51 +459,42 @@ const tabStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xs,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   badgeText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
     includeFontPadding: false,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   createButton: {
     alignItems: 'center',
     justifyContent: 'center',
     width: CREATE_HIT_SIZE,
-    height: CREATE_HIT_SIZE,
-  },
+    height: CREATE_HIT_SIZE },
   createControl: {
     width: CREATE_CONTROL_SIZE,
     height: CREATE_CONTROL_SIZE,
     borderRadius: CREATE_CONTROL_SIZE / 2,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarWrap: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     overflow: 'hidden',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarImage: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-  },
+    borderRadius: AVATAR_SIZE / 2 },
   avatarFallback: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarFallbackText: {
     fontSize: 10,
-    fontFamily: Typography.family.bold,
-  },
-});
+    fontFamily: Typography.family.bold } });
 
 // Dynamic sheet styles (theme-aware via colors parameter)

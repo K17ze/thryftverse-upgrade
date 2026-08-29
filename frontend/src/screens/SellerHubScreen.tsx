@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Type, Typography, Radius, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 
@@ -16,8 +16,7 @@ import {
   FlagshipState,
   FlagshipFormSection,
   FlagshipNavigationRow,
-  FlagshipMetricLine,
-} from '../components/flagship';
+  FlagshipMetricLine } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useSellerTrust } from '../platform/product';
@@ -25,8 +24,7 @@ import {
   fetchSellerHubOverview,
   type SellerHubOverview,
   type SellerHubTask,
-  type SellerHubTaskType,
-} from '../services/sellerHubApi';
+  type SellerHubTaskType } from '../services/sellerHubApi';
 import { fetchImportBatches, type BatchSummaryDTO, type CatalogSource } from '../services/catalogImportApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { haptics } from '../utils/haptics';
@@ -48,8 +46,7 @@ const TASK_META: Record<SellerHubTaskType, {
   respond_offer: { icon: 'chatbubble-ellipses-outline', route: 'Inbox' },
   listing_issue: { icon: 'create-outline', route: 'InventoryManagement' },
   catalogue_awaiting: { icon: 'download-outline', route: 'CatalogImportProgress' },
-  payout_hold: { icon: 'wallet-outline', route: 'Wallet' },
-};
+  payout_hold: { icon: 'wallet-outline', route: 'Wallet' } };
 
 function formatDueAt(dueAt: string | null): string | null {
   if (!dueAt) return null;
@@ -68,8 +65,7 @@ const IMPORT_SOURCE_LABEL: Record<CatalogSource, string> = {
   ebay: 'eBay import',
   seller_package: 'Catalogue upload',
   depop: 'Depop import',
-  vinted: 'Vinted import',
-};
+  vinted: 'Vinted import' };
 
 const IN_PROGRESS_STATES: ReadonlySet<string> = new Set([
   'created', 'discovering', 'hydrating', 'ingesting_media', 'normalising',
@@ -609,8 +605,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 0,
     paddingTop: Space.sm,
-    paddingBottom: Space.xxl,
-  },
+    paddingBottom: Space.xxl },
 
   /* ── Verification banner ── */
   verificationBanner: {
@@ -622,22 +617,18 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   verificationBannerText: {
     flex: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   verificationBannerTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   verificationBannerSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
 
   /* ── Top task — dominant first-viewport object ── */
   topTaskRow: {
@@ -649,33 +640,27 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     borderRadius: Radius.lg,
     marginBottom: Space.sm,
-    minHeight: Control.hit + Space.sm,
-  },
+    minHeight: Control.hit + Space.sm },
   topTaskIconWrap: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   topTaskContent: {
     flex: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   topTaskTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   topTaskDue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
 
   /* ── Money section ── */
   moneySection: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
 
   /* ── "All caught up" — only when all sources fresh ── */
   allCaughtUp: {
@@ -683,14 +668,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   allCaughtUpText: {
     fontSize: TypographyV2.body.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: TypographyV2.body.letterSpacing,
-    lineHeight: TypographyV2.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
 
   /* ── Partial data notice ── */
   partialNotice: {
@@ -698,57 +681,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
     paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   partialNoticeText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
 
   /* ── Partial label for business pulse ── */
   partialLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* ── New seller guidance ── */
   newSellerCard: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     marginHorizontal: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   newSellerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginBottom: Space.xs - 2,
-  },
+    marginBottom: Space.xs - 2 },
   newSellerTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   newSellerTipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   newSellerTip: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight + Space.xxs,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight + Space.xxs },
 
   /* Create listing CTA */
   ctaWrap: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.lg,
-  },
-});
+    paddingVertical: Space.lg } });

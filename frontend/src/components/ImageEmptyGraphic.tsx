@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Radius, Type, Space, Stroke} from '../theme/designTokens';
+import { Typography, Radius, Space, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -40,8 +41,7 @@ export function ImageEmptyGraphic({
   height: h,
   style,
   children,
-  accessibilityElementsHidden,
-}: Props) {
+  accessibilityElementsHidden }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -75,8 +75,7 @@ export function ImageEmptyGraphic({
               styles.stripe,
               {
                 left: `${i * 22}%`,
-                backgroundColor: colors.borderSubtle,
-              },
+                backgroundColor: colors.borderSubtle },
             ]}
           />
         ))}
@@ -107,25 +106,21 @@ function createStyles(colors: ThemeColors) {
     container: {
       overflow: 'hidden',
       borderRadius: Radius.none,
-      position: 'relative',
-    },
+      position: 'relative' },
     texture: {
       ...StyleSheet.absoluteFill,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     stripe: {
       position: 'absolute',
       width: 2,
       height: '200%',
       transform: [{ rotate: '35deg' }],
-      top: '-50%',
-    },
+      top: '-50%' },
     center: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 10,
-    },
+      gap: 10 },
     iconRing: {
       width: 48,
       height: 48,
@@ -134,20 +129,16 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       backgroundColor: colors.surfaceAlt,
       borderWidth: Stroke.standard,
-      borderColor: colors.borderSubtle,
-    },
+      borderColor: colors.borderSubtle },
     labelWrap: {
       paddingHorizontal: 10,
       paddingVertical: Space.xs,
       borderRadius: Radius.sm,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     label: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       letterSpacing: 0.3,
-      textTransform: 'uppercase',
-    },
-  });
+      textTransform: 'uppercase' } });
 }

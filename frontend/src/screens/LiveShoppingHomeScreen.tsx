@@ -5,8 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -19,10 +18,10 @@ import Reanimated, {
   withRepeat,
   withSequence,
   withTiming,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -38,8 +37,7 @@ import {
   LIVE_CATEGORIES,
   LIVE_SHOPPING_DEMO_MODE,
   type LiveSession,
-  type LiveSessionSummary,
-} from '../services/liveShoppingApi';
+  type LiveSessionSummary } from '../services/liveShoppingApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -69,8 +67,7 @@ function LivePulse({ size = 8, color }: { size?: number; color: string }) {
   }, [reducedMotion, scale]);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+    transform: [{ scale: scale.value }] }));
 
   return (
     <Reanimated.View
@@ -108,8 +105,7 @@ function ViewerChip({ count, compact = false }: { count: number; compact?: boole
 const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
   session,
   formatBid,
-  onPress,
-}: {
+  onPress }: {
   session: LiveSession;
   formatBid: (gbp: number) => string;
   onPress: () => void;
@@ -177,8 +173,7 @@ const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
 // ── Replay card (past events) ──
 const ReplayCard = React.memo(function ReplayCard({
   session,
-  onPress,
-}: {
+  onPress }: {
   session: LiveSession;
   onPress: () => void;
 }) {
@@ -263,8 +258,7 @@ const UpcomingRow = React.memo(function UpcomingRow({
   session,
   onNotify,
   notified,
-  formatScheduled,
-}: {
+  formatScheduled }: {
   session: LiveSession;
   onNotify: () => void;
   notified: boolean;
@@ -341,8 +335,7 @@ const UpcomingRow = React.memo(function UpcomingRow({
 const CategoryPill = React.memo(function CategoryPill({
   label,
   selected,
-  onPress,
-}: {
+  onPress }: {
   label: string;
   selected: boolean;
   onPress: () => void;
@@ -354,8 +347,7 @@ const CategoryPill = React.memo(function CategoryPill({
         styles.categoryPill,
         {
           backgroundColor: selected ? colors.brand : 'transparent',
-          borderColor: selected ? colors.brand : colors.border,
-        },
+          borderColor: selected ? colors.brand : colors.border },
       ]}
       onPress={onPress}
       activeOpacity={0.8}
@@ -692,14 +684,11 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm - 1,
     paddingHorizontal: Space.md - 2,
     borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   categoryPillText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.1,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: -0.1 } });
 
 // ── Theme-aware styles factory ──
 function useStyles() {
@@ -712,73 +701,61 @@ function useStyles() {
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: Space.md,
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         headerLeft: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         headerTitle: {
-          fontSize: Type.priceHero.size,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.priceHero.size,
+          fontFamily: TypographyV2.priceHero.fontFamily,
           letterSpacing: -0.8,
-          color: colors.textPrimary,
-        },
+          color: colors.textPrimary },
         demoPill: {
           paddingHorizontal: Space.xs + 2,
           paddingVertical: 2,
           borderRadius: Radius.sm,
           backgroundColor: colors.warningSubtle,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.warningBorder,
-        },
+          borderColor: colors.warningBorder },
         demoPillText: {
-          fontSize: Type.meta.size - 2,
-          fontFamily: Typography.family.bold,
-          letterSpacing: Type.label.letterSpacing,
-          color: colors.warning,
-        },
+          fontSize: TypographyV2.meta.size - 2,
+          fontFamily: TypographyV2.meta.fontFamily,
+          letterSpacing: TypographyV2.label.letterSpacing,
+          color: colors.warning },
         sectionHeader: {
           flexDirection: 'row',
           alignItems: 'baseline',
           justifyContent: 'space-between',
           paddingHorizontal: Space.md,
-          marginBottom: Space.sm,
-        },
+          marginBottom: Space.sm },
         sectionTitle: {
-          fontSize: Type.priceList.size,
-          fontFamily: Typography.family.bold,
-          letterSpacing: Type.subtitle.letterSpacing,
-          color: colors.textPrimary,
-        },
+          fontSize: TypographyV2.priceList.size,
+          fontFamily: TypographyV2.priceList.fontFamily,
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+          color: colors.textPrimary },
         sectionCount: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          fontVariant: ['tabular-nums'],
-        },
+          fontVariant: ['tabular-nums'] },
         noLiveStrip: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
           gap: Space.sm,
-          paddingVertical: Space.lg,
-        },
+          paddingVertical: Space.lg },
         noLiveText: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.regular,
-          color: colors.textMuted,
-        },
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
+          color: colors.textMuted },
         // Featured card
         featuredCard: {
           borderRadius: Radius.lg,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         featuredMediaWrap: {
           width: '100%',
-          height: FEATURED_CARD_HEIGHT,
-        },
+          height: FEATURED_CARD_HEIGHT },
         featuredTopRow: {
           position: 'absolute',
           top: Space.sm,
@@ -786,8 +763,7 @@ function useStyles() {
           right: Space.sm,
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
-        },
+          justifyContent: 'space-between' },
         liveBadge: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -795,23 +771,19 @@ function useStyles() {
           paddingHorizontal: Space.sm,
           paddingVertical: Space.xs,
           borderRadius: Radius.full,
-          backgroundColor: 'rgba(255,59,48,0.92)',
-        },
+          backgroundColor: 'rgba(255,59,48,0.92)' },
         liveBadgeCompact: {
           paddingHorizontal: Space.xs + 2,
           paddingVertical: Space.xs / 2 + 1,
-          gap: Space.xs / 2 + 1,
-        },
+          gap: Space.xs / 2 + 1 },
         liveBadgeText: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.bold,
-          letterSpacing: Type.label.letterSpacing,
-          color: colors.scrimTextPrimary,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          letterSpacing: TypographyV2.label.letterSpacing,
+          color: colors.scrimTextPrimary },
         liveBadgeTextCompact: {
-          fontSize: Type.meta.size - 2,
-          letterSpacing: 0.4,
-        },
+          fontSize: TypographyV2.meta.size - 2,
+          letterSpacing: 0.4 },
         viewerChip: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -819,92 +791,77 @@ function useStyles() {
           paddingHorizontal: Space.sm,
           paddingVertical: Space.xs,
           borderRadius: Radius.full,
-          backgroundColor: colors.overlay,
-        },
+          backgroundColor: colors.overlay },
         viewerChipCompact: {
           paddingHorizontal: Space.xs + 2,
           paddingVertical: Space.xs / 2 + 1,
-          gap: Space.xs / 2 + 1,
-        },
+          gap: Space.xs / 2 + 1 },
         viewerChipText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
           letterSpacing: -0.1,
-          fontVariant: ['tabular-nums'],
-        },
+          fontVariant: ['tabular-nums'] },
         viewerChipTextCompact: {
-          fontSize: Type.meta.size - 1,
-          fontVariant: ['tabular-nums'],
-        },
+          fontSize: TypographyV2.meta.size - 1,
+          fontVariant: ['tabular-nums'] },
         featuredBottomArea: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
           padding: Space.sm + 2,
-          gap: Space.xs + 2,
-        },
+          gap: Space.xs + 2 },
         featuredSellerRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         featuredAvatar: {
           width: Space.lg + 4,
           height: Space.lg + 4,
-          borderRadius: Radius.xl,
-        },
+          borderRadius: Radius.xl },
         featuredSellerText: {
           flex: 1,
-          gap: Space.xs / 4,
-        },
+          gap: Space.xs / 4 },
         featuredNameRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         featuredSellerName: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: -0.1,
-        },
+          letterSpacing: -0.1 },
         featuredCategory: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.regular,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextSecondary,
-          letterSpacing: 0.2,
-        },
+          letterSpacing: 0.2 },
         featuredTitle: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: Type.body.letterSpacing,
-          lineHeight: Type.body.lineHeight,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing,
+          lineHeight: TypographyV2.body.lineHeight },
         featuredBidRow: {
           flexDirection: 'row',
           alignItems: 'baseline',
           justifyContent: 'space-between',
-          marginTop: Space.xs / 2,
-        },
+          marginTop: Space.xs / 2 },
         featuredBidLabel: {
-          fontSize: Type.label.size,
-          lineHeight: Type.label.lineHeight,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.label.size,
+          lineHeight: TypographyV2.label.lineHeight,
+          fontFamily: TypographyV2.label.fontFamily,
           color: colors.scrimTextSecondary,
-          letterSpacing: Type.label.letterSpacing,
-          textTransform: 'uppercase',
-        },
+          letterSpacing: TypographyV2.label.letterSpacing,
+          textTransform: 'uppercase' },
         featuredBidValue: {
-          fontSize: Type.priceList.size,
-          lineHeight: Type.priceList.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.priceList.size,
+          lineHeight: TypographyV2.priceList.lineHeight,
+          fontFamily: TypographyV2.priceList.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: Type.priceList.letterSpacing,
-          fontVariant: ['tabular-nums'],
-        },
+          letterSpacing: TypographyV2.priceList.letterSpacing,
+          fontVariant: ['tabular-nums'] },
         // Upcoming row
         upcomingRow: {
           flexDirection: 'row',
@@ -912,20 +869,17 @@ function useStyles() {
           gap: Space.sm,
           paddingVertical: Space.sm,
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        },
+          borderBottomColor: colors.border },
         upcomingRowPress: {
           flex: 1,
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         upcomingThumbWrap: {
           width: UPCOMING_THUMB_SIZE,
           height: UPCOMING_THUMB_SIZE,
           borderRadius: Radius.md,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         upcomingThumbOverlay: {
           position: 'absolute',
           bottom: Space.xs,
@@ -935,55 +889,46 @@ function useStyles() {
           borderRadius: Radius.lg,
           backgroundColor: colors.overlay,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         upcomingBody: {
           flex: 1,
-          gap: Space.xs / 2,
-        },
+          gap: Space.xs / 2 },
         upcomingScheduled: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.brand,
           letterSpacing: -0.1,
-          fontVariant: ['tabular-nums'],
-        },
+          fontVariant: ['tabular-nums'] },
         upcomingSellerRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         upcomingAvatar: {
           width: Space.lg,
           height: Space.lg,
-          borderRadius: Radius.full,
-        },
+          borderRadius: Radius.full },
         upcomingSellerName: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textSecondary,
-          letterSpacing: -0.1,
-        },
+          letterSpacing: -0.1 },
         upcomingTitle: {
-          fontSize: Type.bodyStrong.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.bodyStrong.letterSpacing,
-          lineHeight: Type.bodyStrong.lineHeight,
-        },
+          letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+          lineHeight: TypographyV2.bodyStrong.lineHeight },
         upcomingMetaRow: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
-          marginTop: Space.xs / 2,
-        },
+          marginTop: Space.xs / 2 },
         upcomingMetaText: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.medium,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          letterSpacing: Type.caption.letterSpacing,
-          fontVariant: ['tabular-nums'],
-        },
+          letterSpacing: TypographyV2.meta.letterSpacing,
+          fontVariant: ['tabular-nums'] },
         notifyBtn: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -993,34 +938,28 @@ function useStyles() {
           borderRadius: Radius.full,
           borderWidth: Stroke.standard,
           borderColor: colors.border,
-          backgroundColor: 'transparent',
-        },
+          backgroundColor: 'transparent' },
         notifyBtnActive: {
           backgroundColor: colors.brand,
-          borderColor: colors.brand,
-        },
+          borderColor: colors.brand },
         notifyBtnText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: -0.1,
-        },
+          letterSpacing: -0.1 },
         notifyBtnTextActive: {
-          color: colors.background,
-        },
+          color: colors.background },
         endedHint: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
           gap: Space.xs,
-          paddingVertical: Space.md,
-        },
+          paddingVertical: Space.md },
         endedHintText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          fontVariant: ['tabular-nums'],
-        },
+          fontVariant: ['tabular-nums'] },
         // ── Replay card ──
         replayCard: {
           width: FEATURED_CARD_WIDTH,
@@ -1028,13 +967,11 @@ function useStyles() {
           overflow: 'hidden',
           backgroundColor: colors.surface,
           borderWidth: Stroke.hairline,
-          borderColor: colors.border,
-        },
+          borderColor: colors.border },
         replayThumbWrap: {
           width: '100%',
           height: 180,
-          position: 'relative',
-        },
+          position: 'relative' },
         replayPlayOverlay: {
           position: 'absolute',
           bottom: Space.sm,
@@ -1044,8 +981,7 @@ function useStyles() {
           borderRadius: Radius.full,
           backgroundColor: colors.overlay,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         replayDurationBadge: {
           position: 'absolute',
           bottom: Space.sm,
@@ -1053,57 +989,46 @@ function useStyles() {
           backgroundColor: colors.overlay,
           paddingHorizontal: Space.xs + 2,
           paddingVertical: Space.xs / 2 + 1,
-          borderRadius: Radius.sm,
-        },
+          borderRadius: Radius.sm },
         replayDurationText: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
-          fontVariant: ['tabular-nums'],
-        },
+          fontVariant: ['tabular-nums'] },
         replayBody: {
           padding: Space.sm,
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         replaySellerRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         replayAvatar: {
           width: Space.lg + 2,
           height: Space.lg + 2,
-          borderRadius: Radius.full,
-        },
+          borderRadius: Radius.full },
         replaySellerText: {
           flex: 1,
-          gap: Space.xs / 4,
-        },
+          gap: Space.xs / 4 },
         replayNameRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs / 2,
-        },
+          gap: Space.xs / 2 },
         replaySellerName: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textPrimary,
           letterSpacing: -0.1,
-          flexShrink: 1,
-        },
+          flexShrink: 1 },
         replayEndedLabel: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.regular,
-          color: colors.textMuted,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textMuted },
         replayTitle: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.body.letterSpacing,
-          lineHeight: Type.body.lineHeight,
-        },
-      }),
+          letterSpacing: TypographyV2.body.letterSpacing,
+          lineHeight: TypographyV2.body.lineHeight } }),
     [colors],
   );
 }

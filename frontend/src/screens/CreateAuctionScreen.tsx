@@ -20,7 +20,8 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Typography, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { Meta, BodyEmphasis, Body, Headline } from '../components/ui/Text';
 import { createAuction } from '../services/marketApi';
 import { createStableId } from '../utils/createStableId';
@@ -168,8 +169,7 @@ export default function CreateAuctionScreen() {
         startingBidGbp: startingBid,
         idempotencyKey,
         ...(reservePriceGbp ? { reservePriceGbp } : {}),
-        ...(buyNowPriceGbp ? { buyNowPriceGbp } : {}),
-      });
+        ...(buyNowPriceGbp ? { buyNowPriceGbp } : {}) });
       const startLabel = startInMinutes === 0 ? 'Immediately' : `In ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`;
       const durationLabel = DURATION_OPTIONS.find(d => d.hours === durationHours)?.label ?? `${durationHours}h`;
       setResultData({
@@ -180,8 +180,7 @@ export default function CreateAuctionScreen() {
         durationLabel,
         startingBid: `${currencyCode} ${startingBidInput}`,
         reservePrice: reservePriceInput ? `${currencyCode} ${reservePriceInput}` : null,
-        buyNow: buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : null,
-      });
+        buyNow: buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : null });
       show(startInMinutes > 0 ? 'Auction scheduled successfully' : 'Auction is now live', 'success');
       // The backend pauses the listing when an auction is created from it.
       // Refresh the feed + invalidate the listing detail so the paused
@@ -688,56 +687,45 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   headerLaunchBtn: {
     borderRadius: Radius.md,
     minHeight: Control.chrome - 2,
-    paddingHorizontal: Space.smMd,
-  },
+    paddingHorizontal: Space.smMd },
   content: {
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   sectionLabel: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   // ── Listing cards — elevated with shadow + rounded image ──
   listingListContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   listingCard: {
     width: Space.xxl * 3 + Space.xs + 2,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   listingCardSelected: {
     borderColor: colors.brand,
-    borderWidth: Stroke.emphasis,
-  },
+    borderWidth: Stroke.emphasis },
   listingImageContainer: {
     width: '100%',
     height: Space.xxl * 3 + Space.lg + 2,
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   listingImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   listingMeta: {
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   listingTitle: {
-    marginBottom: Space.xs / 2,
-  },
+    marginBottom: Space.xs / 2 },
   listingPrice: {},
   selectedTick: {
     position: 'absolute',
@@ -750,39 +738,31 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: Stroke.emphasis,
-    borderColor: colors.surface,
-  },
+    borderColor: colors.surface },
   // ── Preview card ──
   previewCard: {
     marginTop: Space.sm,
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   previewImageContainer: {
     width: '100%',
     height: Space.xxl * 5,
     borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   previewImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   previewMeta: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   previewTitle: {},
   previewPrice: {
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   // ── Form cards ──
   formCard: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   windowRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   // ── Window chips — refined inactive, solid active ──
   windowChip: {
     flex: 1,
@@ -793,28 +773,22 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     paddingVertical: Space.smMd,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   windowChipActive: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   windowChipText: {
     color: colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: Typography.family.medium },
   windowChipTextActive: {
     color: colors.textInverse,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   input: {
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   buyNowRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   // ── Toggle — refined pill ──
   toggleChip: {
     borderRadius: Radius.full,
@@ -824,26 +798,21 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs + 1,
     minWidth: Space.xxl,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   toggleChipActive: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   toggleText: {
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   toggleTextActive: {
     color: colors.textInverse,
     fontFamily: Typography.family.bold,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   launchBtn: {
     marginHorizontal: Space.md,
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   // ── Step indicator — refined active/inactive, weighted connectors ──
   stepIndicator: {
     flexDirection: 'row',
@@ -851,13 +820,11 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: 0,
-  },
+    gap: 0 },
   stepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   stepDot: {
     width: Space.md + 2,
     height: Space.md + 2,
@@ -866,72 +833,57 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   stepDotActive: {
     borderColor: colors.brand,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   stepDotComplete: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   stepDotText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
     fontWeight: '700',
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   stepDotTextActive: {
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
   stepLabel: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   stepLabelActive: {
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   stepLabelCurrent: {
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   stepConnector: {
     width: Space.lg + 4,
     height: Stroke.emphasis,
     backgroundColor: colors.border,
-    marginHorizontal: Space.xs + 2,
-  },
+    marginHorizontal: Space.xs + 2 },
   stepConnectorActive: {
     backgroundColor: colors.brand,
-    height: Stroke.emphasis,
-  },
+    height: Stroke.emphasis },
   // ── Review ──
   reviewHeadline: {
-    fontSize: Type.priceHero.size - 2,
+    fontSize: TypographyV2.priceHero.size - 2,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   reviewSubheadline: {
     color: colors.textMuted,
     paddingHorizontal: Space.md,
     marginTop: Space.xs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   stageNavRow: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
-    marginBottom: Space.xl,
-  },
+    marginBottom: Space.xl },
   stageNavBtn: {
-    flex: 1,
-  },
+    flex: 1 },
   stageNavBtnFull: {
-    flex: 1,
-  },
+    flex: 1 },
   // ── Terms rows ──
   termsRow: {
     flexDirection: 'row',
@@ -939,31 +891,26 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingVertical: Space.xs + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   termsLabel: {
     color: colors.textMuted,
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.caps,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   termsValue: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.body.size,
+    fontVariant: ['tabular-nums'] },
   termsValueCol: {
-    alignItems: 'flex-end',
-  },
+    alignItems: 'flex-end' },
   termsIzeText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs / 4,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   // ── Terms & fees — inline, lighter than summary ──
   termsCard: {
     marginHorizontal: Space.md,
@@ -974,32 +921,27 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.overlay,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   termsSectionLabel: {
-    fontSize: Type.meta.size - 1,
+    fontSize: TypographyV2.meta.size - 1,
     color: colors.textMuted,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   termsInlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   termsInlineLabel: {
     flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   termsInlineValue: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textPrimary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Result overlay — crafted success moment ──
   resultOverlay: {
     position: 'absolute',
@@ -1010,8 +952,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   resultCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.xl,
@@ -1023,9 +964,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     ...Platform.select({
       ios: { shadowColor: colors.shadow, shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.3, shadowRadius: 24 },
-      android: { elevation: 16 },
-    }),
-  },
+      android: { elevation: 16 } }) },
   resultIconWrap: {
     marginBottom: Space.sm,
     width: Space.xxl + Space.xxl + 8,
@@ -1035,41 +974,32 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.emphasis,
     borderColor: colors.successBorder,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   resultTitle: {
-    fontSize: Type.title.size,
+    fontSize: TypographyV2.screenTitle.size,
     textAlign: 'center',
-    letterSpacing: Type.priceHero.letterSpacing,
-  },
+    letterSpacing: TypographyV2.priceHero.letterSpacing },
   resultSubtitle: {
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: Space.xs,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   resultImageContainer: {
     width: '100%',
     height: Space.xxl * 3 + Space.xl + Space.xs,
     borderRadius: Radius.lg,
     marginBottom: Space.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   resultImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   resultSummary: {
     width: '100%',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   resultActions: {
     flexDirection: 'row',
     gap: Space.sm,
-    width: '100%',
-  },
+    width: '100%' },
   resultBtn: {
-    flex: 1,
-  },
-  });
+    flex: 1 } });
 }

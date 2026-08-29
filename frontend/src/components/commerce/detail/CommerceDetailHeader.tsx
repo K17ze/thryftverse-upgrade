@@ -7,11 +7,11 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   runOnJS,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../../theme/designTokens';
+import { Space } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 
 /**
@@ -41,8 +41,7 @@ export function CommerceDetailHeader({
   fadeThreshold = 220,
   title,
   onBack,
-  rightAction,
-}: CommerceDetailHeaderProps) {
+  rightAction }: CommerceDetailHeaderProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -73,8 +72,7 @@ export function CommerceDetailHeader({
     const revealedOpacity = reducedMotion ? 1 : opacity;
     return {
       opacity: reducedMotion && scrollY.value < fadeThreshold ? 0 : revealedOpacity,
-      transform: [{ translateY: reducedMotion ? 0 : translateY }],
-    };
+      transform: [{ translateY: reducedMotion ? 0 : translateY }] };
   });
 
   const titleStyle = useAnimatedStyle(() => {
@@ -87,8 +85,7 @@ export function CommerceDetailHeader({
       Extrapolation.CLAMP,
     );
     return {
-      opacity: reducedMotion ? (scrollY.value >= fadeThreshold ? 1 : 0) : opacity,
-    };
+      opacity: reducedMotion ? (scrollY.value >= fadeThreshold ? 1 : 0) : opacity };
   });
 
   return (
@@ -150,35 +147,27 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 20,
-  },
+    zIndex: 20 },
   border: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   row: {
     height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   hitTarget: {
     width: 44,
     height: 44,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   pressed: {
     opacity: 0.5,
-    transform: [{ scale: 0.9 }],
-  },
+    transform: [{ scale: 0.9 }] },
   title: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: -0.2,
-    marginHorizontal: Space.xs,
-  },
+    marginHorizontal: Space.xs },
   titleSpacer: {
-    flex: 1,
-  },
-});
+    flex: 1 } });

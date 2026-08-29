@@ -1,11 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, FlatList, StyleSheet, ActivityIndicator,
-  type ListRenderItem,
-} from 'react-native';
+  type ListRenderItem } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FormSheet } from './sheets/FormSheet';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
@@ -13,8 +13,7 @@ import { useStore } from '../store/useStore';
 import { formatRelativeTime } from '../utils/dateFormat';
 import {
   fetchMoodboardComments, createMoodboardComment, resolveMoodboardComment,
-  deleteMoodboardComment, type MoodboardComment,
-} from '../services/moodboardApi';
+  deleteMoodboardComment, type MoodboardComment } from '../services/moodboardApi';
 
 export interface MoodboardCommentsSheetProps {
   visible: boolean;
@@ -28,8 +27,7 @@ type LoadStatus = 'loading' | 'error' | 'loaded';
 const AVATAR_SIZE = 28;
 
 export function MoodboardCommentsSheet({
-  visible, onDismiss, moodboardId, itemId,
-}: MoodboardCommentsSheetProps) {
+  visible, onDismiss, moodboardId, itemId }: MoodboardCommentsSheetProps) {
   const { colors } = useAppTheme();
   const currentUserId = useStore((s) => s.currentUser?.id);
   const [comments, setComments] = useState<MoodboardComment[]>([]);
@@ -234,56 +232,45 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     avatar: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: Radius.full, overflow: 'hidden' },
     avatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt },
     avatarInitial: {
-      fontFamily: FontFamily.semibold, fontSize: Type.caption.size, color: colors.textSecondary,
-    },
+      fontFamily: FontFamily.semibold, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
     rowBody: { flex: 1 },
     metaRow: { flexDirection: 'row', alignItems: 'baseline', gap: Space.xs, marginBottom: 2 },
     authorName: {
       flexShrink: 1, fontFamily: FontFamily.semibold,
-      fontSize: Type.metaElevated.size, lineHeight: Type.metaElevated.lineHeight,
-      letterSpacing: Type.metaElevated.letterSpacing, color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.label.size, lineHeight: TypographyV2.label.lineHeight,
+      letterSpacing: TypographyV2.label.letterSpacing, color: colors.textPrimary },
     timestamp: {
-      fontFamily: FontFamily.regular, fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight, color: colors.textMuted,
-    },
+      fontFamily: FontFamily.regular, fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight, color: colors.textMuted },
     body: {
-      fontFamily: FontFamily.regular, fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight, letterSpacing: Type.body.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontFamily: FontFamily.regular, fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight, letterSpacing: TypographyV2.body.letterSpacing,
+      color: colors.textPrimary },
     bodyResolved: {
-      opacity: 0.5, textDecorationLine: 'line-through', color: colors.textSecondary,
-    },
+      opacity: 0.5, textDecorationLine: 'line-through', color: colors.textSecondary },
     actionsRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: Space.xs, marginLeft: -4 },
     iconButton: { width: Control.hit, height: Control.hit, alignItems: 'center', justifyContent: 'center' },
     stateWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl },
     stateText: {
-      fontFamily: FontFamily.regular, fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight, color: colors.textMuted,
-    },
+      fontFamily: FontFamily.regular, fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight, color: colors.textMuted },
     retryButton: {
       marginTop: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.xs,
-      borderRadius: Radius.full, borderWidth: Stroke.standard, borderColor: colors.border,
-    },
-    retryText: { fontFamily: FontFamily.semibold, fontSize: Type.metaElevated.size, color: colors.textPrimary },
+      borderRadius: Radius.full, borderWidth: Stroke.standard, borderColor: colors.border },
+    retryText: { fontFamily: FontFamily.semibold, fontSize: TypographyV2.label.size, color: colors.textPrimary },
     inputBar: {
       flexDirection: 'row', alignItems: 'flex-end', gap: Space.sm,
       paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle,
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     input: {
       flex: 1, minHeight: 40, maxHeight: 120,
       paddingHorizontal: Space.smMd, paddingVertical: Space.sm,
       borderRadius: Radius.md, backgroundColor: colors.surfaceAlt,
-      fontFamily: FontFamily.regular, fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight, color: colors.inputText,
-    },
+      fontFamily: FontFamily.regular, fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight, color: colors.inputText },
     sendButton: {
       paddingHorizontal: Space.md, height: 40, borderRadius: Radius.full,
-      alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand,
-    },
+      alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand },
     sendButtonDisabled: { opacity: 0.4 },
-    sendText: { fontFamily: FontFamily.semibold, fontSize: Type.metaElevated.size, color: colors.textInverse },
-  });
+    sendText: { fontFamily: FontFamily.semibold, fontSize: TypographyV2.label.size, color: colors.textInverse } });

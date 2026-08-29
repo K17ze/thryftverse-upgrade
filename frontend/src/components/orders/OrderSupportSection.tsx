@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Type, Control } from '../../theme/designTokens';
+import { Space, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 
 interface OpenTicket {
@@ -19,14 +20,12 @@ interface Props {
 export function OrderSupportSection({
   openTicket,
   onPressOpenTicket,
-  onPressGetSupport,
-}: Props) {
+  onPressGetSupport }: Props) {
   const { colors } = useAppTheme();
 
   const themed = useMemo(() => ({
     supportLabel: { color: colors.textPrimary },
-    supportSub: { color: colors.textMuted },
-  }), [colors]);
+    supportSub: { color: colors.textMuted } }), [colors]);
 
   if (openTicket) {
     return (
@@ -68,32 +67,25 @@ export function OrderSupportSection({
 
 const styles = StyleSheet.create({
   supportSection: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   supportRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   supportRowPressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   supportInfo: {
-    flex: 1,
-  },
+    flex: 1 },
   supportLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   supportSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs / 2,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs / 2 } });

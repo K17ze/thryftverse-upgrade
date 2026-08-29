@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Control, Type, FontFamily, Stroke } from '../../theme/designTokens';
+import { Space, Control, FontFamily, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { calculatePlatformChargeGbp, sanitizeDecimalInput } from '../../utils/currencyAuthoringFlows';
 
@@ -37,8 +38,7 @@ function AuctionFieldsSection({
   onAuctionDurationHoursChange,
   errors,
   hasValidStartingBid,
-  numericStartingBid,
-}: AuctionFieldsSectionProps) {
+  numericStartingBid }: AuctionFieldsSectionProps) {
   const { colors } = useAppTheme();
 
   return (
@@ -132,84 +132,70 @@ export default AuctionFieldsSection;
 
 const styles = StyleSheet.create({
   fieldGroup: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   fieldLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    marginBottom: Space.xs,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    marginBottom: Space.xs },
   priceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.sm,
-    minHeight: Control.hit + Space.sm,
-  },
+    minHeight: Control.hit + Space.sm },
   currencySymbol: {
-    fontSize: Type.priceHero.size,
+    fontSize: TypographyV2.priceHero.size,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
-    marginRight: Space.xs + 2,
-  },
+    marginRight: Space.xs + 2 },
   priceInput: {
-    fontSize: Type.priceHero.size,
+    fontSize: TypographyV2.priceHero.size,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
     minWidth: Space.xxl + Space.lg + Space.sm,
-    padding: 0,
-  },
+    padding: 0 },
   fieldError: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   hairline: {
     height: StyleSheet.hairlineWidth,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   proceedsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   proceedsLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   proceedsLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.medium,
-    marginTop: 0,
-  },
+    marginTop: 0 },
   proceedsRight: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   proceedsAmount: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: FontFamily.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   proceedsFeeHint: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    marginTop: 0,
-  },
+    marginTop: 0 },
   toggleRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   togglePill: {
     flex: 1,
     flexDirection: 'row',
@@ -219,14 +205,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   togglePillActive: {},
   toggleText: {
-    fontSize: Type.meta.size,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
   toggleTextActive: {
-    fontFamily: FontFamily.bold,
-  },
-});
+    fontFamily: FontFamily.bold } });

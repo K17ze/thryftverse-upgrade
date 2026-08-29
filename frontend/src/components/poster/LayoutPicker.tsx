@@ -1,5 +1,6 @@
 import React from 'react';
-import { Typography, Radius, Type, Space, Stroke } from '../../theme/designTokens';
+import { Radius, Space, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   View,
@@ -7,8 +8,7 @@ import {
   Text,
   Dimensions,
   ScrollView,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -20,8 +20,7 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   runOnJS,
-  cancelAnimation,
-} from 'react-native-reanimated';
+  cancelAnimation } from 'react-native-reanimated';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { GradientRing } from './shared/GradientRing';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -66,8 +65,7 @@ function LayoutPreview({ type }: { type: LayoutType }) {
   const boxStyle = {
     backgroundColor: colors.glassBorder,
     borderRadius: Radius.sm,
-    flex: 1,
-  };
+    flex: 1 };
 
   switch (type) {
     case 'single':
@@ -141,8 +139,7 @@ const LayoutCard = React.memo(function LayoutCard({
   reducedMotion,
   entranceProgress,
   onSelect,
-  onClose,
-}: LayoutCardProps) {
+  onClose }: LayoutCardProps) {
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
   const { colors } = useAppTheme();
@@ -178,8 +175,7 @@ const LayoutCard = React.memo(function LayoutCard({
     );
     return {
       transform: [{ scale }],
-      opacity,
-    };
+      opacity };
   });
 
   const handleSelect = React.useCallback(() => {
@@ -224,8 +220,7 @@ export default function LayoutPicker({
   visible,
   currentLayout,
   onSelect,
-  onClose,
-}: LayoutPickerProps) {
+  onClose }: LayoutPickerProps) {
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
   const haptic = useHaptic();
@@ -247,8 +242,7 @@ export default function LayoutPicker({
         setTimeout(() => {
           scrollRef.current?.scrollTo({
             x: Math.max(0, activeIndex * SNAP_INTERVAL - (SCREEN_W - THUMB_SIZE) / 2),
-            animated: true,
-          });
+            animated: true });
         }, 300);
       }
     }
@@ -279,16 +273,13 @@ export default function LayoutPicker({
   }, [visible, reducedMotion, spring.entrance, translateY, backdropOpacity, contentOpacity]);
 
   const drawerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
+    opacity: backdropOpacity.value }));
 
   const contentStyle = useAnimatedStyle(() => ({
-    opacity: contentOpacity.value,
-  }));
+    opacity: contentOpacity.value }));
 
   const handleClose = React.useCallback(() => {
     haptic.light();
@@ -358,8 +349,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     backdrop: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     drawer: {
       position: 'absolute',
       bottom: 0,
@@ -370,37 +360,31 @@ function createStyles(colors: ThemeColors) {
       borderTopLeftRadius: Radius.xxl,
       borderTopRightRadius: Radius.xxl,
       overflow: 'hidden',
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     handleRow: {
       alignItems: 'center',
       paddingTop: 10,
-      paddingBottom: 6,
-    },
+      paddingBottom: 6 },
     handle: {
       width: 36,
       height: 4,
       borderRadius: Radius.sm,
-      backgroundColor: colors.glassBorder,
-    },
+      backgroundColor: colors.glassBorder },
     title: {
-      fontSize: Type.heading.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.scrimTextPrimary,
       textAlign: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     scrollContent: {
       flexDirection: 'row',
       gap: THUMB_GAP,
       paddingHorizontal: (SCREEN_W - THUMB_SIZE) / 2,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     layoutCard: {
       width: THUMB_SIZE,
       alignItems: 'center',
-      gap: 8,
-    },
+      gap: 8 },
     layoutPreview: {
       width: THUMB_SIZE,
       height: THUMB_SIZE,
@@ -409,19 +393,14 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.glassBorder,
       backgroundColor: colors.glassBorder,
       padding: Space.xs,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     layoutPreviewActive: {
       borderColor: 'transparent',
-      backgroundColor: colors.glassBorder,
-    },
+      backgroundColor: colors.glassBorder },
     layoutLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.scrimTextSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.scrimTextSecondary },
     layoutLabelActive: {
-      color: colors.scrimTextPrimary,
-    },
-  });
+      color: colors.scrimTextPrimary } });
 }

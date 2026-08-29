@@ -21,9 +21,9 @@ import Reanimated, {
   withSpring,
   withTiming,
   Easing,
-  type SharedValue,
-} from 'react-native-reanimated';
-import { Space, Radius, FontFamily, Type, Elevation } from '../../theme/designTokens';
+  type SharedValue } from 'react-native-reanimated';
+import { Space, Radius, FontFamily, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
 
@@ -48,8 +48,7 @@ export function GestureBadge({
   badgeText,
   positionXSv,
   positionYSv,
-  offsetY = 60,
-}: GestureBadgeProps) {
+  offsetY = 60 }: GestureBadgeProps) {
   const reducedMotion = useReducedMotion();
   const opacitySV = useSharedValue(0);
   const scaleSV = useSharedValue(reducedMotion ? 1 : 0.85);
@@ -66,8 +65,7 @@ export function GestureBadge({
       } else {
         opacitySV.value = withTiming(1, {
           duration: Motion.duration.fast,
-          easing: Easing.out(Easing.cubic),
-        });
+          easing: Easing.out(Easing.cubic) });
         scaleSV.value = withSpring(1, { damping: 16, stiffness: 200 });
       }
     } else {
@@ -77,8 +75,7 @@ export function GestureBadge({
       } else {
         opacitySV.value = withTiming(0, {
           duration: Motion.duration.fast,
-          easing: Easing.in(Easing.cubic),
-        });
+          easing: Easing.in(Easing.cubic) });
         scaleSV.value = withSpring(0.85, { damping: 16, stiffness: 200 });
       }
     }
@@ -90,8 +87,7 @@ export function GestureBadge({
     left: positionXSv.value,
     top: positionYSv.value - offsetY,
     opacity: opacitySV.value,
-    transform: [{ scale: scaleSV.value }],
-  }));
+    transform: [{ scale: scaleSV.value }] }));
 
   return (
     <Reanimated.View
@@ -117,20 +113,16 @@ const styles = StyleSheet.create({
     width: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 50,
-  },
+    zIndex: 50 },
   pill: {
     backgroundColor: PILL_FILL,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    ...Elevation.modal,
-  },
+    ...Elevation.modal },
   text: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     color: PILL_TEXT,
-    letterSpacing: 0.3,
-  },
-});
+    letterSpacing: 0.3 } });

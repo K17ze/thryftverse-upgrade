@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-import { Radius, Type } from '../theme/designTokens';
+import { Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 const COMMERCE_DETAIL = resolve(__dirname, '../components/commerce/detail');
 
 function readDetailComponent(name: string): string {
@@ -106,13 +107,13 @@ describe('commerce-detail family art direction (spec 05)', () => {
     it('compact density uses 26pt title', () => {
       const src = readDetailComponent('CommerceDetailIdentity');
       expect(src).toContain('titleCompact');
-      // titleCompact uses Type.priceHero.size - 2 (28 - 2 = 26pt)
+      // titleCompact uses TypographyV2.priceHero.size - 2 (28 - 2 = 26pt)
       expect(src).toMatch(/fontSize: Type\.priceHero\.size - 2/);
     });
 
     it('standard density uses 28pt title', () => {
       const src = readDetailComponent('CommerceDetailIdentity');
-      expect(src).toMatch(/title:[\s\S]*fontSize: Type.priceHero.size/);
+      expect(src).toMatch(/title:[\s\S]*fontSize: TypographyV2.priceHero.size/);
     });
   });
 

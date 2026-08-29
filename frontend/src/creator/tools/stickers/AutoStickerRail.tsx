@@ -22,22 +22,20 @@ import {
   Pressable,
   StyleSheet,
   type ViewStyle,
-  type TextStyle,
-} from 'react-native';
+  type TextStyle } from 'react-native';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Control, Stroke} from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import {
   suggestAutoStickers,
   type AutoStickerInput,
-  type ScoredSticker,
-} from './AutoStickers';
+  type ScoredSticker } from './AutoStickers';
 import type { StickerDef } from './StickerCategories';
 
 // Re-export AutoStickerInput so consumers can import it from this module
@@ -113,23 +111,19 @@ export function AutoStickerRail({ input, onStickerSelect }: AutoStickerRailProps
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      gap: Space.xs,
-    } as ViewStyle,
+      gap: Space.xs } as ViewStyle,
     eyebrow: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       color: colors.textSecondary,
-      textTransform: 'uppercase',
-    } as TextStyle,
+      textTransform: 'uppercase' } as TextStyle,
     rail: {
-      flexGrow: 0,
-    } as ViewStyle,
+      flexGrow: 0 } as ViewStyle,
     railContent: {
       gap: Space.sm,
-      paddingRight: Space.md,
-    } as ViewStyle,
+      paddingRight: Space.md } as ViewStyle,
     cell: {
       width: Control.hit,
       height: Control.hit,
@@ -138,23 +132,18 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
       borderColor: colors.borderSubtle,
       alignItems: 'center',
-      justifyContent: 'center',
-    } as ViewStyle,
+      justifyContent: 'center' } as ViewStyle,
     emoji: {
       fontSize: 28,
-      lineHeight: 32,
-    } as TextStyle,
+      lineHeight: 32 } as TextStyle,
     emptyState: {
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: Space.md,
-    } as ViewStyle,
+      paddingVertical: Space.md } as ViewStyle,
     emptyText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textMuted,
-      textAlign: 'center',
-    } as TextStyle,
-  });
+      textAlign: 'center' } as TextStyle });
 }

@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type, Control } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { DetailRow } from './OrderDetailRows';
 import type { CommerceOrder } from '../../services/commerceApi';
 
@@ -25,16 +26,14 @@ export function ShipmentDetails({
   destinationSummary,
   onCopyTracking,
   onTrackOnCarrierSite,
-  onOpenShippingLabel,
-}: Props) {
+  onOpenShippingLabel }: Props) {
   const { colors } = useAppTheme();
 
   const themed = useMemo(() => ({
     sectionLabel: { color: colors.textMuted },
     detailLabel: { color: colors.textSecondary },
     detailValueLink: { color: colors.brand },
-    shippingLabelBtnText: { color: colors.brand },
-  }), [colors]);
+    shippingLabelBtnText: { color: colors.brand } }), [colors]);
 
   return (
     <View style={styles.shipmentSection}>
@@ -93,67 +92,56 @@ export function ShipmentDetails({
 
 const styles = StyleSheet.create({
   shipmentSection: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   sectionLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Space.sm,
-    gap: Space.md,
-  },
+    gap: Space.md },
   detailLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   detailValueLink: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   copyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   shippingLabelBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingVertical: Space.sm + 2,
     marginTop: Space.xs,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   shippingLabelBtnText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   textLinkRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingVertical: Space.sm,
     marginTop: Space.xs,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   textLink: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

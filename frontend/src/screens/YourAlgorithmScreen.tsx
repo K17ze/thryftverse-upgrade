@@ -32,8 +32,7 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, {
@@ -42,8 +41,7 @@ import Reanimated, {
   withTiming,
   withSpring,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -64,10 +62,10 @@ import {
   fetchAlgorithmProfile,
   updateTopicWeight,
   removeTopic,
-  addTopic,
-} from '../services/algorithmTransparencyApi';
+  addTopic } from '../services/algorithmTransparencyApi';
 
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'YourAlgorithm'>;
 
@@ -86,16 +84,14 @@ const TOPIC_CATEGORIES = [
 const WEIGHT_META: Record<TopicWeight, { label: string; dotCount: number }> = {
   low: { label: 'Low', dotCount: 1 },
   medium: { label: 'Medium', dotCount: 2 },
-  high: { label: 'High', dotCount: 3 },
-};
+  high: { label: 'High', dotCount: 3 } };
 
 const WEIGHT_ORDER: TopicWeight[] = ['low', 'medium', 'high'];
 
 const SOURCE_LABEL: Record<SignalSource, string> = {
   explicit: 'Explicit',
   implicit: 'Implicit',
-  inferred: 'Inferred',
-};
+  inferred: 'Inferred' };
 
 // ─── Screen status ───────────────────────────────────────────────────────────
 type ScreenStatus = 'loading' | 'populated' | 'empty' | 'error' | 'offline';
@@ -160,8 +156,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
         if (updated && profile) {
           setProfile({
             ...profile,
-            topics: profile.topics.map((t) => (t.id === topicId ? updated : t)),
-          });
+            topics: profile.topics.map((t) => (t.id === topicId ? updated : t)) });
         }
       } finally {
         setUpdatingTopicId(null);
@@ -204,8 +199,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           signals: [],
           recentInfluences: [],
           lastUpdated: new Date().toISOString(),
-          isDemo: ALGORITHM_DEMO_MODE,
-        });
+          isDemo: ALGORITHM_DEMO_MODE });
       }
       setNewTopicLabel('');
       setStatus('populated');
@@ -457,8 +451,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                         styles.categoryOption,
                         i < TOPIC_CATEGORIES.length - 1 && {
                           borderBottomColor: colors.borderSubtle,
-                          borderBottomWidth: StyleSheet.hairlineWidth,
-                        },
+                          borderBottomWidth: StyleSheet.hairlineWidth },
                       ]}
                       onPress={() => {
                         haptic.selection();
@@ -495,8 +488,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
               style={[
                 styles.addBtn,
                 {
-                  backgroundColor: !newTopicLabel.trim() || isAdding ? colors.surfaceAlt : colors.brand,
-                },
+                  backgroundColor: !newTopicLabel.trim() || isAdding ? colors.surfaceAlt : colors.brand },
               ]}
               accessibilityRole="button"
               accessibilityLabel="Add topic"
@@ -528,8 +520,7 @@ function SummaryStat({
   value,
   label,
   colors,
-  styles,
-}: {
+  styles }: {
   value: string;
   label: string;
   colors: ReturnType<typeof useAppTheme>['colors'];
@@ -554,8 +545,7 @@ function HowItWorks({
   colors,
   styles,
   reducedMotion,
-  spring,
-}: {
+  spring }: {
   expanded: boolean;
   onToggle: () => void;
   colors: ReturnType<typeof useAppTheme>['colors'];
@@ -579,12 +569,10 @@ function HowItWorks({
 
   const heightStyle = useAnimatedStyle(() => ({
     height: animatedHeight.value,
-    opacity: interpolate(animatedHeight.value, [0, 10], [0, 1], Extrapolation.CLAMP),
-  }));
+    opacity: interpolate(animatedHeight.value, [0, 10], [0, 1], Extrapolation.CLAMP) }));
 
   const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }],
-  }));
+    transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }] }));
 
   return (
     <View style={styles.howItWorksWrap}>
@@ -643,8 +631,7 @@ function TopicRow({
   styles,
   reducedMotion,
   spring,
-  haptic,
-}: {
+  haptic }: {
   topic: AlgorithmTopic;
   isExpanded: boolean;
   onToggle: () => void;
@@ -675,12 +662,10 @@ function TopicRow({
 
   const heightStyle = useAnimatedStyle(() => ({
     height: animatedHeight.value,
-    opacity: interpolate(animatedHeight.value, [0, 10], [0, 1], Extrapolation.CLAMP),
-  }));
+    opacity: interpolate(animatedHeight.value, [0, 10], [0, 1], Extrapolation.CLAMP) }));
 
   const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }],
-  }));
+    transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }] }));
 
   const weightMeta = WEIGHT_META[topic.weight];
 
@@ -711,8 +696,7 @@ function TopicRow({
                   style={[
                     styles.weightDot,
                     {
-                      backgroundColor: n <= weightMeta.dotCount ? colors.textPrimary : colors.border,
-                    },
+                      backgroundColor: n <= weightMeta.dotCount ? colors.textPrimary : colors.border },
                   ]}
                 />
               ))}
@@ -764,8 +748,7 @@ function TopicRow({
                     styles.weightOption,
                     {
                       backgroundColor: selected ? colors.brand : 'transparent',
-                      borderColor: selected ? colors.brand : colors.border,
-                    },
+                      borderColor: selected ? colors.brand : colors.border },
                   ]}
                   onPress={() => onWeightChange(w)}
                   disabled={isUpdating}
@@ -828,8 +811,7 @@ function SignalRow({
   signal,
   isLast,
   colors,
-  styles,
-}: {
+  styles }: {
   signal: AlgorithmSignal;
   isLast: boolean;
   colors: ReturnType<typeof useAppTheme>['colors'];
@@ -880,8 +862,7 @@ function SignalRow({
 // ─── Loading skeleton ────────────────────────────────────────────────────────
 function LoadingSkeleton({
   styles,
-  colors,
-}: {
+  colors }: {
   styles: ReturnType<typeof createStyles>;
   colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
@@ -929,8 +910,7 @@ function LoadingSkeleton({
 function ErrorState({
   styles,
   colors,
-  onRetry,
-}: {
+  onRetry }: {
   styles: ReturnType<typeof createStyles>;
   colors: ReturnType<typeof useAppTheme>['colors'];
   onRetry: () => void;
@@ -972,16 +952,14 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     demoBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textSecondary,
-      flex: 1,
-    },
+      flex: 1 },
 
     // Offline banner
     offlineBanner: {
@@ -991,183 +969,153 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     offlineBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textSecondary,
-      flex: 1,
-    },
+      flex: 1 },
 
     // Summary strip — flat, hairline-separated
     summaryStrip: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.md,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     summaryStat: {
       flex: 1,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     summaryValue: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight },
     summaryLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs / 2 },
     summaryDivider: {
       width: StyleSheet.hairlineWidth,
-      height: Space.xl,
-    },
+      height: Space.xl },
 
     // How it works
     howItWorksWrap: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     howItWorksHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.md,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     howItWorksTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     howItWorksContent: {
       paddingBottom: Space.md,
       position: 'absolute',
       left: 0,
       right: 0,
-      top: 0,
-    },
+      top: 0 },
     howItWorksBody: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-      marginBottom: Space.sm,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
+      marginBottom: Space.sm },
     howItWorksDemo: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs },
 
     // Sections
     sectionWrap: {
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     sectionTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
-      marginBottom: Space.xs,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      marginBottom: Space.xs },
     sectionCaption: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginBottom: Space.md,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginBottom: Space.md },
 
     // Topic list — the dominant panel (flat with hairlines)
     topicList: {
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     topicRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.md,
       minHeight: Control.hit + Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     topicMain: {
       flex: 1,
-      minWidth: 0,
-    },
+      minWidth: 0 },
     topicLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
     topicMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     topicCategory: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     topicMetaGap: {
-      width: Space.sm,
-    },
+      width: Space.sm },
     weightDots: {
       flexDirection: 'row',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     weightDot: {
       width: Space.xs + 2,
       height: Space.xs + 2,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     topicSource: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginLeft: Space.sm,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginLeft: Space.sm },
     topicRight: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     topicExpandedContent: {
       paddingBottom: Space.md,
       position: 'absolute',
       left: 0,
       right: 0,
-      top: 0,
-    },
+      top: 0 },
     controlLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       textTransform: 'uppercase',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     weightSelector: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     weightOption: {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
@@ -1175,95 +1123,79 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderWidth: Stroke.standard,
       minHeight: Control.hit - Space.sm,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     weightOptionText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     weightUpdating: {
-      marginLeft: Space.xs,
-    },
+      marginLeft: Space.xs },
     removeBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     removeBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     lockHint: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     lockHintText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textMuted,
-      flex: 1,
-    },
+      flex: 1 },
 
     // Signal list
     signalList: {
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     signalRow: {
       paddingVertical: Space.md,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     signalMain: {
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     signalLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
     signalMeta: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs / 2 },
     signalWeightBar: {
       height: Space.xs - 1,
       borderRadius: Radius.sm,
       backgroundColor: colors.border,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     signalWeightFill: {
       height: '100%',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
 
     // Add topic
     addTopicRow: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     topicInput: {
       flex: 1,
       height: Control.hit + Space.sm,
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
       paddingHorizontal: Space.md,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     categoryPicker: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1272,132 +1204,110 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
       paddingHorizontal: Space.md,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     categoryPickerLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      flex: 1,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      flex: 1 },
     categoryList: {
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
       maxHeight: 240,
       marginBottom: Space.sm,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     categoryOption: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.md,
       paddingHorizontal: Space.md,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     categoryOptionText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     addBtn: {
       height: Control.hit + Space.sm,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     addBtnText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
 
     // Empty state
     emptyStateWrap: {
       alignItems: 'center',
       paddingVertical: Space.xl,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     emptyIconCircle: {
       width: Space.xl * 2,
       height: Space.xl * 2,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     emptyTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-      marginBottom: Space.xs,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      marginBottom: Space.xs },
     emptySubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-      textAlign: 'center',
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
+      textAlign: 'center' },
 
     // Error state
     errorWrap: {
       alignItems: 'center',
       paddingVertical: Space.xl,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     errorIconCircle: {
       width: Space.xl * 2,
       height: Space.xl * 2,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     errorTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-      marginBottom: Space.xs,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      marginBottom: Space.xs },
     errorSubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
       textAlign: 'center',
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     retryBtn: {
       paddingHorizontal: Space.lg,
       paddingVertical: Space.smMd,
       borderRadius: Radius.full,
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     retryBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
 
     // Skeleton
     skeletonLine: {
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     skeletonSummaryItem: {
       flex: 1,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     skeletonValue: {
       width: Space.xxl,
-      height: Space.md + Space.xs,
-    },
+      height: Space.md + Space.xs },
     skeletonLabel: {
       width: Space.xl * 2,
       height: Space.md - Space.xs,
-      marginTop: Space.xs,
-    },
-  });
+      marginTop: Space.xs } });
 }

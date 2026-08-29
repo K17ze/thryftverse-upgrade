@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -29,8 +30,7 @@ export interface CuratedCollectionsRailProps {
 export function CuratedCollectionsRail({
   collections,
   onOpenCollection,
-  onSeeAll,
-}: CuratedCollectionsRailProps) {
+  onSeeAll }: CuratedCollectionsRailProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
@@ -95,8 +95,7 @@ function CollectionCard({
   width,
   colors,
   styles,
-  onPress,
-}: {
+  onPress }: {
   collection: CuratedCollection;
   width: number;
   colors: ThemeColors;
@@ -165,57 +164,48 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     marginTop: Space.lg,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   kicker: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   seeAllButton: {
     minHeight: 44,
     paddingLeft: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   seeAllText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   titleRow: {
     paddingHorizontal: Space.md,
     marginBottom: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   title: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
-  },
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
+    lineHeight: TypographyV2.screenTitle.lineHeight },
   subtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   rail: {
     paddingHorizontal: Space.md,
     paddingRight: Space.md * 2,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   card: {
     flexShrink: 0,
     flexDirection: 'row',
@@ -224,30 +214,25 @@ function createStyles(colors: ThemeColors) {
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   cardMedia: {
     width: 116,
     minHeight: 148,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   cardImageContainer: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   cardImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   cardMediaFallback: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: Space.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   fallbackMonogram: {
     width: 42,
     height: 42,
@@ -256,17 +241,14 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   fallbackMonogramText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: 0.4,
-  },
+    letterSpacing: 0.4 },
   cardMediaTint: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   cardItemCountBadge: {
     position: 'absolute',
     left: Space.sm,
@@ -274,47 +256,40 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.xs,
     paddingVertical: 3,
     borderRadius: Radius.full,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   cardItemCountBadgeText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    color: colors.scrimTextPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextPrimary },
   cardContent: {
     flex: 1,
     minWidth: 0,
     padding: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   cardCopy: {
     flex: 1,
     minWidth: 0,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   cardKicker: {
     fontSize: 10,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   cardTitle: {
-    fontSize: Type.heading.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.2,
-    lineHeight: Type.heading.lineHeight,
-  },
+    lineHeight: TypographyV2.sectionTitle.lineHeight },
   cardSubtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   cardOpenIcon: {
     width: 36,
     height: 36,
@@ -323,7 +298,5 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  });
+    borderColor: colors.border } });
 }

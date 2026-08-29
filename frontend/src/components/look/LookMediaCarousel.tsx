@@ -6,26 +6,24 @@ import {
   Pressable,
   useWindowDimensions,
   AccessibilityInfo,
-  AppState,
-} from 'react-native';
+  AppState } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withSpring,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import {
   GestureDetector,
   Gesture,
-  FlatList,
-} from 'react-native-gesture-handler';
+  FlatList } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Control, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
@@ -76,12 +74,10 @@ interface LookMediaCarouselProps {
 const createSubComponentStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     page: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     image: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     retryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -90,14 +86,11 @@ const createSubComponentStyles = (colors: ThemeColors) =>
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     retryText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textSecondary } });
 
 // ============================================================================
 // IMAGE PAGE — pinch / double-tap zoom / pan-when-zoomed / single-tap
@@ -119,8 +112,7 @@ const MediaPage = React.memo(function MediaPage({
   pageIndex,
   totalPages,
   onZoomStart,
-  onSingleTap,
-}: MediaPageProps) {
+  onSingleTap }: MediaPageProps) {
   const reducedMotion = useReducedMotion();
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
@@ -229,8 +221,7 @@ const MediaPage = React.memo(function MediaPage({
       { translateX: translateX.value },
       { translateY: translateY.value },
       { scale: scale.value },
-    ],
-  }));
+    ] }));
 
   // Art-directed content fit: cover by default, contain when the natural
   // ratio diverges sharply from the frame so the full outfit stays visible.
@@ -318,8 +309,7 @@ const VideoPage = React.memo(function VideoPage({
   isActive,
   pageIndex,
   totalPages,
-  onSingleTap,
-}: VideoPageProps) {
+  onSingleTap }: VideoPageProps) {
   const [appIsActive, setAppIsActive] = useState(true);
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
@@ -635,8 +625,7 @@ const videoControlStyles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80,
-  },
+    height: 80 },
   centerPlayBtn: {
     position: 'absolute',
     top: '50%',
@@ -648,8 +637,7 @@ const videoControlStyles = StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   controlBar: {
     position: 'absolute',
     bottom: 0,
@@ -659,46 +647,38 @@ const videoControlStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     paddingBottom: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   controlBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   scrubTrack: {
     flex: 1,
     height: Control.hit,
     justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   scrubTrackBg: {
     height: 3,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.3)',
-    overflow: 'visible',
-  },
+    overflow: 'visible' },
   scrubTrackFill: {
     height: '100%',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   scrubThumb: {
     position: 'absolute',
     top: -5,
     width: 13,
     height: 13,
     borderRadius: Radius.full,
-    marginLeft: -6.5,
-  },
+    marginLeft: -6.5 },
   timeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
     minWidth: 32,
-    textAlign: 'center',
-  },
-});
+    textAlign: 'center' } });
 
 // ============================================================================
 // PAGINATION DOT — animated active-dot width morph
@@ -724,19 +704,16 @@ const PaginationDot = React.memo(function PaginationDot({
   isActive,
   reducedMotion,
   activeColor,
-  inactiveColor,
-}: PaginationDotProps) {
+  inactiveColor }: PaginationDotProps) {
   const widthSV = useSharedValue(isActive ? DOT_ACTIVE_WIDTH : DOT_INACTIVE_WIDTH);
 
   useEffect(() => {
     widthSV.value = withTiming(isActive ? DOT_ACTIVE_WIDTH : DOT_INACTIVE_WIDTH, {
-      duration: reducedMotion ? 0 : Motion.duration.normal,
-    });
+      duration: reducedMotion ? 0 : Motion.duration.normal });
   }, [isActive, reducedMotion, widthSV]);
 
   const animStyle = useAnimatedStyle(() => ({
-    width: widthSV.value,
-  }));
+    width: widthSV.value }));
 
   return (
     <Reanimated.View
@@ -745,8 +722,7 @@ const PaginationDot = React.memo(function PaginationDot({
           height: DOT_HEIGHT,
           borderRadius: Radius.full,
           backgroundColor: isActive ? activeColor : inactiveColor,
-          opacity: isActive ? 1 : 0.4,
-        },
+          opacity: isActive ? 1 : 0.4 },
         animStyle,
       ]}
     />
@@ -761,8 +737,7 @@ function LookMediaCarouselImpl({
   aspectRatio = 0.8,
   onActiveIndexChange,
   onFullscreenRequest,
-  accessibilityLabel = 'Look media carousel',
-}: LookMediaCarouselProps) {
+  accessibilityLabel = 'Look media carousel' }: LookMediaCarouselProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
@@ -959,15 +934,13 @@ const createStyles = (colors: ThemeColors) =>
     container: {
       position: 'relative',
       backgroundColor: colors.surfaceAlt,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     topScrim: {
       position: 'absolute',
       top: 0,
       left: 0,
       right: 0,
-      height: 132,
-    },
+      height: 132 },
     // Numeric counter pill — top-right, scrim text on overlay. A hairline
     // scrim border adds legibility on bright imagery (functional, not chrome).
     countBadge: {
@@ -980,14 +953,12 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: Space.xs,
       borderWidth: Stroke.hairline,
       borderColor: colors.scrimTextTertiary,
-      zIndex: 9,
-    },
+      zIndex: 9 },
     countBadgeText: {
       color: colors.scrimTextPrimary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontVariant: ['tabular-nums'] },
     // Dot row — bottom-center, above the caption area.
     dotRow: {
       position: 'absolute',
@@ -998,8 +969,7 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
-      zIndex: 8,
-    },
+      zIndex: 8 },
     // Swipe hint — bottom-center, below the dots. Scrim-only, auto-dismisses.
     swipeHint: {
       position: 'absolute',
@@ -1010,14 +980,11 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
-      zIndex: 7,
-    },
+      zIndex: 7 },
     swipeHintText: {
       color: colors.scrimTextSecondary,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: 0.3,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: 0.3 } });
 
 export const LookMediaCarousel = React.memo(LookMediaCarouselImpl);

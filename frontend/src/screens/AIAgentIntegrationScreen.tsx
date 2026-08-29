@@ -43,15 +43,15 @@ import {
   TextInput,
   ActivityIndicator,
   ScrollView,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
   AIProvider,
   PROVIDER_CONFIGS,
@@ -67,12 +67,10 @@ import {
   discoverModels,
   type ConnectedProvider,
   type DiscoveredModel,
-  type TestResult,
-} from '../services/aiProviderApi';
+  type TestResult } from '../services/aiProviderApi';
 import {
   pauseAllAgents,
-  getActiveAgentSessionCount,
-} from '../services/chatAgentsApi';
+  getActiveAgentSessionCount } from '../services/chatAgentsApi';
 import { useStore } from '../store/useStore';
 import type { ProviderConnectionInfo } from '../services/botsApi';
 import { AgentIcon } from '../components/agents/AgentIcon';
@@ -108,8 +106,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     openai: emptyProviderState(),
     anthropic: emptyProviderState(),
     gemini: emptyProviderState(),
-    custom: emptyProviderState(),
-  });
+    custom: emptyProviderState() });
   const [activeAgentSessions, setActiveAgentSessions] = React.useState(0);
 
   // Server-backed provider connections (Phase 3)
@@ -171,8 +168,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             testing: false,
             testResult: null,
             discoveredModels: null,
-            discovering: true,
-          };
+            discovering: true };
         }
         setProviders(next);
         setLoading(false);
@@ -187,9 +183,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             [c.provider]: {
               ...prev[c.provider],
               discoveredModels: models,
-              discovering: false,
-            },
-          }));
+              discovering: false } }));
         }
       } catch {
         // Storage read failure — leave all providers not-connected.
@@ -277,9 +271,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         editing: true,
         keyInput: '',
         baseUrlInput: prev[provider].stored?.baseUrl ?? '',
-        testResult: null,
-      },
-    }));
+        testResult: null } }));
   };
 
   const cancelEdit = (provider: AIProvider) => {
@@ -291,9 +283,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         editing: false,
         keyInput: '',
         baseUrlInput: prev[provider].stored?.baseUrl ?? '',
-        testResult: null,
-      },
-    }));
+        testResult: null } }));
   };
 
   const handleTest = async (provider: AIProvider) => {
@@ -309,8 +299,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     if (result.status === 'invalid') {
       setProviders((prev) => ({
         ...prev,
-        [provider]: { ...prev[provider], testing: false, testResult: result },
-      }));
+        [provider]: { ...prev[provider], testing: false, testResult: result } }));
       haptic.medium();
       return;
     }
@@ -332,9 +321,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         testResult: result,
         // Store the models discovered during the probe (spec 04).
         discoveredModels: result.models ?? prev[provider].discoveredModels,
-        discovering: false,
-      },
-    }));
+        discovering: false } }));
     haptic.selection();
   };
 
@@ -343,8 +330,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     await removeApiKey(provider);
     setProviders((prev) => ({
       ...prev,
-      [provider]: emptyProviderState(),
-    }));
+      [provider]: emptyProviderState() }));
     haptic.selection();
   };
 
@@ -382,8 +368,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         provider: connectProvider,
         apiKey: connectKey.trim(),
         label: connectLabel.trim() || undefined,
-        baseUrl: connectBaseUrl.trim() || undefined,
-      });
+        baseUrl: connectBaseUrl.trim() || undefined });
       if (connectProvider !== 'openai') {
         // Should not happen — form gates non-openai providers.
         return;
@@ -729,8 +714,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                     {
                       borderColor: isSelected ? colors.brand : colors.border,
                       backgroundColor: isSelected ? colors.brandSubtle : colors.surface,
-                      opacity: isAvailable ? (pressed ? 0.7 : 1) : 0.5,
-                    },
+                      opacity: isAvailable ? (pressed ? 0.7 : 1) : 0.5 },
                   ]}
                   onPress={() => isAvailable && (haptic.light(), setConnectProvider(p))}
                   disabled={!isAvailable}
@@ -947,8 +931,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             styles.toast,
             {
               backgroundColor: toast.kind === 'success' ? colors.successSubtle : colors.dangerSubtle,
-              borderColor: toast.kind === 'success' ? colors.successBorder : colors.dangerBorder,
-            },
+              borderColor: toast.kind === 'success' ? colors.successBorder : colors.dangerBorder },
           ]}
         >
           <Ionicons
@@ -1051,8 +1034,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                             ? colors.success
                             : status === 'invalid'
                               ? colors.danger
-                              : colors.textMuted,
-                      },
+                              : colors.textMuted },
                     ]}
                     numberOfLines={1}
                   >
@@ -1156,8 +1138,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                           onChangeText={(text) =>
                             setProviders((prev) => ({
                               ...prev,
-                              [providerId]: { ...prev[providerId], baseUrlInput: text },
-                            }))
+                              [providerId]: { ...prev[providerId], baseUrlInput: text } }))
                           }
                           autoCapitalize="none"
                           autoCorrect={false}
@@ -1176,8 +1157,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                         onChangeText={(text) =>
                           setProviders((prev) => ({
                             ...prev,
-                            [providerId]: { ...prev[providerId], keyInput: text, testResult: null },
-                          }))
+                            [providerId]: { ...prev[providerId], keyInput: text, testResult: null } }))
                         }
                         autoCapitalize="none"
                         autoCorrect={false}
@@ -1223,8 +1203,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                           styles.testResult,
                           {
                             color:
-                              state.testResult.status === 'valid' ? colors.success : colors.danger,
-                          },
+                              state.testResult.status === 'valid' ? colors.success : colors.danger },
                         ]}
                       >
                         {state.testResult.message}
@@ -1291,8 +1270,7 @@ function PrimaryButton({
   loading,
   disabled,
   colors,
-  styles,
-}: {
+  styles }: {
   label: string;
   onPress: () => void;
   loading?: boolean;
@@ -1335,8 +1313,7 @@ function SecondaryButton({
   danger,
   disabled,
   colors,
-  styles,
-}: {
+  styles }: {
   label: string;
   onPress: () => void;
   danger?: boolean;
@@ -1350,8 +1327,7 @@ function SecondaryButton({
         styles.secondaryBtn,
         {
           borderColor: danger ? colors.danger : colors.border,
-          opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
-        },
+          opacity: disabled ? 0.5 : pressed ? 0.7 : 1 },
       ]}
       onPress={onPress}
       disabled={disabled}
@@ -1382,8 +1358,7 @@ function emptyProviderState(): ProviderState {
     testing: false,
     testResult: null,
     discoveredModels: null,
-    discovering: false,
-  };
+    discovering: false };
 }
 
 function formatRelativeTime(iso: string): string {
@@ -1415,166 +1390,136 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     demoBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textSecondary,
-      flex: 1,
-    },
+      flex: 1 },
     summaryWrap: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.md,
-    },
+      paddingBottom: Space.md },
     summaryTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight },
     summarySubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs / 2 },
     flatRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     flatRowText: {
       flex: 1,
-      minWidth: 0,
-    },
+      minWidth: 0 },
     flatRowTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     flatRowSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginTop: Space.xs / 2 },
     flatRowCaveat: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       marginTop: Space.xs / 2,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     flatRowSeparator: {
       height: StyleSheet.hairlineWidth,
-      marginLeft: Space.md + Control.icon + Space.sm,
-    },
+      marginLeft: Space.md + Control.icon + Space.sm },
     loadingWrap: {
       paddingVertical: Space.xl,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     sectionLabelWrap: {
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     sectionLabel: {
-      fontSize: Type.label.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.label.letterSpacing,
-      textTransform: 'uppercase',
-    },
+      fontSize: TypographyV2.label.size,
+      fontFamily: TypographyV2.label.fontFamily,
+      letterSpacing: TypographyV2.label.letterSpacing,
+      textTransform: 'uppercase' },
     providerRow: {
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     providerHeader: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     providerIdentity: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.sm,
       flex: 1,
-      minWidth: 0,
-    },
+      minWidth: 0 },
     providerNameWrap: {
       flex: 1,
-      minWidth: 0,
-    },
+      minWidth: 0 },
     providerName: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     providerDesc: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs / 2 },
     providerStatus: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       flexShrink: 0,
-      textAlign: 'right',
-    },
+      textAlign: 'right' },
     connectedBody: {
       marginTop: Space.sm,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     keyDisplay: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     keyText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      flex: 1,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      flex: 1 },
     baseUrlText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     validNote: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     storageNote: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     connectCta: {
       marginTop: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     connectHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     editBody: {
       marginTop: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     inputWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1583,65 +1528,54 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
-      backgroundColor: colors.input,
-    },
+      backgroundColor: colors.input },
     input: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
       padding: 0,
-      minHeight: Space.lg,
-    },
+      minHeight: Space.lg },
     modelsWrap: {
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     modelsLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     modelDiscovering: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     modelHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     modelsList: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight + 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight + 2 },
     testResult: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     actionRow: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       gap: Space.sm,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     primaryBtn: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
       minHeight: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     primaryBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     secondaryBtn: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
@@ -1649,47 +1583,39 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
       minHeight: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     secondaryBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     securityNote: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
       marginTop: Space.lg,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     securityHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     securityTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     securityBody: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight + 2,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     // Server connections (Phase 3)
     connectFormBody: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     providerSelectorWrap: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     providerChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1697,59 +1623,49 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
       borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     providerChipText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     providerChipSoon: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     serverConnectionRow: {
       paddingVertical: Space.md,
       paddingHorizontal: Space.md,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     serverConnectionHeader: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyServerConnections: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     deviceLocalNote: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      paddingBottom: Space.sm,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      paddingBottom: Space.sm },
     confirmWrap: {
       marginHorizontal: Space.md,
       marginTop: Space.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
       borderRadius: Radius.md,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     confirmTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     confirmBody: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     toast: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -1759,93 +1675,75 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     toastText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     // Agent Studio hub (Phase 7)
     statusSkeleton: {
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     skeletonLine: {
       height: 14,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     skeletonRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm + Space.xs,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     skeletonIcon: {
       width: Space.lg + Space.xs,
       height: Space.lg + Space.xs,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     skeletonCopy: {
       flex: 1,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     agentListSkeleton: {
-      gap: 0,
-    },
+      gap: 0 },
     emptyAgents: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     emptyText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight + 1,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight + 1 },
     createAgentBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     createAgentText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     pendingAction: {
       marginTop: Space.xs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     pendingActionText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     sectionHint: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       paddingHorizontal: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     collapseHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     collapseHeaderLeft: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
-  });
+      gap: Space.xs / 2 } });
 }

@@ -2,7 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Type, FontFamily } from '../../theme/designTokens';
+import { Space, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { ConfirmationSheet } from '../ConfirmationSheet';
 
@@ -21,21 +22,17 @@ const createStyles = (colors: ThemeColors) =>
       minHeight: 50,
       gap: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     icon: {
       width: 24,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     label: {
       flex: 1,
       fontSize: 16,
       fontFamily: FontFamily.regular,
       color: colors.danger,
-      letterSpacing: Type.body.letterSpacing,
-    },
-  });
+      letterSpacing: TypographyV2.body.letterSpacing } });
 
 export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowProps) {
   const { colors } = useAppTheme();

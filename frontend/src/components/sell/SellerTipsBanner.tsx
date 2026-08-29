@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, FontFamily } from '../../theme/designTokens';
+import { Space, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { t } from '../../i18n';
 
 export interface SellerTipsBannerProps {
@@ -65,33 +66,26 @@ const styles = StyleSheet.create({
   sellerTipsSection: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   sellerTipsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   sellerTipsTitle: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   sellerTipsBody: {
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   sellerTipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   sellerTipText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight + 2,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-});
+    letterSpacing: TypographyV2.meta.letterSpacing } });

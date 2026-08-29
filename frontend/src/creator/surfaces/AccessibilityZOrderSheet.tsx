@@ -21,11 +21,11 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius, Type, Typography, FontFamily, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, FontFamily, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -63,8 +63,7 @@ export function AccessibilityZOrderSheet({
   layers,
   selectedLayerId,
   onClose,
-  onReorder,
-}: AccessibilityZOrderSheetProps) {
+  onReorder }: AccessibilityZOrderSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -106,29 +105,25 @@ export function AccessibilityZOrderSheet({
       label: 'Bring to Front',
       icon: 'arrow-up-circle-outline',
       disabled: !canEdit || isFront,
-      hint: 'Moves the selected object to the very front of the stack',
-    },
+      hint: 'Moves the selected object to the very front of the stack' },
     {
       direction: 'forward',
       label: 'Forward One',
       icon: 'chevron-up-circle-outline',
       disabled: !canEdit || isFront,
-      hint: 'Moves the selected object forward by one layer',
-    },
+      hint: 'Moves the selected object forward by one layer' },
     {
       direction: 'backward',
       label: 'Backward One',
       icon: 'chevron-down-circle-outline',
       disabled: !canEdit || isBack,
-      hint: 'Moves the selected object backward by one layer',
-    },
+      hint: 'Moves the selected object backward by one layer' },
     {
       direction: 'back',
       label: 'Send to Back',
       icon: 'arrow-down-circle-outline',
       disabled: !canEdit || isBack,
-      hint: 'Moves the selected object to the very back of the stack',
-    },
+      hint: 'Moves the selected object to the very back of the stack' },
   ];
 
   return (
@@ -232,8 +227,7 @@ export function AccessibilityZOrderSheet({
                           styles.stackLabel,
                           {
                             color: isSelected ? colors.textPrimary : colors.textSecondary,
-                            fontWeight: isSelected ? '600' : '400',
-                          },
+                            fontWeight: isSelected ? '600' : '400' },
                         ]}
                         numberOfLines={1}
                       >
@@ -262,61 +256,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   closeBtn: {
     width: TOUCH,
     height: TOUCH,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   closeBtnPlaceholder: {
-    width: TOUCH,
-  },
+    width: TOUCH },
   body: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.lg,
-    gap: Space.md,
-  },
+    gap: Space.md },
   emptyState: {
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   emptyText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    textAlign: 'center' },
   emptySubtext: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    textAlign: 'center' },
   readout: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.xs,
     paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   readoutText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontVariant: ['tabular-nums'] },
   actionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   actionBtn: {
     flexGrow: 1,
     flexBasis: '47%',
@@ -326,50 +309,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     height: TOUCH,
     borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   actionBtnText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    flexShrink: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    flexShrink: 1 },
   sectionLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.label.size,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.label.size,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   stackContainer: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    maxHeight: 220,
-  },
+    maxHeight: 220 },
   stackScroll: {},
   stackContent: {
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   stackRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.xs,
     paddingVertical: Space.sm,
-    minHeight: TOUCH,
-  },
+    minHeight: TOUCH },
   stackIndex: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     width: 24,
     textAlign: 'center',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   stackLabel: {
     flex: 1,
     fontFamily: FontFamily.regular,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   stackSelectedText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.meta.size,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

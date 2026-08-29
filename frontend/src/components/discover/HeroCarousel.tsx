@@ -5,15 +5,15 @@ import {
   StyleSheet,
   Dimensions,
   FlatList,
-  ViewToken,
-} from 'react-native';
+  ViewToken } from 'react-native';
 import { Video, ResizeMode } from '../compat/Video';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Space, Stroke} from '../../theme/designTokens';
+import { Typography, Radius, Space, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -69,8 +69,7 @@ export function HeroCarousel({ items, autoPlayInterval = 5000 }: Props) {
   ).current;
 
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 60,
-  }).current;
+    itemVisiblePercentThreshold: 60 }).current;
 
   const renderItem = useCallback(
     ({ item }: { item: HeroItem }) => (
@@ -181,12 +180,10 @@ function createStyles(colors: ThemeColors) {
     slide: {
       width: SCREEN_W,
       height: SCREEN_W * 1.3,
-      position: 'relative',
-    },
+      position: 'relative' },
     media: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     muteBtn: {
       position: 'absolute',
       top: 12,
@@ -194,30 +191,26 @@ function createStyles(colors: ThemeColors) {
       width: 44,
       height: 44,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     infoOverlay: {
       position: 'absolute',
       bottom: 56,
       left: 20,
-      right: 100,
-    },
+      right: 100 },
     sponsorLabel: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.scrimTextSecondary,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     heroTitle: {
       fontFamily: Typography.family.bold,
-      fontSize: Type.priceHero.size,
+      fontSize: TypographyV2.priceHero.size,
       color: colors.scrimTextPrimary,
       letterSpacing: -0.6,
       lineHeight: 34,
       textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 6,
-    },
+      textShadowRadius: 6 },
     visitBtn: {
       position: 'absolute',
       bottom: 56,
@@ -227,31 +220,25 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 10,
       borderRadius: Radius.xxl,
       borderWidth: Stroke.standard,
-      borderColor: colors.glassBorder,
-    },
+      borderColor: colors.glassBorder },
     visitBtnText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.caption.size,
-      color: colors.scrimTextPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      color: colors.scrimTextPrimary },
     dotsRow: {
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
       gap: 6,
       marginTop: 12,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     dot: {
       width: 6,
       height: 6,
       borderRadius: Radius.sm,
-      backgroundColor: colors.textMuted,
-    },
+      backgroundColor: colors.textMuted },
     dotActive: {
       width: 18,
       borderRadius: Radius.sm,
-      backgroundColor: colors.textPrimary,
-    },
-  });
+      backgroundColor: colors.textPrimary } });
 }

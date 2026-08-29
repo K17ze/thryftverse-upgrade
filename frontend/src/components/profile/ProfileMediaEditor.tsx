@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Type } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 type MediaStatus = 'idle' | 'uploading' | 'failed' | 'confirmed';
 
@@ -21,8 +22,7 @@ export function ProfileMediaEditor({
   error,
   onChange,
   onRetry,
-  onRevert,
-}: ProfileMediaEditorProps) {
+  onRevert }: ProfileMediaEditorProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   // Only render for active states — idle/confirmed is handled by the preview's camera buttons.
@@ -78,45 +78,36 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 2,
-  },
+    paddingVertical: Space.xs + 2 },
   statusText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   failedContainer: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     backgroundColor: 'rgba(255,77,77,0.04)',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,77,77,0.12)',
-  },
+    borderColor: 'rgba(255,77,77,0.12)' },
   failedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginBottom: Space.xs + 2,
-  },
+    marginBottom: Space.xs + 2 },
   errorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   actionRow: {
     flexDirection: 'row',
-    gap: Space.md + 2,
-  },
+    gap: Space.md + 2 },
   actionBtn: {
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   actionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand } });
 }

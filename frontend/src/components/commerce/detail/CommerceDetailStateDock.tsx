@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Radius, Typography, Elevation, DockConstants, CommerceLayout } from '../../../theme/designTokens';
+import { Space, Radius, Elevation, DockConstants, CommerceLayout } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useBreakpoint } from '../../../hooks/useBreakpoint';
@@ -120,8 +121,7 @@ export function CommerceDetailStateDock({
   secondaryAction,
   elevated = false,
   bottomInset,
-  layout = 'auto',
-}: CommerceDetailStateDockProps) {
+  layout = 'auto' }: CommerceDetailStateDockProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -159,8 +159,7 @@ export function CommerceDetailStateDock({
         {
           backgroundColor: dockBackground,
           paddingBottom: Math.max(safeBottom + Space.xs, Space.sm),
-          borderTopColor: colors.border,
-        },
+          borderTopColor: colors.border },
       ]}
     >
       {/* ── Gradient elevation overlay (top edge) ──
@@ -318,8 +317,7 @@ export function CommerceDetailStateDock({
               accessibilityRole="button"
               accessibilityState={{
                 disabled: secondaryAction.disabled,
-                busy: secondaryAction.loading,
-              }}
+                busy: secondaryAction.loading }}
             >
               {secondaryAction.loading ? (
                 <ActivityIndicator size="small" color={colors.textPrimary} />
@@ -330,8 +328,7 @@ export function CommerceDetailStateDock({
                     {
                       color: secondaryAction.disabled
                         ? colors.textMuted
-                        : colors.textSecondary,
-                    },
+                        : colors.textSecondary },
                   ]}
                 >
                   {secondaryAction.label}
@@ -352,8 +349,7 @@ export function CommerceDetailStateDock({
                       ? colors.brand
                       : colors.background,
                   borderColor: colors.border,
-                  borderWidth: primaryIsEmphasized ? 0 : 1,
-                },
+                  borderWidth: primaryIsEmphasized ? 0 : 1 },
                 pressed && !primaryAction.disabled && styles.pressed,
                 primaryAction.disabled && styles.disabled,
               ]}
@@ -361,8 +357,7 @@ export function CommerceDetailStateDock({
               accessibilityRole="button"
               accessibilityState={{
                 disabled: primaryAction.disabled,
-                busy: primaryAction.loading,
-              }}
+                busy: primaryAction.loading }}
             >
               {primaryAction.loading ? (
                 <ActivityIndicator size="small" color={primaryIsEmphasized ? colors.textInverse : colors.textPrimary} />
@@ -375,8 +370,7 @@ export function CommerceDetailStateDock({
                         ? colors.textMuted
                         : primaryIsEmphasized
                           ? colors.textInverse
-                          : colors.textPrimary,
-                    },
+                          : colors.textPrimary },
                   ]}
                 >
                   {primaryAction.label}
@@ -408,8 +402,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 100,
-  },
+    zIndex: 100 },
   // ── Buyer protection strip ──
   // Flattened into the dock surface with a hairline divider.
   protectionStrip: {
@@ -418,13 +411,11 @@ const styles = StyleSheet.create({
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   protectionText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   container: {
     width: '100%',
     minWidth: 0,
@@ -434,8 +425,7 @@ const styles = StyleSheet.create({
     // Per Design.md Elevation.floating: the dock is a genuinely floating
     // surface separating persistent action from scroll content.
     // Spec: 8px offset, 0.12 opacity, 16px radius.
-    ...Elevation.floating,
-  },
+    ...Elevation.floating },
   // ── Gradient elevation overlay ──
   // Thin gradient pinned to the top edge of the dock, fading from
   // transparent to the dock background color over ~12px. Creates a
@@ -447,15 +437,13 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 12,
-  },
+    height: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.md,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   // Per spec 05 §4: stacked layout — value cluster on top, actions
   // below in a full-width row. Prevents label truncation on compact
   // widths while preserving 44–48pt hit targets.
@@ -463,71 +451,62 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'stretch',
     gap: Space.sm,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   valueCluster: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   // Text cluster inside the value cluster — holds value, label, subtitle.
   // Needed so the thumbnail sits to the left and text stacks vertically.
   valueTextCluster: {
     flexDirection: 'column',
     gap: Space.xs,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   // Product thumbnail — tokenized via CommerceLayout.dockThumbnailSize.
   // Radius.md (8px) matches the primary action radius for visual coherence.
   thumbnail: {
     width: CommerceLayout.dockThumbnailSize,
     height: CommerceLayout.dockThumbnailSize,
     borderRadius: Radius.md,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   value: {
     // Per Design.md: price-list (20px) is the correct size for dock
     // values. price-large (28px) is reserved for checkout totals.
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   // Strikethrough original price — quiet, muted, shown above current
   // value when a discount is active. Depop/eBay pattern.
   originalValue: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     textDecorationLine: 'line-through',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   valueLabel: {
     // Per Design.md trust/commerce card micro spec: captionElevated
     // (13px) for trust copy and metadata labels. The value label
     // ("Current bid", "Your listing") is a metadata label that
     // benefits from slightly larger size for legibility in the dock.
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   actionCluster: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   // Stacked action cluster: full-width row, primary consumes available
   // space, secondary is constrained.
   actionClusterStacked: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexGrow: 1,
-  },
+    flexGrow: 1 },
   // Per Design.md button-primary spec: full-pill (Radius.full), 52px
   // height, brand fill, body-strong typography. The dock micro spec
   // confirms: "Primary CTA: full-pill." Primary action uses full-pill
@@ -539,8 +518,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 120,
-  },
+    minWidth: 120 },
   // Stacked primary: flexes to consume available width so the label
   // never truncates on compact widths.
   primaryActionStacked: {
@@ -550,13 +528,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexGrow: 1,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   primaryActionText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   // Per Design.md: secondary is a quiet text control, not a full
   // outlined button. Reduces visual noise so the primary action
   // dominates. Secondary action is a text link to reduce visual
@@ -566,57 +542,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   secondaryActionStacked: {
     minHeight: DockConstants.secondaryButtonHeight,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   secondaryActionText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   pressed: {
     opacity: 0.85,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   // Disabled state — opacity reduction per research: "Use opacity
   // reduction (40%), avoid graying out (can be confused with secondary
   // actions)."
   disabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   subtitle: {
     // Per Design.md trust/commerce card micro spec: captionElevated
     // (13px) for trust copy and state explanations. The subtitle
     // ("Complete rights disclosure", "This item has been sold") is
     // contextual copy that benefits from the slightly larger size.
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // Shipping hint — quiet, muted, shown below the price when shipping
   // context is available. Shipping cost shown inline with price for
   // transparency.
   shippingHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   // ── Low-stock indicator ──
   // Subtle warning text shown above the primary CTA when real inventory
   // data indicates low stock. 12sp, warning color, single line — quiet
   // urgency that doesn't disrupt the dock layout.
   lowStockHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

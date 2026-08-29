@@ -5,8 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -18,13 +17,13 @@ import { parseApiError } from '../lib/apiClient';
 import {
   listUserAddresses,
   deleteUserAddress,
-  CommerceAddress,
-} from '../services/commerceApi';
+  CommerceAddress } from '../services/commerceApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SavedAddresses'>;
@@ -95,8 +94,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
             postalCode: defaultAddr.postalCode,
             countryCode: defaultAddr.countryCode,
             country: defaultAddr.country,
-            isDefault: defaultAddr.isDefault,
-          });
+            isDefault: defaultAddr.isDefault });
         } else if (items.length === 0) {
           clearSavedAddress();
         }
@@ -159,8 +157,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
                   postalCode: newDefault.postalCode,
                   countryCode: newDefault.countryCode,
                   country: newDefault.country,
-                  isDefault: newDefault.isDefault,
-                });
+                  isDefault: newDefault.isDefault });
               }
             }
             show('Address removed', 'success');
@@ -171,8 +168,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
             setDeletingId(null);
           }
         },
-        variant: 'danger',
-      });
+        variant: 'danger' });
     },
     [addresses, currentUser?.id, savedAddress?.id, clearSavedAddress, saveAddress, show, haptic]
   );
@@ -190,8 +186,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
         postalCode: address.postalCode,
         countryCode: address.countryCode,
         country: address.country,
-        isDefault: address.isDefault,
-      });
+        isDefault: address.isDefault });
       navigation.navigate('AddressForm', { mode: 'edit', source: 'postage' });
     },
     [navigation, saveAddress]
@@ -371,107 +366,86 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   postureSummary: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   postureTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   postureSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs / 2 },
   skeletonWrap: {
     paddingTop: Space.sm,
-    gap: Space.md,
-  },
+    gap: Space.md },
   skeletonCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-  },
+    padding: Space.md },
   skeletonLine: {
     height: Space.md,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   listWrap: {
     paddingTop: Space.sm,
-    gap: Space.md,
-  },
+    gap: Space.md },
   addressCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-  },
+    padding: Space.md },
   addressCardBody: {
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   addressCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   addressCardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   addressCardActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   defaultBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.sm - 2,
     paddingVertical: Space.xs - 1,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   defaultBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   editAction: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   addressName: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
-    marginBottom: Space.xs / 2,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    marginBottom: Space.xs / 2 },
   addressLine: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight + 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    letterSpacing: TypographyV2.body.letterSpacing },
   addressDetail: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs / 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs / 2 },
   listFootnote: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight + 2,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textAlign: 'center',
     marginTop: Space.sm,
-    paddingHorizontal: Space.md,
-  },
-});
+    paddingHorizontal: Space.md } });

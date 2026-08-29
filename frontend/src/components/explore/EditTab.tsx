@@ -3,15 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Type, Space, Radius, Typography, Stroke, Elevation} from '../../theme/designTokens';
+import { Space, Radius, Stroke, Elevation} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
@@ -66,8 +66,7 @@ export default function EditTab() {
     title: l.title,
     brand: l.brand,
     price: l.price,
-    image: l.images[0] ?? '',
-  });
+    image: l.images[0] ?? '' });
 
   const trendingListings = React.useMemo(() => {
     if (trending.length > 0) {
@@ -76,8 +75,7 @@ export default function EditTab() {
         title: t.title,
         brand: t.brand ?? '',
         price: t.priceGbp,
-        image: t.images[0] ?? t.imageUrl ?? '',
-      }));
+        image: t.images[0] ?? t.imageUrl ?? '' }));
     }
     // Fallback to client-side sorting when backend returns no data
     return [...listings]
@@ -223,69 +221,57 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   scrollContent: {
     paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
 
   /* Trending Rail */
   trendingScroll: {
     paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   trendingItem: {
     width: 140,
-    gap: 4,
-  },
+    gap: 4 },
   trendingImage: {
     width: 140,
     height: 180,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   trendingBrand: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-    marginTop: Space.xs,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs },
   trendingTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   trendingPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.brand,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* Window Tabs */
   windowTabs: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     gap: Space.xs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   windowTab: {
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   windowTabActive: {
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   windowTabText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   windowTabTextActive: {
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
 
   /* Quiz Card */
   quizCard: {
@@ -298,31 +284,25 @@ function createStyles(colors: ThemeColors) {
     marginHorizontal: Space.md,
     padding: Space.md,
     gap: Space.sm,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   quizContent: {
     flex: 1,
-    gap: 4,
-  },
+    gap: 4 },
   quizTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   quizSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: 18,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: 18 },
   quizIconWrap: {
     width: 48,
     height: 48,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  });
+    justifyContent: 'center' } });
 }

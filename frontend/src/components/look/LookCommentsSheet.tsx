@@ -5,8 +5,7 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { SlideInDown } from 'react-native-reanimated';
@@ -14,7 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type, Stroke, Control, AvatarSize } from '../../theme/designTokens';
+import { Space, Radius, Stroke, Control, AvatarSize } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
@@ -23,8 +23,7 @@ import {
   fetchLookCommentsFromApi,
   createLookCommentOnApi,
   deleteLookCommentOnApi,
-  type LookCommentApiItem,
-} from '../../services/looksApi';
+  type LookCommentApiItem } from '../../services/looksApi';
 import { formatRelativeTime } from '../../utils/dateFormat';
 import { makeStableId } from '../../utils/createStableId';
 
@@ -45,8 +44,7 @@ export function LookCommentsSheet({
   onClose,
   onCommentCountChange,
   isAuthenticated,
-  onSignInRequired,
-}: LookCommentsSheetProps) {
+  onSignInRequired }: LookCommentsSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -254,8 +252,7 @@ export function LookCommentsSheet({
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -263,30 +260,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   headerTitle: {
-    fontSize: Type.itemTitle.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.itemTitle.size,
+    fontFamily: TypographyV2.itemTitle.fontFamily,
+    color: colors.textPrimary },
   closeBtn: {
     width: 40,
     height: 40,
     borderRadius: Radius.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   listContent: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   commentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   avatarWrap: {
     width: AvatarSize.sm,
     height: AvatarSize.sm,
@@ -294,49 +286,40 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   avatar: {
     width: AvatarSize.sm,
     height: AvatarSize.sm,
-    borderRadius: Radius.xl,
-  },
+    borderRadius: Radius.xl },
   commentBody: {
     flex: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   commentAuthor: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   commentText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   commentTime: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: Space.xxs,
-  },
+    marginTop: Space.xxs },
   emptyWrap: {
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: 40,
-  },
+    paddingVertical: 40 },
   emptyText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   emptySubtext: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textMuted },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -345,8 +328,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-  },
+    backgroundColor: colors.surface },
   input: {
     flex: 1,
     minHeight: 40,
@@ -355,29 +337,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   sendBtn: {
     width: 40,
     height: 40,
     borderRadius: Radius.xxl,
     backgroundColor: colors.brand,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   sendBtnDisabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   signInBar: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.surface,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   signInBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -388,11 +366,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.xxl,
     borderWidth: Stroke.standard,
     borderColor: colors.brand,
-    backgroundColor: colors.brandSubtle,
-  },
+    backgroundColor: colors.brandSubtle },
   signInBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand } });

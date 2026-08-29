@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography , Space, Radius, Type } from '../../theme/designTokens';
+import { Typography , Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Caption } from '../ui/Text';
 
 export type EmojiReaction = {
@@ -28,8 +29,7 @@ const EXTENDED_EMOJIS = [
 export function EmojiReactionsBar({
   reactions,
   onReact,
-  style,
-}: EmojiReactionsBarProps) {
+  style }: EmojiReactionsBarProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [expanded, setExpanded] = React.useState(false);
@@ -105,8 +105,7 @@ export function EmojiReactionsBar({
 export function MessageReactionsSummary({
   reactions,
   onPress,
-  style,
-}: {
+  style }: {
   reactions: EmojiReaction[];
   onPress?: () => void;
   style?: ViewStyle;
@@ -143,8 +142,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -155,36 +153,29 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 3,
-    minHeight: 36,
-  },
+    minHeight: 36 },
   chipActive: {
     borderColor: colors.brand,
-    backgroundColor: colors.brandSubtle,
-  },
+    backgroundColor: colors.brandSubtle },
   emoji: {
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   count: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   plus: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   expandedDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
     marginHorizontal: Space.xs,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   expandedGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.xs + 2,
     paddingHorizontal: Space.xs,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   summaryContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -195,12 +186,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   emojiStack: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   summaryEmojiWrap: {
     width: 18,
     height: 18,
@@ -209,13 +198,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   summaryEmoji: {
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   summaryCount: {
     marginLeft: Space.xs + 2,
-    fontFamily: Typography.family.medium,
-  },
-});
+    fontFamily: Typography.family.medium } });

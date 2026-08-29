@@ -4,12 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Typography, Type, Radius, Control, Stroke } from '../theme/designTokens';
+import { Space, Typography, Radius, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   FlagshipHeader,
-  FlagshipScreen,
-} from '../components/flagship';
+  FlagshipScreen } from '../components/flagship';
 import { reportUser, blockUser, type ReportReason } from '../services/profileApi';
 import { reportListing, type ListingReportReason } from '../services/listingsApi';
 import { reportConversationOnApi } from '../services/chatApi';
@@ -39,74 +39,62 @@ const REPORT_REASONS: Array<{
     key: 'spam',
     label: 'Spam',
     description: 'Unwanted promotion, scams or repetitive messages',
-    icon: 'mail-unread-outline',
-  },
+    icon: 'mail-unread-outline' },
   {
     key: 'harassment',
     label: 'Harassment',
     description: 'Threatening, abusive or targeted unwanted contact',
-    icon: 'warning-outline',
-  },
+    icon: 'warning-outline' },
   {
     key: 'hate_speech',
     label: 'Hate speech',
     description: 'Slurs, dehumanizing language, or attacks on protected groups',
-    icon: 'megaphone-outline',
-  },
+    icon: 'megaphone-outline' },
   {
     key: 'counterfeit',
     label: 'Fake item',
     description: 'Counterfeit goods or misleading authenticity claims',
-    icon: 'pricetag-outline',
-  },
+    icon: 'pricetag-outline' },
   {
     key: 'prohibited',
     label: 'Prohibited item',
     description: 'Weapons, drugs, wildlife, or other prohibited categories',
-    icon: 'ban-outline',
-  },
+    icon: 'ban-outline' },
   {
     key: 'off_platform',
     label: 'Off-platform request',
     description: 'Asked to transact outside Thryftverse, against policy',
-    icon: 'exit-outline',
-  },
+    icon: 'exit-outline' },
   {
     key: 'scam',
     label: 'Scam or fraud',
     description: 'Attempted financial fraud, phishing, or impersonation',
-    icon: 'cash-outline',
-  },
+    icon: 'cash-outline' },
   {
     key: 'misinformation',
     label: 'Misleading content',
     description: 'False or misleading claims about an item',
-    icon: 'information-circle-outline',
-  },
+    icon: 'information-circle-outline' },
   {
     key: 'privacy',
     label: 'Privacy violation',
     description: 'Shared private information without consent',
-    icon: 'lock-closed-outline',
-  },
+    icon: 'lock-closed-outline' },
   {
     key: 'impersonation',
     label: 'Impersonation',
     description: 'Pretending to be someone else',
-    icon: 'person-outline',
-  },
+    icon: 'person-outline' },
   {
     key: 'minor_safety',
     label: 'Minor safety',
     description: 'Content or behavior endangering minors',
-    icon: 'shield-outline',
-  },
+    icon: 'shield-outline' },
   {
     key: 'other',
     label: 'Something else',
     description: 'Tell the moderation team what happened',
-    icon: 'help-circle-outline',
-  },
+    icon: 'help-circle-outline' },
 ];
 
 export default function ReportScreen({ navigation, route }: Props) {
@@ -156,14 +144,12 @@ export default function ReportScreen({ navigation, route }: Props) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.85,
-        selectionLimit: 3 - evidenceItems.length,
-      });
+        selectionLimit: 3 - evidenceItems.length });
       if (result.canceled || !result.assets?.length) return;
       const placeholders: EvidenceItem[] = result.assets.map((_, idx) => ({
         id: `pick_${Date.now()}_${idx}`,
         uri: '',
-        state: 'uploading',
-      }));
+        state: 'uploading' }));
       setEvidenceItems((prev) => [...prev, ...placeholders]);
       setIsUploading(true);
       let successCount = 0;
@@ -213,14 +199,12 @@ export default function ReportScreen({ navigation, route }: Props) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.85,
-      });
+        quality: 0.85 });
       if (result.canceled || !result.assets?.length) return;
       const placeholder: EvidenceItem = {
         id: `cam_${Date.now()}`,
         uri: '',
-        state: 'uploading',
-      };
+        state: 'uploading' };
       setEvidenceItems((prev) => [...prev, placeholder]);
       setIsUploading(true);
       try {
@@ -623,68 +607,57 @@ export default function ReportScreen({ navigation, route }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   intro: {
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   introTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   introBody: {
     maxWidth: 340,
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   reasons: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   reason: {
     minHeight: Control.hit + Space.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   reasonDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   reasonIcon: {
     width: Space.lg + Space.xs,
     height: Space.lg + Space.xs,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   reasonIconSelected: {
     // TODO: replace `${colors.textPrimary}14` with textPrimarySubtle token when available
-    backgroundColor: `${colors.textPrimary}14`,
-  },
+    backgroundColor: `${colors.textPrimary}14` },
   reasonCopy: {
     minWidth: 0,
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   reasonLabel: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   reasonDescription: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   radio: {
     width: Space.lg - Space.xs,
     height: Space.lg - Space.xs,
@@ -692,27 +665,22 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   radioSelected: {
-    borderColor: colors.textPrimary,
-  },
+    borderColor: colors.textPrimary },
   radioDot: {
     width: Space.sm + 2,
     height: Space.sm + 2,
     borderRadius: Radius.full,
-    backgroundColor: colors.textPrimary,
-  },
+    backgroundColor: colors.textPrimary },
   details: {
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   detailsLabel: {
     marginBottom: Space.xs + 2,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   detailsInput: {
     minHeight: Space.xl * 3 + Space.md + Space.xs,
     padding: Space.md,
@@ -722,39 +690,33 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
     backgroundColor: colors.background,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   characterCount: {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-    textAlign: 'right',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'right' },
   evidenceLabel: {
     marginTop: Space.lg,
     marginBottom: Space.xs + 2,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   evidenceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   evidenceTileWrap: {
-    position: 'relative',
-  },
+    position: 'relative' },
   evidenceTile: {
     width: Space.xxl + Space.xl,
     height: Space.xxl + Space.xl,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   evidenceRemoveBtn: {
     position: 'absolute',
     top: -Space.xs,
@@ -762,11 +724,9 @@ function createStyles(colors: ThemeColors) {
     width: Control.chrome,
     height: Control.chrome,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   evidenceTilePlaceholder: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   evidenceStateOverlay: {
     position: 'absolute',
     top: 0,
@@ -774,8 +734,7 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     bottom: 0,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   evidenceStateBadge: {
     position: 'absolute',
     bottom: Space.xs,
@@ -785,13 +744,11 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.success,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   evidenceUploadRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   evidenceUploadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -800,93 +757,80 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   evidenceUploadText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   evidenceCount: {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   submitAction: {
     minHeight: Space.xxl,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.textPrimary,
-  },
+    backgroundColor: colors.textPrimary },
   submitDisabled: {
-    opacity: 0.36,
-  },
+    opacity: 0.36 },
   submitText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   complete: {
     alignItems: 'center',
     paddingHorizontal: Space.xl,
-    paddingTop: Control.hit * 2,
-  },
+    paddingTop: Control.hit * 2 },
   completeTitle: {
     marginTop: Space.md,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    textAlign: 'center' },
   reportIdText: {
     marginTop: Space.xs,
     color: colors.brand,
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    textAlign: 'center' },
   reportIdNote: {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    textAlign: 'center' },
   completeBody: {
     maxWidth: 330,
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    textAlign: 'center' },
   submittedAtText: {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'center' },
   submittedEvidence: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm,
     marginTop: Space.md,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   doneAction: {
     minWidth: 150,
     minHeight: Control.hit,
@@ -895,14 +839,12 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.textPrimary,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   doneActionText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   blockAction: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -915,28 +857,24 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
     borderColor: colors.danger,
-    backgroundColor: colors.danger,
-  },
+    backgroundColor: colors.danger },
   blockActionText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   blockedNote: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     marginTop: Space.md,
-    maxWidth: 300,
-  },
+    maxWidth: 300 },
   blockedNoteText: {
     flex: 1,
     color: colors.success,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   secondaryDoneAction: {
     minWidth: 140,
     minHeight: Control.hit,
@@ -946,13 +884,10 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   secondaryDoneText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight } });
 }

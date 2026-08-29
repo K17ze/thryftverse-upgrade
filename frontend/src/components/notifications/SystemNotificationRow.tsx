@@ -5,16 +5,13 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   NotificationRowBase,
   NotificationStatusIcon,
-  NotificationActionButton,
-} from './NotificationRowBase';
+  NotificationActionButton } from './NotificationRowBase';
 import {
-  Type,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   readPayloadString,
-  type NotificationEventV2,
-} from '../../services/notificationsApi';
+  type NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
 // SystemNotificationRow — resolution / dispute / system events
@@ -56,8 +53,7 @@ export function SystemNotificationRow({
   aggregatedCount,
   inAttentionSection = false,
   onPress,
-  onAction,
-}: SystemNotificationRowProps) {
+  onAction }: SystemNotificationRowProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -117,21 +113,17 @@ export function SystemNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyStrong.lineHeight,
-      flexShrink: 1,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      flexShrink: 1 },
     titleUnread: {
       color: colors.textPrimary,
-      fontFamily: FontFamily.semibold,
-    },
+      fontFamily: FontFamily.semibold },
     body: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      lineHeight: TypographyV2.body.lineHeight } });
 }

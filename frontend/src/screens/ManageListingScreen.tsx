@@ -7,8 +7,7 @@ import {
   StatusBar,
   Dimensions,
   Share,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
@@ -16,8 +15,7 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { ProductDetailSkeleton } from '../components/product/ProductDetailSkeleton';
@@ -34,14 +32,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Space,
   Radius,
-  Type,
-  Typography,
   Stroke,
   Control,
   LetterSpacing,
   Numeric,
-  FontFamily,
-} from '../theme/designTokens';
+  FontFamily } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -169,7 +165,7 @@ export default function ManageListingScreen() {
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
         <Ionicons name="warning-outline" size={48} color={colors.textMuted} />
-        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.md }}>
+        <Text style={{ fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary, marginTop: Space.md }}>
           Could not load listing
         </Text>
         <AppButton title="Retry" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => {
@@ -196,10 +192,10 @@ export default function ManageListingScreen() {
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
         <Ionicons name="lock-closed-outline" size={48} color={colors.textMuted} />
-        <Text style={{ fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginTop: Space.md }}>
+        <Text style={{ fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary, marginTop: Space.md }}>
           Permission denied
         </Text>
-        <Text style={{ fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
+        <Text style={{ fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
           You do not have permission to manage this listing.
         </Text>
         <AppButton title="Go back" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => navigation.goBack()} />
@@ -213,8 +209,7 @@ export default function ManageListingScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.priceGbp ?? 0, currencyCode, { displayMode: 'fiat' })}.`,
-      });
+        message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.priceGbp ?? 0, currencyCode, { displayMode: 'fiat' })}.` });
     } catch {
       // silently fail
     }
@@ -238,8 +233,7 @@ export default function ManageListingScreen() {
           show('Failed to delete listing', 'error');
         }
       },
-      variant: 'danger',
-    });
+      variant: 'danger' });
   };
 
   const status = item.status ?? 'active';
@@ -264,8 +258,7 @@ export default function ManageListingScreen() {
         } catch {
           show('Failed to update listing', 'error');
         }
-      },
-    });
+      } });
   };
 
   const handlePause = async () => {
@@ -309,8 +302,7 @@ export default function ManageListingScreen() {
       confirmLabel: firstAction.label,
       cancelLabel: 'Cancel',
       variant: 'default',
-      onConfirm: firstAction.action,
-    });
+      onConfirm: firstAction.action });
   };
 
   // Status metadata for the flat identity block.
@@ -617,37 +609,31 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     hdrBtn: {
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     hdrTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.textPrimary,
-      maxWidth: SCREEN_W * 0.5,
-    },
+      maxWidth: SCREEN_W * 0.5 },
 
     // ── Media carousel ──
     heroWrap: {
       width: SCREEN_W,
       height: SCREEN_W,
       position: 'relative',
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     heroImage: {
       width: SCREEN_W,
-      height: SCREEN_W,
-    },
+      height: SCREEN_W },
     heroOverlay: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     dotRow: {
       position: 'absolute',
       bottom: Space.md,
@@ -655,18 +641,15 @@ function createStyles(colors: ThemeColors) {
       right: 0,
       flexDirection: 'row',
       justifyContent: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     dot: {
       width: Space.xs + 2,
       height: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.scrimTextTertiary,
-    },
+      backgroundColor: colors.scrimTextTertiary },
     dotActive: {
       backgroundColor: colors.textInverse,
-      width: Control.iconCompact,
-    },
+      width: Control.iconCompact },
 
     // ── Flat identity block ──
     // Per AGENTS.md §4: no floating white card over media. Title, price and
@@ -674,51 +657,43 @@ function createStyles(colors: ThemeColors) {
     identityBlock: {
       paddingHorizontal: Space.md,
       paddingTop: Space.lg,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     identityTitle: {
-      fontSize: Type.itemTitle.size,
-      lineHeight: Type.itemTitle.lineHeight,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.itemTitle.size,
+      lineHeight: TypographyV2.itemTitle.lineHeight,
+      fontFamily: TypographyV2.itemTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.itemTitle.letterSpacing,
-    },
+      letterSpacing: TypographyV2.itemTitle.letterSpacing },
     identityPrice: {
       ...Numeric.priceList,
       fontFamily: FontFamily.bold,
       color: colors.textPrimary,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     statusRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     statusPillFlat: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       borderRadius: Radius.full,
       paddingHorizontal: Space.sm + Space.xxs,
-      paddingVertical: Space.xxs + 1,
-    },
+      paddingVertical: Space.xxs + 1 },
     statusDotFlat: {
       width: Space.xs + 2,
       height: Space.xs + 2,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     statusPillFlatText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: LetterSpacing.wide,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: LetterSpacing.wide },
     statusMeta: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      flexShrink: 1,
-    },
+      flexShrink: 1 },
 
     // ── Primary CTA ──
     editBtn: {
@@ -730,8 +705,7 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.md,
       paddingVertical: Space.md,
       borderRadius: Radius.xl,
-      backgroundColor: colors.textPrimary,
-    },
+      backgroundColor: colors.textPrimary },
 
     // ── Transparent action cluster ──
     // Per AGENTS.md §4: transparent 44pt targets, 20–24pt glyphs, no grey
@@ -741,46 +715,38 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-around',
       marginHorizontal: Space.md,
       marginTop: Space.md,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     iconAction: {
       alignItems: 'center',
       gap: Space.xs,
       width: Control.hit,
       height: Control.hit,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     iconActionLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
 
     // ── Section labels (flat, no card) ──
     sectionLabel: {
-      fontSize: Type.label.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.label.size,
+      fontFamily: TypographyV2.label.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: LetterSpacing.caps,
       paddingHorizontal: Space.md,
       paddingTop: Space.lg,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
 
     // ── Metrics section ──
     metricsSection: {
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
 
     // ── Disclosure group ──
     disclosureGroup: {
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
 
     // ── More / terminal section ──
     moreSection: {
-      marginTop: Space.lg,
-    },
-  });
+      marginTop: Space.lg } });
 }

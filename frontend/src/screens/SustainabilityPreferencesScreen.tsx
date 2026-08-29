@@ -33,14 +33,14 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
   fetchMyImpactLedger,
   fetchSustainabilityPreferences,
   updateSustainabilityPreferences,
   type ImpactLedgerResponse,
-  type SustainabilityPreferences,
-} from '../services/impactApi';
+  type SustainabilityPreferences } from '../services/impactApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SustainabilityPreferences'>;
 
@@ -122,8 +122,7 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
         plasticFreePackaging: p.plasticFreePackaging,
         showBadges: p.showBadges,
         trackImpact: p.trackImpact,
-        localFirst: p.localFirst,
-      };
+        localFirst: p.localFirst };
       updateSustainabilityPreferences(patch).catch((err) => {
         console.warn('[sustainability] persist failed', err);
       });
@@ -324,13 +323,11 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
       paddingBottom: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     summaryTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     heroPanel: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -338,53 +335,44 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       paddingVertical: Space.md + Space.xs,
       paddingHorizontal: Space.md,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     heroStat: {
-      fontSize: Type.bodyStrong.size + 4,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-      flex: 1,
-    },
+      fontSize: TypographyV2.bodyStrong.size + 4,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      flex: 1 },
     heroSecondary: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
       marginTop: Space.xs / 2,
-      flex: 1,
-    },
+      flex: 1 },
     emptyStateText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-      flex: 1,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      flex: 1 },
     goalRow: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     goalRowLast: {
-      borderBottomWidth: 0,
-    },
+      borderBottomWidth: 0 },
     goalLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     goalHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     chipRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.xs,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     chip: {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 2,
@@ -392,34 +380,27 @@ function createStyles(colors: ThemeColors) {
       borderWidth: StyleSheet.hairlineWidth,
       minHeight: Control.chromeCompact,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     chipText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     footer: {
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     methodologyToggle: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     methodologyLink: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     methodologyText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs } });
 }

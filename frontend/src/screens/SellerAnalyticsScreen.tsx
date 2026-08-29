@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
@@ -178,8 +179,7 @@ function ActivityChart({ buckets, colors, accessibilitySummary }: { buckets: Cha
                         chartStyles.bar,
                         {
                           height: `${heightPct}%`,
-                          backgroundColor: bucket.count > 0 ? colors.brand : colors.surfaceAlt,
-                        },
+                          backgroundColor: bucket.count > 0 ? colors.brand : colors.surfaceAlt },
                       ]}
                     />
                   </View>
@@ -215,88 +215,70 @@ function ActivityChart({ buckets, colors, accessibilitySummary }: { buckets: Cha
 
 const chartStyles = StyleSheet.create({
   container: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   chartArea: {
     flexDirection: 'row',
-    alignItems: 'stretch',
-  },
+    alignItems: 'stretch' },
   yAxis: {
     width: 26,
     height: 80,
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    paddingRight: Space.xs,
-  },
+    paddingRight: Space.xs },
   yAxisLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.size + 2,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.size + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   plotArea: {
     flex: 1,
     height: 80,
-    position: 'relative',
-  },
+    position: 'relative' },
   gridLine: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: StyleSheet.hairlineWidth,
-  },
+    height: StyleSheet.hairlineWidth },
   barsRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     height: '100%',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   barColumn: {
     flex: 1,
     height: '100%',
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   barTrack: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   bar: {
     width: '100%',
     borderTopLeftRadius: Radius.sm,
     borderTopRightRadius: Radius.sm,
-    minHeight: 2,
-  },
+    minHeight: 2 },
   labelsRow: {
     flexDirection: 'row',
-    marginTop: Space.xs - 2,
-  },
+    marginTop: Space.xs - 2 },
   yAxisSpacer: {
-    width: 26,
-  },
+    width: 26 },
   labelsTrack: {
     flex: 1,
     flexDirection: 'row',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   labelColumn: {
     flex: 1,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   labelText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   emptyWrap: {
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.lg,
-  },
+    paddingVertical: Space.lg },
   emptyText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily } });
 
 export default function SellerAnalyticsScreen() {
   const a11yRef = useRef<any>(null);
@@ -420,8 +402,7 @@ export default function SellerAnalyticsScreen() {
       {
         icon: 'cash-outline',
         label: 'Avg order value',
-        value: avgOrderValue != null ? formatFromFiat(avgOrderValue, currencyCode) : 'Unavailable',
-      },
+        value: avgOrderValue != null ? formatFromFiat(avgOrderValue, currencyCode) : 'Unavailable' },
       { icon: 'trending-up-outline', label: 'Conversion', value: conversionRate != null ? `${conversionRate.toFixed(1)}%` : 'Unavailable' },
       { icon: 'eye-outline', label: 'Views', value: totalViews != null ? String(totalViews) : 'Unavailable' },
     ];
@@ -440,8 +421,7 @@ export default function SellerAnalyticsScreen() {
           views: t.viewsCount,
           likes: t.likesCount,
           status: t.status,
-          imageUrl: listing?.imageUrl ?? listing?.images?.[0] ?? null,
-        };
+          imageUrl: listing?.imageUrl ?? listing?.images?.[0] ?? null };
       });
     }
     return [...listings]
@@ -454,8 +434,7 @@ export default function SellerAnalyticsScreen() {
         views: l.engagement?.views ?? 0,
         likes: l.engagement?.likes ?? 0,
         status: l.status,
-        imageUrl: l.imageUrl ?? l.images?.[0] ?? null,
-      }));
+        imageUrl: l.imageUrl ?? l.images?.[0] ?? null }));
   }, [listings, topPerformersData]);
 
   // ── Activity chart data ──
@@ -486,8 +465,7 @@ export default function SellerAnalyticsScreen() {
         views: l.engagement?.views ?? 0,
         likes: l.engagement?.likes ?? 0,
         status: l.status,
-        imageUrl: l.imageUrl ?? l.images?.[0] ?? null,
-      }));
+        imageUrl: l.imageUrl ?? l.images?.[0] ?? null }));
   }, [listings]);
 
   const periodLabel = period === '7d' ? '7 days' : period === '30d' ? '30 days' : '90 days';
@@ -577,7 +555,7 @@ export default function SellerAnalyticsScreen() {
       ) : null}
       {partialError ? (
         <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt }}>
-          <Text style={{ fontSize: Type.captionElevated.size, color: colors.textMuted, lineHeight: Type.captionElevated.lineHeight }}>
+          <Text style={{ fontSize: TypographyV2.meta.size, color: colors.textMuted, lineHeight: TypographyV2.meta.lineHeight }}>
             Analytics details couldn't be loaded — showing listing data only. Pull to retry.
           </Text>
         </View>
@@ -815,36 +793,30 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
 
     // ── Primary outcome hero ──
     heroBlock: {
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     heroEyebrow: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
-      marginBottom: Space.xs - 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginBottom: Space.xs - 2 },
     heroValue: {
-      fontSize: Type.priceHero.size,
-      lineHeight: Type.priceHero.lineHeight,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.priceHero.size,
+      lineHeight: TypographyV2.priceHero.lineHeight,
+      fontFamily: TypographyV2.priceHero.fontFamily,
+      fontVariant: ['tabular-nums'] },
     heroTrendRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     heroTrendText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontVariant: ['tabular-nums'] },
 
     // ── Period selector — segmented control ──
     periodSegmentRow: {
@@ -853,89 +825,74 @@ function createStyles(colors: ThemeColors) {
       marginVertical: Space.sm,
       backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.md,
-      padding: Space.xxs,
-    },
+      padding: Space.xxs },
     periodSegment: {
       flex: 1,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.sm,
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: Control.chrome,
-    },
+      minHeight: Control.chrome },
     periodSegmentText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
 
     // ── Activity chart section ──
     chartSection: {
       marginTop: Space.sm,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     chartHeader: {
       flexDirection: 'row',
       alignItems: 'baseline',
       justifyContent: 'space-between',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     chartTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     chartSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontVariant: ['tabular-nums'] },
 
     // ── KPI flat rows ──
     kpiList: {
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     // ── Seller Analytics v2 — engagement insights section ──
     v2Section: {
       marginTop: Space.lg,
       paddingTop: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     v2Header: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     v2HeaderTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     kpiRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm + 2,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     kpiLabelCol: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     kpiLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     kpiValue: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontVariant: ['tabular-nums'] },
 
     // ── Section headers ──
     sectionHeader: {
@@ -943,116 +900,92 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       marginTop: Space.lg,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     sectionTitleRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     sectionTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily },
     sectionHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
 
     // ── Top listings — media-first rows with hairline dividers ──
     topListingsList: {
-      gap: 0,
-    },
+      gap: 0 },
     topListingRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.md,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     topListingThumb: {
       width: 48,
       height: 48,
       borderRadius: Radius.sm,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     topListingThumbImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     topListingThumbPlaceholder: {
       flex: 1,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     topListingInfo: {
       flex: 1,
-      gap: Space.xs - 2,
-    },
+      gap: Space.xs - 2 },
     topListingRowTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     topListingRowMeta: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontVariant: ['tabular-nums'] },
     topListingRowPrice: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontVariant: ['tabular-nums'] },
 
     // ── Needs attention — flat rows with images ──
     listingList: {
-      gap: 0,
-    },
+      gap: 0 },
     attentionRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm + 2,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     attentionImageWrap: {
       width: 40,
       height: 40,
       borderRadius: Radius.sm,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     attentionImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     attentionImagePlaceholder: {
       flex: 1,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     attentionInfo: {
       flex: 1,
-      gap: Space.xs - 2,
-    },
+      gap: Space.xs - 2 },
     attentionTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     attentionIssue: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     attentionPrice: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      fontVariant: ['tabular-nums'] },
 
     // ── Skeleton ──
     skeletonKpiRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: Space.sm + 2,
-    },
-  });
+      paddingVertical: Space.sm + 2 } });
 }

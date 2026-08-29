@@ -5,12 +5,12 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Image as RNImage,
-} from 'react-native';
+  Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Radius, Type, Space, EditorMaterial, Stroke} from '../theme/designTokens';
+import { Typography, Radius, Space, EditorMaterial, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { BlurView } from 'expo-blur';
@@ -111,8 +111,7 @@ export function CreatorEntryScreen({
   onBlankStart,
   onOpenDraft,
   onVisualSearchCapture,
-  onViewportChange,
-}: CreatorEntryScreenProps) {
+  onViewportChange }: CreatorEntryScreenProps) {
   const insets = useSafeAreaInsets();
   const isPoster = documentType === 'poster';
   const haptic = useHaptic();
@@ -185,15 +184,13 @@ export function CreatorEntryScreen({
         uri,
         kind: 'image',
         width: imgW,
-        height: imgH,
-      };
+        height: imgH };
       onMediaSelected([media]);
     }, () => {
       const media: CreatorInitialMedia = {
         id: `capture_${Date.now()}`,
         uri,
-        kind: 'image',
-      };
+        kind: 'image' };
       onMediaSelected([media]);
     });
   }, [mode, onMediaSelected, onVisualSearchCapture, haptic]);
@@ -224,8 +221,7 @@ export function CreatorEntryScreen({
       kind: a.mediaType,
       width: a.width,
       height: a.height,
-      durationMs: a.durationMs,
-    }));
+      durationMs: a.durationMs }));
     haptic.light();
     onMediaSelected(media);
   }, [mode, onMediaSelected, onVisualSearchCapture, haptic]);
@@ -386,8 +382,7 @@ export function CreatorEntryScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
-  },
+    backgroundColor: '#000' },
 
   // Camera view — "Aa" text-mode button (Instagram "Create" pattern).
   // Refined chrome: subtle dark fill + hairline white/10 border for
@@ -400,12 +395,10 @@ const styles = StyleSheet.create({
     borderColor: EditorMaterial.plate.hairline,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   textModeBtnLabel: {
     fontSize: 17,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
 
   // Drafts button — transparent 44pt target (AGENTS.md §4: ordinary controls
   // default to transparent). No fill, no border — the top scrim provides
@@ -416,8 +409,7 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 20,
-  },
+    zIndex: 20 },
   // Subtle brand-color dot — signals "there is something to resume".
   draftsBadge: {
     position: 'absolute',
@@ -427,8 +419,7 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(0,0,0,0.4)',
-  },
+    borderColor: 'rgba(0,0,0,0.4)' },
   // Count badge — when there are 2+ drafts, show the number instead of a dot.
   // Uses brand color fill with count text for clearer affordance.
   draftsCountBadge: {
@@ -440,12 +431,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   draftsCountText: {
     fontSize: 10,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
 
   // Drafts sheet
   draftsSheetHeader: {
@@ -454,62 +443,51 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.lg,
     paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   draftsSheetTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily },
   draftsCloseBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   draftsList: {
-    flex: 1,
-  },
+    flex: 1 },
   draftsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.md,
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   draftCard: {
     width: 140,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   draftThumb: {
     width: 140,
     height: 175,
     borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
+    borderColor: 'rgba(255,255,255,0.06)' },
   draftThumbPlaceholder: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   draftTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   draftTimestamp: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   draftsEmpty: {
     textAlign: 'center',
     paddingTop: Space.xl,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
 
   // ── In-camera mode switcher (Look / Poster / Search) ──
   // Subtle text-based segmented control rendered into the camera's bottom
@@ -521,6 +499,4 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    alignItems: 'center',
-  },
-});
+    alignItems: 'center' } });

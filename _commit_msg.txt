@@ -1,10 +1,11 @@
-Phase 2+3 continued: fix CreatorCanvas themed style factories, SupportCaseDetail Alert import, HomeScreen/GlobalSearchScreen magic numbers to tokens
+Phase 2B: TypographyV2 migration complete — 521 files migrated from legacy Type tokens to TypographyV2 roles
 
-- Fix CreatorCanvas.tsx: instantiate createMentionStyles/createLookStyles/createVoteStyles/createQuizStyles/createQuestionStyles/createSliderStyles via useAppTheme + useMemo (subagent had converted static styles to factory functions but forgot to call them)
-- Fix SupportCaseDetailScreen.tsx: add missing Alert import
-- HomeScreen.tsx: 30+ magic numbers replaced with Space/Type/Radius/Stroke/Control/AvatarSize tokens
-- GlobalSearchScreen.tsx: 40+ magic numbers replaced with design tokens
-- OfferToLikersSheet.tsx: add brandSubtle/successSubtle/border properties to themed object
+- Mapped Type.hero -> TypographyV2.display, Type.heading -> TypographyV2.sectionTitle
+- All other Type.XXX tokens mapped via LEGACY_TO_V2_MAP
+- Typography.family.X replaced with TypographyV2.ZZZ.fontFamily where context allows
+- Imports updated: TypographyV2 import added, Type removed from designTokens import
+- Typography removed from designTokens import where no longer used
+- TypeScript compiles cleanly with zero errors
 
 Generated with [Devin](https://devin.ai)
 

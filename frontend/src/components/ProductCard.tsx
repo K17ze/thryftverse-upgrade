@@ -26,7 +26,8 @@ import { useRenderTrace } from '../performance/renderTrace';
 import { SustainabilityBadge } from './product/SustainabilityBadge';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 
-import { Space, Radius, Control, Type, Typography, AvatarSize } from '../theme/designTokens';
+import { Space, Radius, Control, AvatarSize } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { synthesizeListingIdentity } from '../services/listingMapper';
 
 /** Shared text-shadow offset for glyph legibility on media surfaces.
@@ -161,8 +162,7 @@ function ProductCardBase({
     const isNew = item.condition === 'New with tags';
     return {
       label: isNew ? 'New' : item.condition,
-      bg: isNew ? colors.success : colors.overlay,
-    };
+      bg: isNew ? colors.success : colors.overlay };
   })();
 
   const cardContent = (
@@ -226,8 +226,7 @@ function ProductCardBase({
                 factors: [],
                 co2SavedKg: 0,
                 waterSavedL: 0,
-                summary: '',
-              }}
+                summary: '' }}
               variant="compact"
               onMedia
             />
@@ -373,14 +372,12 @@ export const ProductCard = React.memo(ProductCardBase);
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   // Sold items recede without hiding the media — a gentle 0.7 opacity
   // across the whole card communicates "no longer available" while the
   // preview stays recognisable.
   soldContainer: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
 
   // Image - Pinterest/Depop tight editorial feel. No shadow, minimal radius.
   // Art direction (AGENTS.md §15 — media storytelling):
@@ -398,11 +395,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     position: 'relative',
     overflow: 'hidden',
     borderRadius: Radius.lg,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   image: {
-    width: '100%',
-  },
+    width: '100%' },
 
   // Sold — gray scrim over the preview + a centered "Sold" label.
   // Combined with soldContainer opacity, the status is unambiguous but
@@ -411,18 +406,16 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   soldLabelCenter: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     // Fixed white ink — the scrim is always dark, so a theme text token
     // (black in dark mode) would render invisible.
     color: colors.scrimTextPrimary,
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   // Video indicator — small dark circle with a white play glyph, upper-right.
   // Subtle (24pt) but discoverable; only cards whose media includes a
   // video render it.
@@ -435,8 +428,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   mediaBadge: {
     position: 'absolute',
     top: Space.sm,
@@ -446,93 +438,80 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     height: 28,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   actionHitTarget: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Text-shadow scrim for glyph legibility on media — per AGENTS.md,
   // visible containment must have meaning. These controls don't need
   // containment; they need legibility. Shadow replaces circular chrome.
   actionGlyph: {
     textShadowColor: colors.shadow,
     textShadowOffset: GLYPH_TEXT_SHADOW_OFFSET,
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   actionButtonsRow: {
     position: 'absolute',
     bottom: Space.xs,
     right: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 0,
-  },
+    gap: 0 },
   sustainabilityChipWrap: {
     position: 'absolute',
     top: Space.sm,
-    left: Space.sm,
-  },
+    left: Space.sm },
 
   // Info - Clean hierarchy with breathing room
   info: {
     paddingTop: Space.sm,
     paddingHorizontal: Space.xs,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   // Brand eyebrow — a restrained single-line brand label above the title.
   // Only rendered when brand is present (Phase 5 WP7 identity synthesis).
   // Brandless listings show the clean title without a misleading label.
   brandEyebrow: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.meta.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'uppercase' },
   title: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   priceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
   // This is the Vestiaire/StockX move: price is the visual anchor.
   priceHero: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: Control.chromeCompact,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   sellerIdentity: {
     flex: 1,
     minWidth: 0,
     minHeight: Control.chromeCompact,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-  },
+    gap: 5 },
   sellerAvatar: {
     width: AvatarSize.inline,
     height: AvatarSize.inline,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   sellerAvatarPlaceholder: {
     width: AvatarSize.inline,
     height: AvatarSize.inline,
@@ -541,18 +520,15 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   sellerName: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    flex: 1,
-  },
+    flex: 1 },
   sellerVerifiedIcon: {
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   // Price-drop badge — top-left, red. Only the strongest deal signal
   // occupies this corner; otherwise the sustainability chip takes it.
   priceDropBadge: {
@@ -562,8 +538,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     backgroundColor: colors.danger,
     paddingHorizontal: Space.sm,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   // Condition badge — lower-left, color-coded via inline backgroundColor.
   // Small 20pt pill with an 8pt radius so it reads as metadata, not chrome.
   conditionBadge: {
@@ -574,21 +549,18 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingHorizontal: 6,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   conditionText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     // Fixed white ink — condition/price-drop badges always sit on a dark
     // or saturated background, so a theme text token (black in dark mode)
     // would be invisible.
     color: colors.scrimTextPrimary,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
-    fontVariant: ['tabular-nums'],
-  },
-});
+    fontVariant: ['tabular-nums'] } });
 
 // ============================================================================
 // PRODUCT DISCOVERY TILE — lightweight masonry tile for FlashList v2
@@ -627,8 +599,7 @@ function ProductDiscoveryTileBase({
   downscaleWidth,
   testID,
   isSaved,
-  onSaveToggle,
-}: ProductDiscoveryTileProps) {
+  onSaveToggle }: ProductDiscoveryTileProps) {
   const { colors } = useAppTheme();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const haptic = useHaptic();
@@ -645,8 +616,7 @@ function ProductDiscoveryTileBase({
   const focalPoint = getCategoryFocalPoint(item.category);
   const contentPosition = {
     top: `${Math.round(focalPoint.y * 100)}%`,
-    left: `${Math.round(focalPoint.x * 100)}%`,
-  };
+    left: `${Math.round(focalPoint.x * 100)}%` };
 
   // Condition badge — single state marker only (sold > condition). Sits over
   // the media on the semantic `overlay` scrim; "New with tags" uses the
@@ -658,8 +628,7 @@ function ProductDiscoveryTileBase({
     : item.condition
       ? {
           label: item.condition === 'New with tags' ? 'New' : item.condition,
-          bg: item.condition === 'New with tags' ? colors.success : colors.overlay,
-        }
+          bg: item.condition === 'New with tags' ? colors.success : colors.overlay }
       : null;
 
   const handleSavePress = useCallback(
@@ -735,13 +704,11 @@ export const ProductDiscoveryTile = React.memo(ProductDiscoveryTileBase);
 
 const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   media: {
     position: 'relative',
     overflow: 'hidden',
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   conditionBadge: {
     position: 'absolute',
     bottom: Space.xs,
@@ -750,20 +717,18 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     paddingHorizontal: 6,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Fixed white ink — the badge always sits on the dark `overlay` scrim or
   // the saturated `success` green, so a theme text token (black in dark
   // mode) would render invisible. Mirrors the ProductCard convention.
   conditionText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.scrimTextPrimary,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   // Save button — transparent 36pt hit target (AGENTS.md §4: separate hit
   // area from visible shape) with a glyph that legibility comes from the
   // shadow, not from decorative circular chrome. Top-right over the media.
@@ -774,39 +739,33 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     width: Control.chrome,
     height: Control.chrome,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // textShadowColor is set inline from `colors.shadow` — the static style
   // sheet cannot reference theme tokens, so only the geometry lives here.
   saveGlyph: {
     textShadowOffset: GLYPH_TEXT_SHADOW_OFFSET,
-    textShadowRadius: 3,
-  },
+    textShadowRadius: 3 },
   info: {
     paddingTop: Space.xs,
     paddingHorizontal: Space.xxs,
-    gap: 0,
-  },
+    gap: 0 },
   // Title — 1 line, caption size, muted. The image is the dominant object;
   // the title is a quiet label, not a competing headline. Pinterest pattern:
   // media dominates, text recedes.
   title: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // Price — body size, bold, primary. The price is the actionable metadata
   // for a marketplace tile; it carries more weight than the title.
   price: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
-});
+    letterSpacing: TypographyV2.body.letterSpacing,
+    fontVariant: ['tabular-nums'] } });
 
 export default ProductCard;

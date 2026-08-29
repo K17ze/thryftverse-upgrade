@@ -30,18 +30,16 @@ import {
   LayoutAnimation,
   type LayoutChangeEvent,
   type GestureResponderEvent,
-  type PanResponderGestureState,
-} from 'react-native';
+  type PanResponderGestureState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
   Radius,
-  Type,
   Typography,
   FontFamily,
   Control,
-  Stroke,
-} from '../../../theme/designTokens';
+  Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -50,8 +48,7 @@ import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import {
   type AudioConfig,
   type AudioTrack,
-  DEFAULT_AUDIO_CONFIG,
-} from './AudioTypes';
+  DEFAULT_AUDIO_CONFIG } from './AudioTypes';
 import { WaveformTrack } from '../../poster/timeline/WaveformTrack';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -98,8 +95,7 @@ export function AudioBrowserSheet({
   onClose,
   onConfirm,
   initialConfig,
-  hasOriginalAudio = false,
-}: AudioBrowserSheetProps) {
+  hasOriginalAudio = false }: AudioBrowserSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -138,8 +134,7 @@ export function AudioBrowserSheet({
     if (!reducedMotion) haptic.light();
     setConfig((prev) => ({
       ...prev,
-      originalVolume: prev.originalVolume > 0 ? 0 : DEFAULT_AUDIO_CONFIG.originalVolume,
-    }));
+      originalVolume: prev.originalVolume > 0 ? 0 : DEFAULT_AUDIO_CONFIG.originalVolume }));
   }, [haptic, reducedMotion]);
 
   const handleVolumeChange = useCallback((v: number) => {
@@ -153,22 +148,19 @@ export function AudioBrowserSheet({
   const handleStartOffsetChange = useCallback((v: number) => {
     setConfig((prev) => ({
       ...prev,
-      startOffsetMs: clamp(v, 0, selectedTrack?.durationMs ?? 0),
-    }));
+      startOffsetMs: clamp(v, 0, selectedTrack?.durationMs ?? 0) }));
   }, [selectedTrack]);
 
   const handleFadeInChange = useCallback((v: number) => {
     setConfig((prev) => ({
       ...prev,
-      fadeInMs: clamp(v, 0, selectedTrack?.durationMs ?? 0),
-    }));
+      fadeInMs: clamp(v, 0, selectedTrack?.durationMs ?? 0) }));
   }, [selectedTrack]);
 
   const handleFadeOutChange = useCallback((v: number) => {
     setConfig((prev) => ({
       ...prev,
-      fadeOutMs: clamp(v, 0, selectedTrack?.durationMs ?? 0),
-    }));
+      fadeOutMs: clamp(v, 0, selectedTrack?.durationMs ?? 0) }));
   }, [selectedTrack]);
 
   const handleTrimStartChange = useCallback((v: number) => {
@@ -180,8 +172,7 @@ export function AudioBrowserSheet({
       return {
         ...prev,
         trimStartMs: clampedStart,
-        trimEndMs: Math.max(clampedStart + 100, currentEnd),
-      };
+        trimEndMs: Math.max(clampedStart + 100, currentEnd) };
     });
   }, [selectedTrack]);
 
@@ -193,8 +184,7 @@ export function AudioBrowserSheet({
       return {
         ...prev,
         trimStartMs: Math.min(currentStart, clampedEnd - 100),
-        trimEndMs: clampedEnd,
-      };
+        trimEndMs: clampedEnd };
     });
   }, [selectedTrack]);
 
@@ -486,8 +476,7 @@ function OriginalAudioTabBody({
   hasOriginalAudio,
   originalVolume,
   onToggleOriginal,
-  onVolumeChange,
-}: OriginalAudioTabBodyProps) {
+  onVolumeChange }: OriginalAudioTabBodyProps) {
   const styles = useSheetStyles(colors);
   if (!hasOriginalAudio) {
     return (
@@ -519,8 +508,7 @@ function OriginalAudioTabBody({
             styles.switchTrack,
             {
               backgroundColor: keepOriginal ? colors.brand : colors.surfaceAlt,
-              borderColor: keepOriginal ? colors.brand : colors.border,
-            },
+              borderColor: keepOriginal ? colors.brand : colors.border },
           ]}
         >
           <View
@@ -528,8 +516,7 @@ function OriginalAudioTabBody({
               styles.switchThumb,
               {
                 backgroundColor: keepOriginal ? colors.textInverse : colors.textSecondary,
-                transform: [{ translateX: keepOriginal ? 22 : 2 }],
-              },
+                transform: [{ translateX: keepOriginal ? 22 : 2 }] },
             ]}
           />
         </View>
@@ -637,8 +624,7 @@ function SliderRow({
   labelColor,
   valueColor,
   onChange,
-  disabled = false,
-}: SliderRowProps) {
+  disabled = false }: SliderRowProps) {
   const { colors } = useAppTheme();
   const styles = useSheetStyles(colors);
   const trackWidthRef = useRef(0);
@@ -673,8 +659,7 @@ function SliderRow({
           onChange(Math.round(next * 1000) / 1000);
         },
         onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false,
-      }),
+        onPanResponderTerminationRequest: () => false }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [thumbPosition, valueToPosition, onChange, disabled],
   );
@@ -702,8 +687,7 @@ function SliderRow({
             styles.fill,
             {
               width: thumbPosition,
-              backgroundColor: fillColor,
-            },
+              backgroundColor: fillColor },
           ]}
         />
         <View
@@ -711,8 +695,7 @@ function SliderRow({
             styles.thumb,
             {
               left: thumbPosition,
-              backgroundColor: thumbColor,
-            },
+              backgroundColor: thumbColor },
           ]}
         />
       </View>
@@ -726,25 +709,21 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     content: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     // ── Tabs ──
     tabBar: {
       flexDirection: 'row',
@@ -752,159 +731,127 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     tab: {
       alignItems: 'center',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     tabLabel: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     tabLabelActive: {
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     tabUnderline: {
       height: Stroke.emphasis,
       borderRadius: Stroke.emphasis / 2,
       width: 24,
-      marginTop: Space.xxs,
-    },
+      marginTop: Space.xxs },
     // ── Empty / original bodies ──
     emptyBody: {
       paddingVertical: Space.xl,
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     originalBody: {
       paddingVertical: Space.sm,
-      gap: Space.md,
-    },
+      gap: Space.md },
     // ── Toggle ──
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     toggleTextWrap: {
       flex: 1,
       paddingRight: Space.md,
-      gap: 2,
-    },
+      gap: 2 },
     toggleTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     switchTrack: {
       width: 46,
       height: 28,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     switchThumb: {
       position: 'absolute',
       width: 22,
       height: 22,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     // ── Track controls ──
     sectionDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginVertical: Space.md,
-    },
+      marginVertical: Space.md },
     trackControls: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     sectionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     trackMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     trackMetaInfo: {
       flex: 1,
       gap: 2,
-      paddingRight: Space.md,
-    },
+      paddingRight: Space.md },
     trackTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     trackArtist: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     durationText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontVariant: ['tabular-nums'] },
     // ── Waveform ──
     waveformSection: {
       gap: Space.xxs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     waveformLabel: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     noTrackState: {
       paddingVertical: Space.lg,
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     noTrackText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     // ── Slider ──
     sliderRow: {
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     sliderHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     sliderLabel: {
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     sliderValue: {
-      fontSize: Type.caption.size,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontVariant: ['tabular-nums'] },
     trackWrap: {
       height: Control.hit,
       justifyContent: 'center',
-      position: 'relative',
-    },
+      position: 'relative' },
     track: {
       position: 'absolute',
       left: 0,
       right: 0,
       height: 3,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     fill: {
       position: 'absolute',
       left: 0,
       height: 3,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     thumb: {
       position: 'absolute',
       width: 16,
@@ -912,8 +859,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       marginLeft: -8,
       borderWidth: Stroke.standard,
-      borderColor: 'rgba(0,0,0,0)',
-    },
+      borderColor: 'rgba(0,0,0,0)' },
     // ── Preview ──
     previewBtn: {
       flexDirection: 'row',
@@ -924,27 +870,21 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
       marginTop: Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     previewBtnText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     // ── Footer ──
     footer: {
-      paddingTop: Space.lg,
-    },
+      paddingTop: Space.lg },
     doneBtn: {
       alignItems: 'center',
       justifyContent: 'center',
       height: 50,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     doneBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size } });
 }
 
 // Memoised style factory keyed to colors so re-renders only rebuild when

@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Typography, Space, Type } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { ThemeColors } from '../../theme/ThemeContext';
 
 interface ListingIdentityBlockProps {
@@ -17,8 +18,7 @@ export function ListingIdentityBlock({
   title,
   price,
   originalPrice,
-  hasDiscount,
-}: ListingIdentityBlockProps) {
+  hasDiscount }: ListingIdentityBlockProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
@@ -44,40 +44,33 @@ function createStyles(colors: ThemeColors) {
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   brand: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   title: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.title.lineHeight,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
     letterSpacing: -0.4,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 10,
-  },
+    gap: 10 },
   price: {
-    fontSize: Type.priceHero.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: TypographyV2.priceHero.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: -0.6,
-  },
+    letterSpacing: -0.6 },
   originalPrice: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textMuted,
-    textDecorationLine: 'line-through',
-  },
-  });
+    textDecorationLine: 'line-through' } });
 }

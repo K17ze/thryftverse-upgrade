@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type, Stroke, Control } from '../../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { haptics } from '../../utils/haptics';
 import { openProfile } from '../../navigation/openProfile';
@@ -26,16 +27,14 @@ export function OrderCounterpartySection({
   listingId,
   currentUserId,
   onMessage,
-  navigation,
-}: Props) {
+  navigation }: Props) {
   const { colors } = useAppTheme();
 
   const themed = useMemo(() => ({
     sectionLabel: { color: colors.textMuted },
     counterpartyName: { color: colors.textPrimary },
     counterpartyBtn: { borderColor: colors.border },
-    counterpartyBtnText: { color: colors.brand },
-  }), [colors]);
+    counterpartyBtnText: { color: colors.brand } }), [colors]);
 
   return (
     <View style={styles.counterpartySection}>
@@ -81,36 +80,30 @@ export function OrderCounterpartySection({
 
 const styles = StyleSheet.create({
   counterpartySection: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   counterpartyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   counterpartyIdentity: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   counterpartyAvatar: {
     width: Space.xxl,
     height: Space.xxl,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   counterpartyName: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   counterpartyActions: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   counterpartyBtn: {
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
@@ -118,23 +111,18 @@ const styles = StyleSheet.create({
     borderWidth: Stroke.standard,
     minHeight: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   counterpartyBtnText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   counterpartyBtnPressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   sectionLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.sm,
-  },
-});
+    marginBottom: Space.sm } });

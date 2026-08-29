@@ -5,8 +5,7 @@ import { View,
   Text,
   StyleSheet,
   ScrollView,
-  StatusBar,
-} from 'react-native';
+  StatusBar } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +13,8 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useTaxonomy } from '../context/TaxonomyContext';
-import { Typography, Space, Radius, Type, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { VisualCategoryTile } from '../components/discover/VisualCategoryTile';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 
@@ -38,8 +38,7 @@ export default function CategoryTreeScreen() {
         title: child.name,
         subs: categories
           .filter((c) => c.parentId === child.id)
-          .map((c) => c.name),
-      }));
+          .map((c) => c.name) }));
     }
     return map;
   }, [categories]);
@@ -165,22 +164,19 @@ function createStyles(colors: ThemeColors) {
     editorialHeader: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     backBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
       alignItems: 'flex-start',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     editorialTitle: {
-      fontSize: Type.display.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.display.size,
+      fontFamily: TypographyV2.display.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.display.letterSpacing - 0.3,
-      lineHeight: Type.display.lineHeight + 2,
-    },
+      letterSpacing: TypographyV2.display.letterSpacing - 0.3,
+      lineHeight: TypographyV2.display.lineHeight + 2 },
 
     viewAllRow: {
       flexDirection: 'row',
@@ -191,62 +187,52 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.brand,
       marginHorizontal: Space.md,
       marginBottom: Space.lg,
-      borderRadius: Radius.xl,
-    },
+      borderRadius: Radius.xl },
     viewAllText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.background,
-      letterSpacing: LetterSpacing.wide + 0.18,
-    },
+      letterSpacing: LetterSpacing.wide + 0.18 },
 
     gridWrap: {
       marginHorizontal: Space.md,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
 
     section: {
       marginTop: Space.md,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
 
     subsScroll: {
       paddingTop: Space.sm,
       paddingBottom: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     subPill: {
       backgroundColor: colors.surface,
       paddingHorizontal: Space.md - 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     subPillText: {
       color: colors.textPrimary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     errorWrap: {
       flex: 1,
       paddingHorizontal: Space.md,
       paddingTop: Space.xl,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     errorText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
-      lineHeight: Type.body.lineHeight + 4,
-      marginBottom: Space.lg,
-    },
+      lineHeight: TypographyV2.body.lineHeight + 4,
+      marginBottom: Space.lg },
     errorCta: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -255,13 +241,10 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.lg,
       backgroundColor: colors.brand,
       borderRadius: Radius.xl,
-      minWidth: 220,
-    },
+      minWidth: 220 },
     errorCtaText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.background,
-      letterSpacing: LetterSpacing.wide + 0.18,
-    },
-  });
+      letterSpacing: LetterSpacing.wide + 0.18 } });
 }

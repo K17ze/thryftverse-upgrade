@@ -1,7 +1,8 @@
 import React, { useState, useCallback, memo } from 'react';
 import { Pressable, Text, StyleSheet } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 
 export interface ExpandableCaptionProps {
@@ -16,8 +17,7 @@ export interface ExpandableCaptionProps {
  */
 function ExpandableCaptionImpl({
   text,
-  longThreshold = 140,
-}: ExpandableCaptionProps) {
+  longThreshold = 140 }: ExpandableCaptionProps) {
   const { colors } = useAppTheme();
   const styles = useCaptionStyles(colors);
   const haptic = useHaptic();
@@ -59,17 +59,14 @@ export const ExpandableCaption = memo(ExpandableCaptionImpl);
 const useCaptionStyles = (colors: ThemeColors) => {
   return StyleSheet.create({
     caption: {
-      fontSize: Type.title.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.screenTitle.size,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.title.letterSpacing,
-      lineHeight: Type.title.size + 6,
-    },
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
+      lineHeight: TypographyV2.screenTitle.size + 6 },
     captionToggle: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      marginTop: Space.xs,
-    },
-  });
+      marginTop: Space.xs } });
 };

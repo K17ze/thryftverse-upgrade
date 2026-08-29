@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { LottieAnimation, type LottieAnimationSource } from './LottieAnimation';
 
 // ---------------------------------------------------------------------------
@@ -43,8 +44,7 @@ export function AnimatedLoadingState({
   label,
   fullScreen = false,
   animationSize = 120,
-  style,
-}: AnimatedLoadingStateProps) {
+  style }: AnimatedLoadingStateProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -94,26 +94,20 @@ function createStyles(colors: ThemeColors): LoadingStateStyles {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.xl,
-      gap: Space.md,
-    },
+      gap: Space.md },
     fullScreen: {
       flex: 1,
       backgroundColor: colors.background,
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     label: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
-      textAlign: 'center',
-    },
-  });
+      textAlign: 'center' } });
 
   return {
     ...staticStyles,
     animation: (size: number): ViewStyle => ({
       width: size,
-      height: size,
-    }),
-  };
+      height: size }) };
 }

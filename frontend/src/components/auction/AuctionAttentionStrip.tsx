@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -25,8 +26,7 @@ const KIND_LABEL: Record<AttentionKind, string> = {
   leading: 'Leading',
   ending_soon: 'Ending soon',
   won: 'Won',
-  watching: 'Watching',
-};
+  watching: 'Watching' };
 
 export function AuctionAttentionStrip({
   kind,
@@ -35,8 +35,7 @@ export function AuctionAttentionStrip({
   message,
   actionLabel,
   onPress,
-  onAction,
-}: Props) {
+  onAction }: Props) {
   const { colors } = useAppTheme();
   
   const isWatching = kind === 'watching';
@@ -53,8 +52,7 @@ export function AuctionAttentionStrip({
       {
         backgroundColor: colors.surface,
         borderColor: colors.border,
-        borderLeftColor: accentColor,
-      }
+        borderLeftColor: accentColor }
     ]}>
       <AnimatedPressable
         style={styles.body}
@@ -112,59 +110,47 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderLeftWidth: 3,
-    maxHeight: 76,
-  },
+    maxHeight: 76 },
   body: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   thumbContainer: {
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   thumb: {
     width: 48,
-    height: 48,
-  },
+    height: 48 },
   content: {
     flex: 1,
-    gap: 1,
-  },
+    gap: 1 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   kind: {
     fontFamily: Typography.family.semibold,
     fontSize: 10,
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     letterSpacing: -0.2,
-    lineHeight: 17,
-  },
+    lineHeight: 17 },
   message: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    fontVariant: ['tabular-nums'] },
   actionBtn: {
     paddingHorizontal: Space.smMd,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   actionText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    letterSpacing: 0.2,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: 0.2 } });

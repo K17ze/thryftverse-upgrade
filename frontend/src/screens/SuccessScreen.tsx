@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +20,8 @@ import { getListingCoverUri } from '../utils/media';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
-import { Typography, Radius, Type, Space, Elevation, Stroke } from '../theme/designTokens';
+import { Radius, Space, Elevation, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
 type RouteT = RouteProp<RootStackParamList, 'Success'>;;
 
@@ -95,8 +95,7 @@ export default function SuccessScreen() {
       orderPlaced: {
         isComplete: true, // Payment confirmed — we are on the success screen.
         isActive: false,
-        detail: "We've notified the seller",
-      },
+        detail: "We've notified the seller" },
       sellerPrep: {
         isComplete: shippedOrBeyond.has(status),
         // Only active when the seller has genuinely accepted ('processing'/'preparing').
@@ -104,21 +103,17 @@ export default function SuccessScreen() {
         isActive: sellerPreparing.has(status),
         detail: sellerPreparing.has(status)
           ? 'The seller is preparing your item'
-          : 'Waiting for the seller to confirm',
-      },
+          : 'Waiting for the seller to confirm' },
       shipped: {
         isComplete: deliveredOrBeyond.has(status),
         isActive: inTransit.has(status),
         detail: inTransit.has(status)
           ? "You'll get tracking updates in chat"
-          : 'Not yet shipped',
-      },
+          : 'Not yet shipped' },
       delivered: {
         isComplete: status === 'completed',
         isActive: status === 'delivered',
-        detail: 'Leave a review once you receive it',
-      },
-    };
+        detail: 'Leave a review once you receive it' } };
   }, [order]);
 
   return (
@@ -240,8 +235,7 @@ function TimelineStep({
   detail,
   isComplete,
   isActive,
-  isLast,
-}: {
+  isLast }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   detail: string;
@@ -276,39 +270,30 @@ function createTimelineStyles(colors: ThemeColors) {
   step: {
     flexDirection: 'row',
     gap: Space.smMd,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   iconCol: {
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   stepIcon: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   connector: {
     width: Stroke.standard,
     flex: 1,
     backgroundColor: colors.border,
-    minHeight: Space.md + 4,
-  },
+    minHeight: Space.md + 4 },
   connectorComplete: {
-    backgroundColor: colors.success,
-  },
+    backgroundColor: colors.success },
   textCol: {
     flex: 1,
     gap: Space.xs / 2,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   label: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   detail: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    lineHeight: Type.caption.size + 4,
-  },
-  });
+    lineHeight: TypographyV2.meta.size + 4 } });
 }
 
 function createStyles(colors: ThemeColors) {
@@ -317,11 +302,10 @@ function createStyles(colors: ThemeColors) {
   scrollContent: { flexGrow: 1, paddingHorizontal: Space.lg },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: Space.xl + Space.xl - 8, paddingBottom: 20 },
   successIcon: {
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
 
-  title: { fontSize: Type.priceHero.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
-  subtitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: TypographyV2.priceHero.size, fontFamily: TypographyV2.priceHero.fontFamily, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
+  subtitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 
   orderCardWrap: { width: '100%', marginTop: Space.lg },
   orderCard: {
@@ -330,29 +314,25 @@ function createStyles(colors: ThemeColors) {
     gap: Space.smMd,
     padding: Space.smMd,
     borderRadius: Radius.lg,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   orderImage: { width: Space.xxl + Space.xl + Space.xs, height: Space.xxl + Space.xl + Space.xs, borderRadius: Radius.md },
   orderInfo: { flex: 1, gap: 2 },
-  orderTitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  orderSeller: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
-  orderAmount: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 2 },
+  orderTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary },
+  orderSeller: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary },
+  orderAmount: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary, marginTop: 2 },
 
   timelineWrap: {
     width: '100%',
     marginTop: Space.xl + 4,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   timelineTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     marginBottom: Space.sm + 2,
-    textAlign: 'left',
-  },
+    textAlign: 'left' },
   timeline: {
-    paddingLeft: Space.xs,
-  },
+    paddingLeft: Space.xs },
 
   supportRowWrap: { marginTop: Space.lg, width: '100%' },
   supportIdentity: {
@@ -364,15 +344,12 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     paddingHorizontal: Space.smMd,
-    paddingVertical: Space.xs + 2,
-  },
+    paddingVertical: Space.xs + 2 },
   supportText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
 
-  footer: { paddingHorizontal: Space.lg, paddingBottom: Space.xl + Space.xl - 8, gap: 12 },
-  });
+  footer: { paddingHorizontal: Space.lg, paddingBottom: Space.xl + Space.xl - 8, gap: 12 } });
 }

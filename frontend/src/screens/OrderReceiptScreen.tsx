@@ -9,13 +9,13 @@ import {
   ActivityIndicator,
   Share,
   Clipboard,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Typography, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -38,8 +38,7 @@ function formatReceiptDate(iso: string): string {
     month: 'long',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit',
-  });
+    minute: '2-digit' });
 }
 
 export default function OrderReceiptScreen() {
@@ -77,8 +76,7 @@ export default function OrderReceiptScreen() {
     nextStepDotPending: { backgroundColor: colors.border },
     nextStepText: { color: colors.textPrimary },
     nextStepTextMuted: { color: colors.textMuted },
-    viewDetailBtnText: { color: colors.brand },
-  }), [colors]);
+    viewDetailBtnText: { color: colors.brand } }), [colors]);
 
   const { orderId } = route.params;
 
@@ -123,8 +121,7 @@ export default function OrderReceiptScreen() {
     const date = formatReceiptDate(order.createdAt);
     try {
       await Share.share({
-        message: `Thryftverse Order #${shortId}\n${status}\n${date}\nTotal: ${total}`,
-      });
+        message: `Thryftverse Order #${shortId}\n${status}\n${date}\nTotal: ${total}` });
     } catch {
       show('Could not share receipt', 'error');
     }
@@ -436,8 +433,7 @@ function ReceiptRow({ label, value }: { label: string; value: string }) {
   const { colors } = useAppTheme();
   const rowThemed = React.useMemo(() => ({
     label: { color: colors.textSecondary },
-    value: { color: colors.textPrimary },
-  }), [colors]);
+    value: { color: colors.textPrimary } }), [colors]);
   return (
     <View style={styles.receiptRow}>
       <Text style={[styles.receiptRowLabel, rowThemed.label]}>{label}</Text>
@@ -448,234 +444,188 @@ function ReceiptRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   headerBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   headerBtnPressed: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   retryBtnPressed: {
     opacity: 0.85,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   viewDetailBtnPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   headerRight: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   loadingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   skeletonContainer: {
     flex: 1,
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    gap: Space.md,
-  },
+    gap: Space.md },
   skeletonItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   skeletonTxRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   errorTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    textAlign: 'center' },
   retryBtn: {
     paddingVertical: Space.md + 2,
     paddingHorizontal: Space.xl,
     borderRadius: Radius.lg,
     minHeight: Space.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   retryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   scrollContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   successHeader: {
     alignItems: 'center',
     paddingVertical: Space.lg,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   successIconWrap: {
     width: Space.xxl + Space.xxl + Space.xs,
     height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   successTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   successSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   receiptCard: {
-    padding: Space.md,
-  },
+    padding: Space.md },
   receiptHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   receiptTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   orderIdRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   orderIdLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   receiptSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   sectionLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps + 0.38,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   receiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Space.xs,
-    gap: Space.md,
-  },
+    gap: Space.md },
   receiptRowLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   receiptRowValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'right',
-    flex: 1,
-  },
+    flex: 1 },
   receiptDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.md,
-  },
+    marginVertical: Space.md },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   totalLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   totalValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   immutableNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   immutableText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   pendingNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs + 2,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   pendingText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   nextStepsCard: {
     marginTop: Space.md,
     paddingTop: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   nextStepsTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginBottom: Space.sm,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   nextStepItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   nextStepDot: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.sm,
-  },
-  nextStepDotActive: {
-  },
-  nextStepDotPending: {
-  },
+    borderRadius: Radius.sm },
+  nextStepDotActive: {},
+  nextStepDotPending: {},
   nextStepText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   nextStepTextMuted: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   viewDetailBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -683,41 +633,33 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingVertical: Space.md,
     marginTop: Space.md,
-    minHeight: Space.xxl,
-  },
+    minHeight: Space.xxl },
   viewDetailBtnText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   // ── Itemized item row ──
   itemizedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   itemThumb: {
     width: 56,
     height: 56,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemThumbPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   itemizedInfo: {
     flex: 1,
-    gap: Space.xs - 2,
-  },
+    gap: Space.xs - 2 },
   itemizedTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight },
   itemizedPrice: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   // ── Save / share button ──
   saveBtn: {
     flexDirection: 'row',
@@ -725,13 +667,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     paddingVertical: Space.md - 2,
-    minHeight: Space.xxl - Space.sm,
-  },
+    minHeight: Space.xxl - Space.sm },
   saveBtnPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   saveBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily } });

@@ -25,8 +25,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View,
-} from 'react-native';
+  View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
   useAnimatedReaction,
@@ -35,8 +34,7 @@ import Reanimated, {
   runOnJS,
   withTiming,
   withSpring,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,11 +46,11 @@ import {
   Skia,
   Text as SkiaText,
   useFont,
-  Image as SkiaImage,
-} from '@shopify/react-native-skia';
+  Image as SkiaImage } from '@shopify/react-native-skia';
 import { Image as ExpoImage } from 'expo-image';
 
-import { Space, Radius, FontFamily, Type, Elevation, Stroke as StrokeToken, Control } from '../../../theme/designTokens';
+import { Space, Radius, FontFamily, Elevation, Stroke as StrokeToken, Control } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../../theme/motionTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
@@ -63,14 +61,12 @@ import {
   CreatorSlider,
   CreatorSegmentControl,
   CreatorIconButton,
-  type SegmentOption,
-} from '../../controls';
+  type SegmentOption } from '../../controls';
 import {
   useCreatorColorHistory,
   toHexString,
   fromHexString,
-  normalize,
-} from '../../color/';
+  normalize } from '../../color/';
 import type { CreatorColor } from '../../color/';
 import type { BrushType, DrawingDocument, EmojiBrushConfig, Stroke } from './DrawingTypes';
 import { DrawingPaletteBar } from './DrawingPaletteBar';
@@ -122,33 +118,27 @@ const EMOJI_CATEGORIES: EmojiCategory[] = [
   {
     id: 'faces',
     name: 'Faces',
-    emojis: ['😀', '😍', '🥰', '😎', '🤩', '😂', '🥳', '😭', '🤔', '😴', '🤯', '😱'],
-  },
+    emojis: ['😀', '😍', '🥰', '😎', '🤩', '😂', '🥳', '😭', '🤔', '😴', '🤯', '😱'] },
   {
     id: 'hearts',
     name: 'Hearts',
-    emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💔', '❣️', '💕', '💖'],
-  },
+    emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💔', '❣️', '💕', '💖'] },
   {
     id: 'hands',
     name: 'Hands',
-    emojis: ['👍', '👎', '👏', '🙌', '🤝', '✌️', '🤞', '🤟', '👋', '🤙', '👌', '💪'],
-  },
+    emojis: ['👍', '👎', '👏', '🙌', '🤝', '✌️', '🤞', '🤟', '👋', '🤙', '👌', '💪'] },
   {
     id: 'animals',
     name: 'Animals',
-    emojis: ['🐶', '🐱', '🦄', '🦋', '🐝', '🦋', '🐢', '🦊', '🐼', '🦁', '🐯', '🐸'],
-  },
+    emojis: ['🐶', '🐱', '🦄', '🦋', '🐝', '🦋', '🐢', '🦊', '🐼', '🦁', '🐯', '🐸'] },
   {
     id: 'food',
     name: 'Food',
-    emojis: ['🍕', '🍔', '🍟', '🌮', '🍣', '🍩', '🍦', '🍓', '🍉', '🥑', '🌶️', '🍿'],
-  },
+    emojis: ['🍕', '🍔', '🍟', '🌮', '🍣', '🍩', '🍦', '🍓', '🍉', '🥑', '🌶️', '🍿'] },
   {
     id: 'symbols',
     name: 'Symbols',
-    emojis: ['🔥', '✨', '⭐', '💯', '🎉', '👑', '💎', '🚀', '🌈', '☀️', '❄️', '⚡'],
-  },
+    emojis: ['🔥', '✨', '⭐', '💯', '🎉', '👑', '💎', '🚀', '🌈', '☀️', '❄️', '⚡'] },
 ];
 
 const DEFAULT_EMOJI = '🔥';
@@ -221,8 +211,7 @@ function computeStampPoints(
   const makeStamp = (x: number, y: number) => ({
     x: x + (Math.random() - 0.5) * jitterRange,
     y: y + (Math.random() - 0.5) * jitterRange,
-    rotation: (Math.random() - 0.5) * 30,
-  });
+    rotation: (Math.random() - 0.5) * 30 });
 
   stamps.push(makeStamp(points[0]!.x, points[0]!.y));
 
@@ -274,8 +263,7 @@ const EmojiStamp = React.memo(function EmojiStamp({
   x,
   y,
   size,
-  rotation,
-}: EmojiStampProps) {
+  rotation }: EmojiStampProps) {
   // useFont returns null until the font is loaded. We request the system
   // emoji font; on iOS this is "Apple Color Emoji", on Android "NotoColorEmoji".
   // Skia resolves these by family name from the platform font collection.
@@ -395,8 +383,7 @@ export function DrawingWorkspace({
   onCommit,
   canvasWidth,
   canvasHeight,
-  backgroundUri,
-}: DrawingWorkspaceProps) {
+  backgroundUri }: DrawingWorkspaceProps) {
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -428,8 +415,7 @@ export function DrawingWorkspace({
     size: 32,
     spacing: 24,
     rotation: 0,
-    jitter: 0,
-  });
+    jitter: 0 });
   const [activeEmojiCategory, setActiveEmojiCategory] = useState<string>('faces');
 
   // ── Emoji category underline indicator (spring-animated, brand color) ──
@@ -465,8 +451,7 @@ export function DrawingWorkspace({
 
   const emojiUnderlineStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: emojiUnderlineXSV.value }],
-    width: emojiUnderlineWSV.value,
-  }));
+    width: emojiUnderlineWSV.value }));
 
   // Recent color history (persisted via AsyncStorage, spec §4).
   const { recents, commitColor: commitRecentColor } = useCreatorColorHistory();
@@ -487,8 +472,7 @@ export function DrawingWorkspace({
       } else if (currentMetaRef.current && currentPointsRef.current.length > 0) {
         setLiveStroke({
           ...currentMetaRef.current,
-          points: currentPointsRef.current,
-        });
+          points: currentPointsRef.current });
       }
     }
   }, []);
@@ -532,12 +516,10 @@ export function DrawingWorkspace({
 
   const panelStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: panelTranslateY.value }],
-    opacity: panelOpacity.value,
-  }));
+    opacity: panelOpacity.value }));
 
   const canvasStyle = useAnimatedStyle(() => ({
-    opacity: canvasOpacity.value,
-  }));
+    opacity: canvasOpacity.value }));
 
   // ── Stroke lifecycle (called from gesture worklet via runOnJS) ──
   const startStroke = useCallback(
@@ -549,8 +531,7 @@ export function DrawingWorkspace({
         color: brushType === 'eraser' ? '#000000' : brushColor,
         size: brushSize,
         points: [],
-        emojiConfig: brushType === 'emoji' ? { ...emojiBrush } : undefined,
-      };
+        emojiConfig: brushType === 'emoji' ? { ...emojiBrush } : undefined };
       renderTickSV.value = renderTickSV.value + 1;
     },
     [brushType, brushColor, brushSize, emojiBrush, renderTickSV],
@@ -575,8 +556,7 @@ export function DrawingWorkspace({
     if (!currentMetaRef.current) return;
     const stroke: Stroke = {
       ...currentMetaRef.current,
-      points: currentPointsRef.current,
-    };
+      points: currentPointsRef.current };
     if (stroke.points.length > 0) {
       setStrokes((prev) => [...prev, stroke].slice(-MAX_UNDO_LEVELS));
       setRedoStack([]);
@@ -640,16 +620,14 @@ export function DrawingWorkspace({
       onConfirm: () => {
         setRedoStack((r) => [...r, ...strokes].slice(-MAX_UNDO_LEVELS));
         setStrokes([]);
-      },
-    });
+      } });
   }, [strokes]);
 
   const handleDone = useCallback(() => {
     const doc: DrawingDocument = {
       strokes,
       width: canvasWidth,
-      height: canvasHeight,
-    };
+      height: canvasHeight };
     onCommit(doc);
   }, [strokes, canvasWidth, canvasHeight, onCommit]);
 
@@ -701,8 +679,7 @@ export function DrawingWorkspace({
               {
                 width: canvasWidth,
                 height: canvasHeight,
-                backgroundColor: canvasBg,
-              },
+                backgroundColor: canvasBg },
             ]}
           >
             {/* ── Media background (Snapchat/Instagram pattern) ─────────── */}
@@ -738,8 +715,7 @@ export function DrawingWorkspace({
                   position: 'absolute',
                   inset: 0,
                   width: canvasWidth,
-                  height: canvasHeight,
-                }}
+                  height: canvasHeight }}
               />
             </GestureDetector>
           </View>
@@ -793,8 +769,7 @@ export function DrawingWorkspace({
             {
               backgroundColor: colors.surface,
               paddingBottom: Math.max(insets.bottom, Space.sm),
-              borderColor: colors.border,
-            },
+              borderColor: colors.border },
             panelStyle,
           ]}
         >
@@ -843,8 +818,7 @@ export function DrawingWorkspace({
                       onLayout={(e) => {
                         emojiTabLayouts.current[idx] = {
                           x: e.nativeEvent.layout.x,
-                          width: e.nativeEvent.layout.width,
-                        };
+                          width: e.nativeEvent.layout.width };
                         if (active) applyEmojiUnderline(idx);
                       }}
                       style={styles.emojiTab}
@@ -932,8 +906,7 @@ export function DrawingWorkspace({
                       width: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
                       height: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
                       borderRadius: Radius.full,
-                      backgroundColor: brushType === 'eraser' ? colors.border : brushColor,
-                    }}
+                      backgroundColor: brushType === 'eraser' ? colors.border : brushColor }}
                   />
                 </View>
                 <CreatorSlider
@@ -973,19 +946,16 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginTop: CANVAS_TOP_OFFSET,
       borderRadius: Radius.md,
       overflow: 'hidden',
-      ...Elevation.floating,
-    },
+      ...Elevation.floating },
     fallbackCanvas: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     fallbackText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
-      fontFamily: FontFamily.regular,
-    },
+      fontFamily: FontFamily.regular },
     topBar: {
       position: 'absolute',
       top: 0,
@@ -996,25 +966,21 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingBottom: Space.sm,
-      zIndex: 10,
-    },
+      zIndex: 10 },
     topActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     doneButton: {
       height: 50,
       paddingHorizontal: Space.lg,
       borderRadius: Radius.lg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     doneText: {
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     panel: {
       position: 'absolute',
       left: 0,
@@ -1026,36 +992,30 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
       gap: Space.sm,
-      ...Elevation.modal,
-    },
+      ...Elevation.modal },
     colorRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      flexWrap: 'wrap',
-    },
+      flexWrap: 'wrap' },
     swatch: {
       width: 32,
       height: 32,
       borderRadius: Radius.full,
-      borderWidth: StrokeToken.emphasis,
-    },
+      borderWidth: StrokeToken.emphasis },
     expandColorBtn: {
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.full,
       borderWidth: StrokeToken.standard,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     colorPickerSection: {
-      paddingTop: Space.xs,
-    },
+      paddingTop: Space.xs },
     sizeRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     sizeDotWrap: {
       width: Control.chrome,
       height: Control.chrome,
@@ -1063,68 +1023,55 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderWidth: StrokeToken.standard,
       borderColor: colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     // ── Emoji brush panel ──
     emojiPanel: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emojiTabs: {
-      flexGrow: 0,
-    },
+      flexGrow: 0 },
     emojiTabsContent: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
       paddingRight: Space.md,
-      position: 'relative',
-    },
+      position: 'relative' },
     // Text-only tab — no pill background; selection shown via underline only.
     emojiTab: {
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     emojiTabUnderline: {
       position: 'absolute',
       bottom: 0,
       left: 0,
       height: StrokeToken.emphasis,
-      borderRadius: StrokeToken.emphasis,
-    },
+      borderRadius: StrokeToken.emphasis },
     emojiTabLabel: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      color: colors.textSecondary },
     emojiTabLabelActive: {
       fontFamily: FontFamily.semibold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     emojiGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     emojiCell: {
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.sm,
       borderWidth: StrokeToken.emphasis,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     emojiCellText: {
       // Emoji glyph size — canvas-specific, not a type token.
       fontSize: 28,
-      lineHeight: 32,
-    },
+      lineHeight: 32 },
     emojiSizePreview: {
       // Emoji glyph preview — canvas-specific, not a type token.
       fontSize: 24,
       width: Control.chrome,
-      textAlign: 'center',
-    },
-  });
+      textAlign: 'center' } });
 }

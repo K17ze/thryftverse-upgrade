@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Space, Type, Typography } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type AppEmptyStateVariant = 'default' | 'compact';
 
@@ -30,8 +31,7 @@ export function AppEmptyState({
   description,
   action,
   variant = 'default',
-  style,
-}: AppEmptyStateProps) {
+  style }: AppEmptyStateProps) {
   const reducedMotion = useReducedMotion();
   const enter = reducedMotion ? undefined : FadeIn.duration(300);
   const compact = variant === 'compact';
@@ -85,39 +85,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Space.xl + Space.sm,
     paddingVertical: Space.xxl + Space.sm,
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   containerCompact: {
     flex: 0,
     minHeight: 228,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md + Space.sm,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   title: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
     letterSpacing: -0.2,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   titleCompact: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight },
   description: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: 0.08,
     textAlign: 'center',
-    lineHeight: Type.body.lineHeight + 1,
-    maxWidth: 260,
-  },
+    lineHeight: TypographyV2.body.lineHeight + 1,
+    maxWidth: 260 },
   descriptionCompact: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 1,
-    maxWidth: 310,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 1,
+    maxWidth: 310 },
   actionWrap: {
-    marginTop: Space.md + 4,
-  },
-});
+    marginTop: Space.md + 4 } });

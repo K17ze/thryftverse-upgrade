@@ -4,8 +4,7 @@ import {
   StyleSheet,
   Text,
   View,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 // Note: ScrollView is retained for the horizontal subcategory rail only.
 // The vertical scroll surface is owned by the FlashList inside PinterestMasonryGrid.
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -20,7 +19,8 @@ import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Space, Typography, Type, Control, Stroke, Radius } from '../theme/designTokens';
+import { Space, Typography, Control, Stroke, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useStore, type BrowseSortOption } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
 
@@ -142,25 +142,21 @@ export default function CategoryDetailScreen() {
     () =>
       StyleSheet.create({
         content: {
-          flex: 1,
-        },
+          flex: 1 },
         summary: {
           paddingHorizontal: Space.md,
           paddingTop: Space.xs,
           paddingBottom: Space.sm,
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         count: {
           color: colors.textPrimary,
           fontFamily: Typography.family.semibold,
-          fontSize: Type.body.size,
-          lineHeight: Type.body.lineHeight,
-        },
+          fontSize: TypographyV2.body.size,
+          lineHeight: TypographyV2.body.lineHeight },
         categoryRail: {
           paddingHorizontal: Space.md,
           paddingBottom: Space.sm,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         categoryChip: {
           paddingHorizontal: Space.sm + 2,
           paddingVertical: Space.sm,
@@ -170,21 +166,17 @@ export default function CategoryDetailScreen() {
           borderColor: colors.border,
           minHeight: Control.chrome,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         categoryChipText: {
           color: colors.textPrimary,
           fontFamily: Typography.family.medium,
-          fontSize: Type.caption.size,
-        },
+          fontSize: TypographyV2.meta.size },
         filterBar: {
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         filterRow: {
           paddingHorizontal: Space.md,
           gap: Space.sm,
-          alignItems: 'center',
-        },
+          alignItems: 'center' },
         filterPill: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -193,20 +185,16 @@ export default function CategoryDetailScreen() {
           paddingVertical: Space.sm,
           borderRadius: Radius.full,
           backgroundColor: 'transparent',
-          minHeight: Control.chrome,
-        },
+          minHeight: Control.chrome },
         filterPillActive: {
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surfaceAlt },
         filterPillText: {
           color: colors.textMuted,
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily },
         filterPillTextActive: {
           color: colors.textPrimary,
-          fontFamily: Typography.family.semibold,
-        },
+          fontFamily: Typography.family.semibold },
         sortMenu: {
           marginHorizontal: Space.md,
           marginBottom: Space.sm,
@@ -214,8 +202,7 @@ export default function CategoryDetailScreen() {
           overflow: 'hidden',
           backgroundColor: colors.surface,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.border,
-        },
+          borderColor: colors.border },
         sortMenuItem: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -223,44 +210,34 @@ export default function CategoryDetailScreen() {
           paddingVertical: Space.sm + 2,
           paddingHorizontal: Space.md,
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        },
+          borderBottomColor: colors.border },
         sortMenuItemText: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.regular,
-          color: colors.textPrimary,
-        },
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
+          color: colors.textPrimary },
         sortMenuItemTextActive: {
           color: colors.brand,
-          fontFamily: Typography.family.semibold,
-        },
+          fontFamily: Typography.family.semibold },
         grid: {
           flex: 1,
-          paddingTop: Space.xs,
-        },
+          paddingTop: Space.xs },
         loadingGrid: {
           flex: 1,
           flexDirection: 'row',
           flexWrap: 'wrap',
           gap: Space.sm,
-          paddingHorizontal: Space.md,
-        },
+          paddingHorizontal: Space.md },
         loadingColumn: {
           width: '48%',
-          marginBottom: Space.md,
-        },
+          marginBottom: Space.md },
         skeletonLine: {
-          marginTop: Space.sm,
-        },
+          marginTop: Space.sm },
         skeletonMeta: {
-          marginTop: Space.xs + 2,
-        },
+          marginTop: Space.xs + 2 },
         emptyWrap: {
           flex: 1,
           minHeight: Space.xxl * 7 + Space.lg,
-          justifyContent: 'center',
-        },
-      }),
+          justifyContent: 'center' } }),
     [colors]
   );
 
@@ -328,8 +305,7 @@ export default function CategoryDetailScreen() {
                 navigation.navigate('Browse', {
                   categoryId: category.id,
                   subcategoryId: subcategory.id,
-                  title: subcategory.name,
-                })
+                  title: subcategory.name })
               }
               activeOpacity={0.7}
               scaleValue={0.97}
@@ -460,8 +436,7 @@ export default function CategoryDetailScreen() {
                   sustainableOnly: false,
                   priceMin: null,
                   priceMax: null,
-                  sort: 'Recommended',
-                });
+                  sort: 'Recommended' });
               }}
             />
           </View>
@@ -482,8 +457,7 @@ export default function CategoryDetailScreen() {
                   : () =>
                       navigation.navigate('Browse', {
                         categoryId: 'all',
-                        title: 'Browse',
-                      })
+                        title: 'Browse' })
               }
             />
           </View>

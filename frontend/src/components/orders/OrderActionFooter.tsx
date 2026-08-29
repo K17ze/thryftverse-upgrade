@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface OrderActionConfig {
   label: string;
@@ -21,8 +22,7 @@ interface Props {
 export function OrderActionFooter({
   primaryAction,
   secondaryAction,
-  bottomInset,
-}: Props) {
+  bottomInset }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -52,8 +52,7 @@ export function OrderActionFooter({
             accessibilityLabel={secondaryAction.accessibilityLabel}
             accessibilityState={{
               disabled: secondaryAction.disabled || secondaryAction.loading,
-              busy: secondaryAction.loading,
-            }}
+              busy: secondaryAction.loading }}
           >
             {secondaryAction.loading ? (
               <ActivityIndicator size="small" color={colors.danger} />
@@ -82,8 +81,7 @@ export function OrderActionFooter({
             accessibilityLabel={primaryAction.accessibilityLabel}
             accessibilityState={{
               disabled: primaryAction.disabled || primaryAction.loading,
-              busy: primaryAction.loading,
-            }}
+              busy: primaryAction.loading }}
           >
             {primaryAction.loading ? (
               <ActivityIndicator size="small" color={colors.textInverse} />
@@ -108,12 +106,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderTopColor: colors.border,
     backgroundColor: colors.background,
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   row: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   btn: {
     flex: 1,
     flexDirection: 'row',
@@ -122,33 +118,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
     minHeight: 48,
     borderRadius: Radius.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   btnPrimary: {
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   btnSecondary: {
     backgroundColor: colors.surfaceAlt,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   btnDestructive: {
-    borderColor: colors.danger,
-  },
+    borderColor: colors.danger },
   btnDisabled: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   btnText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   btnTextPrimary: {
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
   btnTextSecondary: {
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   btnTextDestructive: {
-    color: colors.danger,
-  },
-});
+    color: colors.danger } });
