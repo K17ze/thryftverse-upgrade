@@ -19,7 +19,9 @@
       "message": "Message",
       "buy": "Buy",
       "bid": "Bid",
-      "sell": "Sell"
+      "sell": "Sell",
+      "ok": "OK",
+      "confirm": "Confirm"
     },
     "states": {
       "loading": "Loading...",
@@ -493,5 +495,547 @@
       "statusCancelled": "Cancelled",
       "statusRefunded": "Refunded"
     }
-  }
-}
+  },
+  "myProfile": {
+    "cover": {
+      "uploadFailed": "Cover upload failed",
+      "retry": "Retry",
+      "cancel": "Cancel"
+    },
+    "utility": {
+      "orders": "Orders",
+      "analytics": "Analytics",
+      "closet": "Closet",
+      "wallet": "Wallet",
+      "auctions": "Auctions",
+      "coOwn": "Co-own",
+      "sellerHub": "Seller Hub",
+      "itemsCount": "{{count}} items",
+      "assetsCount": "{{count}} assets"
+    },
+    "notSignedIn": {
+      "subtitle": "Sign in to view your profile, listings, and wallet.",
+      "signIn": "Sign In"
+    },
+    "holiday": {
+      "title": "Holiday mode is on",
+      "subtitle": "Your shop is paused. Tap to manage."
+    },
+    "tabs": {
+      "shop": "Shop",
+      "looks": "Looks",
+      "about": "About"
+    },
+    "listings": {
+      "emptyTitle": "List your first item",
+      "emptyBody": "Photograph an item and publish it when you are ready.",
+      "startSelling": "Start selling",
+      "bringOverListings": "Bring over your existing listings",
+      "viewAll": "View All",
+      "sold": "SOLD",
+      "listingsCount": "{{count}} listings"
+    },
+    "looks": {
+      "errorTitle": "Couldn't load your Looks",
+      "errorSubtitle": "Check your connection and try again.",
+      "tryAgain": "Try again",
+      "emptyTitle": "No Looks yet",
+      "emptySubtitle": "Create your first Look to showcase your style.",
+      "createLook": "Create Look"
+    },
+    "about": {
+      "coOwnPortfolio": "CO-OWN PORTFOLIO",
+      "viewAll": "View all",
+      "unit": "unit",
+      "units": "units",
+      "website": "Website",
+      "shopPolicies": "Shop policies",
+      "payments": "Payments",
+      "paymentsValue": "Secure checkout with buyer protection",
+      "shipping": "Shipping",
+      "shippingSeller": "Seller {{label}}. Tracking provided on dispatch.",
+      "shippingDefault": "Tracking provided on dispatch.",
+      "returns": "Returns",
+      "returnsValue": "Returns accepted for items not as described.",
+      "responseRate": "Response rate",
+      "response": "Response",
+      "responseSeller": "Seller typically replies {{label}}.",
+      "responseDefault": "Seller aims to respond promptly.",
+      "noDetails": "No additional details available."
+    },
+    "completion": {
+      "title": "Complete your profile",
+      "progress": "{{percent}}% · {{done}}/{{total}}"
+    },
+    "growth": {
+      "title": "Grow on Thryftverse",
+      "listFirstItemTitle": "List your first item",
+      "listFirstItemSub": "Photograph and publish an item to start selling.",
+      "growAudienceTitle": "Grow your audience",
+      "growAudienceSub": "Share your profile and create content to attract followers."
+    }
+  },
+  "galleria": {
+    "editorial": {
+      "eyebrow": "EDITORIAL"
+    },
+    "collections": {
+      "eyebrow": "CURATED COLLECTIONS",
+      "curatedBy": "Curated by {{curator}}"
+    },
+    "assets": {
+      "eyebrow": "FEATURED ASSETS",
+      "title": "Co-Own highlights"
+    },
+    "editorialList": {
+      "eyebrow": "EDITORIAL",
+      "title": "Stories from the Galleria"
+    },
+    "creativeTools": {
+      "eyebrow": "CREATIVE TOOLS",
+      "title": "Make it yours",
+      "posterStudio": "Poster Studio",
+      "posterStudioSub": "Create posters, looks & moodboard collages"
+    },
+    "demo": {
+      "content": "Demo content"
+    },
+    "offline": {
+      "banner": "Offline — showing cached Galleria content"
+    },
+    "error": {
+      "title": "Galleria unavailable",
+      "retry": "Retry",
+      "loadFailed": "We couldn't load the Galleria. Try again."
+    },
+    "empty": {
+      "title": "The Galleria is being curated",
+      "subtitle": "Our curators are preparing new collections and editorial pieces. Check back soon.",
+      "refresh": "Refresh"
+    }
+  },
+  "agentLedger": {
+    "header": {
+      "title": "Agent runs",
+      "subtitle": "Server-backed execution records"
+    },
+    "status": {
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "running": "Running",
+      "queued": "Queued",
+      "cancelled": "Cancelled",
+      "timedOut": "Timed out",
+      "unknown": "Unknown",
+      "awaitingApproval": "Awaiting approval",
+      "awaitingInput": "Awaiting input"
+    },
+    "error": {
+      "title": "Couldn't load runs",
+      "retry": "Retry",
+      "loadFailed": "Failed to load runs"
+    },
+    "empty": {
+      "title": "No agent runs yet",
+      "body": "When agents execute — via mentions, commands, or schedules — their runs appear here with status, token usage, and timing."
+    },
+    "footer": {
+      "note": "Previously shown local activity log has been replaced with server-backed run records."
+    },
+    "approvals": {
+      "title": "Pending approvals",
+      "approving": "Approving…",
+      "approve": "Approve",
+      "rejecting": "Rejecting…",
+      "reject": "Reject",
+      "errorApproveTitle": "Could not approve",
+      "errorApproveMessage": "The request could not be approved.",
+      "errorRejectTitle": "Could not reject",
+      "errorRejectMessage": "The request could not be rejected."
+    },
+    "cancel": {
+      "cancelling": "Cancelling…",
+      "cancel": "Cancel",
+      "confirmTitle": "Cancel agent run",
+      "confirmMessage": "Cancel the run for {{botName}}?",
+      "confirmLabel": "Cancel run",
+      "errorTitle": "Could not cancel",
+      "errorMessage": "The run could not be cancelled."
+    },
+    "tools": {
+      "search": "Search: {{query}}",
+      "listing": "Listing: {{listingId}}",
+      "priceHistory": "Price history: {{query}}",
+      "readMessages": "Read {{count}} messages"
+    },
+    "time": {
+      "justNow": "Just now",
+      "minutesAgo": "{{count}}m ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
+    },
+    "tokens": {
+      "usage": "{{input}} in · {{output}} out"
+    }
+  },
+  "liveStreamViewer": {
+    "lotStatus": {
+      "comingUp": "Coming up",
+      "openForBidding": "Open for bidding",
+      "closingSoon": "Closing soon!",
+      "passed": "Passed (reserve not met)",
+      "cancelled": "Cancelled"
+    },
+    "connecting": {
+      "title": "Connecting to stream",
+      "subtitle": "Setting up real-time connection"
+    },
+    "error": {
+      "title": "Couldn't connect to stream",
+      "subtitle": "The stream may have ended or your connection dropped.",
+      "reconnect": "Reconnect",
+      "goBack": "Go back"
+    },
+    "ended": {
+      "title": "Stream Ended",
+      "subtitle": "Thanks for watching",
+      "viewers": "Viewers",
+      "lotsSold": "Lots Sold",
+      "totalSales": "Total Sales",
+      "done": "Done"
+    },
+    "demo": {
+      "label": "DEMO",
+      "stream": "Demo stream"
+    },
+    "video": {
+      "connecting": "Connecting to stream..."
+    },
+    "seller": {
+      "following": "Following",
+      "follow": "Follow"
+    },
+    "live": {
+      "label": "LIVE"
+    },
+    "chat": {
+      "seller": "SELLER",
+      "placeholder": "Send a message..."
+    },
+    "product": {
+      "bids": "bids"
+    },
+    "bid": {
+      "placeBid": "Bid",
+      "buyNow": "Buy",
+      "buyNowFull": "Buy Now",
+      "completeCheckout": "Complete checkout"
+    },
+    "bidSheet": {
+      "title": "Place a Bid",
+      "currentBid": "Current bid",
+      "minNextBid": "Minimum next bid",
+      "cancel": "Cancel",
+      "close": "Close"
+    },
+    "unknown": {
+      "title": "Bid status unknown",
+      "subtitle": "Your bid may have been placed. We couldn't confirm the result.",
+      "checkResult": "Check result",
+      "dismiss": "Dismiss"
+    }
+  },
+  "liveShopping": {
+    "live": {
+      "label": "LIVE",
+      "demo": "DEMO"
+    },
+    "header": {
+      "title": "Live"
+    },
+    "sections": {
+      "liveNow": "Live now",
+      "comingUp": "Coming up",
+      "pastEvents": "Past Events"
+    },
+    "featured": {
+      "currentBid": "Current bid"
+    },
+    "upcoming": {
+      "waiting": "waiting",
+      "notified": "Notified",
+      "notifyMe": "Notify me",
+      "startingSoon": "Starting soon"
+    },
+    "noLive": {
+      "text": "No one is live right now"
+    },
+    "error": {
+      "title": "Couldn't load live sessions",
+      "retry": "Retry"
+    },
+    "empty": {
+      "title": "No live sessions right now",
+      "subtitle": "Check back soon, or start your own session from the Seller Hub.",
+      "goToSellerHub": "Go to Seller Hub"
+    }
+  },
+  "conversationalSearch": {
+    "header": {
+      "title": "Ask ThryftVerse"
+    },
+    "demo": {
+      "banner": "Keyword matching — we extract filters from your description."
+    },
+    "offline": {
+      "banner": "You are offline. Reconnect to search."
+    },
+    "empty": {
+      "greetingTitle": "What are you looking for today?",
+      "greetingSubtitle": "Describe it in your own words.",
+      "suggestionsLabel": "Try one of these"
+    },
+    "matched": {
+      "label": "Matched keywords"
+    },
+    "actions": {
+      "viewResults": "View results",
+      "refine": "Refine"
+    },
+    "error": {
+      "retry": "Retry"
+    },
+    "input": {
+      "placeholder": "Describe what you are looking for…"
+    }
+  },
+  "aiAgent": {
+    "header": {
+      "title": "Agent Studio",
+      "subtitle": "Manage agents, connections, and keys"
+    },
+    "sections": {
+      "yourAgents": "YOUR AGENTS",
+      "serverConnections": "SERVER CONNECTIONS",
+      "deviceLocalKeys": "DEVICE-LOCAL KEYS"
+    },
+    "serverConnections": {
+      "hint": "Keys verified and stored encrypted on the server. These power agent execution.",
+      "connectServerSide": "Connect server-side",
+      "connectServerSideSub": "Keys are verified and stored encrypted on the server.",
+      "empty": "No server connections yet. Connect a provider to power your agents."
+    },
+    "deviceLocal": {
+      "note": "Discovery only — not used for execution",
+      "expandedNote": "Device-local keys are used for model discovery only. Server connections power agent execution."
+    },
+    "agents": {
+      "empty": "No agents yet. Create one to give it a specialty, boundaries, and context.",
+      "create": "Create agent",
+      "pauseAll": "Pause all agents",
+      "noSessionsRunning": "No agent sessions running",
+      "activity": "Agent activity",
+      "activitySub": "Local log of agent actions and approvals"
+    },
+    "connect": {
+      "cancel": "Cancel",
+      "verifySave": "Verify & save",
+      "verifying": "Verifying…",
+      "apiKey": "API key",
+      "labelOptional": "Label (optional)",
+      "baseUrl": "Base URL (optional, custom providers)"
+    },
+    "confirm": {
+      "title": "Remove this connection?",
+      "body": "Agents using this connection will no longer be able to run until you connect a replacement.",
+      "cancel": "Cancel",
+      "remove": "Remove",
+      "removing": "Removing…"
+    },
+    "connection": {
+      "reverify": "Reverify",
+      "verifying": "Verifying…",
+      "remove": "Remove",
+      "removing": "Removing…"
+    }
+  },
+  "algorithm": {
+    "header": {
+      "title": "Your Algorithm",
+      "subtitle": "The signals that shape your feed"
+    },
+    "demo": {
+      "banner": "Algorithm data is illustrative in demo mode."
+    },
+    "offline": {
+      "banner": "You are offline. Showing the last saved profile."
+    },
+    "summary": {
+      "activeTopics": "Active topics",
+      "signals": "Signals",
+      "lastUpdated": "Last updated"
+    },
+    "howItWorks": {
+      "title": "How this works"
+    },
+    "empty": {
+      "title": "No topics yet",
+      "subtitle": "Your feed is based on general popularity. Add a topic below to start shaping your recommendations."
+    },
+    "topics": {
+      "title": "Topics that influence your feed",
+      "caption": "Tap a topic to adjust its weight or remove it.",
+      "influenceWeight": "Influence weight",
+      "removeTopic": "Remove topic",
+      "lockHint": "Kept for trust and accounting. You can pause its influence on your feed."
+    },
+    "signals": {
+      "title": "Recent signals",
+      "caption": "The latest actions that shaped your feed."
+    },
+    "addTopic": {
+      "title": "Add a topic",
+      "caption": "Tell us what you're interested in.",
+      "placeholder": "e.g. Vintage watches",
+      "addBtn": "Add topic"
+    },
+    "error": {
+      "title": "Couldn't load your algorithm",
+      "subtitle": "We couldn't fetch your algorithm profile. Check your connection and try again.",
+      "retry": "Retry"
+    }
+  },
+  "aiListing": {
+    "header": {
+      "title": "Quick list",
+      "subtitle": "Snap photos · review · publish"
+    },
+    "fields": {
+      "title": "Title",
+      "description": "Description",
+      "category": "Category",
+      "brand": "Brand",
+      "condition": "Condition",
+      "price": "Price (GBP)",
+      "tags": "Tags",
+      "materialComposition": "Material composition",
+      "weight": "Weight (kg)"
+    },
+    "placeholders": {
+      "title": "e.g. Vintage Levi's 501 Denim Jacket",
+      "description": "Describe your item…",
+      "selectCategory": "Select category",
+      "brand": "Brand",
+      "selectCondition": "Select condition",
+      "price": "0.00",
+      "addTag": "Add tag",
+      "material": "e.g. cotton, polyester, wool...",
+      "weight": "e.g. 0.45"
+    },
+    "impact": {
+      "helper": "Used to calculate real environmental impact. Optional but recommended."
+    },
+    "preview": {
+      "label": "Preview",
+      "completeness": "Completeness"
+    },
+    "publish": {
+      "publishing": "Publishing…",
+      "reviewPublish": "Review & publish"
+    },
+    "photo": {
+      "cover": "Cover",
+      "enhance": "Enhance",
+      "camera": "Camera",
+      "library": "Library"
+    },
+    "suggestion": {
+      "use": "Use"
+    },
+    "picker": {
+      "selectCategory": "Select category",
+      "selectCondition": "Select condition"
+    }
+  },
+  "report": {
+    "header": {
+      "title": "Report",
+      "reportAccount": "Report account",
+      "reportGroup": "Report group",
+      "reportListing": "Report listing",
+      "subtitle": "Reports are confidential"
+    },
+    "received": {
+      "title": "Report received",
+      "body": "We'll review and let you know the outcome.",
+      "referenceNote": "Reference this number in future support contact.",
+      "blockUser": "Block this user",
+      "blockedNote": "This account is blocked and cannot contact you.",
+      "done": "Done"
+    },
+    "unavailable": {
+      "title": "Report target unavailable",
+      "body": "This report was opened without a valid reference. Nothing has been submitted.",
+      "goBack": "Go back"
+    },
+    "submit": {
+      "label": "Send report"
+    },
+    "intro": {
+      "title": "What happened?",
+      "body": "Choose the reason that best describes the issue. Do not include passwords, payment details or other sensitive information."
+    },
+    "details": {
+      "label": "Additional details (optional)",
+      "placeholder": "Describe what happened"
+    },
+    "evidence": {
+      "label": "Evidence photos (optional)",
+      "camera": "Camera",
+      "gallery": "Gallery",
+      "count": "{count}/3 photos"
+    },
+    "reasons": {
+      "spam": "Spam",
+      "spamDesc": "Unwanted promotion, scams or repetitive messages",
+      "harassment": "Harassment",
+      "harassmentDesc": "Threatening, abusive or targeted unwanted contact",
+      "hateSpeech": "Hate speech",
+      "hateSpeechDesc": "Slurs, dehumanizing language, or attacks on protected groups",
+      "counterfeit": "Fake item",
+      "counterfeitDesc": "Counterfeit goods or misleading authenticity claims",
+      "prohibited": "Prohibited item",
+      "prohibitedDesc": "Weapons, drugs, wildlife, or other prohibited categories",
+      "offPlatform": "Off-platform request",
+      "offPlatformDesc": "Asked to transact outside Thryftverse, against policy",
+      "scam": "Scam or fraud",
+      "scamDesc": "Attempted financial fraud, phishing, or impersonation",
+      "misinformation": "Misleading content",
+      "misinformationDesc": "False or misleading claims about an item",
+      "privacy": "Privacy violation",
+      "privacyDesc": "Shared private information without consent",
+      "impersonation": "Impersonation",
+      "impersonationDesc": "Pretending to be someone else",
+      "minorSafety": "Minor safety",
+      "minorSafetyDesc": "Content or behavior endangering minors",
+      "other": "Something else",
+      "otherDesc": "Tell the moderation team what happened"
+    }
+  },
+  "appeal": {
+    "header": {
+      "title": "Appeal decision"
+    },
+    "loading": {
+      "title": "Loading decision",
+      "subtitle": "One moment while we retrieve the details."
+    },
+    "error": {
+      "title": "Couldn't load decision",
+      "subtitle": "We could not retrieve the decision details. Tap below to try again.",
+      "tryAgain": "Try again",
+      "goBack": "Go back"
+    },
+    "windowClosed": {
+      "title": "Appeal window closed",
+      "body": "Decisions can

@@ -18,6 +18,7 @@ import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Radius, Space, Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { AnimatedPressable } from '../../AnimatedPressable';
@@ -40,7 +41,7 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: 4,
     },
     customColorTitle: {
-      fontSize: 15,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: Typography.family.semibold,
     },
     customColorPreview: {
@@ -52,7 +53,7 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.borderSubtle,
     },
     customColorPreviewLabel: {
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       fontFamily: Typography.family.semibold,
     },
     applyCustomBtn: {
@@ -64,7 +65,7 @@ function createStyles(colors: ThemeColors) {
     },
     applyCustomText: {
       color: colors.textInverse,
-      fontSize: 15,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: Typography.family.bold,
     },
     sliderWrap: {

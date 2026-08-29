@@ -376,7 +376,7 @@ function createStyles(colors: ThemeColors) {
       textAlign: 'center',
       marginBottom: 4 },
     sectionLabel: {
-      fontSize: 12,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
       textTransform: 'uppercase',
@@ -401,7 +401,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       paddingBottom: 4 },
     customTitle: {
-      fontSize: 16,
+      fontSize: TypographyV2.body.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary },
     customPreview: {
@@ -412,12 +412,12 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
       borderColor: colors.borderSubtle },
     customPreviewLabel: {
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       fontFamily: Typography.family.semibold },
     sliderWrap: {
       gap: 6 },
     sliderLabel: {
-      fontSize: 12,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary },
     applyCustomBtn: {
@@ -429,6 +429,6 @@ function createStyles(colors: ThemeColors) {
       marginTop: 4 },
     applyCustomText: {
       color: colors.textInverse,
-      fontSize: 15,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: Typography.family.bold } });
 }

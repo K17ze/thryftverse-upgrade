@@ -28,6 +28,7 @@ import {
   Group,
 } from '@shopify/react-native-skia';
 import { Typography, Radius, Space, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -992,7 +993,7 @@ function createStyles(colors: ThemeColors) {
   },
   doneDrawText: {
     color: colors.textInverse,
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
     fontFamily: Typography.family.bold,
   },
   // ── Clear confirmation ActionSheet ──
@@ -1021,12 +1022,12 @@ function createStyles(colors: ThemeColors) {
     alignSelf: 'center',
   },
   confirmTitle: {
-    fontSize: 17,
+    fontSize: TypographyV2.sectionTitle.size,
     fontFamily: Typography.family.bold,
     textAlign: 'center',
   },
   confirmSubtitle: {
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingHorizontal: Space.md,
@@ -1043,7 +1044,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   confirmCancelText: {
-    fontSize: 15,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   confirmClearBtn: {
@@ -1054,7 +1055,7 @@ function createStyles(colors: ThemeColors) {
   },
   confirmClearText: {
     color: colors.textInverse,
-    fontSize: 15,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: Typography.family.bold,
   },
 });

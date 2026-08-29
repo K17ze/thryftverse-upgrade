@@ -189,16 +189,16 @@ export function AITransparencyDisclosure({
       alignSelf: 'center',
       marginBottom: Space.md },
     title: {
-      fontSize: 24,
+      fontSize: TypographyV2.screenTitle.size,
       fontWeight: '700',
       color: colors.textPrimary,
       marginBottom: 6 },
     subtitle: {
-      fontSize: 15,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textSecondary,
-      lineHeight: 21 },
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     sectionLabel: {
-      fontSize: 13,
+      fontSize: TypographyV2.label.size,
       fontWeight: '600',
       color: colors.textMuted,
       textTransform: 'uppercase',
@@ -212,16 +212,16 @@ export function AITransparencyDisclosure({
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderSubtle },
     featureTitle: {
-      fontSize: 17,
+      fontSize: TypographyV2.sectionTitle.size,
       fontWeight: '600',
       color: colors.textPrimary,
       marginBottom: 4 },
     featureDescription: {
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
-      lineHeight: 20 },
+      lineHeight: TypographyV2.body.lineHeight },
     dataLabel: {
-      fontSize: 13,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '500',
       color: colors.textMuted,
       marginTop: 8,
@@ -238,7 +238,7 @@ export function AITransparencyDisclosure({
       marginRight: 6,
       marginBottom: 4 },
     chipText: {
-      fontSize: 12,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary },
     controlsSection: {
       paddingHorizontal: Space.lg,
@@ -250,7 +250,7 @@ export function AITransparencyDisclosure({
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderSubtle },
     controlText: {
-      fontSize: 15,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textPrimary,
       flex: 1 },
     controlChevron: {
@@ -261,9 +261,9 @@ export function AITransparencyDisclosure({
       paddingTop: 20,
       paddingBottom: 8 },
     contactText: {
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
-      lineHeight: 20 },
+      lineHeight: TypographyV2.body.lineHeight },
     buttonRow: {
       flexDirection: 'row',
       paddingHorizontal: Space.lg,
@@ -276,7 +276,7 @@ export function AITransparencyDisclosure({
       borderRadius: 16,
       alignItems: 'center' },
     primaryButtonText: {
-      fontSize: 17,
+      fontSize: TypographyV2.sectionTitle.size,
       fontWeight: '600',
       color: colors.textInverse } });
 

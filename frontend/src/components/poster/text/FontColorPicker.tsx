@@ -483,7 +483,7 @@ function createStyles(colors: ThemeColors) {
     fontPreviewTextActive: {
       color: colors.textPrimary },
     fontLabel: {
-      fontSize: 10,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       fontFamily: Typography.family.regular },
     fontLabelActive: {
@@ -553,7 +553,7 @@ function createEyedropperStyles(colors: ThemeColors) {
       paddingHorizontal: 8,
       paddingVertical: 2 },
     loupeLabelText: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       color: colors.textPrimary,
       fontFamily: Typography.family.regular },
     instructionWrap: {
@@ -570,6 +570,6 @@ function createEyedropperStyles(colors: ThemeColors) {
       paddingVertical: 10 },
     instructionText: {
       color: colors.textPrimary,
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       fontFamily: Typography.family.regular } });
 }

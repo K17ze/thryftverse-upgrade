@@ -700,7 +700,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     paddingVertical: Space.xs,
     borderRadius: Radius.sm },
   coverBadgeText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     color: colors.scrimTextPrimary,
     letterSpacing: 0.5 },
@@ -716,7 +716,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     paddingVertical: Space.xs,
     borderRadius: Radius.sm },
   videoText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     color: colors.scrimTextPrimary },
   countBadge: {
@@ -871,7 +871,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     justifyContent: 'center' },
   thumbNumberText: {
     color: colors.background,
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold },
   thumbStatusOverlay: {
     position: 'absolute',
@@ -923,7 +923,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     borderRadius: Radius.sm,
     backgroundColor: colors.danger },
   thumbRetryBtnText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     color: colors.textInverse },
   thumbCancelledOverlay: {

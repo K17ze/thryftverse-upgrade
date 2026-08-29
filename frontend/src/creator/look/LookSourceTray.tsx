@@ -827,12 +827,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center' },
   itemTitle: {
     fontFamily: Typography.family.medium,
-    fontSize: 10.5,
+    fontSize: TypographyV2.meta.size,
     marginTop: 2,
     textAlign: 'center' },
   itemPrice: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10.5 },
+    fontSize: TypographyV2.meta.size },
   // ── Floating drag preview ──
   dragPreview: {
     position: 'absolute',
@@ -848,12 +848,12 @@ const styles = StyleSheet.create({
     ...Elevation.floating },
   previewTitle: {
     fontFamily: Typography.family.medium,
-    fontSize: 10.5,
+    fontSize: TypographyV2.meta.size,
     marginTop: 2,
     textAlign: 'center' },
   previewPrice: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10.5 },
+    fontSize: TypographyV2.meta.size },
   // ── Source tray peek strip ──
   peekStrip: {
     flexDirection: 'row',

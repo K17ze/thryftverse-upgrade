@@ -643,7 +643,7 @@ function createStyles(colors: ThemeColors) {
     // mode) would render invisible.
     creatorText: {
       color: '#FFFFFF',
-      fontSize: 12,
+      fontSize: TypographyV2.meta.size,
       lineHeight: 16,
       fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: TypographyV2.meta.letterSpacing,
@@ -660,7 +660,7 @@ function createStyles(colors: ThemeColors) {
       gap: 2 },
     shoppableText: {
       color: '#FFFFFF',
-      fontSize: 10,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily },
     // Media-type / multi-layer cue — top-right, small icon only.
     mediaCueBadge: {
@@ -686,6 +686,6 @@ function createStyles(colors: ThemeColors) {
     // dark mode.
     likeText: {
       color: '#FFFFFF',
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily } });
 }

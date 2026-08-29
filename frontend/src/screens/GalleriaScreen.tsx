@@ -36,6 +36,7 @@ import {
   type GalleriaEditorial,
   type GalleriaFeaturedAsset } from '../services/galleriaApi';
 import { openProductDetail } from '../platform/product/openProductDetail';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -66,6 +67,7 @@ const HeroEditorialCard = React.memo(function HeroEditorialCard({
   editorial: GalleriaEditorial;
 }) {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
 
   return (
     <View
@@ -86,7 +88,7 @@ const HeroEditorialCard = React.memo(function HeroEditorialCard({
       <View style={styles.heroOverlay} pointerEvents="none">
         <View style={styles.heroEyebrowRow}>
           <View style={styles.heroEyebrowDot} />
-          <Text style={styles.heroEyebrow}>EDITORIAL</Text>
+          <Text style={styles.heroEyebrow}>{t('editorial.eyebrow')}</Text>
         </View>
         <Text style={styles.heroTitle} numberOfLines={3}>
           {editorial.title}
@@ -162,6 +164,7 @@ const FeaturedCollectionCard = React.memo(function FeaturedCollectionCard({
   onPress: () => void;
 }) {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
 
   return (
     <AnimatedPressable
@@ -195,7 +198,7 @@ const FeaturedCollectionCard = React.memo(function FeaturedCollectionCard({
             contentFit="cover"
           />
           <Text style={styles.featuredCollectionCurator} numberOfLines={1}>
-            Curated by {collection.curator}
+            {t('collections.curatedBy', { curator: collection.curator })}
           </Text>
         </View>
       </View>
@@ -448,6 +451,7 @@ export default function GalleriaScreen() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const reducedMotion = useReducedMotion();
+  const { t } = useAppTranslation('galleria');
 
   const [collections, setCollections] = useState<GalleriaCollection[]>([]);
   const [editorials, setEditorials] = useState<GalleriaEditorial[]>([]);
@@ -474,7 +478,7 @@ export default function GalleriaScreen() {
       setEditorials(eds);
       setFeaturedAssets(assets);
     } catch (e) {
-      setError('We couldn\u2019t load the Galleria. Try again.');
+      setError(t('error.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -549,7 +553,7 @@ export default function GalleriaScreen() {
         {GALLERIA_DEMO_MODE && (
           <View style={styles.demoBadgeRow}>
             <View style={styles.demoBadgeDot} />
-            <Text style={styles.demoBadgeText}>Demo content</Text>
+            <Text style={styles.demoBadgeText}>{t('demo.content')}</Text>
           </View>
         )}
 
@@ -567,7 +571,7 @@ export default function GalleriaScreen() {
           <CollectionRailSkeleton />
         ) : collections.length > 0 ? (
           <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={styles.sectionWrap}>
-            <Text style={styles.sectionEyebrow}>CURATED COLLECTIONS</Text>
+            <Text style={styles.sectionEyebrow}>{t('collections.eyebrow')}</Text>
             {featuredCollection && (
               <FeaturedCollectionCard
                 collection={featuredCollection}
@@ -595,11 +599,11 @@ export default function GalleriaScreen() {
         {/* ── Section 3: Featured Assets — header + loading skeleton ── */}
         {loading ? (
           <>
-            <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
+            <SectionHeader eyebrow={t('assets.eyebrow')} title={t('assets.title')} />
             <FeaturedMasonrySkeleton />
           </>
         ) : featuredAssets.length > 0 ? (
-          <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
+          <SectionHeader eyebrow={t('assets.eyebrow')} title={t('assets.title')} />
         ) : null}
       </View>
     ),
@@ -614,6 +618,7 @@ export default function GalleriaScreen() {
       reducedMotion,
       styles,
       handleCollectionPress,
+      t,
     ],
   );
 
@@ -623,13 +628,13 @@ export default function GalleriaScreen() {
         {/* ── Section 4: Editorial list ── */}
         {loading && editorials.length > 0 ? (
           <>
-            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
+            <SectionHeader eyebrow={t('editorialList.eyebrow')} title={t('editorialList.title')} />
             <EditorialSkeleton />
             <EditorialSkeleton />
           </>
         ) : remainingEditorials.length > 0 ? (
           <>
-            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
+            <SectionHeader eyebrow={t('editorialList.eyebrow')} title={t('editorialList.title')} />
             {remainingEditorials.map((ed, idx) => (
               <EditorialListItem
                 key={ed.id}
@@ -643,7 +648,7 @@ export default function GalleriaScreen() {
 
         {/* ── Section 5: Creative Tools — Poster Studio CTA ── */}
         <View style={styles.stylingToolsWrap}>
-          <SectionHeader eyebrow="CREATIVE TOOLS" title="Make it yours" />
+          <SectionHeader eyebrow={t('creativeTools.eyebrow')} title={t('creativeTools.title')} />
           <AnimatedPressable
             style={styles.moodboardCtaCard}
             onPress={() => { haptic.selection(); navigation.navigate('CreatorStudio', { type: 'poster', openTemplates: true }); }}
@@ -656,10 +661,10 @@ export default function GalleriaScreen() {
             <Ionicons name="create-outline" size={22} color={colors.brand} />
             <View style={styles.moodboardCtaCopy}>
               <Text style={styles.moodboardCtaTitle} numberOfLines={1}>
-                Poster Studio
+                {t('creativeTools.posterStudio')}
               </Text>
               <Text style={styles.moodboardCtaSubtitle} numberOfLines={2}>
-                Create posters, looks & moodboard collages
+                {t('creativeTools.posterStudioSub')}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -676,6 +681,7 @@ export default function GalleriaScreen() {
       colors,
       haptic,
       navigation,
+      t,
     ],
   );
 
@@ -686,9 +692,9 @@ export default function GalleriaScreen() {
         <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
         <EmptyState
           icon="cloud-offline-outline"
-          title="Galleria unavailable"
+          title={t('error.title')}
           subtitle={error}
-          ctaLabel="Retry"
+          ctaLabel={t('error.retry')}
           onCtaPress={() => void loadAll(false)}
         />
       </View>
@@ -707,9 +713,9 @@ export default function GalleriaScreen() {
         <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
         <EmptyState
           icon="images-outline"
-          title="The Galleria is being curated"
-          subtitle="Our curators are preparing new collections and editorial pieces. Check back soon."
-          ctaLabel="Refresh"
+          title={t('empty.title')}
+          subtitle={t('empty.subtitle')}
+          ctaLabel={t('empty.refresh')}
           onCtaPress={() => void loadAll(false)}
         />
       </View>
@@ -724,7 +730,7 @@ export default function GalleriaScreen() {
       {isOffline && (
         <View style={styles.offlineBanner}>
           <Ionicons name="cloud-offline-outline" size={14} color={colors.scrimTextPrimary} />
-          <Text style={styles.offlineBannerText}>Offline — showing cached Galleria content</Text>
+          <Text style={styles.offlineBannerText}>{t('offline.banner')}</Text>
         </View>
       )}
 

@@ -28,6 +28,7 @@ import {
 } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface SDKPrivacyEntry {
   /** npm package name. */
@@ -478,9 +479,9 @@ export function PrivacyManifest({
       paddingBottom: Space.md,
     },
     summaryText: {
-      fontSize: 15,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textSecondary,
-      lineHeight: 21,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
     },
     summaryBold: {
       fontWeight: '600',
@@ -494,7 +495,7 @@ export function PrivacyManifest({
       marginBottom: 8,
     },
     warningText: {
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       color: colors.warning,
     },
     sdkCard: {
@@ -504,24 +505,24 @@ export function PrivacyManifest({
       borderBottomColor: colors.borderSubtle,
     },
     sdkName: {
-      fontSize: 16,
+      fontSize: TypographyV2.body.size,
       fontWeight: '600',
       color: colors.textPrimary,
       marginBottom: 2,
     },
     sdkVersion: {
-      fontSize: 13,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       marginBottom: 6,
     },
     sdkDescription: {
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
-      lineHeight: 20,
+      lineHeight: TypographyV2.body.lineHeight,
       marginBottom: 8,
     },
     dataLabel: {
-      fontSize: 13,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '500',
       color: colors.textMuted,
       marginBottom: 6,
@@ -540,11 +541,11 @@ export function PrivacyManifest({
       marginBottom: 4,
     },
     chipText: {
-      fontSize: 12,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
     },
     noDataText: {
-      fontSize: 13,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       fontStyle: 'italic',
     },
@@ -561,12 +562,12 @@ export function PrivacyManifest({
       marginRight: 6,
     },
     trackingText: {
-      fontSize: 13,
+      fontSize: TypographyV2.meta.size,
       color: colors.warning,
       fontWeight: '500',
     },
     privacyLink: {
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       color: colors.brand,
       marginTop: 8,
     },

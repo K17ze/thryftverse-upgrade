@@ -3597,7 +3597,7 @@ const VotePicker = React.memo(function VotePicker({ onClose, onAddLayer }: { onC
           {timerMs && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'center' }}>
               <Ionicons name="timer-outline" size={IconGrammar.badge} color={colors.textSecondary} aria-hidden={true} />
-              <Text style={{ fontFamily: Typography.family.medium, fontSize: 10, color: colors.textSecondary }}>
+              <Text style={{ fontFamily: Typography.family.medium, fontSize: TypographyV2.meta.size, color: colors.textSecondary }}>
                 {timerMs >= 86400000 ? `${Math.floor(timerMs / 86400000)}d` : timerMs >= 3600000 ? `${Math.floor(timerMs / 3600000)}h` : `${Math.floor(timerMs / 60000)}m`}
               </Text>
             </View>
@@ -4393,7 +4393,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     alignItems: 'center' },
   selectionPreviewOrderText: {
     fontFamily: Typography.family.bold,
-    fontSize: 10 },
+    fontSize: TypographyV2.meta.size },
   selectionPreviewRemove: {
     position: 'absolute',
     top: 2,
@@ -4433,7 +4433,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     borderRadius: Radius.sm },
   mediaGridDuration: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.medium },
   // Selection overlay — subtle tint + border highlight (iOS Photos pattern).
   // The border communicates selection more clearly than a heavy dark overlay.

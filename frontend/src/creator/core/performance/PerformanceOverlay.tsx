@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' },
   title: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '600',
     letterSpacing: 0.5,
     textTransform: 'uppercase' },
@@ -359,19 +359,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16, 185, 129, 0.3)' },
   miniBtnText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '600' },
   fpsRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 4 },
   fpsValue: {
-    fontSize: 32,
+    fontSize: TypographyV2.display.size,
     fontWeight: '700',
     fontVariant: ['tabular-nums'] },
   fpsUnit: {
     color: '#FFFFFF80',
-    fontSize: 12,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '500' },
   graphContainer: {
     marginVertical: 2,
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3 },
   statValue: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '600',
     fontVariant: ['tabular-nums'] },
   threadRow: {

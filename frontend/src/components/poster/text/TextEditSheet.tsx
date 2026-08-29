@@ -426,7 +426,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt },
     fontPillText: {
       color: colors.textSecondary,
-      fontSize: 14 },
+      fontSize: TypographyV2.body.size },
     fontPillTextActive: {
       color: colors.textPrimary },
     colorRow: {
@@ -464,7 +464,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 2 },
     toggleLabel: {
       color: colors.textSecondary,
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       fontFamily: Typography.family.medium },
     toggleBtn: {
       width: 36,
@@ -495,7 +495,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt },
     alignBtnText: {
       color: colors.textSecondary,
-      fontSize: 15,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: Typography.family.bold },
     alignBtnTextActive: {
       color: colors.textPrimary },
@@ -516,7 +516,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center' },
     sizeBtnTextSmall: {
       color: colors.textSecondary,
-      fontSize: 13,
+      fontSize: TypographyV2.body.size,
       fontFamily: Typography.family.semibold },
     sizeBtnTextLarge: {
       color: colors.textPrimary,
@@ -524,7 +524,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: TypographyV2.sectionTitle.fontFamily },
     strokeWidthLabel: {
       color: colors.textPrimary,
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       fontFamily: Typography.family.semibold,
       minWidth: 20,
       textAlign: 'center' },
@@ -537,6 +537,6 @@ function createStyles(colors: ThemeColors) {
       marginTop: 2 },
     doneBtnText: {
       color: colors.textInverse,
-      fontSize: 15,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: Typography.family.bold } });
 }

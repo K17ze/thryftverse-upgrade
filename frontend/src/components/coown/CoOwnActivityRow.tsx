@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   sideText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.4,
   },
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
   },
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   settlementText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
   },

@@ -33,6 +33,7 @@ import { TypographyV2 } from '../theme/typography.v2';
 import { useStore } from '../store/useStore';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import type { AgentRunInfo, ApprovalRequestInfo } from '../services/botsApi';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AgentLedger'>;
 
@@ -50,16 +51,16 @@ const STATUS_COLOR_KEY: Record<RunStatus, 'success' | 'danger' | 'social' | 'tex
   waiting_for_input: 'warning',
 };
 
-const STATUS_LABEL: Record<RunStatus, string> = {
-  succeeded: 'Succeeded',
-  failed: 'Failed',
-  running: 'Running',
-  queued: 'Queued',
-  cancelled: 'Cancelled',
-  timed_out: 'Timed out',
-  unknown_outcome: 'Unknown',
-  waiting_for_approval: 'Awaiting approval',
-  waiting_for_input: 'Awaiting input',
+const STATUS_LABEL_KEY: Record<RunStatus, string> = {
+  succeeded: 'status.succeeded',
+  failed: 'status.failed',
+  running: 'status.running',
+  queued: 'status.queued',
+  cancelled: 'status.cancelled',
+  timed_out: 'status.timedOut',
+  unknown_outcome: 'status.unknown',
+  waiting_for_approval: 'status.awaitingApproval',
+  waiting_for_input: 'status.awaitingInput',
 };
 
 const TRIGGER_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -76,6 +77,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { t } = useAppTranslation('agentLedger');
 
   const agentRuns = useStore((s) => s.agentRuns);
   const loadAgentRuns = useStore((s) => s.loadAgentRuns);
@@ -123,7 +125,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
           loadPendingApprovals(),
         ]);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load runs');
+        setError(e instanceof Error ? e.message : t('error.loadFailed'));
       } finally {
         if (isRefresh) setRefreshing(false);
         else setLoading(false);
@@ -140,9 +142,9 @@ export default function AgentLedgerScreen({ navigation }: Props) {
     haptic.medium();
     setConfirmSheet({
       visible: true,
-      title: 'Cancel agent run',
-      message: `Cancel the run for ${botNameById.get(run.botId) ?? run.botId}?`,
-      confirmLabel: 'Cancel run',
+      title: t('cancel.confirmTitle'),
+      message: t('cancel.confirmMessage', { botName: botNameById.get(run.botId) ?? run.botId }),
+      confirmLabel: t('cancel.confirmLabel'),
       variant: 'danger',
       onConfirm: async () => {
         setCancellingId(run.id);
@@ -153,9 +155,9 @@ export default function AgentLedgerScreen({ navigation }: Props) {
           haptic.heavy();
           setConfirmSheet({
             visible: true,
-            title: 'Could not cancel',
-            message: e instanceof Error ? e.message : 'The run could not be cancelled.',
-            confirmLabel: 'OK',
+            title: t('cancel.errorTitle'),
+            message: e instanceof Error ? e.message : t('cancel.errorMessage'),
+            confirmLabel: t('common:buttons.ok'),
             variant: 'default',
             onConfirm: () => {},
           });
@@ -175,9 +177,9 @@ export default function AgentLedgerScreen({ navigation }: Props) {
         haptic.heavy();
         setConfirmSheet({
           visible: true,
-          title: 'Could not approve',
-          message: e instanceof Error ? e.message : 'The request could not be approved.',
-          confirmLabel: 'OK',
+          title: t('approvals.errorApproveTitle'),
+          message: e instanceof Error ? e.message : t('approvals.errorApproveMessage'),
+          confirmLabel: t('common:buttons.ok'),
           variant: 'default',
           onConfirm: () => {},
         });
@@ -194,9 +196,9 @@ export default function AgentLedgerScreen({ navigation }: Props) {
         haptic.heavy();
         setConfirmSheet({
           visible: true,
-          title: 'Could not reject',
-          message: e instanceof Error ? e.message : 'The request could not be rejected.',
-          confirmLabel: 'OK',
+          title: t('approvals.errorRejectTitle'),
+          message: e instanceof Error ? e.message : t('approvals.errorRejectMessage'),
+          confirmLabel: t('common:buttons.ok'),
           variant: 'default',
           onConfirm: () => {},
         });
@@ -212,20 +214,20 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       }
       case 'search_listings': {
         const query = args.query;
-        return typeof query === 'string' ? `Search: ${query}` : '';
+        return typeof query === 'string' ? t('tools.search', { query }) : '';
       }
       case 'get_listing_details': {
         const listingId = args.listingId;
-        return typeof listingId === 'string' ? `Listing: ${listingId}` : '';
+        return typeof listingId === 'string' ? t('tools.listing', { listingId }) : '';
       }
       case 'check_price_history': {
         const query = args.query;
-        return typeof query === 'string' ? `Price history: ${query}` : '';
+        return typeof query === 'string' ? t('tools.priceHistory', { query }) : '';
       }
       case 'read_conversation': {
         const limit = args.limit;
         const n = typeof limit === 'number' ? limit : 20;
-        return `Read ${n} messages`;
+        return t('tools.readMessages', { count: n });
       }
       default: {
         try {
@@ -249,10 +251,10 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       const diffMin = Math.floor(diffMs / 60000);
       const diffHr = Math.floor(diffMin / 60);
       const diffDay = Math.floor(diffHr / 24);
-      if (diffMin < 1) return 'Just now';
-      if (diffMin < 60) return `${diffMin}m ago`;
-      if (diffHr < 24) return `${diffHr}h ago`;
-      if (diffDay < 7) return `${diffDay}d ago`;
+      if (diffMin < 1) return t('time.justNow');
+      if (diffMin < 60) return t('time.minutesAgo', { count: diffMin });
+      if (diffHr < 24) return t('time.hoursAgo', { count: diffHr });
+      if (diffDay < 7) return t('time.daysAgo', { count: diffDay });
       return d.toLocaleDateString();
     } catch {
       return iso;
@@ -283,8 +285,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Agent runs"
-            subtitle="Server-backed execution records"
+            title={t('header.title')}
+            subtitle={t('header.subtitle')}
             onBack={() => navigation.goBack()}
           />
         }
@@ -320,8 +322,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Agent runs"
-            subtitle="Server-backed execution records"
+            title={t('header.title')}
+            subtitle={t('header.subtitle')}
             onBack={() => navigation.goBack()}
           />
         }
@@ -331,7 +333,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
             <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
           </View>
           <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
-            Couldn't load runs
+            {t('error.title')}
           </Text>
           <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
             {error}
@@ -341,7 +343,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
             hitSlop={8}
             style={({ pressed }) => [styles.retryBtn, { backgroundColor: colors.surfaceAlt, opacity: pressed ? 0.7 : 1 }]}
           >
-            <Text style={[styles.retryText, { color: colors.textPrimary }]}>Retry</Text>
+            <Text style={[styles.retryText, { color: colors.textPrimary }]}>{t('error.retry')}</Text>
           </Pressable>
         </View>
       </FlagshipScreen>
@@ -354,8 +356,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Agent runs"
-            subtitle="Server-backed execution records"
+            title={t('header.title')}
+            subtitle={t('header.subtitle')}
             onBack={() => navigation.goBack()}
           />
         }
@@ -365,15 +367,15 @@ export default function AgentLedgerScreen({ navigation }: Props) {
             <Ionicons name="flash-outline" size={28} color={colors.textMuted} />
           </View>
           <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
-            No agent runs yet
+            {t('empty.title')}
           </Text>
           <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
-            When agents execute — via mentions, commands, or schedules — their runs appear here with status, token usage, and timing.
+            {t('empty.body')}
           </Text>
         </View>
         <View style={styles.footerNote}>
           <Text style={[styles.footerNoteText, { color: colors.textMuted }]}>
-            Previously shown local activity log has been replaced with server-backed run records.
+            {t('footer.note')}
           </Text>
         </View>
       </FlagshipScreen>
@@ -385,8 +387,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Agent runs"
-          subtitle="Server-backed execution records"
+          title={t('header.title')}
+          subtitle={t('header.subtitle')}
           onBack={() => navigation.goBack()}
         />
       }
@@ -406,7 +408,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
           <View style={styles.list}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Pending approvals
+                {t('approvals.title')}
               </Text>
               <Text style={[styles.sectionCount, { color: colors.textMuted }]}>
                 {pendingApprovals.length}
@@ -470,7 +472,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                         ]}
                       >
                         <Text style={[styles.approveText, { color: colors.success }]}>
-                          {isApproving ? 'Approving…' : 'Approve'}
+                          {isApproving ? t('approvals.approving') : t('approvals.approve')}
                         </Text>
                       </Pressable>
                       <Pressable
@@ -483,7 +485,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                         ]}
                       >
                         <Text style={[styles.rejectText, { color: colors.danger }]}>
-                          {isRejecting ? 'Rejecting…' : 'Reject'}
+                          {isRejecting ? t('approvals.rejecting') : t('approvals.reject')}
                         </Text>
                       </Pressable>
                     </View>
@@ -524,7 +526,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
 
                   <View style={styles.metaLine}>
                     <Text style={[styles.statusText, { color: statusColor(run.status) }]}>
-                      {STATUS_LABEL[run.status]}
+                      {t(STATUS_LABEL_KEY[run.status])}
                     </Text>
                     <Text style={[styles.dotSep, { color: colors.textMuted }]}>·</Text>
                     <Text style={[styles.triggerText, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -542,7 +544,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
 
                   {(run.inputTokens > 0 || run.outputTokens > 0) ? (
                     <Text style={[styles.tokenText, { color: colors.textMuted }]}>
-                      {run.inputTokens.toLocaleString()} in · {run.outputTokens.toLocaleString()} out
+                      {t('tokens.usage', { input: run.inputTokens.toLocaleString(), output: run.outputTokens.toLocaleString() })}
                     </Text>
                   ) : null}
 
@@ -563,7 +565,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                       ]}
                     >
                       <Text style={[styles.cancelBtnText, { color: colors.danger }]}>
-                        {cancellingId === run.id ? 'Cancelling…' : 'Cancel'}
+                        {cancellingId === run.id ? t('cancel.cancelling') : t('cancel.cancel')}
                       </Text>
                     </Pressable>
                   ) : null}
@@ -575,7 +577,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
 
         <View style={styles.footerNote}>
           <Text style={[styles.footerNoteText, { color: colors.textMuted }]}>
-            Previously shown local activity log has been replaced with server-backed run records.
+            {t('footer.note')}
           </Text>
         </View>
       </ScrollView>
@@ -584,7 +586,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
         onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
         title={confirmSheet.title}
         message={confirmSheet.message}
-        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        confirmLabel={confirmSheet.confirmLabel ?? t('common:buttons.confirm')}
         variant={confirmSheet.variant ?? 'default'}
         onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
       />

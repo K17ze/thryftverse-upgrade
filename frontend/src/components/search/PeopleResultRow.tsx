@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { type ThemeColors } from '../../theme/ThemeContext';
 import { FontFamily, Space, Control, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -135,11 +136,11 @@ export const peopleRowStyles = StyleSheet.create({
     gap: 2,
   },
   name: {
-    fontSize: 15,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
   },
   username: {
-    fontSize: 13,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
   },
   followBtn: {
@@ -151,7 +152,7 @@ export const peopleRowStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   followText: {
-    fontSize: 13,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
   },
 });

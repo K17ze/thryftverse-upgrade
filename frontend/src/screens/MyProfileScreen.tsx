@@ -52,6 +52,7 @@ import { fetchPosterHighlights, type PosterHighlight } from '../services/posters
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -90,6 +91,7 @@ function formatCompact(n: number): string {
 export default function MyProfileScreen() {
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
+  const { t: tt } = useAppTranslation('myProfile');
 
   // Themed style overrides — color properties extracted from module-level styles
   const t = {
@@ -485,43 +487,43 @@ export default function MyProfileScreen() {
     () => [
       {
         icon: 'bag-handle-outline' as const,
-        label: 'Orders',
+        label: tt('utility.orders'),
         onPress: () => { haptic.light(); navigation.navigate('MyOrders'); },
         accessibilityLabel: 'Orders' },
       {
         icon: 'pulse-outline' as const,
-        label: 'Analytics',
+        label: tt('utility.analytics'),
         onPress: () => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); },
         accessibilityLabel: 'Creator analytics' },
       {
         icon: 'bookmark-outline' as const,
-        label: 'Closet',
-        value: `${savedCount + wishlistCount} items`,
+        label: tt('utility.closet'),
+        value: tt('utility.itemsCount', { count: savedCount + wishlistCount }),
         onPress: () => { haptic.light(); navigation.navigate('Closet'); },
         accessibilityLabel: 'Closet' },
       {
         icon: 'wallet-outline' as const,
-        label: 'Wallet',
+        label: tt('utility.wallet'),
         onPress: () => { haptic.light(); navigation.navigate('Wallet'); },
         accessibilityLabel: 'Wallet' },
       {
         icon: 'timer-outline' as const,
-        label: 'Auctions',
+        label: tt('utility.auctions'),
         onPress: () => { haptic.light(); navigation.navigate('AuctionHome'); },
         accessibilityLabel: 'Browse auctions' },
       {
         icon: 'layers-outline' as const,
-        label: 'Co-own',
-        value: coOwnHoldings.length > 0 ? `${coOwnHoldings.length} assets` : undefined,
+        label: tt('utility.coOwn'),
+        value: coOwnHoldings.length > 0 ? tt('utility.assetsCount', { count: coOwnHoldings.length }) : undefined,
         onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
         accessibilityLabel: 'Browse co-own market' },
       {
         icon: 'storefront-outline' as const,
-        label: 'Seller Hub',
+        label: tt('utility.sellerHub'),
         onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
         accessibilityLabel: 'Seller Hub' },
     ],
-    [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation]
+    [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation, tt]
   );
 
   if (!user) {
@@ -530,9 +532,9 @@ export default function MyProfileScreen() {
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <EmptyState
           icon="person-outline"
-          title="Not signed in"
-          subtitle="Sign in to view your profile, listings, and wallet."
-          ctaLabel="Sign In"
+          title={tt('common:misc.notSignedIn')}
+          subtitle={tt('notSignedIn.subtitle')}
+          ctaLabel={tt('notSignedIn.signIn')}
           onCtaPress={() => navigation.navigate('Login')}
         />
       </View>
@@ -621,7 +623,7 @@ export default function MyProfileScreen() {
             <View style={styles.coverFailureCopy}>
               <Ionicons name="alert-circle-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
               <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1}>
-                {coverState.error || 'Cover upload failed'}
+                {coverState.error || tt('cover.uploadFailed')}
               </Text>
             </View>
             <AnimatedPressable
@@ -631,7 +633,7 @@ export default function MyProfileScreen() {
               accessibilityLabel="Retry cover upload"
               hitSlop={5}
             >
-              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>Retry</Text>
+              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>{tt('cover.retry')}</Text>
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.coverFailureAction}
@@ -640,7 +642,7 @@ export default function MyProfileScreen() {
               accessibilityLabel="Cancel cover change"
               hitSlop={5}
             >
-              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>Cancel</Text>
+              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>{tt('cover.cancel')}</Text>
             </AnimatedPressable>
           </View>
         ) : (
@@ -717,9 +719,9 @@ export default function MyProfileScreen() {
             >
               <Ionicons name="pause-circle" size={18} color={colors.textMuted} aria-hidden={true} />
               <View style={myProfileStyles.awayBannerTextWrap}>
-                <Text style={[myProfileStyles.awayBannerTitle, tMyProfile.awayBannerTitle]}>Holiday mode is on</Text>
+                <Text style={[myProfileStyles.awayBannerTitle, tMyProfile.awayBannerTitle]}>{tt('holiday.title')}</Text>
                 <Text style={[myProfileStyles.awayBannerSub, tMyProfile.awayBannerSub]}>
-                  Your shop is paused. Tap to manage.
+                  {tt('holiday.subtitle')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
@@ -755,9 +757,9 @@ export default function MyProfileScreen() {
           {/* ── 9. STICKY FLAT TAB RAIL ── */}
           <MyProfileTabRail
             tabs={[
-              { key: 'listings', label: 'Shop', count: allOwnedListings.length },
-              { key: 'looks', label: 'Looks', count: myLooks.length },
-              { key: 'about', label: 'About' },
+              { key: 'listings', label: tt('tabs.shop'), count: allOwnedListings.length },
+              { key: 'looks', label: tt('tabs.looks'), count: myLooks.length },
+              { key: 'about', label: tt('tabs.about') },
             ]}
             activeKey={activeTab}
             onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
@@ -779,9 +781,9 @@ export default function MyProfileScreen() {
             {allOwnedListings.length === 0 ? (
               <View style={styles.listingsEmpty}>
                 <Ionicons name="bag-add-outline" size={28} color={colors.textSecondary} aria-hidden={true} />
-                <Text style={[styles.listingsEmptyTitle, t.listingsEmptyTitle]}>List your first item</Text>
+                <Text style={[styles.listingsEmptyTitle, t.listingsEmptyTitle]}>{tt('listings.emptyTitle')}</Text>
                 <Text style={[styles.listingsEmptyBody, t.listingsEmptyBody]}>
-                  Photograph an item and publish it when you are ready.
+                  {tt('listings.emptyBody')}
                 </Text>
                 <AnimatedPressable
                   style={[styles.listingsEmptyCta, t.listingsEmptyCta]}
@@ -790,7 +792,7 @@ export default function MyProfileScreen() {
                   accessibilityLabel="Start selling"
                   hitSlop={1}
                 >
-                  <Text style={[styles.listingsEmptyCtaText, t.listingsEmptyCtaText]}>Start selling</Text>
+                  <Text style={[styles.listingsEmptyCtaText, t.listingsEmptyCtaText]}>{tt('listings.startSelling')}</Text>
                 </AnimatedPressable>
                 <AnimatedPressable
                   style={styles.listingsEmptyImportLink}
@@ -801,21 +803,21 @@ export default function MyProfileScreen() {
                   hitSlop={8}
                 >
                   <Text style={[styles.listingsEmptyImportText, { color: colors.brand }]}>
-                    Bring over your existing listings
+                    {tt('listings.bringOverListings')}
                   </Text>
                 </AnimatedPressable>
               </View>
             ) : (
               <>
                 <View style={styles.gridHeader}>
-                  <Text style={[styles.gridHeaderCount, t.gridHeaderCount]}>{allOwnedListings.length} listings</Text>
+                  <Text style={[styles.gridHeaderCount, t.gridHeaderCount]}>{tt('listings.listingsCount', { count: allOwnedListings.length })}</Text>
                   <Pressable
                     onPress={() => navigation.navigate('MyListings')}
                     accessibilityRole="button"
                     accessibilityLabel="View all listings"
                     hitSlop={13}
                   >
-                    <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>View All</Text>
+                    <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>{tt('listings.viewAll')}</Text>
                   </Pressable>
                 </View>
                 <View style={styles.grid}>
@@ -849,7 +851,7 @@ export default function MyProfileScreen() {
                         ) : null}
                         {item.isSold ? (
                           <View style={[styles.soldOverlay, t.soldOverlay]}>
-                            <Text style={[styles.soldText, t.soldText]}>SOLD</Text>
+                            <Text style={[styles.soldText, t.soldText]}>{tt('listings.sold')}</Text>
                           </View>
                         ) : null}
                         {/* Hero card: price overlays on a bottom gradient so the
@@ -909,18 +911,18 @@ export default function MyProfileScreen() {
               <EmptyState
                 density="compact"
                 icon="cloud-offline-outline"
-                title="Couldn't load your Looks"
-                subtitle="Check your connection and try again."
-                ctaLabel="Try again"
+                title={tt('looks.errorTitle')}
+                subtitle={tt('looks.errorSubtitle')}
+                ctaLabel={tt('looks.tryAgain')}
                 onCtaPress={() => { void loadMyLooks(); }}
               />
             ) : myLooks.length === 0 ? (
               <EmptyState
                 density="compact"
                 icon="images-outline"
-                title="No Looks yet"
-                subtitle="Create your first Look to showcase your style."
-                ctaLabel="Create Look"
+                title={tt('looks.emptyTitle')}
+                subtitle={tt('looks.emptySubtitle')}
+                ctaLabel={tt('looks.createLook')}
                 onCtaPress={() => navigation.navigate('CreatorStudio', { type: 'look' })}
               />
             ) : (
@@ -957,9 +959,9 @@ export default function MyProfileScreen() {
                 accessibilityHint="Opens your Co-Own holdings hub"
               >
                 <View style={styles.portfolioHeader}>
-                  <Text style={[styles.portfolioLabel, t.portfolioLabel]}>CO-OWN PORTFOLIO</Text>
+                  <Text style={[styles.portfolioLabel, t.portfolioLabel]}>{tt('about.coOwnPortfolio')}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 }}>
-                    <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>View all</Text>
+                    <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>{tt('about.viewAll')}</Text>
                     <Ionicons name="chevron-forward" size={12} color={colors.textMuted} aria-hidden={true} />
                   </View>
                 </View>
@@ -980,7 +982,7 @@ export default function MyProfileScreen() {
                           {h.title}
                         </Text>
                         <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>
-                          {h.yourUnits} {h.yourUnits === 1 ? 'unit' : 'units'}
+                          {h.yourUnits} {h.yourUnits === 1 ? tt('about.unit') : tt('about.units')}
                         </Text>
                       </View>
                     </View>
@@ -992,7 +994,7 @@ export default function MyProfileScreen() {
             {user.website ? (
               <View style={styles.aboutContainer}>
                 <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Website</Text>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.website')}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs }}>
                     <Text style={[styles.aboutValue, t.aboutValue, { flexShrink: 1 }]} numberOfLines={1}>{user.website}</Text>
                     <Ionicons name="open-outline" size={12} color={colors.textMuted} aria-hidden={true} />
@@ -1005,41 +1007,41 @@ export default function MyProfileScreen() {
                 Trust badges above show a compact "Replies Xh" pill; this section
                 provides the full policy context without duplicating the badge. */}
             <View style={styles.aboutContainer}>
-              <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>Shop policies</Text>
+              <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>{tt('about.shopPolicies')}</Text>
               <View style={[styles.aboutRow, t.aboutRow]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>Payments</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]}>Secure checkout with buyer protection</Text>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.payments')}</Text>
+                <Text style={[styles.aboutValue, t.aboutValue]}>{tt('about.paymentsValue')}</Text>
               </View>
               <View style={[styles.aboutRow, t.aboutRow]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>Shipping</Text>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.shipping')}</Text>
                 <Text style={[styles.aboutValue, t.aboutValue]}>
                   {sellerTrust?.dispatchTimeLabel
-                    ? `Seller ${sellerTrust.dispatchTimeLabel.toLowerCase()}. Tracking provided on dispatch.`
-                    : 'Tracking provided on dispatch.'}
+                    ? tt('about.shippingSeller', { label: sellerTrust.dispatchTimeLabel.toLowerCase() })
+                    : tt('about.shippingDefault')}
                 </Text>
               </View>
               <View style={[styles.aboutRow, t.aboutRow]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>Returns</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]}>Returns accepted for items not as described.</Text>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.returns')}</Text>
+                <Text style={[styles.aboutValue, t.aboutValue]}>{tt('about.returnsValue')}</Text>
               </View>
               {sellerTrust?.responseRate !== null && sellerTrust?.responseRate !== undefined ? (
                 <View style={[styles.aboutRow, t.aboutRow]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Response rate</Text>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.responseRate')}</Text>
                   <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.responseRate}%</Text>
                 </View>
               ) : null}
               <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>Response</Text>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.response')}</Text>
                 <Text style={[styles.aboutValue, t.aboutValue]}>
                   {sellerTrust?.responseTimeLabel
-                    ? `Seller typically replies ${sellerTrust.responseTimeLabel.toLowerCase()}.`
-                    : 'Seller aims to respond promptly.'}
+                    ? tt('about.responseSeller', { label: sellerTrust.responseTimeLabel.toLowerCase() })
+                    : tt('about.responseDefault')}
                 </Text>
               </View>
             </View>
 
             {!user.website && !sellerTrust && (
-              <Text style={[styles.aboutEmpty, t.aboutEmpty]}>No additional details available.</Text>
+              <Text style={[styles.aboutEmpty, t.aboutEmpty]}>{tt('about.noDetails')}</Text>
             )}
           </Reanimated.View>
         )}
@@ -1053,9 +1055,9 @@ export default function MyProfileScreen() {
           <View style={[styles.completionCard, t.completionCard]}>
             <View style={styles.completionHead}>
               <View style={styles.completionHeadText}>
-                <Text style={[styles.completionTitle, t.completionTitle]}>Complete your profile</Text>
+                <Text style={[styles.completionTitle, t.completionTitle]}>{tt('completion.title')}</Text>
                 <Text style={[styles.completionPercent, t.completionPercent]}>
-                  {completion.percent}% · {completion.done}/{completion.total}
+                  {tt('completion.progress', { percent: completion.percent, done: completion.done, total: completion.total })}
                 </Text>
               </View>
               <AnimatedPressable
@@ -1089,7 +1091,7 @@ export default function MyProfileScreen() {
         {showGrowthPrompt ? (
           <View style={[styles.growthCard, t.growthCard]}>
             <View style={styles.growthHead}>
-              <Text style={[styles.growthTitle, t.growthTitle]}>Grow on Thryftverse</Text>
+              <Text style={[styles.growthTitle, t.growthTitle]}>{tt('growth.title')}</Text>
               <AnimatedPressable
                 // TODO: replace `${colors.textMuted}14` with textMutedSubtle token when available
                 style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
@@ -1110,9 +1112,9 @@ export default function MyProfileScreen() {
                 accessibilityHint="Opens the sell flow to create your first listing"
               >
                 <View style={styles.growthRowText}>
-                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>List your first item</Text>
+                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.listFirstItemTitle')}</Text>
                   <Text style={[styles.growthRowSub, t.growthRowSub]}>
-                    Photograph and publish an item to start selling.
+                    {tt('growth.listFirstItemSub')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
@@ -1128,9 +1130,9 @@ export default function MyProfileScreen() {
                 accessibilityHint="Opens creator analytics with audience growth tools"
               >
                 <View style={styles.growthRowText}>
-                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>Grow your audience</Text>
+                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.growAudienceTitle')}</Text>
                   <Text style={[styles.growthRowSub, t.growthRowSub]}>
-                    Share your profile and create content to attract followers.
+                    {tt('growth.growAudienceSub')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
