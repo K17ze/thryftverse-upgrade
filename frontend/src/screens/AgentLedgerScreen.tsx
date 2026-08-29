@@ -28,7 +28,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useStore } from '../store/useStore';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import type { AgentRunInfo, ApprovalRequestInfo } from '../services/botsApi';
@@ -632,16 +633,16 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     botName: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
       flex: 1,
       minWidth: 0,
     },
     timeText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       flexShrink: 0,
     },
     metaLine: {
@@ -651,34 +652,34 @@ function createStyles(colors: ThemeColors) {
       flexWrap: 'wrap',
     },
     statusText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     dotSep: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
     },
     triggerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     durationText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     tokenText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     errorText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
     },
     cancelBtn: {
       alignSelf: 'flex-start',
@@ -689,9 +690,9 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs / 2,
     },
     cancelBtnText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     // Approvals section
     sectionHeader: {
@@ -703,25 +704,25 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.sm,
     },
     sectionTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
     },
     sectionCount: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     toolNameText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     argsText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
     },
     quoteWrap: {
       borderLeftWidth: 2,
@@ -729,10 +730,10 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs / 2,
     },
     quoteText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontStyle: 'italic',
     },
     approvalActions: {
@@ -744,14 +745,14 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xs / 2,
     },
     approveText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
     },
     rejectText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
     },
     // Skeleton
     skeletonIcon: {
@@ -779,16 +780,16 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md,
     },
     stateTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
       marginBottom: Space.xs,
     },
     stateBody: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight + 2,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       textAlign: 'center',
     },
     retryBtn: {
@@ -798,19 +799,19 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
     },
     retryText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
     },
     footerNote: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.lg,
     },
     footerNoteText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
     },
   });
 }

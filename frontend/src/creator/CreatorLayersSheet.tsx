@@ -13,7 +13,7 @@ import Reanimated, {
   Easing,
   type SharedValue,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
@@ -925,11 +925,7 @@ const styles = StyleSheet.create({
   layerRowDragging: {
     opacity: 0.7,
     borderRadius: Radius.lg,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    ...Elevation.modal,
   },
   dragHandle: {
     width: Control.hit,

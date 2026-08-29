@@ -16,7 +16,6 @@ import {
   Camera,
   type CameraRef,
   useCameraDevice,
-  useCameraPermission,
   usePhotoOutput,
   useVideoOutput,
 } from 'react-native-vision-camera';
@@ -196,8 +195,11 @@ export default function CreatorCamera({
   const cameraRef = useRef<CameraRef | SkiaCameraRef>(null);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const device = useCameraDevice(facing);
-  const { hasPermission, requestPermission, canRequestPermission } = useCameraPermission();
+  // Single permission owner: useCreatorCapturePermissions wraps both
+  // camera and microphone permission state. Do not call useCameraPermission
+  // directly — that creates a duplicate owner and divergent state.
   const capturePermissions = useCreatorCapturePermissions();
+  const { cameraGranted: hasPermission, canRequestCamera: canRequestPermission, requestCamera: requestPermission } = capturePermissions;
   const photoOutput = usePhotoOutput({ qualityPrioritization: 'balanced', quality: 0.92 });
   // Gate audio on microphone permission — if mic is denied or not yet
   // requested, record muted video. The mic permission is requested

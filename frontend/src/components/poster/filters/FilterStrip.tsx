@@ -12,7 +12,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Typography, Radius, Space, Stroke } from '../../../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Elevation } from '../../../theme/designTokens';
 import {
   View,
   StyleSheet,
@@ -489,11 +489,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.scrimTextPrimary,
       borderWidth: Stroke.standard,
       borderColor: colors.border,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-      elevation: 3,
+      ...Elevation.modal,
     },
     // Filter name overlay
     overlayWrap: {

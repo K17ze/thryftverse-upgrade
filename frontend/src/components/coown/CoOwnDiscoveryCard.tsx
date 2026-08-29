@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 
 export interface CoOwnDiscoveryCardProps {
@@ -111,8 +112,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 4,
   },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     lineHeight: 18,
     minHeight: 36,
@@ -123,13 +124,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 3,
   },
   unitPrice: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.3,
   },
   perUnit: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
   },
   allocationRow: {
@@ -151,7 +152,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.brand,
   },
   allocationText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '500',
     color: colors.textSecondary,
   },

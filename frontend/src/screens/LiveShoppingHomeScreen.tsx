@@ -94,10 +94,11 @@ function LiveBadge({ compact = false }: { compact?: boolean }) {
 // ── Viewer count chip ──
 function ViewerChip({ count, compact = false }: { count: number; compact?: boolean }) {
   const styles = useStyles();
+  const { colors } = useAppTheme();
   const formatted = count >= 1000 ? `${(count / 1000).toFixed(1)}K` : String(count);
   return (
     <View style={[styles.viewerChip, compact && styles.viewerChipCompact]}>
-      <Ionicons name="eye" size={16} color="#FFFFFF" />
+      <Ionicons name="eye" size={16} color={colors.scrimTextPrimary} />
       <Text style={[styles.viewerChipText, compact && styles.viewerChipTextCompact]}>{formatted}</Text>
     </View>
   );
@@ -154,7 +155,7 @@ const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
               <View style={styles.featuredNameRow}>
                 <Text style={styles.featuredSellerName} numberOfLines={1}>{session.sellerName}</Text>
                 {session.sellerVerified && (
-                  <Ionicons name="checkmark-circle" size={16} color="#3B9EFF" />
+                  <Ionicons name="checkmark-circle" size={16} color={colors.commerceTrust} />
                 )}
               </View>
               <Text style={styles.featuredCategory}>{session.category}</Text>
@@ -226,7 +227,7 @@ const ReplayCard = React.memo(function ReplayCard({
           pointerEvents="none"
         />
         <View style={styles.replayPlayOverlay}>
-          <Ionicons name="play" size={20} color="#FFFFFF" />
+          <Ionicons name="play" size={20} color={colors.scrimTextPrimary} />
         </View>
         {durationLabel && (
           <View style={styles.replayDurationBadge}>
@@ -288,7 +289,7 @@ const UpcomingRow = React.memo(function UpcomingRow({
             contentFit="cover"
           />
           <View style={styles.upcomingThumbOverlay}>
-            <Ionicons name="time-outline" size={16} color="#FFFFFF" />
+            <Ionicons name="time-outline" size={16} color={colors.scrimTextPrimary} />
           </View>
         </View>
         <View style={styles.upcomingBody}>
@@ -326,7 +327,7 @@ const UpcomingRow = React.memo(function UpcomingRow({
         <Ionicons
           name={notified ? 'notifications' : 'notifications-outline'}
           size={16}
-          color={notified ? '#FFFFFF' : styles.notifyBtnText.color}
+          color={notified ? colors.scrimTextPrimary : styles.notifyBtnText.color}
         />
         <Text style={[styles.notifyBtnText, notified && styles.notifyBtnTextActive]}>
           {notified ? 'Notified' : 'Notify me'}

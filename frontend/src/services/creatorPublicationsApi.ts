@@ -81,10 +81,11 @@ export interface PublicationHistoryResult {
 /**
  * Send the canonical publish command to the publication orchestrator.
  *
- * The idempotency key is derived deterministically from the document ID and
- * revision, so a retried publish after a lost response replays safely.
- * The caller should persist this key before sending so unknown-outcome
- * recovery can use it.
+ * The idempotency key should be a unique publication attempt ID generated
+ * by the caller before sending. A retried publish after a lost response
+ * uses the same key to replay safely. A new publish attempt (after edit,
+ * retry from error) uses a new key. The caller should persist this key
+ * before sending so unknown-outcome recovery can use it.
  */
 export async function publishCreatorDocument(
   documentId: string,

@@ -38,11 +38,25 @@ interface ClaimedSchedule {
 }
 
 /**
+ * Minimal structural type for the Fastify app instance — only the `inject`
+ * method is needed to call the publication orchestrator internally. Keeping
+ * this narrow avoids importing the full Fastify types into the worker layer.
+ */
+export interface ScheduledPublicationApp {
+  inject: (opts: {
+    method: string;
+    url: string;
+    headers?: Record<string, string>;
+  }) => Promise<{ statusCode: number; json: () => Promise<Record<string, unknown>> }>;
+}
+
+/**
  * Sweep due creator_schedules rows and execute their publication commands.
  * Returns the number of rows processed.
  */
 export async function sweepScheduledPublications(
   reason: 'scheduled' | 'manual' = 'scheduled',
+  app?: ScheduledPublicationApp,
 ): Promise<number> {
   const client = await db.connect();
   let processed = 0;
@@ -123,7 +137,14 @@ export async function sweepScheduledPublications(
     // We update the schedule row after the result.
     for (const schedule of allClaimed) {
       try {
-        const result = await executeScheduledPublication(schedule);
+        // When the Fastify app is available (inline workers in the API
+        // process), use the real publication path via app.inject. The
+        // standalone worker process has no app, so it falls back to the
+        // stub which returns a transient failure — the schedule returns
+        // to pending and is retried by the API-side sweep.
+        const result = app
+          ? await executeScheduledPublicationViaApp(app, schedule)
+          : await executeScheduledPublication(schedule);
         processed++;
 
         if (result.ok) {
@@ -380,11 +401,7 @@ async function executeScheduledPublication(
  * available. The standalone worker process defers to the API-side sweep.
  */
 export async function executeScheduledPublicationViaApp(
-  app: { inject: (opts: {
-    method: string;
-    url: string;
-    headers?: Record<string, string>;
-  }) => Promise<{ statusCode: number; json: () => Promise<Record<string, unknown>> }> },
+  app: ScheduledPublicationApp,
   schedule: ClaimedSchedule,
 ): Promise<ScheduleExecutionResult> {
   // Re-check version.

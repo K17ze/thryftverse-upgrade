@@ -10,7 +10,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 
-import { Radius } from '../theme/designTokens';
+import { Radius, Elevation } from '../theme/designTokens';
 interface PremiumToggleProps {
   value: boolean;
   onValueChange: (v: boolean) => void;
@@ -90,10 +90,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     width: 26,
     height: 26,
     borderRadius: Radius.xl,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    ...Elevation.modal,
   },
 });

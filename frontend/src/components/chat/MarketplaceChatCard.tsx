@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type , Typography, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -312,8 +313,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.surface,
   },
   offerSender: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
   },
   offerPriceRow: {
@@ -330,15 +331,15 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: Space.xs + 1,
   },
   offerPrice: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
   },
   offerStrike: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textDecorationLine: 'line-through',
     flexShrink: 1,
@@ -362,8 +363,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: 5,
   },
   offerStatusText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   counterRoundRow: {
     flexDirection: 'row',
@@ -372,8 +373,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     marginBottom: 2,
   },
   counterRoundText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     letterSpacing: 0.3,
   },
@@ -387,8 +388,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     alignSelf: 'flex-start',
   },
   offerExpiryText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
     fontVariant: ['tabular-nums'],
   },
@@ -412,8 +413,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   offerPassText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
   },
   offerCounter: {
@@ -427,8 +428,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   offerCounterText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
   },
   offerAccept: {
@@ -442,8 +443,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.brand,
   },
   offerAcceptText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textInverse,
   },
   statusInline: {
@@ -475,17 +476,17 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: 2,
   },
   statusInlineTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
     textAlign: 'left',
   },
   statusInlineBody: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textAlign: 'left',
-    lineHeight: Type.meta.lineHeight + 2,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
   },
   noticeInline: {
     flexDirection: 'row',
@@ -498,8 +499,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   noticeInlineText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
   },
   systemEvent: {
@@ -537,18 +538,18 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: Space.xs,
   },
   systemEventTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
     textAlign: 'left',
     flexShrink: 1,
   },
   systemEventText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textAlign: 'left',
-    lineHeight: Type.meta.lineHeight + 2,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
   },
   verifiedPill: {
     flexDirection: 'row',
@@ -560,8 +561,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   verifiedText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
   },
 });

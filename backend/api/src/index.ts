@@ -46861,7 +46861,7 @@ const start = async () => {
           await processPushReceiptReconciliation();
         },
         handleScheduledPublicationSweepJob: async ({ reason }) => {
-          await sweepScheduledPublications(reason);
+          await sweepScheduledPublications(reason, app);
         },
         handleAnalyticsAggregationJob: async () => {
           await aggregateAnalyticsDaily();

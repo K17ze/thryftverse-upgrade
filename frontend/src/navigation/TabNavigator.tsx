@@ -8,7 +8,7 @@ import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TabParamList, RootStackParamList } from './types';
-import { Space, Radius, Typography, Type, Stroke} from '../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke, Elevation} from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -298,8 +298,7 @@ export default function TabNavigator() {
             backgroundColor: 'transparent',
             height: NAV_HEIGHT + insets.bottom,
             paddingBottom: insets.bottom,
-            elevation: 0,
-            shadowOpacity: 0,
+            ...Elevation.none,
           },
           tabBarBackground: () => (
             <LiquidGlassBackdrop

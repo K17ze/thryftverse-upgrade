@@ -43,10 +43,13 @@ export interface CreatorCapturePermissions {
 /**
  * Owns camera + microphone permission state for the creator camera.
  *
- * Camera permission is requested on mount (the camera is the root
- * creator state — the user sees the viewfinder immediately).
+ * Camera permission is NOT requested on mount — the hook exposes
+ * `requestCamera` for the caller to invoke explicitly on the user's
+ * first interaction with the camera surface. This matches Design.md's
+ * permission privacy principle: never request a permission before the
+ * user has expressed intent that requires it.
  *
- * Microphone permission is NOT requested on mount. It is requested
+ * Microphone permission is also NOT requested on mount. It is requested
  * lazily — only when the user first transitions from shutter press to
  * video intent. Camera is a blocking gate; microphone is non-blocking
  * with graceful degradation to muted recording (Instagram/Snapchat

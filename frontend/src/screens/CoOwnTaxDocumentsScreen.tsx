@@ -21,7 +21,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -277,17 +278,17 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs,
     },
     heroYear: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     },
     heroPeriod: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       marginTop: Space.xs / 2,
     },
     heroPnlWrap: {
@@ -296,18 +297,18 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
     },
     heroPnlLabel: {
-      fontSize: Type.label.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.label.size,
+      fontFamily: TypographyV2.label.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
+      letterSpacing: TypographyV2.label.letterSpacing,
     },
     heroPnlValue: {
-      fontSize: Type.priceHero.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceHero.size,
+      fontFamily: TypographyV2.priceHero.fontFamily,
       fontVariant: ['tabular-nums'],
-      letterSpacing: Type.priceHero.letterSpacing,
-      lineHeight: Type.priceHero.lineHeight,
+      letterSpacing: TypographyV2.priceHero.letterSpacing,
+      lineHeight: TypographyV2.priceHero.lineHeight,
     },
     heroPnlBadge: {
       flexDirection: 'row',
@@ -318,9 +319,9 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xs - 1,
     },
     heroPnlBadgeText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
 
     // Disclaimer — flat, no card
@@ -329,32 +330,32 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs,
     },
     disclaimerTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       marginBottom: Space.xs / 2,
     },
     disclaimerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
     },
     generatedAt: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       textAlign: 'center',
       marginTop: Space.md,
     },
     financialValue: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       fontVariant: ['tabular-nums'],
     },
   });

@@ -21,7 +21,8 @@ import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography, DockConstants, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, DockConstants, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
@@ -896,13 +897,13 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   listingTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   listingPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   selectedTick: {
     position: 'absolute',
@@ -936,13 +937,13 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   previewTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   previewPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   contextCard: {
     flexDirection: 'row',
@@ -962,13 +963,13 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   contextTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   contextPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   formCard: {
     paddingVertical: Space.md,
@@ -980,14 +981,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   formLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   formHint: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   unitPresets: {
     flexDirection: 'row',
@@ -1001,8 +1002,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   unitPresetText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   vehicleTypeRow: {
     flexDirection: 'row',
@@ -1018,8 +1019,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   vehicleTypeText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   kycGateCard: {
     flexDirection: 'row',
@@ -1035,12 +1036,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   kycGateTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   kycGateText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   insuranceRow: {
     flexDirection: 'row',
@@ -1058,8 +1059,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   insuranceToggleText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   estimateCard: {
     paddingVertical: Space.md,
@@ -1072,13 +1073,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   estimatedValue: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
   },
   estimatedSub: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs / 2,
   },
   stablePreview: {
@@ -1086,12 +1087,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   stableLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   stableValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   reviewAssetCard: {
     flexDirection: 'row',
@@ -1111,13 +1112,13 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   reviewAssetTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   reviewAssetSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   summaryCard: {
     paddingVertical: Space.md,
@@ -1125,8 +1126,8 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   summaryLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide + 0.18,
     textTransform: 'uppercase',
     marginBottom: Space.sm,
@@ -1140,13 +1141,13 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   summaryKey: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     flexShrink: 0,
   },
   summaryValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     flex: 1,
     minWidth: 0,
     textAlign: 'right',
@@ -1162,15 +1163,15 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   totalKey: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     flexShrink: 1,
     minWidth: 0,
   },
   totalValue: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
     flexShrink: 0,
   },
   // ── Recourse agreement stage ──
@@ -1190,31 +1191,31 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   recourseLiabilityLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   recourseLiabilityValue: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
   },
   recourseLiabilityBullets: {
     gap: Space.xs,
   },
   recourseBulletText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.size + 6,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.size + 6,
   },
   recourseObligationsList: {
     gap: 0,
     marginTop: Space.md,
   },
   recourseObligationsTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide + 0.18,
     textTransform: 'uppercase',
     marginBottom: Space.sm,
@@ -1228,9 +1229,9 @@ const styles = StyleSheet.create({
   },
   recourseObligationText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight - 1,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight - 1,
   },
   recourseAcceptRow: {
     flexDirection: 'row',
@@ -1252,8 +1253,8 @@ const styles = StyleSheet.create({
   },
   recourseAcceptText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.body.lineHeight - 1,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight - 1,
   },
 });

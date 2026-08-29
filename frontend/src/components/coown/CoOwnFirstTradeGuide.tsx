@@ -2,7 +2,8 @@ import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { haptics } from '../../utils/haptics';
@@ -308,19 +309,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     letterSpacing: -0.3,
     marginBottom: 2,
   },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     lineHeight: 17,
   },
   skipText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     marginTop: Space.xs,
   },
   progressRow: {
@@ -360,14 +361,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     letterSpacing: -0.3,
     textAlign: 'center',
   },
   stepBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     lineHeight: 22,
     textAlign: 'center',
   },
@@ -383,8 +384,8 @@ const styles = StyleSheet.create({
   },
   takeawayText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     lineHeight: 18,
   },
   recapBox: {
@@ -396,8 +397,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   recapTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginBottom: 2,
   },
   recapRow: {
@@ -407,13 +408,13 @@ const styles = StyleSheet.create({
   },
   recapItem: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     lineHeight: 16,
   },
   stepCounter: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     marginTop: Space.md,
     letterSpacing: 0.3,
@@ -437,8 +438,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   backBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   footerRight: {
     flexDirection: 'row',

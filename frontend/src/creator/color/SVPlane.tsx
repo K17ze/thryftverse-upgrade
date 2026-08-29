@@ -27,7 +27,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke, Elevation } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { hsvToRgb, toHexString } from './ColorMath';
 import type { HSV } from './ColorTypes';
@@ -208,10 +208,6 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: Radius.full,
     borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
+    ...Elevation.modal,
   },
 });

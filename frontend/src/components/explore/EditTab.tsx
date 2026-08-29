@@ -11,7 +11,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Type, Space, Radius, Typography, Stroke} from '../../theme/designTokens';
+import { Type, Space, Radius, Typography, Stroke, Elevation} from '../../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
@@ -298,11 +298,7 @@ function createStyles(colors: ThemeColors) {
     marginHorizontal: Space.md,
     padding: Space.md,
     gap: Space.sm,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    ...Elevation.subtle,
   },
   quizContent: {
     flex: 1,

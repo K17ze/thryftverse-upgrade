@@ -11,7 +11,7 @@ import Reanimated, {
 import { type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
-import { Space, FontFamily, Stroke } from '../../theme/designTokens';
+import { Space, FontFamily, Stroke, Elevation } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 
@@ -87,11 +87,7 @@ const progressOverlayStyles = StyleSheet.create({
     borderWidth: Stroke.hairline,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    shadowColor: 'transparent',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    ...Elevation.none,
   },
   row: {
     flexDirection: 'row',

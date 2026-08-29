@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Elevation, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 
 export interface CoOwnFeaturedHeroProps {
@@ -153,7 +154,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.sm,
   },
   statusText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
@@ -162,15 +163,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
   },
   eyebrow: {
-    fontSize: Type.label.size,
+    fontSize: TypographyV2.label.size,
     fontWeight: '600',
     color: colors.textSecondary,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
     lineHeight: 30,
     letterSpacing: -0.5,
@@ -183,13 +184,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.sm,
   },
   unitPrice: {
-    fontSize: Type.priceHero.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: TypographyV2.priceHero.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   perUnit: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
   },
   allocationRow: {
@@ -208,7 +209,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.brand,
   },
   allocationText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
   },
   issuerRow: {
@@ -218,7 +219,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.sm,
   },
   issuerText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
     flex: 1,
   },
@@ -232,7 +233,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.md,
   },
   actionText: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontWeight: '600',
     color: colors.background,
   },

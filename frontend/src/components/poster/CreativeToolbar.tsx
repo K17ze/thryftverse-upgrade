@@ -218,7 +218,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.bold,
   },
   toolLabelSecondary: {
-    fontSize: 9,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
   },
   });

@@ -37,7 +37,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control, Elevation } from '../../theme/designTokens';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -596,11 +596,7 @@ const styles = StyleSheet.create({
     height: STOP_THUMB_SIZE,
     borderRadius: STOP_THUMB_SIZE / 2,
     borderWidth: Stroke.standard,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
+    ...Elevation.modal,
   },
   stopControls: {
     flexDirection: 'row',
@@ -653,11 +649,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: Space.xs,
     borderWidth: Stroke.emphasis,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
+    ...Elevation.modal,
   },
   colorPickerSection: {
     marginTop: Space.sm,

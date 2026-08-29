@@ -259,7 +259,7 @@ export function CreatorEntryScreen({
             <CreatorModeSwitch mode={mode} onModeChange={handleModeChange} />
           </View>
         )}
-        renderTopRightAccessory={() => (
+        renderTopRightAccessory={mode === 'poster' ? () => (
           <Pressable
             style={styles.textModeAccessory}
             onPress={() => { haptic.light(); onBlankStart(); }}
@@ -272,7 +272,7 @@ export function CreatorEntryScreen({
             <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay, borderRadius: Radius.full }]} />
             <Text style={[styles.textModeBtnLabel, { color: colors.scrimTextPrimary }]}>Aa</Text>
           </Pressable>
-        )}
+        ) : undefined}
       />
 
       {/* Drafts button — small affordance in the camera top bar, next to

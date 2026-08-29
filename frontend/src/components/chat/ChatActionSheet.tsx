@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet, Modal, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Space, Radius, Type, Typography } from "../../theme/designTokens";
+import { Space, Radius, Type, Typography, Elevation } from "../../theme/designTokens";
 import { useAppTheme } from "../../theme/ThemeContext";
 import { AnimatedPressable } from "../AnimatedPressable";
 
@@ -150,10 +150,7 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.xxl,
     gap: Space.md,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 12,
+    ...Elevation.floating,
   },
   handle: {
     width: 36,

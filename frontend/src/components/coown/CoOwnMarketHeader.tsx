@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Control, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
+import { Space, Control, Radius, Typography, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 export interface CoOwnMarketHeaderAction {
@@ -133,16 +134,16 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
   },
   subtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight,
   },
   actionsRow: {
     flexDirection: 'row',

@@ -38,7 +38,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { Radius, Space, Stroke } from '../../theme/designTokens';
+import { Radius, Space, Stroke, Elevation } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -387,11 +387,7 @@ const styles = StyleSheet.create({
     marginLeft: -THUMB_SIZE / 2,
     top: (MIN_TOUCH_TARGET - THUMB_SIZE) / 2,
     // Subtle elevation — thumb lifts above the track
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 3,
+    ...Elevation.modal,
   },
 });
 

@@ -55,6 +55,7 @@ import { HelpShortcutsSheet } from '../surfaces/HelpShortcutsSheet';
 import {
   type ToolContext,
   type ToolGroup,
+  getOverflowTools,
 } from '../core/toolRegistry';
 import { EffectPreviewRail, AdjustPanel, FILTER_PRESETS, AutoAdjustButton } from '../tools/effects';
 import { AIEffectBrowserSheet } from '../tools/effects/AIEffectBrowserSheet';

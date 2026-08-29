@@ -15,7 +15,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 import { haptics } from '../../utils/haptics';
 import type { CoOwn1ZeBalance as CanonicalCoOwn1ZeBalance, CoOwnReconciliationState } from '../../data/coOwnModels';
@@ -266,7 +267,7 @@ function BalanceRow({
           style={[
             styles.balanceLabel,
             { color: emphasis ? colors.textPrimary : colors.textSecondary },
-            emphasis && { fontFamily: Typography.family.semibold },
+            emphasis && { fontFamily: TypographyV2.bodyStrong.fontFamily },
           ]}
           numberOfLines={1}
         >
@@ -307,16 +308,16 @@ const styles = StyleSheet.create({
     marginRight: -Space.xs,
   },
   heroMasked: {
-    fontSize: Type.display.size,
-    lineHeight: Type.display.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.display.size,
+    lineHeight: TypographyV2.display.lineHeight,
+    fontFamily: TypographyV2.display.fontFamily,
     letterSpacing: 2,
   },
   heroLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
   },
   localFiatRow: {
@@ -327,10 +328,10 @@ const styles = StyleSheet.create({
   },
   localFiatText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   sectionCard: {
     paddingTop: Space.md,
@@ -345,10 +346,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   sectionTitle: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
   },
   safeguardChip: {
@@ -360,22 +361,22 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   safeguardChipText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   pendingNote: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     fontStyle: 'italic',
   },
   emptyClaimText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     paddingVertical: Space.sm,
   },
   balanceRow: {
@@ -390,16 +391,16 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   balanceLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   balanceCaption: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   totalRow: {
     flexDirection: 'row',
@@ -410,10 +411,10 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   totalLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
   withdrawableRow: {
     flexDirection: 'row',
@@ -431,10 +432,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   withdrawableLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
 });
 

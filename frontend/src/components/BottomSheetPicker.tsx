@@ -8,7 +8,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, Elevation } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -156,11 +156,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 20,
+    ...Elevation.modal,
   },
   handleContainer: { alignItems: 'center', paddingVertical: 14 },
   handle: { width: 44, height: 5, borderRadius: Radius.sm, backgroundColor: colors.border },

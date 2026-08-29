@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Text, Pressable, StyleProp, ViewStyle } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type } from '../../theme/designTokens';
+import { Typography, Radius, Type, Elevation } from '../../theme/designTokens';
 
 export interface NativeSegmentedControlOption<T extends string> {
   value: T;
@@ -68,11 +68,7 @@ function createStyles(colors: ThemeColors) {
   },
   optionActive: {
     backgroundColor: colors.surface,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
+    ...Elevation.card,
   },
   optionText: {
     fontSize: Type.caption.size,

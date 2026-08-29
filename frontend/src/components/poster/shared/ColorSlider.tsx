@@ -32,7 +32,7 @@ import Reanimated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
-import { Radius, Space, Stroke, Type } from '../../../theme/designTokens';
+import { Radius, Space, Stroke, Type, Elevation } from '../../../theme/designTokens';
 import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -85,11 +85,7 @@ function createStyles(colors: ThemeColors) {
       marginLeft: -SLIDER_THUMB_SIZE / 2,
       top: (SLIDER_TRACK_HEIGHT - SLIDER_THUMB_SIZE) / 2,
       // Subtle elevation — thumb lifts above the track
-      shadowColor: '#000',
-      shadowOpacity: 0.2,
-      shadowRadius: 3,
-      shadowOffset: { width: 0, height: 1 },
-      elevation: 3,
+      ...Elevation.modal,
     },
     hueSegmentRow: {
       flexDirection: 'row',

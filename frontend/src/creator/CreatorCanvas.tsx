@@ -29,7 +29,7 @@ import {
   fitbox as skiaFitbox,
   rect as skiaRect,
 } from '@shopify/react-native-skia';
-import { Space, Radius, Type, Typography, IconGrammar, Stroke} from '../theme/designTokens';
+import { Space, Radius, Type, Typography, IconGrammar, Stroke, Elevation} from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -1987,6 +1987,8 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 
 function MentionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mention' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
+  const mentionStyles = React.useMemo(() => createMentionStyles(colors), [colors]);
   return (
     <View style={mentionStyles.container} accessibilityLabel={`Mention @${payload.username}`} accessibilityRole="link">
       <Text style={mentionStyles.text}>@{payload.username}</Text>
@@ -1996,9 +1998,11 @@ function MentionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 
 function LookLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'look' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
+  const lookStyles = React.useMemo(() => createLookStyles(colors), [colors]);
   return (
     <View style={lookStyles.container} accessibilityLabel={`Look, ${payload.snapshotCaption || 'View look'}`} accessibilityRole="link">
-      <Ionicons name="shirt-outline" size={IconGrammar.badge} color="#fff" aria-hidden={true} />
+      <Ionicons name="shirt-outline" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
       <Text style={lookStyles.text} numberOfLines={1}>{payload.snapshotCaption || 'View look'}</Text>
     </View>
   );
@@ -2006,6 +2010,8 @@ function LookLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'loo
 
 function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vote' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
+  const voteStyles = React.useMemo(() => createVoteStyles(colors), [colors]);
   const hasTimer = payload.timerMs !== undefined && payload.timerMs > 0;
   const timerSeconds = hasTimer ? Math.round(payload.timerMs! / 1000) : 0;
   const timerLabel = timerSeconds >= 3600
@@ -2045,6 +2051,8 @@ function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vot
 // Premium rendering: gradient surface, proper button styling, filled correct badge.
 function QuizLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'quiz' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
+  const quizStyles = React.useMemo(() => createQuizStyles(colors), [colors]);
   return (
     <View style={quizStyles.container} accessibilityLabel={`Quiz, ${payload.emoji} ${payload.question}`} accessibilityRole="summary">
       <View style={quizStyles.header}>
@@ -2080,6 +2088,8 @@ function QuizLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'qui
 // Premium rendering: gradient background, input affordance with cursor hint.
 function QuestionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'question' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
+  const questionStyles = React.useMemo(() => createQuestionStyles(colors), [colors]);
   return (
     <View style={[questionStyles.container, { backgroundColor: payload.backgroundColor }]} accessibilityLabel={`Question box, ${payload.prompt}`} accessibilityRole="search">
       <Text style={questionStyles.prompt}>{payload.prompt}</Text>
@@ -2099,6 +2109,8 @@ function QuestionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
 // Premium rendering: dark glass surface, proper slider track with thumb.
 function EmojiSliderLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'emojiSlider' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
+  const sliderStyles = React.useMemo(() => createSliderStyles(colors), [colors]);
   return (
     <View style={sliderStyles.container} accessibilityLabel={`Emoji slider, ${payload.emoji} ${payload.question}`} accessibilityRole="adjustable">
       <Text style={sliderStyles.question}>{payload.question}</Text>
@@ -2156,11 +2168,7 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
   const { payload } = layer;
   const fillColor = payload.fillColor ?? colors.brand;
   const subtleShadow = {
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...Elevation.floating,
   };
   const iconSize = Math.min(width, height);
 
@@ -2357,10 +2365,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
             width: 40,
             height: 40,
             borderRadius: Radius.sm,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.3,
-            shadowRadius: 3,
+            ...Elevation.modal,
           }}
           contentFit="cover"
           cachePolicy="memory-disk"
@@ -2613,11 +2618,7 @@ function SelectionHandles({
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: handleColor,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Elevation.modal,
   };
 
   // Invisible hit zone — 44pt for touch compliance
@@ -2844,7 +2845,7 @@ function createProductStyles(colors: ThemeColors) {
     gap: 4,
   },
   title: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
   },
@@ -2857,7 +2858,7 @@ function createProductStyles(colors: ThemeColors) {
     color: colors.danger,
   },
   deletedPrice: {
-    color: '#888',
+    color: colors.textMuted,
   },
   imageContainer: {
     borderRadius: Radius.md,
@@ -2912,11 +2913,7 @@ function createProductStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     paddingHorizontal: Space.smMd,
     paddingVertical: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    ...Elevation.modal,
   },
   hotspotDot: {
     width: 7,
@@ -2940,260 +2937,272 @@ function createProductStyles(colors: ThemeColors) {
   });
 }
 
-const mentionStyles = StyleSheet.create({
-  container: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.smMd,
-    paddingVertical: Space.xs,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  text: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
-});
+function createMentionStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.smMd,
+      paddingVertical: Space.xs,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    text: {
+      color: colors.scrimTextPrimary,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+    },
+  });
+}
 
-const lookStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs,
-    justifyContent: 'center',
-  },
-  text: {
-    color: '#fff',
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
-});
+function createLookStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.xs,
+      justifyContent: 'center',
+    },
+    text: {
+      color: colors.scrimTextPrimary,
+      fontFamily: Typography.family.medium,
+      fontSize: Type.caption.size,
+    },
+  });
+}
 
-const voteStyles = StyleSheet.create({
-  container: {
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.md + 2,
-    paddingVertical: Space.sm + 2,
-    gap: 8,
-    minWidth: 160,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  question: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    textAlign: 'center',
-    flexShrink: 1,
-  },
-  timerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: Radius.md,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  timerText: {
-    color: '#fff',
-    fontFamily: Typography.family.medium,
-    fontSize: 10,
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  option: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: Radius.sm,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    alignItems: 'center',
-    minWidth: 60,
-    flex: 1,
-    maxWidth: '48%',
-  },
-  optionFirst: {
-    // Both options equal weight — no visual hierarchy difference
-  },
-  optionText: {
-    color: '#fff',
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size + 1,
-  },
-});
+function createVoteStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      backgroundColor: 'rgba(0,0,0,0.75)',
+      borderRadius: Radius.lg,
+      paddingHorizontal: Space.md + 2,
+      paddingVertical: Space.sm + 2,
+      gap: 8,
+      minWidth: 160,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+    },
+    question: {
+      color: colors.scrimTextPrimary,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+      textAlign: 'center',
+      flexShrink: 1,
+    },
+    timerBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      borderRadius: Radius.md,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    timerText: {
+      color: colors.scrimTextPrimary,
+      fontFamily: Typography.family.medium,
+      fontSize: 10,
+    },
+    optionsRow: {
+      flexDirection: 'row',
+      gap: 6,
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+    },
+    option: {
+      backgroundColor: 'rgba(255,255,255,0.18)',
+      borderRadius: Radius.sm,
+      paddingVertical: Space.sm,
+      paddingHorizontal: Space.md,
+      alignItems: 'center',
+      minWidth: 60,
+      flex: 1,
+      maxWidth: '48%',
+    },
+    optionFirst: {
+      // Both options equal weight — no visual hierarchy difference
+    },
+    optionText: {
+      color: colors.scrimTextPrimary,
+      fontFamily: Typography.family.medium,
+      fontSize: Type.caption.size + 1,
+    },
+  });
+}
 
-const quizStyles = StyleSheet.create({
-  container: {
-    backgroundColor: 'rgba(0,0,0,0.78)',
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.md + 2,
-    paddingVertical: Space.sm + 2,
-    gap: 10,
-    minWidth: 180,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  emoji: {
-    fontSize: Type.heading.size,
-  },
-  question: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    flex: 1,
-  },
-  optionsCol: {
-    gap: 6,
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: Radius.sm,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  optionCorrect: {
-    backgroundColor: 'rgba(201,164,106,0.25)',
-    borderColor: 'rgba(201,164,106,0.6)',
-  },
-  optionText: {
-    color: '#fff',
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size + 1,
-    flex: 1,
-  },
-  optionTextCorrect: {
-    color: '#C9A46A',
-    fontFamily: Typography.family.semibold,
-  },
-  correctBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: Radius.full,
-    backgroundColor: '#C9A46A',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+function createQuizStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      backgroundColor: 'rgba(0,0,0,0.78)',
+      borderRadius: Radius.lg,
+      paddingHorizontal: Space.md + 2,
+      paddingVertical: Space.sm + 2,
+      gap: 10,
+      minWidth: 180,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    emoji: {
+      fontSize: Type.heading.size,
+    },
+    question: {
+      color: colors.scrimTextPrimary,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+      flex: 1,
+    },
+    optionsCol: {
+      gap: 6,
+    },
+    option: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: 'rgba(255,255,255,0.12)',
+      borderRadius: Radius.sm,
+      paddingVertical: Space.sm,
+      paddingHorizontal: Space.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: 'rgba(255,255,255,0.08)',
+    },
+    optionCorrect: {
+      backgroundColor: 'rgba(201,164,106,0.25)',
+      borderColor: 'rgba(201,164,106,0.6)',
+    },
+    optionText: {
+      color: colors.scrimTextPrimary,
+      fontFamily: Typography.family.medium,
+      fontSize: Type.caption.size + 1,
+      flex: 1,
+    },
+    optionTextCorrect: {
+      color: colors.antiqueGold,
+      fontFamily: Typography.family.semibold,
+    },
+    correctBadge: {
+      width: 18,
+      height: 18,
+      borderRadius: Radius.full,
+      backgroundColor: colors.antiqueGold,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+  });
+}
 
-const questionStyles = StyleSheet.create({
-  container: {
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.md + 2,
-    paddingVertical: Space.sm + 2,
-    minWidth: 180,
-    maxWidth: '100%',
-  },
-  prompt: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    marginBottom: Space.sm,
-  },
-  inputAffordance: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.sm,
-  },
-  placeholder: {
-    flex: 1,
-    color: 'rgba(255,255,255,0.55)',
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
-  sendHint: {
-    width: 18,
-    height: 18,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+function createQuestionStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      borderRadius: Radius.lg,
+      paddingHorizontal: Space.md + 2,
+      paddingVertical: Space.sm + 2,
+      minWidth: 180,
+      maxWidth: '100%',
+    },
+    prompt: {
+      color: colors.scrimTextPrimary,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.bodyStrong.size,
+      marginBottom: Space.sm,
+    },
+    inputAffordance: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: 'rgba(255,255,255,0.12)',
+      borderRadius: Radius.md,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.sm,
+    },
+    placeholder: {
+      flex: 1,
+      color: 'rgba(255,255,255,0.55)',
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
+    },
+    sendHint: {
+      width: 18,
+      height: 18,
+      borderRadius: Radius.full,
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+  });
+}
 
-const sliderStyles = StyleSheet.create({
-  container: {
-    backgroundColor: 'rgba(0,0,0,0.78)',
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.md + 2,
-    paddingVertical: Space.sm + 2,
-    minWidth: 200,
-    maxWidth: '100%',
-  },
-  question: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  sliderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  emoji: {
-    fontSize: Type.display.size,
-  },
-  track: {
-    flex: 1,
-    height: 6,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-  },
-  trackFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: '50%',
-    borderRadius: Radius.full,
-  },
-  thumb: {
-    width: 14,
-    height: 14,
-    borderRadius: Radius.full,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    position: 'absolute',
-    left: '50%',
-    marginLeft: -7,
-  },
-  endLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-  },
-});
+function createSliderStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      backgroundColor: 'rgba(0,0,0,0.78)',
+      borderRadius: Radius.lg,
+      paddingHorizontal: Space.md + 2,
+      paddingVertical: Space.sm + 2,
+      minWidth: 200,
+      maxWidth: '100%',
+    },
+    question: {
+      color: colors.scrimTextPrimary,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+      marginBottom: 10,
+      textAlign: 'center',
+    },
+    sliderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    emoji: {
+      fontSize: Type.display.size,
+    },
+    track: {
+      flex: 1,
+      height: 6,
+      borderRadius: Radius.full,
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      justifyContent: 'center',
+    },
+    trackFill: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: '50%',
+      borderRadius: Radius.full,
+    },
+    thumb: {
+      width: 14,
+      height: 14,
+      borderRadius: Radius.full,
+      backgroundColor: colors.scrimTextPrimary,
+      borderWidth: 2,
+      position: 'absolute',
+      left: '50%',
+      marginLeft: -7,
+    },
+    endLabel: {
+      color: 'rgba(255,255,255,0.7)',
+      fontFamily: Typography.family.medium,
+      fontSize: Type.meta.size,
+    },
+  });
+}
 
 const countdownStyles = StyleSheet.create({
   container: {

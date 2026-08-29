@@ -41,6 +41,7 @@ import { useUploadManager, detectMimeType } from './core/upload';
 import type { UploadJob, UploadJobStatus } from './core/upload';
 import type { CreatorDocument, CreatorLayer } from './composition';
 import {
+  validateDocumentStructure,
   validateForPublish,
   serialiseToLookPayload,
   serialiseToPosterPayload,
@@ -206,6 +207,19 @@ function isNetworkError(error: string | undefined): boolean {
 }
 
 /**
+ * Generate a unique publication attempt ID. This is persisted locally
+ * before the publish request and used as the idempotency key. A new
+ * attempt (retry, re-publish after edit) generates a new ID so the
+ * server can distinguish replay from a genuinely new publication.
+ */
+function generatePublicationAttemptId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `attempt_${crypto.randomUUID()}`;
+  }
+  return `attempt_${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
  * Invalidate all caches that depend on published creator content.
  * After a successful publication, the following surfaces must not
  * serve stale data:
@@ -256,6 +270,10 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   const [isCheckingResult, setIsCheckingResult] = useState(false);
   const [publishedId, setPublishedId] = useState('');
   const [scheduleError, setScheduleError] = useState('');
+  // Persisted publication attempt ID — generated once per publish attempt,
+  // used as the idempotency key and for unknown-outcome recovery. A new
+  // attempt (retry, re-publish after edit) generates a new ID.
+  const publicationAttemptIdRef = useRef<string>('');
   const publishGuardRef = useRef(new PublishGuard());
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -341,11 +359,15 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
 
     CreatorAnalytics.publishStart(document.type);
     let publicationRequestStarted = false;
+    // Generate a unique attempt ID for this publish attempt. Used as the
+    // idempotency key so retried requests replay safely, and for
+    // unknown-outcome recovery lookup. A new retry generates a new ID.
+    publicationAttemptIdRef.current = generatePublicationAttemptId();
     try {
-      // 1. Validate the document before any upload
-      const validation = validateForPublish(document);
-      if (!validation.valid) {
-        throw new Error(validation.errors.join('; '));
+      // 1. Validate document structure (allows local URIs — they will be uploaded next)
+      const structureValidation = validateDocumentStructure(document);
+      if (!structureValidation.valid) {
+        throw new Error(structureValidation.errors.join('; '));
       }
 
       let workingDoc = document;
@@ -365,8 +387,11 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           // AsyncStorage and retry with exponential backoff on network
           // failures. The current transport is **retryable** (whole-file
           // re-upload on failure with real byte progress). Multipart
-          // (resumable at part level) is implemented but awaiting
-          // backend endpoints — see MultipartUploader.ts.
+          // (resumable at the part level) is fully supported end-to-end:
+          // the backend exposes initiate/parts/complete/abort endpoints
+          // and multipart completion creates the same media_asset +
+          // processing job + ingest pipeline as single-PUT — see
+          // MultipartUploader.ts and uploads.ts.
           const localRefs = scanDocumentForLocalUris(document);
           const projectId = document.id;
 
@@ -472,7 +497,10 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       const publishCommand: PublishCommand = {
         revision: 0, // The orchestrator allocates the revision server-side
         destination: workingDoc.type === 'look' ? 'look' : 'poster',
-        audience: workingDoc.metadata.visibility === 'closeFriends' ? 'closeFriends' : (workingDoc.metadata.visibility as 'public' | 'private'),
+        // Close Friends is not a supported audience — fail closed to private.
+        audience: workingDoc.metadata.visibility === 'closeFriends'
+          ? 'private'
+          : (workingDoc.metadata.visibility as 'public' | 'private'),
         expiresInHours: workingDoc.metadata.expiresInHours ?? 24,
         expectedMedia,
         compositionDocument: workingDoc.type === 'look'
@@ -499,7 +527,11 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       } else {
         // Publish now via the orchestrator.
         publicationRequestStarted = true;
-        const pubResult = await publishCreatorDocument(workingDoc.id, publishCommand);
+        const pubResult = await publishCreatorDocument(
+          workingDoc.id,
+          publishCommand,
+          publicationAttemptIdRef.current,
+        );
         const targetId = pubResult.targetId;
 
         publishGuardRef.current.complete(workingDoc.id);
@@ -527,6 +559,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     setScheduleError('');
     progressWidth.value = 0;
     publishGuardRef.current.reset();
+    // Clear the attempt ID so handlePublish generates a fresh one.
+    publicationAttemptIdRef.current = '';
     handlePublish();
   }, [haptic, progressWidth, handlePublish]);
 
@@ -540,8 +574,10 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       // The orchestrator's creator_publications row is the source of truth —
       // if it exists, the publish committed, regardless of whether the public
       // projection has propagated to the read model yet.
-      const idempotencyKey = `pub_${document.id}_0`;
-      const publication = await lookupPublicationByKey(document.id, idempotencyKey);
+      // Use the persisted attempt ID; fall back to the legacy key for
+      // documents published before attempt IDs were introduced.
+      const attemptId = publicationAttemptIdRef.current || `pub_${document.id}_0`;
+      const publication = await lookupPublicationByKey(document.id, attemptId);
       if (publication && publication.ok) {
         publishGuardRef.current.complete(publication.targetId);
         setPublishedId(publication.targetId);
@@ -604,7 +640,10 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       const retryCommand: PublishCommand = {
         revision: 0,
         destination: document.type === 'look' ? 'look' : 'poster',
-        audience: document.metadata.visibility === 'closeFriends' ? 'closeFriends' : (document.metadata.visibility as 'public' | 'private'),
+        // Close Friends is not a supported audience — fail closed to private.
+        audience: document.metadata.visibility === 'closeFriends'
+          ? 'private'
+          : (document.metadata.visibility as 'public' | 'private'),
         expiresInHours: document.metadata.expiresInHours ?? 24,
         expectedMedia,
       };
@@ -1098,13 +1137,11 @@ function PublishReview({
   const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
 
   // ── Audience selector segmented control ─────────────────────────
+  // Close Friends is not shown until a real audience graph, authorization
+  // query, delivery filter, and viewer behavior exist. Old drafts using
+  // that value are silently closed to private by the serializers.
   const audienceOptions = [
     { key: 'public' as const, label: 'Public', icon: 'globe-outline' as const },
-    ...(document.type === 'look' ? [{
-      key: 'closeFriends' as const,
-      label: 'Followers',
-      icon: 'people-outline' as const,
-    }] : []),
     { key: 'private' as const, label: 'Private', icon: 'lock-closed-outline' as const },
   ];
   const activeAudienceIndex = audienceOptions.findIndex((o) => o.key === document.metadata.visibility);

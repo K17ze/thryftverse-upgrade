@@ -24,7 +24,7 @@ import Reanimated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Radius, Space, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Typography, Radius, Space, Type, Stroke, Control, LetterSpacing, Elevation } from '../theme/designTokens';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -1005,11 +1005,7 @@ function createStyles(colors: ThemeColors, width: number, height: number) {
     backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: -(Space.sm - 2) },
-    shadowOpacity: 0.18,
-    shadowRadius: Space.md,
-    elevation: Space.md,
+    ...Elevation.modal,
   },
   handleContainer: {
     alignItems: 'center',

@@ -106,10 +106,10 @@ export default function BottomControlBar({
                 resizeMode="cover"
               />
             ) : (
-              <Ionicons name="images-outline" size={20} color="#fff" />
+              <Ionicons name="images-outline" size={20} color={colors.scrimTextPrimary} />
             )}
             <View style={styles.galleryOverlay}>
-              <Ionicons name="chevron-up" size={14} color="#fff" />
+              <Ionicons name="chevron-up" size={14} color={colors.scrimTextPrimary} />
             </View>
           </Reanimated.View>
         </Pressable>
@@ -128,7 +128,7 @@ export default function BottomControlBar({
             accessibilityHint="Switches between front and back camera"
             accessibilityRole="button"
           >
-            <Ionicons name="sync-outline" size={22} color="#fff" />
+            <Ionicons name="sync-outline" size={22} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
         )}
       </View>

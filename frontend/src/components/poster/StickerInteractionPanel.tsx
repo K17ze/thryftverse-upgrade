@@ -20,7 +20,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Motion } from '../../theme/motionTokens';
-import { Type, Typography, Space, Radius, Control, Stroke } from '../../theme/designTokens';
+import { Type, Typography, Space, Radius, Control, Stroke, Elevation } from '../../theme/designTokens';
 import type {
   PosterSticker as ApiPosterSticker,
   PollVoteResult,
@@ -276,11 +276,7 @@ function createStickerPanelStyles(colors: ReturnType<typeof useAppTheme>['colors
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     // Deliberate elevation to separate the panel from the story content
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 16,
+    ...Elevation.modal,
   },
   headerRow: {
     flexDirection: 'row',

@@ -23,7 +23,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Radius, Stroke } from '../../theme/designTokens';
+import { Radius, Stroke, Elevation } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { toRgbaString } from './ColorMath';
 import type { CreatorColor } from './ColorTypes';
@@ -268,10 +268,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     borderWidth: Stroke.emphasis,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
+    ...Elevation.modal,
   },
 });

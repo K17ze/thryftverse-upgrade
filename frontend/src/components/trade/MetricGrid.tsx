@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Type , Space, Radius  } from '../../theme/designTokens';
+import { Space, Radius  } from '../../theme/designTokens';
 import { TradeCard } from './TradeCard';
 import { Meta, BodyEmphasis } from '../ui/Text';
 

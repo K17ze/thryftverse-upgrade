@@ -32,7 +32,7 @@ import Reanimated, {
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
-import { Radius, Space, IconGrammar } from '../../theme/designTokens';
+import { Radius, Space, IconGrammar, Elevation } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { FontFamily } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -233,11 +233,7 @@ const styles = StyleSheet.create({
     bottom: INDICATOR_PADDING,
     left: INDICATOR_PADDING,
     // Shadow for depth separation
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
+    ...Elevation.card,
   },
   segmentsRow: {
     flexDirection: 'row',

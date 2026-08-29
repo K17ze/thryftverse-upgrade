@@ -17,7 +17,8 @@ import { fetchCoOwnHoldings, listCoOwnAssets } from '../services/marketApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
-import { Radius, Space, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Radius, Space, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
 import { getCategoryFocalPoint } from '../utils/media';
 import { AppInput } from '../components/ui/AppInput';
@@ -980,8 +981,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tabText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     letterSpacing: LetterSpacing.normal - 0.1,
     textAlign: 'center',
   },
@@ -1010,16 +1011,16 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   sectionEyebrow: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
   },
   sectionTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     letterSpacing: LetterSpacing.tight,
   },
   sectionAction: {
@@ -1031,9 +1032,9 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   sectionActionText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   positionsContent: {
     paddingHorizontal: Space.md,
@@ -1062,14 +1063,14 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   inlineStateTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   inlineStateText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   inlineRetry: {
     minWidth: Space.xxl + Space.xl + Space.xs,
@@ -1080,18 +1081,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   inlineRetryText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   instrumentsHeader: {
     paddingTop: Space.sm,
     paddingBottom: Space.md,
   },
   resultCount: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
     paddingBottom: Space.xs,
   },
@@ -1126,9 +1127,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   controlText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   sortOptions: {
     paddingHorizontal: Space.md,
@@ -1145,9 +1146,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sortOptionText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   // ── Funding status filter chips ──
   // Flat chip row below sort controls. Uses brandSubtle for selected state
@@ -1165,8 +1166,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   fundingFilterText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     letterSpacing: LetterSpacing.normal - 0.1,
   },
   instrumentRow: {
@@ -1210,14 +1211,14 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   creatorTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   creatorText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   ledgerLink: {
     minHeight: Control.hit,
@@ -1227,8 +1228,8 @@ const styles = StyleSheet.create({
   },
   ledgerLinkText: {
     flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
   },
 });

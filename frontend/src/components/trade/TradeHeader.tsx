@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Type, Space } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Headline } from '../ui/Text';
 

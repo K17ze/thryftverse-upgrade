@@ -58,6 +58,7 @@ import {
   Stroke,
   Control,
   FontFamily,
+  Elevation,
 } from '../../../theme/designTokens';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
@@ -1314,11 +1315,7 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.3,
-      shadowRadius: 3,
-      elevation: 3,
+      ...Elevation.modal,
     },
     mediaGridSelectionText: {
       fontSize: 11,

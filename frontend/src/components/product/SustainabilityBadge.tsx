@@ -15,7 +15,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Elevation } from '../../theme/designTokens';
 import type { SustainabilityScore } from '../../utils/sustainabilityScore';
 
 export type SustainabilityBadgeVariant = 'compact' | 'detailed';
@@ -216,11 +216,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   compactChipOnMedia: {
     // Legibility on photography — subtle dark backing is provided by the
     // solid grade fill itself, so no extra scrim is needed.
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.5,
-    shadowRadius: 3,
-    elevation: 2,
+    ...Elevation.modal,
   },
   compactLabel: {
     fontSize: Type.meta.size,

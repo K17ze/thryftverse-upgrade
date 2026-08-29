@@ -24,7 +24,7 @@ import Reanimated, {
   useAnimatedStyle,
   runOnJS,
 } from 'react-native-reanimated';
-import { Radius, Space, Stroke, Type, Typography } from '../../../theme/designTokens';
+import { Radius, Space, Stroke, Type, Typography, Elevation } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { AnimatedPressable } from '../../AnimatedPressable';
@@ -557,11 +557,7 @@ function createEyedropperStyles(colors: ThemeColors) {
       borderColor: colors.scrimTextPrimary,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: colors.shadow,
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 8,
+      ...Elevation.modal,
     },
     loupeCrosshairH: {
       position: 'absolute',

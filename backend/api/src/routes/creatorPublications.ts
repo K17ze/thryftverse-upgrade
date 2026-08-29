@@ -97,6 +97,8 @@ async function verifyMediaReceipt(
   publicationId: string,
   expectedMediaType: 'image' | 'video',
   suppliedUrl: string,
+  layerId: string,
+  field: string,
   suppliedAssetId?: string,
 ): Promise<VerifiedMedia> {
   const result = await client.query<{
@@ -108,6 +110,8 @@ async function verifyMediaReceipt(
     scope_ref_id: string | null;
     media_asset_id: string | null;
     media_asset_status: string | null;
+    media_asset_processing_status: string | null;
+    media_asset_moderation_status: string | null;
     canonical_url: string | null;
   }>(
     `SELECT finalization.id, finalization.owner_id,
@@ -115,6 +119,8 @@ async function verifyMediaReceipt(
             finalization.status, finalization.scope_ref_id,
             finalization.media_asset_id,
             asset.status AS media_asset_status,
+            asset.processing_status AS media_asset_processing_status,
+            asset.moderation_status AS media_asset_moderation_status,
             asset.canonical_url
      FROM upload_finalizations finalization
      LEFT JOIN media_assets asset
@@ -145,15 +151,76 @@ async function verifyMediaReceipt(
     throw new MediaVerificationError(
       `Media receipt ${finalizationId} does not match the verified upload`,
       'MEDIA_RECEIPT_MISMATCH',
+      layerId,
+      field,
+    );
+  }
+
+  // P0.7: Require a publishable media asset state at publication time.
+  // The finalization receipt alone is insufficient — the underlying
+  // media_assets row must exist and be in a publishable state. This
+  // prevents publishing with unprocessed, quarantined, or failed media.
+  if (!receipt.media_asset_id || !receipt.media_asset_status) {
+    throw new MediaVerificationError(
+      `Layer ${layerId} (${field}): no media asset row exists for finalization ${finalizationId} — upload processing may not have completed`,
+      'MEDIA_RECEIPT_MISSING',
+      layerId,
+      field,
+    );
+  }
+
+  // Check processing_status — 'failed' is a distinct blocker from
+  // still-processing. The 'publishable' lifecycle status on the asset
+  // also indicates readiness even if processing_status is not literally
+  // 'completed' (e.g. assets that skip transcoding).
+  if (receipt.media_asset_processing_status === 'failed') {
+    throw new MediaVerificationError(
+      `Layer ${layerId} (${field}): media processing failed for asset ${receipt.media_asset_id}`,
+      'MEDIA_PROCESSING_FAILED',
+      layerId,
+      field,
+    );
+  }
+
+  // Check moderation_status — 'rejected' or 'review' (flagged for
+  // human review) means the asset is quarantined and must not be
+  // published. 'flagged' is included for forward-compatibility.
+  const moderationStatus = receipt.media_asset_moderation_status;
+  if (
+    moderationStatus === 'rejected'
+    || moderationStatus === 'review'
+    || moderationStatus === 'flagged'
+  ) {
+    throw new MediaVerificationError(
+      `Layer ${layerId} (${field}): media asset ${receipt.media_asset_id} is quarantined (moderation_status: ${moderationStatus})`,
+      'MEDIA_QUARANTINED',
+      layerId,
+      field,
+    );
+  }
+
+  // Asset must be in a publishable lifecycle state or have completed
+  // processing. 'publishable' and 'published' are both acceptable;
+  // 'completed' processing_status is also acceptable regardless of
+  // lifecycle status (the asset may not have been transitioned to
+  // 'publishable' yet but processing is done).
+  const isPublishableLifecycle =
+    receipt.media_asset_status === 'publishable'
+    || receipt.media_asset_status === 'published';
+  const isProcessingComplete = receipt.media_asset_processing_status === 'completed';
+  if (!isPublishableLifecycle && !isProcessingComplete) {
+    throw new MediaVerificationError(
+      `Layer ${layerId} (${field}): media asset ${receipt.media_asset_id} is not publishable (status: ${receipt.media_asset_status}, processing_status: ${receipt.media_asset_processing_status})`,
+      'MEDIA_PROCESSING',
+      layerId,
+      field,
     );
   }
 
   return {
-    layerId: '',
+    layerId,
     finalizationId: receipt.id,
-    mediaAssetId: receipt.media_asset_status === 'published'
-      ? receipt.media_asset_id
-      : null,
+    mediaAssetId: receipt.media_asset_id,
     resolvedUrl: receipt.canonical_url ?? receipt.public_url,
     contentType: receipt.content_type,
     role: 'primary',
@@ -162,10 +229,210 @@ async function verifyMediaReceipt(
 
 class MediaVerificationError extends Error {
   code: string;
-  constructor(message: string, code: string) {
+  layerId?: string;
+  field?: string;
+  constructor(message: string, code: string, layerId?: string, field?: string) {
     super(message);
     this.code = code;
+    this.layerId = layerId;
+    this.field = field;
   }
+}
+
+// ── P0.6: Server-walk media references for exact receipt coverage ──────
+
+/**
+ * A media-bearing field discovered while walking a composition document.
+ * Each reference maps a (layerId, field) pair to a URI and its associated
+ * finalization/asset evidence from the document payload.
+ */
+interface MediaReference {
+  layerId: string;
+  /** The document field that carries the URI (e.g. 'mediaUri', 'thumbnailUri'). */
+  field: string;
+  /** The expectedMedia role that corresponds to this field (e.g. 'primary', 'thumbnail'). */
+  role: string;
+  /** The URI value stored in the document, or undefined if the field is absent. */
+  uri: string | undefined;
+  /** The finalization ID from the document payload, if present. */
+  finalizationId: string | undefined;
+  /** The media asset ID from the document payload, if present. */
+  mediaAssetId: string | undefined;
+}
+
+/**
+ * Walk a composition document (stored document_json or the command's
+ * compositionDocument) and extract every media-bearing path.
+ *
+ * Media-bearing fields by layer type:
+ *  - media:   mediaUri (→ mediaFinalizationId / mediaAssetId)
+ *             thumbnailUri (→ thumbnailFinalizationId / thumbnailMediaAssetId)
+ *  - product: snapshotImageUrl (→ snapshotMediaFinalizationId / snapshotMediaAssetId)
+ *  - look:    snapshotImageUrl (→ snapshotMediaFinalizationId / snapshotMediaAssetId)
+ *
+ * Non-media layers (text, mention, vote, quiz, etc.) produce no references.
+ */
+function extractMediaReferences(doc: unknown): MediaReference[] {
+  if (!doc || typeof doc !== 'object') return [];
+  const root = doc as { pages?: Array<{ layers?: Array<Record<string, unknown>> }> };
+  const pages = root.pages;
+  if (!Array.isArray(pages)) return [];
+
+  const refs: MediaReference[] = [];
+
+  for (const page of pages) {
+    const layers = page.layers;
+    if (!Array.isArray(layers)) continue;
+
+    for (const layer of layers) {
+      const layerId = layer['id'];
+      const layerType = layer['type'];
+      if (typeof layerId !== 'string' || typeof layerType !== 'string') continue;
+
+      const payload = layer['payload'];
+      if (!payload || typeof payload !== 'object') continue;
+      const p = payload as Record<string, unknown>;
+
+      if (layerType === 'media') {
+        // Primary media
+        if (typeof p['mediaUri'] === 'string' || p['mediaFinalizationId'] !== undefined || p['mediaAssetId'] !== undefined) {
+          refs.push({
+            layerId,
+            field: 'mediaUri',
+            role: 'primary',
+            uri: typeof p['mediaUri'] === 'string' ? p['mediaUri'] : undefined,
+            finalizationId: typeof p['mediaFinalizationId'] === 'string' ? p['mediaFinalizationId'] : undefined,
+            mediaAssetId: typeof p['mediaAssetId'] === 'string' ? p['mediaAssetId'] : undefined,
+          });
+        }
+        // Thumbnail (video poster image)
+        if (typeof p['thumbnailUri'] === 'string' || p['thumbnailFinalizationId'] !== undefined || p['thumbnailMediaAssetId'] !== undefined) {
+          refs.push({
+            layerId,
+            field: 'thumbnailUri',
+            role: 'thumbnail',
+            uri: typeof p['thumbnailUri'] === 'string' ? p['thumbnailUri'] : undefined,
+            finalizationId: typeof p['thumbnailFinalizationId'] === 'string' ? p['thumbnailFinalizationId'] : undefined,
+            mediaAssetId: typeof p['thumbnailMediaAssetId'] === 'string' ? p['thumbnailMediaAssetId'] : undefined,
+          });
+        }
+      } else if (layerType === 'product' || layerType === 'look') {
+        // Product / Look snapshot image
+        if (typeof p['snapshotImageUrl'] === 'string' || p['snapshotMediaFinalizationId'] !== undefined || p['snapshotMediaAssetId'] !== undefined) {
+          refs.push({
+            layerId,
+            field: 'snapshotImageUrl',
+            role: 'snapshot',
+            uri: typeof p['snapshotImageUrl'] === 'string' ? p['snapshotImageUrl'] : undefined,
+            finalizationId: typeof p['snapshotMediaFinalizationId'] === 'string' ? p['snapshotMediaFinalizationId'] : undefined,
+            mediaAssetId: typeof p['snapshotMediaAssetId'] === 'string' ? p['snapshotMediaAssetId'] : undefined,
+          });
+        }
+      }
+    }
+  }
+
+  return refs;
+}
+
+interface MediaCoverageError {
+  layerId: string;
+  field: string;
+  code: string;
+  message: string;
+}
+
+interface MediaCoverageResult {
+  ok: boolean;
+  errors: MediaCoverageError[];
+}
+
+/**
+ * Validate that the expectedMedia list exactly covers every media-bearing
+ * path in the stored document. This is the P0.6 server-walk: instead of
+ * trusting the client-supplied expectedMedia list, the server independently
+ * walks the document and proves bidirectional exact coverage.
+ *
+ * Rejects when:
+ *  1. A media path in the document has no matching expectedMedia entry
+ *     (missing receipt).
+ *  2. expectedMedia contains an entry not found in the document (unused
+ *     receipt — the client is claiming media that doesn't exist).
+ *  3. A media path has a raw URL but no finalizationId in the document
+ *     payload (the document itself lacks the receipt binding).
+ */
+function validateMediaCoverage(
+  docReferences: MediaReference[],
+  expectedMedia: Array<{
+    layerId: string;
+    finalizationId: string;
+    role: string;
+    suppliedUrl: string;
+  }>,
+): MediaCoverageResult {
+  const errors: MediaCoverageError[] = [];
+
+  // Index expectedMedia by (layerId, role) for O(1) lookup.
+  const expectedByKey = new Map<string, typeof expectedMedia[number]>();
+  for (const expected of expectedMedia) {
+    const key = `${expected.layerId}::${expected.role}`;
+    if (expectedByKey.has(key)) {
+      errors.push({
+        layerId: expected.layerId,
+        field: expected.role,
+        code: 'MEDIA_RECEIPT_DUPLICATE',
+        message: `Duplicate expectedMedia entry for layer ${expected.layerId} role ${expected.role}`,
+      });
+    }
+    expectedByKey.set(key, expected);
+  }
+
+  // Index doc references by (layerId, role) for reverse lookup.
+  const docByKey = new Map<string, MediaReference>();
+  for (const ref of docReferences) {
+    const key = `${ref.layerId}::${ref.role}`;
+    docByKey.set(key, ref);
+  }
+
+  // Check 1 & 3: every media path in the document must have a receipt.
+  for (const ref of docReferences) {
+    // Check 3: raw URL but no finalizationId in the document payload.
+    if (ref.uri && !ref.finalizationId && !ref.mediaAssetId) {
+      errors.push({
+        layerId: ref.layerId,
+        field: ref.field,
+        code: 'MEDIA_RECEIPT_MISSING',
+        message: `Layer ${ref.layerId} (${ref.field}) has a URL but no finalizationId in the document payload`,
+      });
+      continue;
+    }
+
+    // Check 1: media path exists in the document but no expectedMedia entry.
+    const key = `${ref.layerId}::${ref.role}`;
+    if (!expectedByKey.has(key)) {
+      errors.push({
+        layerId: ref.layerId,
+        field: ref.field,
+        code: 'MEDIA_RECEIPT_MISSING',
+        message: `Layer ${ref.layerId} (${ref.field}) has no matching expectedMedia entry — receipt is missing`,
+      });
+    }
+  }
+
+  // Check 2: expectedMedia entries not found in the document (unused receipts).
+  for (const expected of expectedMedia) {
+    const key = `${expected.layerId}::${expected.role}`;
+    if (!docByKey.has(key)) {
+      errors.push({
+        layerId: expected.layerId,
+        field: expected.role,
+        code: 'MEDIA_RECEIPT_UNUSED',
+        message: `expectedMedia entry for layer ${expected.layerId} role ${expected.role} does not match any media path in the document`,
+      });
+    }
+  }
+
+  return { ok: errors.length === 0, errors };
 }
 
 // ── Projection creation ────────────────────────────────────────────────
@@ -434,6 +701,18 @@ export const registerCreatorPublicationRoutes = ({
     const { documentId } = documentIdParamsSchema.parse(request.params);
     const command = publishCommandSchema.parse(request.body ?? {});
 
+    // P0.3b: Reject closeFriends audience — the backend must not silently
+    // downgrade to public/private. The frontend hides the option, but the
+    // server enforces it so a stale or tampered client cannot bypass.
+    if (command.audience === 'closeFriends') {
+      reply.code(400);
+      return {
+        ok: false,
+        error: 'The closeFriends audience is not supported for publication. Use public or private.',
+        code: 'AUDIENCE_UNSUPPORTED',
+      };
+    }
+
     // Idempotency key: header takes precedence, then body, then derived.
     const rawHeaderKey = Array.isArray(request.headers['idempotency-key'])
       ? request.headers['idempotency-key'][0]
@@ -590,6 +869,40 @@ export const registerCreatorPublicationRoutes = ({
         };
       }
 
+      // 4b. P0.6: Server-walk all media references for exact receipt coverage.
+      // Walk both the stored document_json and the compositionDocument (if
+      // provided) to extract every media-bearing path, then prove that
+      // expectedMedia exactly covers them — no missing receipts, no unused
+      // receipts, no raw URLs without finalization bindings.
+      const docMediaRefs = extractMediaReferences(doc);
+      const compositionMediaRefs = command.compositionDocument
+        ? extractMediaReferences(command.compositionDocument)
+        : [];
+      // Union by (layerId, role) — the compositionDocument may carry
+      // additional layers not yet persisted, and the stored document is
+      // the authoritative locked state.
+      const allMediaRefs = new Map<string, MediaReference>();
+      for (const ref of [...docMediaRefs, ...compositionMediaRefs]) {
+        const key = `${ref.layerId}::${ref.role}`;
+        if (!allMediaRefs.has(key)) {
+          allMediaRefs.set(key, ref);
+        }
+      }
+      const coverageResult = validateMediaCoverage(
+        [...allMediaRefs.values()],
+        command.expectedMedia,
+      );
+      if (!coverageResult.ok) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return {
+          ok: false,
+          error: 'Media receipt coverage mismatch',
+          code: 'MEDIA_COVERAGE_MISMATCH',
+          mediaErrors: coverageResult.errors,
+        };
+      }
+
       // 5. Verify media receipts.
       const verifiedMediaByLayer = new Map<string, VerifiedMedia>();
       for (const expected of command.expectedMedia) {
@@ -611,16 +924,23 @@ export const registerCreatorPublicationRoutes = ({
             documentId,
             expected.mediaType,
             expected.suppliedUrl,
+            expected.layerId,
+            expected.role,
             expected.assetId,
           );
-          verified.layerId = expected.layerId;
           verified.role = expected.role;
           verifiedMediaByLayer.set(expected.layerId, verified);
         } catch (error) {
           await client.query('ROLLBACK');
           if (error instanceof MediaVerificationError) {
             reply.code(422);
-            return { ok: false, error: error.message, code: error.code };
+            return {
+              ok: false,
+              error: error.message,
+              code: error.code,
+              layerId: error.layerId,
+              field: error.field,
+            };
           }
           throw error;
         }
@@ -651,7 +971,7 @@ export const registerCreatorPublicationRoutes = ({
           primaryFinalizationId: primaryMedia.finalizationId,
           primaryMediaAssetId: primaryMedia.mediaAssetId,
           compositionDocument: command.compositionDocument,
-          visibility: command.audience === 'private' ? 'private' : 'public',
+          visibility: command.audience,
           payloadHash,
         });
       } else if (command.destination === 'poster') {
@@ -674,7 +994,7 @@ export const registerCreatorPublicationRoutes = ({
         targetId = await createPosterProjection(client, {
           documentId,
           creatorId: actorUserId,
-          audience: command.audience === 'closeFriends' ? 'private' : command.audience,
+          audience: command.audience,
           allowReplies: doc.metadata?.allowReplies ?? true,
           allowReactions: doc.metadata?.allowReactions ?? true,
           expiresInHours: command.expiresInHours,
@@ -701,7 +1021,7 @@ export const registerCreatorPublicationRoutes = ({
           documentId,
           creatorId: actorUserId,
           moodboardId,
-          audience: command.audience === 'closeFriends' ? 'private' : command.audience,
+          audience: command.audience,
           allowReplies: doc.metadata?.allowReplies ?? true,
           allowReactions: doc.metadata?.allowReactions ?? true,
           expiresInHours: command.expiresInHours,
@@ -956,6 +1276,18 @@ export const registerCreatorPublicationRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
     const body = scheduleBodySchema.parse(request.body);
+
+    // P0.3b: Reject closeFriends audience at schedule time too — fail fast
+    // so the creator gets immediate feedback rather than a failure at
+    // execution time.
+    if (body.publishCommand.audience === 'closeFriends') {
+      reply.code(400);
+      return {
+        ok: false,
+        error: 'The closeFriends audience is not supported for publication. Use public or private.',
+        code: 'AUDIENCE_UNSUPPORTED',
+      };
+    }
 
     // Verify document ownership.
     const docResult = await db.query<{ creator_id: string; status: string }>(

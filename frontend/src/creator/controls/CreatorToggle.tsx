@@ -28,7 +28,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { Radius, Space } from '../../theme/designTokens';
+import { Radius, Space, Elevation } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -159,19 +159,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 1,
     // Subtle shadow for depth
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    ...Elevation.card,
   },
   thumb: {
     // Subtle elevation — thumb lifts above the track
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
+    ...Elevation.modal,
   },
 });
 

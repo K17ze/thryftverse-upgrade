@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { FlagshipEmptyGraphic } from '../flagship';
 
@@ -145,9 +146,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   loadingText: {
     marginTop: Space.md,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   // Skeleton placeholders (match final layout geometry)
   skeletonGraphic: {
@@ -171,19 +172,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     textAlign: 'center',
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
     marginBottom: Space.xs,
   },
   subtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center',
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight,
     marginBottom: Space.lg,
   },
   actionRow: {
@@ -197,9 +198,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.lg,
   },
   primaryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   secondaryBtn: {
     paddingHorizontal: Space.lg,
@@ -208,8 +209,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: Stroke.standard,
   },
   secondaryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
 });

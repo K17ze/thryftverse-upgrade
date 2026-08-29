@@ -11,7 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Radius, Space, Type, Typography } from '../../theme/designTokens';
+import { Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -233,9 +234,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   statusText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   content: {
     position: 'absolute',
@@ -246,17 +247,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   category: {
     color: colors.scrimTextSecondary,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   title: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.priceList.size,
+    fontSize: TypographyV2.priceList.size,
     lineHeight: 24,
-    fontFamily: Typography.family.bold,
+    fontFamily: TypographyV2.priceList.fontFamily,
     letterSpacing: -0.45,
     maxWidth: '92%',
   },
@@ -268,17 +269,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   price: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     fontVariant: ['tabular-nums'],
     flexShrink: 0,
   },
   localReference: {
     color: colors.scrimTextSecondary,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
     flexShrink: 1,
   },
@@ -296,9 +297,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   availability: {
     color: colors.scrimTextSecondary,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
   },
   progressTrack: {
@@ -321,9 +322,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   marketActionText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   indicatorRow: {
     minHeight: 28,
@@ -333,9 +334,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'space-between',
   },
   indicatorText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
   },
   dots: {

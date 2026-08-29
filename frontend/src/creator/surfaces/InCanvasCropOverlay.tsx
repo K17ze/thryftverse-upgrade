@@ -34,7 +34,7 @@ import Reanimated, {
   Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, FontFamily, Control, Stroke, ZIndex, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, Control, Stroke, ZIndex, IconGrammar, Elevation } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
@@ -467,11 +467,7 @@ export function InCanvasCropOverlay({
   // underlying content. Stroke.emphasis (2pt) per stroke grammar: handles
   // are selection/focus indicators.
   const HANDLE_SHADOW: ViewStyle = {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.35,
-    shadowRadius: 2,
-    elevation: 2,
+    ...Elevation.modal,
   };
 
   const cornerBracket = (borders: ViewStyle): ViewStyle => ({

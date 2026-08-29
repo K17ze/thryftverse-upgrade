@@ -12,7 +12,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useHaptics } from '../../platform/haptics';
 import { REDUCED_SPRING } from '../../theme/motionTokens';
-import { Radius, Space, Type, Typography } from '../../theme/designTokens';
+import { Radius, Space, Type, Typography, Elevation } from '../../theme/designTokens';
 
 const ReanimatedView = Reanimated.View;
 
@@ -141,11 +141,7 @@ function createStyles(colors: ThemeColors) {
       height: THUMB_SIZE,
       borderRadius: THUMB_SIZE / 2,
       backgroundColor: colors.scrimTextPrimary,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 3,
+      ...Elevation.modal,
     },
   });
 }

@@ -12,7 +12,7 @@ import { Image } from 'expo-image';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type, FontFamily, Stroke } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, FontFamily, Stroke, Elevation } from '../theme/designTokens';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -632,11 +632,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.35,
-    shadowRadius: 2,
-    elevation: 2,
+    ...Elevation.modal,
   },
   cornerTL: {
     top: -1,

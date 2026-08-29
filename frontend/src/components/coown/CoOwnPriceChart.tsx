@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { listCoOwnExecutions, MarketCoOwnExecution } from '../../services/marketApi';
 import { haptics } from '../../utils/haptics';
@@ -531,8 +532,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headerTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     letterSpacing: -0.2,
   },
   changeBadge: {
@@ -544,8 +545,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   changeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
   },
   periodRow: {
@@ -563,8 +564,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   periodChipText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
   },
   chartWrap: {
@@ -597,12 +598,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   chartEmptyText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   chartEmptySubtext: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   footerRow: {
     flexDirection: 'row',
@@ -620,13 +621,13 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.xs,
   },
   footerLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1,
   },
   footerValue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
   },
   // ── Phase 2: a11y summary (visually hidden) ──
@@ -648,14 +649,14 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   lastAgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1,
   },
   // ── Phase 2: change timestamp ──
   changeTimestamp: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1,
   },
   // ── Phase 2: controls row ──
@@ -679,8 +680,8 @@ const styles = StyleSheet.create({
   },
   // ── Phase 2: sparse-trade note ──
   sparseNote: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1,
     textAlign: 'center',
     marginTop: Space.xs,
@@ -707,13 +708,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   inlineStateTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   inlineStateBody: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   retryBtn: {
     paddingHorizontal: Space.sm,
@@ -726,8 +727,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   retryText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
   },
 });

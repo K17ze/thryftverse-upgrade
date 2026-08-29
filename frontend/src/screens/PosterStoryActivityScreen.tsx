@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing, Elevation } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -770,11 +770,7 @@ function createStyles(colors: ThemeColors) {
       padding: Space.md,
       borderRadius: Radius.lg,
       backgroundColor: colors.surfaceElevated,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 2,
+      ...Elevation.card,
     },
     summaryMetric: {
       flex: 1,

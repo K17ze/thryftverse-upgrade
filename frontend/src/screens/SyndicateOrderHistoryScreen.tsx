@@ -18,7 +18,8 @@ import { useToast } from '../context/ToastContext';
 import { OrderHistoryRow } from '../components/trade';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
@@ -432,9 +433,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   sideTabText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   sideTabTextActive: {
     fontFamily: Typography.family.semibold,
@@ -459,9 +460,9 @@ const styles = StyleSheet.create({
   },
   periodButtonText: {
     flexShrink: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   listContent: {
     paddingBottom: Space.xl,

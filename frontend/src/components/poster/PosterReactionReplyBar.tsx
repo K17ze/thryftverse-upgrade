@@ -22,7 +22,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography, Control } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Elevation } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -549,11 +549,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       overflow: 'hidden',
       alignSelf: 'flex-end',
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.25,
-      shadowRadius: 12,
-      elevation: 8,
+      ...Elevation.modal,
     },
     // Glass background layer for the reaction tray.
     reactionTrayGlass: {

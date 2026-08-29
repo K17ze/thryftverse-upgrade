@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -198,13 +198,13 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             <View style={styles.cardOverlayRight}>
               {viewCount > 0 && (
                 <View style={styles.viewCountPill}>
-                  <Ionicons name="eye-outline" size={11} color="#fff" />
+                  <Ionicons name="eye-outline" size={11} color={colors.scrimTextPrimary} />
                   <Text style={styles.viewCountText}>{viewCount}</Text>
                 </View>
               )}
               {item.totalFrameCount > 1 && (
                 <View style={styles.frameCountPill}>
-                  <Ionicons name="layers" size={12} color="#fff" />
+                  <Ionicons name="layers" size={12} color={colors.scrimTextPrimary} />
                   <Text style={styles.frameCountText}>{item.totalFrameCount}</Text>
                 </View>
               )}
@@ -263,12 +263,12 @@ export default function PosterArchiveScreen({ navigation }: Props) {
           )}
           <View style={styles.cardOverlay}>
             <View style={[styles.statusPill, styles.statusHighlight]}>
-              <Ionicons name="star" size={10} color="#fff" />
+              <Ionicons name="star" size={10} color={colors.scrimTextPrimary} />
               <Text style={styles.statusText}>Highlight</Text>
             </View>
             {frameCount > 1 && (
               <View style={styles.frameCountPill}>
-                <Ionicons name="layers" size={12} color="#fff" />
+                <Ionicons name="layers" size={12} color={colors.scrimTextPrimary} />
                 <Text style={styles.frameCountText}>{frameCount}</Text>
               </View>
             )}
@@ -618,11 +618,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    ...Elevation.card,
   },
   cardMedia: {
     width: CARD_W,
@@ -637,7 +633,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
   },
   cardPlaceholderText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
     textAlign: 'center',
@@ -663,7 +659,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs / 2,
   },
   viewCountText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
@@ -692,7 +688,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.6)',
   },
   statusText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
@@ -707,7 +703,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs / 2,
   },
   frameCountText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },

@@ -9,7 +9,7 @@ import Reanimated, {
   withSequence,
   runOnJS,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control, Elevation } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -786,11 +786,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     justifyContent: 'center',
     // Subtle drop shadow so stickers feel like they're floating above the
     // media, not pasted on — Instagram-style sticker depth.
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
+    ...Elevation.modal,
   },
   // Bounding box — 1pt dashed border (enhanced selection visual)
   selectedWrap: {
@@ -859,11 +855,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     alignItems: 'center',
     borderWidth: Stroke.standard,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    ...Elevation.modal,
   },
   // Delete handle below bottom-center (24pt trash icon)
   deleteHandle: {
@@ -880,11 +872,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     alignSelf: 'center',
     marginLeft: 'auto',
     marginRight: 'auto',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    ...Elevation.modal,
   },
   textWrap: {
     alignItems: 'center',
@@ -989,11 +977,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     paddingVertical: Space.sm,
     gap: 6,
     minWidth: 160,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
+    ...Elevation.modal,
   },
   pollQuestion: {
     color: '#fff',
@@ -1009,11 +993,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     paddingVertical: Space.sm,
     gap: 6,
     minWidth: 160,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
+    ...Elevation.modal,
   },
   quizQuestion: {
     color: '#fff',
@@ -1028,11 +1008,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
+    ...Elevation.modal,
   },
   questionText: {
     color: '#fff',
@@ -1049,11 +1025,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     paddingVertical: Space.sm,
     alignItems: 'center',
     gap: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
+    ...Elevation.modal,
   },
   countdownLabel: {
     color: 'rgba(255,255,255,0.7)',

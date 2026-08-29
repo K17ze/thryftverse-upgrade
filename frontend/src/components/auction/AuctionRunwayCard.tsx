@@ -240,10 +240,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   cardMetadataBelow: {
     backgroundColor: 'transparent',
-    shadowColor: 'transparent',
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    elevation: 0,
+    ...Elevation.none,
   },
   imageWrap: {
     position: 'relative',

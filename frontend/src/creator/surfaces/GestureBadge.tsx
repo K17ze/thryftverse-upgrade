@@ -23,7 +23,7 @@ import Reanimated, {
   Easing,
   type SharedValue,
 } from 'react-native-reanimated';
-import { Space, Radius, FontFamily, Type } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Type, Elevation } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
 
@@ -124,11 +124,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
+    ...Elevation.modal,
   },
   text: {
     fontFamily: FontFamily.semibold,

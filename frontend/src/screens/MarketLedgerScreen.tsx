@@ -12,7 +12,8 @@ import {
   MarketHistoryCursor,
   listUserMarketHistory,
 } from '../services/marketApi';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -380,15 +381,15 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   summaryStatLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
   summaryStatValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   summaryStatDivider: {

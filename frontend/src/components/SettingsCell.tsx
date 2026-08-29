@@ -11,7 +11,7 @@ import { haptics } from '../utils/haptics';
 import { AnimatedPressable } from './AnimatedPressable';
 import { PremiumToggle } from './PremiumToggle';
 
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { Type, Space, Radius, Typography, Elevation } from '../theme/designTokens';
 export type SettingsCellVariant = 'default' | 'value' | 'toggle' | 'button' | 'destructive' | 'custom';
 
 interface SettingsCellProps {
@@ -195,11 +195,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surface,
       borderRadius: Radius.xl,
       overflow: 'hidden',
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.06,
-      shadowRadius: 10,
-      elevation: 3,
+      ...Elevation.card,
     },
     container: {
       flexDirection: 'row',

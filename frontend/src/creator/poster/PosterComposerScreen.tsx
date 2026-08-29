@@ -19,7 +19,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke, Type} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
@@ -120,6 +120,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { show } = useToast();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   // ── Performance monitoring (dev-only) ──────────────────────────────
   // Starts the FrameProfiler on mount and renders the PerformanceOverlay
@@ -1417,7 +1418,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   }, [selectedLayer, updateLayer]);
 
   // ── Tool groups for ContextToolRail ────────────────────────────────
-  // Each context maps to a ToolGroup with up to 6 primary tools + overflow.
+  // Each context maps to a ToolGroup with up to 4 primary tools + overflow.
   // All onPress handlers wire to EXISTING handlers — no new actions.
   const toolGroups = useMemo<ToolGroup[]>(() => {
     const mk = (
@@ -2229,16 +2230,12 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       {/* ── Bottom tool rail — ContextToolRail (context-sensitive) ────── */}
       {/* The ContextToolRail is the single bottom surface for both default
           and selection states. It adapts its visible tool set based on the
-          active ToolContext (editor mode + selection state). Up to 6
+          active ToolContext (editor mode + selection state). Up to 4
           primary actions are always visible; additional tools (including
           Edit Clip for video, z-order, duplicate, delete, opacity) are
           revealed under the trailing "More" button. The legacy context
           toolbar was removed — it duplicated tools already in the rail
-          and competed with the canvas per the surface budget constraint. */}
-      {/* Replaces the static tool dock. The rail adapts its visible tool set
-          based on the active ToolContext (editor mode + selection state).
-          Up to 4 primary actions are always visible; additional tools are
-          revealed under the trailing "More" button.
+          and competed with the canvas per the surface budget constraint.
           Frame count indicator sits at the start when multiple frames. */}
       {/* ── Bottom tool rail — only when bottomSurface === 'tools' ────── */}
       {/* The tool rail is the default bottom surface. When the timeline or
@@ -2876,10 +2873,11 @@ function PosterComposerScreenWithProvider(props: {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
   // ── Crash recovery banner (inline notification, not a card) ──
   // Calm but noticeable: soft tinted background + left accent bar gives the
@@ -3380,4 +3378,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
   },
-});
+  });
+}

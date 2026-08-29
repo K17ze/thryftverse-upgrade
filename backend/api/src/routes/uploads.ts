@@ -923,13 +923,34 @@ export const registerUploadRoutes = ({
 
     // Create the finalization record — same table as single-PUT uploads so
     // downstream consumers (listing publication, media assets) work
-    // identically regardless of transport.
+    // identically regardless of transport. Then create the media_asset +
+    // media_processing_job rows and enqueue the ingest job, mirroring the
+    // single-PUT finalize path so multipart uploads flow through the same
+    // moderation/derivative pipeline.
     const finalizationId = `fin_${crypto.randomUUID()}`;
     const safeName = session.object_key.split('/').pop() ?? 'multipart_upload';
     const client = await db.connect();
+    let mediaAsset: {
+      id: string;
+      status: string;
+      mediaKind: 'image' | 'video' | 'audio' | 'document';
+      canonicalUrl: string | null;
+    } | null = null;
+    let finalizedRowId = finalizationId;
     try {
       await client.query('BEGIN');
-      await client.query(
+      const finalizationResult = await client.query<{
+        id: string;
+        object_key: string;
+        bucket: string;
+        folder: string;
+        file_name: string;
+        content_type: string;
+        size_bytes: string;
+        public_url: string;
+        scope: string;
+        metadata: unknown;
+      }>(
         `INSERT INTO upload_finalizations
            (id, object_key, bucket, owner_id, folder, file_name,
             content_type, size_bytes, public_url, status, scope,
@@ -939,7 +960,8 @@ export const registerUploadRoutes = ({
          ON CONFLICT (object_key, bucket) DO UPDATE
          SET status = 'finalized', head_checked_at = NOW(),
              updated_at = NOW()
-         RETURNING id`,
+         RETURNING id, object_key, bucket, folder, file_name, content_type,
+                   size_bytes::text, public_url, scope, metadata`,
         [
           finalizationId,
           session.object_key,
@@ -952,6 +974,75 @@ export const registerUploadRoutes = ({
           location,
         ],
       );
+      const finRow = finalizationResult.rows[0];
+      finalizedRowId = finRow.id;
+
+      // Create the media_asset row — same INSERT pattern as the single-PUT
+      // finalize path so downstream moderation/derivatives run identically.
+      const mediaAssetId = `masset_${crypto.randomUUID()}`;
+      const mediaKind = mediaKindForContentType(finRow.content_type);
+      const assetResult = await client.query<{
+        id: string;
+        status: string;
+        media_kind: 'image' | 'video' | 'audio' | 'document';
+        canonical_url: string | null;
+      }>(
+        `INSERT INTO media_assets (
+           id, upload_finalization_id, owner_id, bucket, object_key,
+           file_name, intended_purpose, media_kind,
+           declared_content_type, declared_size_bytes,
+           original_object_url, status, scan_status,
+           moderation_status, processing_status, metadata
+         )
+         VALUES (
+           $1, $2, $3, $4, $5, $6, $7, $8,
+           $9, $10, $11, 'integrity_verified', 'pending',
+           'pending', 'pending', $12::jsonb
+         )
+         ON CONFLICT (upload_finalization_id)
+         DO UPDATE SET
+           intended_purpose = EXCLUDED.intended_purpose,
+           metadata = media_assets.metadata || EXCLUDED.metadata
+         RETURNING id, status, media_kind::text, canonical_url`,
+        [
+          mediaAssetId,
+          finRow.id,
+          actorUserId,
+          finRow.bucket,
+          finRow.object_key,
+          finRow.file_name,
+          finRow.scope,
+          mediaKind,
+          finRow.content_type,
+          Number(finRow.size_bytes),
+          finRow.public_url,
+          JSON.stringify(finRow.metadata ?? {}),
+        ],
+      );
+      const asset = assetResult.rows[0];
+      await client.query(
+        `UPDATE upload_finalizations
+         SET media_asset_id = $2
+         WHERE id = $1 AND media_asset_id IS DISTINCT FROM $2`,
+        [finRow.id, asset.id],
+      );
+
+      await client.query(
+        `INSERT INTO media_processing_jobs (
+           id, media_asset_id, job_type, status
+         )
+         VALUES ($1, $2, 'inspect_scan_process_moderate', 'pending')
+         ON CONFLICT DO NOTHING`,
+        [`mjob_${crypto.randomUUID()}`, asset.id],
+      );
+
+      mediaAsset = {
+        id: asset.id,
+        status: asset.status,
+        mediaKind: asset.media_kind,
+        canonicalUrl: asset.canonical_url,
+      };
+
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
@@ -962,13 +1053,67 @@ export const registerUploadRoutes = ({
       client.release();
     }
 
+    // Dispatch media ingest to the durable queue — same fallback-to-inline
+    // moderation behaviour as the single-PUT finalize path.
+    if (mediaAsset) {
+      try {
+        await enqueueMediaIngestJob({
+          assetId: mediaAsset.id,
+          reason: 'multipart_complete',
+        });
+      } catch (queueError) {
+        app.log.error(
+          { err: queueError, assetId: mediaAsset.id },
+          'Failed to enqueue media ingest job — falling back to inline moderation',
+        );
+        if (mediaAsset.mediaKind === 'image' && createModerationProvider().name !== 'mock') {
+          void moderateImageAsset(mediaAsset.id, location)
+            .then((outcome) => {
+              if (outcome.status === 'integrity_verified' || outcome.status === 'processing') {
+                return;
+              }
+              db.query(
+                `UPDATE media_assets
+                 SET moderation_status = $2,
+                     status = CASE WHEN $3 IN ('publishable', 'quarantined', 'processing_failed') THEN $3 ELSE status END
+                 WHERE id = $1
+                   AND status IN ('integrity_verified', 'processing', 'moderation_pending')`,
+                [mediaAsset.id, outcome.moderationStatus, outcome.status],
+              ).catch((dbError) => {
+                app.log.error(
+                  { err: dbError, assetId: mediaAsset.id },
+                  'Failed to persist background moderation outcome',
+                );
+              });
+            })
+            .catch((moderationError) => {
+              app.log.error(
+                { err: moderationError, assetId: mediaAsset.id },
+                'Background image moderation failed',
+              );
+            });
+        }
+      }
+    }
+
     return {
       ok: true,
-      finalizationId,
+      finalizationId: finalizedRowId,
       objectKey: session.object_key,
       publicUrl: location,
       sizeBytes,
       contentType: session.content_type,
+      mediaAsset: mediaAsset
+        ? {
+          ...mediaAsset,
+          publishable: mediaAsset.status === 'publishable'
+            || mediaAsset.status === 'published',
+          processingRequired: mediaAsset.status === 'integrity_verified'
+            || mediaAsset.status === 'processing'
+            || mediaAsset.status === 'moderation_pending'
+            || mediaAsset.status === 'processing_failed',
+        }
+        : null,
     };
   });
 

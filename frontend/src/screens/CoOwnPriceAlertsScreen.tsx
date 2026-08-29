@@ -20,7 +20,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -384,12 +385,12 @@ function createStyles(colors: ThemeColors) {
 
     // Section headers — flat, no count badge dashboard
     sectionTitle: {
-      fontSize: Type.label.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.label.size,
+      fontFamily: TypographyV2.label.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
-      lineHeight: Type.label.lineHeight,
+      letterSpacing: TypographyV2.label.letterSpacing,
+      lineHeight: TypographyV2.label.lineHeight,
       marginTop: Space.lg,
       marginBottom: Space.sm,
       paddingHorizontal: Space.xs,
@@ -420,28 +421,28 @@ function createStyles(colors: ThemeColors) {
     },
     alertText: { flex: 1 },
     alertCondition: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
-      lineHeight: Type.meta.lineHeight,
+      letterSpacing: TypographyV2.label.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
     },
     alertPrice: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
       marginTop: Space.xs / 2,
       fontVariant: ['tabular-nums'],
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
     },
     alertDate: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       marginTop: Space.xs / 2,
     },
 

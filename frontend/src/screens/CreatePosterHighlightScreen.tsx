@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useHaptic } from '../hooks/useHaptic';
@@ -567,11 +567,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 3,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 2,
+      ...Elevation.modal,
     },
     coverBadgeText: {
       fontSize: Type.meta.size,
@@ -614,11 +610,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 3,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 2,
+      ...Elevation.modal,
     },
     coverPreviewBadgeText: {
       fontSize: Type.meta.size,

@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, DockConstants, Stroke } from '../theme/designTokens';
+import { Space, Radius, DockConstants, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
@@ -209,25 +210,25 @@ const styles = StyleSheet.create({
     marginBottom: Space.lg,
   },
   assetContextLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   assetContextText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
   },
   sectionLabel: {
-    fontSize: Type.label.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.label.size,
+    fontFamily: TypographyV2.label.fontFamily,
     marginBottom: Space.sm,
     textTransform: 'uppercase',
-    letterSpacing: Type.label.letterSpacing,
-    lineHeight: Type.label.lineHeight,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    lineHeight: TypographyV2.label.lineHeight,
   },
   categoryGrid: {
     flexDirection: 'row',
@@ -243,10 +244,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   categoryLabel: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
   },
   note: {
     marginTop: Space.lg,
@@ -269,16 +270,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   noteTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
     marginBottom: Space.xs / 2,
   },
   noteText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
 });

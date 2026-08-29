@@ -31,7 +31,17 @@ export interface ContractValidationResult {
 }
 
 // ── Core contract validation ──────────────────────────────────────
-export function validateForPublish(doc: CreatorDocument): ContractValidationResult {
+
+/**
+ * Validates document structure, schema, pages, layers, and supported types.
+ * Does NOT reject local URIs — this is the pre-upload check used before
+ * media has been uploaded to the server. Local device URIs are expected
+ * at this stage (camera capture, gallery selection).
+ *
+ * Use this before the upload step. Use validateForPublish after upload
+ * to ensure no local URIs remain.
+ */
+export function validateDocumentStructure(doc: CreatorDocument): ContractValidationResult {
   const errors: string[] = [];
 
   // 1. Schema validation via Zod
@@ -71,7 +81,81 @@ export function validateForPublish(doc: CreatorDocument): ContractValidationResu
     errors.push('Documents cannot have more than 10 pages');
   }
 
-  // 5. Local URI rejection — no local device URIs in published payload
+  // 5. Look-specific: must have at least one media layer
+  if (validated.type === 'look') {
+    const hasMedia = validated.pages[0].layers.some((l) => l.type === 'media');
+    if (!hasMedia) {
+      errors.push('Look documents must contain at least one media layer');
+    }
+  }
+
+  // 6. Poster-specific: each page must have media or text content
+  if (validated.type === 'poster') {
+    for (const page of validated.pages) {
+      const hasContent = page.layers.some(
+        (l) => l.type === 'media' || l.type === 'text',
+      );
+      if (!hasContent) {
+        errors.push(`Page ${page.id}: must contain at least one media or text layer`);
+      }
+    }
+  }
+
+  // 7. Vote layer validation
+  for (const page of validated.pages) {
+    for (const layer of page.layers) {
+      if (layer.type === 'vote') {
+        if (layer.payload.options.length < 2 || layer.payload.options.length > 4) {
+          errors.push(`Layer ${layer.id}: vote must have 2-4 options`);
+        }
+      }
+    }
+  }
+
+  // 8. Unsupported interactive layer validation
+  // Interactive layer types that have no backend sticker projection must be
+  // rejected at publish time rather than silently dropped or coerced.
+  // Decorative/visual layers (decorative, draw, gif, time, weather, adjustment)
+  // are permitted — they simply produce no sticker rows and live only in the
+  // compositionDocument.
+  const UNSUPPORTED_INTERACTIVE_TYPES = new Set([
+    'quiz', 'question', 'emojiSlider', 'countdown', 'link', 'location', 'hashtag', 'music',
+  ]);
+  for (const page of validated.pages) {
+    for (const layer of page.layers) {
+      if (UNSUPPORTED_INTERACTIVE_TYPES.has(layer.type)) {
+        errors.push(
+          `Layer ${layer.id}: type '${layer.type}' is not supported for publication. Remove this layer or use a supported alternative.`,
+        );
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    sanitizedDoc: errors.length === 0 ? validated : undefined,
+  };
+}
+
+/**
+ * Strict publication validation. Rejects local device URIs — every media
+ * reference must have been uploaded and replaced with a remote URL.
+ *
+ * Use this AFTER upload, not before. For the pre-upload structure check,
+ * use validateDocumentStructure.
+ */
+export function validateForPublish(doc: CreatorDocument): ContractValidationResult {
+  // First run the structure validation
+  const structureResult = validateDocumentStructure(doc);
+  if (!structureResult.valid) {
+    return structureResult;
+  }
+
+  const validated = structureResult.sanitizedDoc!;
+  const errors: string[] = [];
+
+  // Local URI rejection — no local device URIs in published payload
   for (const page of validated.pages) {
     for (const layer of page.layers) {
       if (layer.type === 'media') {
@@ -99,56 +183,6 @@ export function validateForPublish(doc: CreatorDocument): ContractValidationResu
             `Layer ${layer.id}: look snapshotImageUrl is a local URI`,
           );
         }
-      }
-    }
-  }
-
-  // 6. Look-specific: must have at least one media layer
-  if (validated.type === 'look') {
-    const hasMedia = validated.pages[0].layers.some((l) => l.type === 'media');
-    if (!hasMedia) {
-      errors.push('Look documents must contain at least one media layer');
-    }
-  }
-
-  // 7. Poster-specific: each page must have media or text content
-  if (validated.type === 'poster') {
-    for (const page of validated.pages) {
-      const hasContent = page.layers.some(
-        (l) => l.type === 'media' || l.type === 'text',
-      );
-      if (!hasContent) {
-        errors.push(`Page ${page.id}: must contain at least one media or text layer`);
-      }
-    }
-  }
-
-  // 8. Vote layer validation
-  for (const page of validated.pages) {
-    for (const layer of page.layers) {
-      if (layer.type === 'vote') {
-        if (layer.payload.options.length < 2 || layer.payload.options.length > 4) {
-          errors.push(`Layer ${layer.id}: vote must have 2-4 options`);
-        }
-      }
-    }
-  }
-
-  // 9. Unsupported interactive layer validation
-  // Interactive layer types that have no backend sticker projection must be
-  // rejected at publish time rather than silently dropped or coerced.
-  // Decorative/visual layers (decorative, draw, gif, time, weather, adjustment)
-  // are permitted — they simply produce no sticker rows and live only in the
-  // compositionDocument.
-  const UNSUPPORTED_INTERACTIVE_TYPES = new Set([
-    'quiz', 'question', 'emojiSlider', 'countdown', 'link', 'location', 'hashtag', 'music',
-  ]);
-  for (const page of validated.pages) {
-    for (const layer of page.layers) {
-      if (UNSUPPORTED_INTERACTIVE_TYPES.has(layer.type)) {
-        errors.push(
-          `Layer ${layer.id}: type '${layer.type}' is not supported for publication. Remove this layer or use a supported alternative.`,
-        );
       }
     }
   }
@@ -266,8 +300,11 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
         ? 'video'
         : 'image',
       ...(mediaUrls.length > 0 ? { mediaUrls } : {}),
+      // Close Friends is not a supported audience — no graph, delivery
+      // filter, or authorization exists. Old drafts using that value
+      // fail closed to private rather than widening the audience.
       visibility: doc.metadata.visibility === 'closeFriends'
-        ? 'followers'
+        ? 'private'
         : doc.metadata.visibility,
       tags,
       status: 'published',

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, BackHandler } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space, Elevation } from '../../theme/designTokens';
 export interface NativeMenuOption {
   label: string;
   onPress: () => void;
@@ -74,11 +74,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xl,
     paddingVertical: Space.xs,
     minWidth: 200,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    ...Elevation.modal,
   },
   option: {
     paddingVertical: 12,

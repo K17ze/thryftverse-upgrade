@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useToast, ToastType } from '../context/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Typography, Radius, Space, Type } from '../theme/designTokens';
+import { Typography, Radius, Space, Type, Elevation } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, Easing } from 'react-native-reanimated';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -121,11 +121,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingVertical: 14,
     borderLeftWidth: 4,
     gap: 12,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 10,
+    ...Elevation.modal,
   },
   message: {
     flex: 1,

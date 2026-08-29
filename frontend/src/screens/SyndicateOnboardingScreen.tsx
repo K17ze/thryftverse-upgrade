@@ -14,7 +14,8 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -214,8 +215,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   progressLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide + 0.18,
   },
   headerBtn: {
@@ -227,8 +228,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   skipText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   hero: {
     flex: 1,
@@ -244,11 +245,11 @@ const styles = StyleSheet.create({
   },
   title: {
     marginTop: Space.lg,
-    fontSize: Type.display.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.display.size,
+    fontFamily: TypographyV2.display.fontFamily,
     letterSpacing: LetterSpacing.tight - 0.38,
     textAlign: 'center',
-    lineHeight: Type.display.size - 2,
+    lineHeight: TypographyV2.display.size - 2,
   },
   welcomeBadge: {
     marginTop: Space.md,
@@ -257,16 +258,16 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   welcomeBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.caps - 0.02,
     textTransform: 'uppercase',
   },
   body: {
     marginTop: Space.sm,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.size + 9,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.size + 9,
     textAlign: 'center',
     paddingHorizontal: Space.md,
   },
@@ -281,8 +282,8 @@ const styles = StyleSheet.create({
     maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 16,
   },
   checklistTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps - 0.02,
     marginBottom: Space.xs / 2,
@@ -294,9 +295,9 @@ const styles = StyleSheet.create({
   },
   checklistText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.size + 6,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.size + 6,
   },
   footer: {
     paddingTop: Space.lg,
@@ -325,7 +326,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   primaryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
 });

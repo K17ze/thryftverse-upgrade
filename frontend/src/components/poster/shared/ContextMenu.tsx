@@ -41,7 +41,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography, Stroke} from '../../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Elevation} from '../../../theme/designTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
@@ -258,11 +258,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: 34,
     paddingTop: Space.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 16,
+    ...Elevation.modal,
   },
   handle: {
     width: 36,
