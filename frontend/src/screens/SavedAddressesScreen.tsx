@@ -196,67 +196,75 @@ export default function SavedAddressesScreen({ navigation }: Props) {
     navigation.navigate('AddressForm', { mode: 'add', source: 'postage' });
   }, [navigation]);
 
-  const renderAddressCard = (address: CommerceAddress, index: number) => {
-    const isDefault = address.isDefault;
-    const isDeleting = deletingId === address.id;
-    const detail = formatAddressDetail(address);
-    return (
-      <View key={address.id}>
-        <View style={[styles.addressCard, { backgroundColor: colors.surface, borderColor: colors.border }, isDefault && { borderColor: colors.brand, borderWidth: Stroke.emphasis }]}>
-          <View style={styles.addressCardHeader}>
-            <View style={styles.addressCardHeaderLeft}>
-              {isDefault ? (
-                <View style={[styles.defaultBadge, { backgroundColor: colors.brandSubtle }]}>
-                  <Ionicons name="star" size={11} color={colors.brand} />
-                  <Text style={[styles.defaultBadgeText, { color: colors.brand }]}>DEFAULT</Text>
-                </View>
+  const renderAddressCard = useCallback(
+    (address: CommerceAddress, index: number) => {
+      const isDefault = address.isDefault;
+      const isDeleting = deletingId === address.id;
+      const detail = formatAddressDetail(address);
+      return (
+        <View key={address.id}>
+          <View style={[styles.addressCard, { backgroundColor: colors.surface, borderColor: colors.border }, isDefault && { borderColor: colors.brand, borderWidth: Stroke.emphasis }]}>
+            <View style={styles.addressCardHeader}>
+              <View style={styles.addressCardHeaderLeft}>
+                {isDefault ? (
+                  <View style={[styles.defaultBadge, { backgroundColor: colors.brandSubtle }]}>
+                    <Ionicons name="star" size={11} color={colors.brand} />
+                    <Text style={[styles.defaultBadgeText, { color: colors.brand }]}>DEFAULT</Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.addressCardActions}>
+                <AnimatedPressable
+                  onPress={() => handleEdit(address)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  scaleValue={0.95}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit address for ${address.name}`}
+                >
+                  <Text style={[styles.editAction, { color: colors.brand }]}>Edit</Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  onPress={() => handleDelete(address)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  scaleValue={0.95}
+                  hapticFeedback="light"
+                  disabled={isDeleting}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove address for ${address.name}`}
+                >
+                  {isDeleting ? (
+                    <ActivityIndicator size="small" color={colors.danger} />
+                  ) : (
+                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                  )}
+                </AnimatedPressable>
+              </View>
+            </View>
+            <View style={styles.addressCardBody}>
+              <Text style={[styles.addressName, { color: colors.textPrimary }]} numberOfLines={1}>
+                {address.name}
+              </Text>
+              <Text style={[styles.addressLine, { color: colors.textSecondary }]} numberOfLines={2}>
+                {formatAddressLine(address)}
+              </Text>
+              {detail ? (
+                <Text style={[styles.addressDetail, { color: colors.textMuted }]} numberOfLines={1}>
+                  {detail}
+                </Text>
               ) : null}
             </View>
-            <View style={styles.addressCardActions}>
-              <AnimatedPressable
-                onPress={() => handleEdit(address)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                scaleValue={0.95}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel={`Edit address for ${address.name}`}
-              >
-                <Text style={[styles.editAction, { color: colors.brand }]}>Edit</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                onPress={() => handleDelete(address)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                scaleValue={0.95}
-                hapticFeedback="light"
-                disabled={isDeleting}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove address for ${address.name}`}
-              >
-                {isDeleting ? (
-                  <ActivityIndicator size="small" color={colors.danger} />
-                ) : (
-                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                )}
-              </AnimatedPressable>
-            </View>
-          </View>
-          <View style={styles.addressCardBody}>
-            <Text style={[styles.addressName, { color: colors.textPrimary }]} numberOfLines={1}>
-              {address.name}
-            </Text>
-            <Text style={[styles.addressLine, { color: colors.textSecondary }]} numberOfLines={2}>
-              {formatAddressLine(address)}
-            </Text>
-            {detail ? (
-              <Text style={[styles.addressDetail, { color: colors.textMuted }]} numberOfLines={1}>
-                {detail}
-              </Text>
-            ) : null}
           </View>
         </View>
-      </View>
-    );
-  };
+      );
+    },
+    [colors, deletingId, handleEdit, handleDelete]
+  );
+
+  const renderItem = useCallback(
+    ({ item, index }: { item: CommerceAddress; index: number }) => renderAddressCard(item, index),
+    [renderAddressCard]
+  );
 
   return (
     <FlagshipScreen
@@ -289,7 +297,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
       <FlashList
         data={loadState === 'populated' ? addresses : []}
         keyExtractor={(item) => String(item.id)}
-        renderItem={({ item, index }) => renderAddressCard(item, index)}
+        renderItem={renderItem}
         contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xl }}
         showsVerticalScrollIndicator={false}
         refreshControl={

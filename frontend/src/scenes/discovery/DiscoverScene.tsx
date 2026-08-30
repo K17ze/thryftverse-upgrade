@@ -29,30 +29,25 @@ import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { fetchPosterStories, type PosterStory } from '../../services/postersApi';
 import { fetchPublicMoodboards, type Moodboard } from '../../services/moodboardApi';
 import type { RootStackParamList } from '../../navigation/types';
-import { useVisuallyComplete } from '../../performance/visuallyComplete';
+import { useReadiness } from '../../performance/visuallyComplete';
 import { useA11yAudit } from '../../hooks/useA11yAudit';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const DISCOVER_NUM_COLUMNS = 2;
 type DiscoverNavigation = NativeStackNavigationProp<RootStackParamList>;
 
-const CATEGORY_FILTERS: Record<string, (listing: Listing) => boolean> = {
-  Clothing: (l) => !!l.subcategory && l.subcategory.includes('clothing'),
-  Shoes: (l) => !!l.subcategory && l.subcategory.includes('shoes'),
-  Bags: (l) => !!l.subcategory && l.subcategory.includes('bags'),
-  Accessories: (l) => !!l.subcategory && l.subcategory.includes('accessories'),
-  // "jewel" catches both the British "jewellery" and American "jewelry" spellings.
-  Jewelry: (l) => !!l.subcategory && l.subcategory.includes('jewel'),
-  Home: (l) => l.category === 'home',
-  // "arts" matches the `hob-arts` (Arts & crafts) subcategory.
-  Art: (l) => !!l.subcategory && l.subcategory.includes('arts') };
-
 // ============================================================================
 // CATEGORY BAR — horizontal scrollable pill bar (filters the feed)
 // ============================================================================
 
+interface DiscoverCategoryOption {
+  id: string;
+  name: string;
+}
+
 interface DiscoverCategoryBarProps {
   activeCategory: string;
+  categories: DiscoverCategoryOption[];
   onSelect: (category: string) => void;
 }
 
@@ -63,18 +58,13 @@ interface DiscoverCategoryBarProps {
  * are transparent with muted text. A hairline bottom border separates the bar
  * from the masonry grid.
  *
- * Selecting a pill filters the feed client-side (see CATEGORY_FILTERS). "All"
- * is the default and shows every listing. The pills are Pressables with
- * accessibility labels and roles.
+ * Selecting a pill filters the feed client-side (see getFilterFn in
+ * DiscoverScene). "All" is the default and shows every listing. The pills
+ * are Pressables with accessibility labels and roles.
  */
-function DiscoverCategoryBar({ activeCategory, onSelect }: DiscoverCategoryBarProps) {
+function DiscoverCategoryBar({ activeCategory, categories, onSelect }: DiscoverCategoryBarProps) {
   const { colors } = useAppTheme();
-  const { categories } = useTaxonomy();
   const styles = useMemo(() => createCategoryBarStyles(colors), [colors]);
-  const discoverCategories = useMemo(
-    () => ['All', ...categories.filter((c) => c.parentId === null).map((c) => c.name)],
-    [categories],
-  );
 
   return (
     <View style={styles.bar}>
@@ -85,19 +75,19 @@ function DiscoverCategoryBar({ activeCategory, onSelect }: DiscoverCategoryBarPr
         accessibilityRole="tablist"
         accessibilityLabel="Discovery categories"
       >
-        {discoverCategories.map((category, idx) => {
-          const isActive = category === activeCategory;
+        {categories.map((category, idx) => {
+          const isActive = category.id === activeCategory;
           return (
             <Pressable
-              key={`cat-${idx}-${category}`}
+              key={`cat-${idx}-${category.id}`}
               style={[styles.pill, isActive && styles.pillActive]}
-              onPress={() => onSelect(category)}
+              onPress={() => onSelect(category.id)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
-              accessibilityLabel={`${category} category`}
+              accessibilityLabel={`${category.name} category`}
             >
               <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
-                {category}
+                {category.name}
               </Text>
             </Pressable>
           );
@@ -116,9 +106,15 @@ function createCategoryBarStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       gap: Space.xs,
-      alignItems: 'center' },
+      alignItems: 'center',
+      // Ensure the touch target around the ScrollView row is at least 44pt
+      // (Design.md: 44pt interaction band with 32–36pt visible chrome).
+      minHeight: 44 },
     pill: {
-      paddingVertical: Space.xs + 2,
+      // 36pt visible chrome inside a 44pt interaction band (Design.md).
+      // paddingVertical: Space.sm (8pt) + text line-height yields ~36pt.
+      minHeight: 36,
+      paddingVertical: Space.sm,
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.md,
       backgroundColor: 'transparent' },
@@ -185,6 +181,7 @@ export function DiscoverScene({
   isSavedListing }: DiscoverSceneProps) {
   const { colors } = useAppTheme();
   const { isOffline } = useConnectivity();
+  const { categories: taxonomyCategories } = useTaxonomy();
   const navigation = useNavigation<DiscoverNavigation>();
   const reducedMotion = useReducedMotion();
   const scrollY = useSharedValue(0);
@@ -192,10 +189,10 @@ export function DiscoverScene({
   const scrollRef = useRef<any>(null);
   const a11yRef = useRef<any>(null);
   useA11yAudit(a11yRef, 'DiscoverScene');
-  useVisuallyComplete('Discover');
+  const reportReady = useReadiness('Discover');
 
   // Active category for the pill bar. Drives client-side filtering of the
-  // feed via CATEGORY_FILTERS. "All" is the default and shows every listing.
+  // feed via getFilterFn. "All" is the default and shows every listing.
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [posters, setPosters] = useState<PosterStory[]>([]);
@@ -239,7 +236,8 @@ export function DiscoverScene({
       && moodboardsResult.status === 'rejected',
     );
     setIsSupplementalLoading(false);
-  }, []);
+    reportReady('data-ready');
+  }, [reportReady]);
 
   useEffect(() => {
     void loadSupplementalContent();
@@ -253,6 +251,56 @@ export function DiscoverScene({
     [colors],
   );
 
+  // Category bar options built from taxonomy root categories, keyed by their
+  // stable taxonomy ID (not display name) so filtering is decoupled from
+  // localization/renaming. "All" is a synthetic option that shows everything.
+  const discoverCategories = useMemo<DiscoverCategoryOption[]>(
+    () => [
+      { id: 'All', name: 'All' },
+      ...taxonomyCategories
+        .filter((c) => c.parentId === null)
+        .map((c) => ({ id: c.id, name: c.name })),
+    ],
+    [taxonomyCategories],
+  );
+
+  // Map each root/ancestor category ID to the set of all descendant IDs, so
+  // the filter can match listings whose `category` is the selected root or
+  // any node beneath it in the taxonomy parent chain.
+  const descendantMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const cat of taxonomyCategories) {
+      let parentId = cat.parentId;
+      while (parentId) {
+        if (!map.has(parentId)) map.set(parentId, new Set());
+        map.get(parentId)!.add(cat.id);
+        const parent = taxonomyCategories.find((c) => c.id === parentId);
+        parentId = parent?.parentId ?? null;
+      }
+    }
+    return map;
+  }, [taxonomyCategories]);
+
+  // Build a filter predicate from a taxonomy category ID. Returns null for
+  // "All" (no filtering). Matches listings whose `category` equals the
+  // selected root ID or is a descendant of it; also falls back to matching
+  // the listing's `subcategory` string against descendant IDs for listings
+  // that carry subcategory text instead of a taxonomy category ID.
+  const getFilterFn = useCallback(
+    (categoryId: string): ((listing: Listing) => boolean) | null => {
+      if (categoryId === 'All') return null;
+      const descendants = descendantMap.get(categoryId);
+      const descendantList = descendants ? [...descendants] : [];
+      return (l: Listing) => {
+        if (l.category === categoryId) return true;
+        if (descendants && descendants.has(l.category)) return true;
+        if (l.subcategory && descendantList.some((d) => l.subcategory!.includes(d))) return true;
+        return false;
+      };
+    },
+    [descendantMap],
+  );
+
   // Personalised listings: use the For You feed when it has results and the
   // user is on "All" (the personalised canvas). Category pills fall back to
   // the full backend cursor because For You recommendations don't carry
@@ -264,14 +312,14 @@ export function DiscoverScene({
   }, [listings, activeCategory, forYouFeed.listings]);
 
   // Filter listings by the active category pill. "All" passes everything
-  // through; any other pill applies the matching predicate from
-  // CATEGORY_FILTERS. The filtered set is then assembled into heterogeneous
+  // through; any other pill applies the predicate built from the taxonomy
+  // via getFilterFn. The filtered set is then assembled into heterogeneous
   // feed units so the grid stays a pure function of DiscoveryFeedUnit[].
   const filteredListings = useMemo(() => {
     if (activeCategory === 'All') return personalisedListings;
-    const filterFn = CATEGORY_FILTERS[activeCategory];
+    const filterFn = getFilterFn(activeCategory);
     return filterFn ? personalisedListings.filter(filterFn) : personalisedListings;
-  }, [personalisedListings, activeCategory]);
+  }, [personalisedListings, activeCategory, getFilterFn]);
 
   // Assemble the heterogeneous feed units from the filtered listings. This is the
   // single place where Discover's feed rhythm + span decisions are made, so
@@ -287,6 +335,12 @@ export function DiscoverScene({
     ),
     [activeCategory, filteredListings, looks, moodboards, posters],
   );
+
+  useEffect(() => {
+    if (units.length > 0 && !isSupplementalLoading) {
+      reportReady('interaction-ready');
+    }
+  }, [units.length, isSupplementalLoading, reportReady]);
 
   // Plain JS scroll handler drives the RefreshIndicator's shared scrollY
   // value from the FlashList's own scrolling — no enclosing ScrollView.
@@ -380,12 +434,13 @@ export function DiscoverScene({
       <>
         <DiscoverCategoryBar
           activeCategory={activeCategory}
+          categories={discoverCategories}
           onSelect={setActiveCategory}
         />
         {isOffline && <OfflineBanner />}
       </>
     ),
-    [activeCategory, isOffline],
+    [activeCategory, discoverCategories, isOffline],
   );
 
   // Error and empty states are authored here (with recovery CTAs) and render
@@ -423,16 +478,19 @@ export function DiscoverScene({
   }
 
   if (showFilteredEmpty) {
+    const activeCategoryName =
+      discoverCategories.find((c) => c.id === activeCategory)?.name ?? activeCategory;
     return (
       <View style={[styles.container, styles.stateWrap]}>
         <DiscoverCategoryBar
           activeCategory={activeCategory}
+          categories={discoverCategories}
           onSelect={setActiveCategory}
         />
         <EmptyState
           density="compact"
           icon="pricetags-outline"
-          title={`No ${activeCategory.toLowerCase()} items yet`}
+          title={`No ${activeCategoryName.toLowerCase()} items yet`}
           subtitle="Try another category or check back soon."
           ctaLabel="Show all"
           onCtaPress={() => setActiveCategory('All')}

@@ -131,9 +131,11 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
                   style={styles.optionRow}
                   activeOpacity={0.7}
                   onPress={() => handleSelect(opt)}
+                  accessibilityRole="button"
+                  accessibilityLabel={opt}
                 >
                   <Text style={[styles.optionText, selectedValue === opt && styles.optionTextActive]}>{opt}</Text>
-                  {selectedValue === opt && <Ionicons name="checkmark-circle" size={24} color={colors.brand} />}
+                  {selectedValue === opt && <Ionicons name="checkmark-circle" size={24} color={colors.brand} aria-hidden={true} />}
                 </AnimatedPressable>
               ))
             )}

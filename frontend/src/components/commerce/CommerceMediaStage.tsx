@@ -35,7 +35,6 @@ import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
-import { SharedTransitionImage } from '../SharedTransitionImage';
 import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
 
 const MAX_ZOOM = 4;
@@ -235,13 +234,16 @@ function MediaPage({
               downscaleWidth={width}
             />
           ) : (
-            <SharedTransitionImage
+            <CachedImage
               key={retryKey}
-              source={{ uri: item.uri }}
+              uri={item.uri}
+              blurhash={item.blurhash ?? undefined}
               style={subComponentStyles.image}
-              resizeMode={item.fit ?? 'contain'}
+              containerStyle={subComponentStyles.image}
+              contentFit={item.fit ?? 'cover'}
               sharedTransitionTag={sharedTransitionTag}
               onError={() => setFailed(true)}
+              downscaleWidth={width}
             />
           )
         )}

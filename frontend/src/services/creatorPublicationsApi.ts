@@ -36,6 +36,10 @@ export interface PublishCommand {
   expectedMedia: ExpectedMediaEntry[];
   compositionDocument?: unknown;
   rightsSnapshotId?: string;
+  /** Server lock_version at save time — enables optimistic concurrency on publish. */
+  expectedLockVersion?: number;
+  /** Canonical SHA-256 hash of the document JSON at save time. */
+  expectedDocumentHash?: string;
 }
 
 export interface PublicationResult {
@@ -155,6 +159,8 @@ export interface ScheduleCreatorDocumentParams {
   dueAt: string;
   timezone?: string;
   publishCommand: PublishCommand;
+  /** Idempotency key for unknown-outcome reconciliation. */
+  idempotencyKey?: string;
 }
 
 export interface ScheduleResult {
@@ -163,6 +169,7 @@ export interface ScheduleResult {
   documentId: string;
   dueAt: string;
   timezone: string;
+  idempotencyKey?: string;
   error?: string;
 }
 
@@ -173,16 +180,25 @@ export interface ScheduleResult {
  * scheduled-publication worker at due_at. This is the honest scheduling
  * path: the content is NOT published immediately — it publishes exactly
  * once at the scheduled time.
+ *
+ * The idempotency key is sent via the Idempotency-Key header so the
+ * server can deduplicate and the client can resolve unknown outcomes.
  */
 export async function schedulePublication(
   documentId: string,
   params: ScheduleCreatorDocumentParams,
 ): Promise<ScheduleResult> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (params.idempotencyKey) {
+    headers['Idempotency-Key'] = params.idempotencyKey;
+  }
   return fetchJson<ScheduleResult>(
     `/creator/documents/${documentId}/schedule`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         dueAt: params.dueAt,
         timezone: params.timezone ?? 'UTC',
@@ -226,6 +242,52 @@ export async function fetchScheduleInfo(
   return fetchJson<{ ok: boolean; schedule: ScheduleInfo | null }>(
     `/creator/documents/${documentId}/schedule`,
   );
+}
+
+// ── Schedule reconciliation ────────────────────────────────────────────
+
+export interface ScheduleLookupResult {
+  ok: boolean;
+  documentId: string;
+  scheduleId: string;
+  dueAt: string;
+  timezone: string;
+  version: number;
+  state: 'pending' | 'claimed' | 'published' | 'failed' | 'cancelled';
+  attempts: number;
+  publicationId: string | null;
+  failureReason: string | null;
+  error?: string;
+  code?: string;
+}
+
+/**
+ * Resolve an unknown schedule outcome after a lost network response.
+ *
+ * The client sent a POST /schedule command but never received the
+ * response. The outcome is ambiguous — the schedule may or may not have
+ * been created. This lookup resolves it against the authoritative
+ * creator_schedules row by idempotency key.
+ *
+ * Returns the schedule if the server committed it, or null if no
+ * schedule exists for this key (the command may not have reached the
+ * server — safe to retry).
+ */
+export async function lookupScheduleByKey(
+  documentId: string,
+  idempotencyKey: string,
+): Promise<ScheduleLookupResult | null> {
+  try {
+    return await fetchJson<ScheduleLookupResult>(
+      `/creator/documents/${documentId}/schedule/${encodeURIComponent(idempotencyKey)}`,
+    );
+  } catch (error) {
+    // 404 means no schedule found — the command didn't reach the server.
+    if (error instanceof Error && error.message.includes('404')) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 // ── Collaborators (P2.12) ─────────────────────────────────────────────

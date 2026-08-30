@@ -360,7 +360,7 @@ import {
   getPersistedSellerRiskTier,
 } from './lib/sellerRiskTiering.js';
 import type { SellerRiskTier } from './lib/sellerRiskTiering.js';
-import { COOWN_POLICY } from './lib/commercePolicies.js';
+import { COOWN_POLICY, COMMERCE_POLICY_VERSION } from './lib/commercePolicies.js';
 import { compensateTerminalCommercePayment } from './lib/commerceCheckoutLifecycle.js';
 import {
   appendDomainEvent,
@@ -40935,6 +40935,114 @@ app.get('/co-own/policy', async () => ({
   policy: COOWN_POLICY,
 }));
 
+// ── Co-Own eligibility (authoritative, server-evidenced) ──
+// GET /co-own/eligibility/:assetId
+//
+// Returns a server-side eligibility decision for the authenticated user
+// against a specific Co-Own asset. This is the source of truth for the
+// frontend's disabled-state UI. It is ADVISORY for the UI only — every
+// money-mutating endpoint (order placement, buyout, reservation) re-runs
+// `evaluateMarketEligibility` transactionally inside its own DB transaction
+// and rejects on failure, so a tampered or stale client response can never
+// authorise a trade.
+//
+// The decision is short-lived (TTL below) so the frontend must re-fetch
+// before showing the trade ticket after the window expires.
+const CO_OWN_ELIGIBILITY_TTL_MS = 5 * 60_000; // 5 minutes
+
+app.get('/co-own/eligibility/:assetId', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
+  const { assetId } = paramsSchema.parse(request.params);
+  const userId = request.authUser.userId;
+
+  const evaluatedAt = new Date();
+  const expiresAt = new Date(evaluatedAt.getTime() + CO_OWN_ELIGIBILITY_TTL_MS);
+
+  // Listing-status checks are server-owned and cannot be derived from
+  // client state. A missing or closed asset is never eligible.
+  const assetResult = await db.query<{ id: string; is_open: boolean; listing_tier: string }>(
+    `SELECT id, is_open, listing_tier FROM coOwn_assets WHERE id = $1`,
+    [assetId]
+  );
+  const asset = assetResult.rows[0];
+  if (!asset) {
+    return {
+      ok: true,
+      eligible: false,
+      reasonCodes: ['ASSET_NOT_FOUND'],
+      policyVersion: COMMERCE_POLICY_VERSION,
+      evaluatedAt: evaluatedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
+  const reasonCodes: string[] = [];
+  if (!asset.is_open) {
+    reasonCodes.push('ASSET_CLOSED');
+  }
+
+  // Compliance / jurisdiction / KYC / sanctions / limits. orderNotionalGbp
+  // is 0 for the standalone eligibility probe — per-order notional limits
+  // are re-evaluated transactionally at order placement time.
+  const decision = await evaluateMarketEligibility(db, {
+    userId,
+    market: 'co-own',
+    orderNotionalGbp: 0,
+  });
+
+  if (!decision.allowed) {
+    reasonCodes.push(decision.code);
+  }
+
+  // Prior-ownership check: a user who already holds 100% of the asset
+  // cannot buy more units (the backend enforces this at order time too).
+  if (asset.is_open && decision.allowed) {
+    const holdingsResult = await db.query<{ units_owned: string; total_units: number }>(
+      `SELECT h.units_owned::text AS units_owned, a.total_units
+         FROM coOwn_holdings h
+         JOIN coOwn_assets a ON a.id = h.asset_id
+        WHERE h.asset_id = $1 AND h.user_id = $2`,
+      [assetId, userId]
+    );
+    const held = Number(holdingsResult.rows[0]?.units_owned ?? 0);
+    const total = Math.max(1, holdingsResult.rows[0]?.total_units ?? 1);
+    if (held >= total) {
+      reasonCodes.push('ALREADY_FULL_OWNER');
+    }
+  }
+
+  // Build a UI-facing message from the first applicable reason. The
+  // authoritative message at execution time comes from the transactional
+  // re-evaluation, so this is purely for the disabled-state copy.
+  let message: string | undefined;
+  if (reasonCodes.length > 0) {
+    if (reasonCodes.includes('ASSET_NOT_FOUND')) {
+      message = 'Co-Own asset not found.';
+    } else if (reasonCodes.includes('ASSET_CLOSED')) {
+      message = 'Co-Own asset is closed for trading.';
+    } else if (reasonCodes.includes('ALREADY_FULL_OWNER')) {
+      message = 'You already own 100% of this asset.';
+    } else if (!decision.allowed) {
+      message = decision.message;
+    }
+  }
+
+  return {
+    ok: true,
+    eligible: reasonCodes.length === 0,
+    reasonCodes,
+    policyVersion: COMMERCE_POLICY_VERSION,
+    evaluatedAt: evaluatedAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    message,
+  };
+});
+
 app.get('/co-own/assets', async (request) => {
   const querySchema = z.object({
     openOnly: z.union([z.string(), z.boolean()]).optional(),
@@ -46861,7 +46969,7 @@ const start = async () => {
           await processPushReceiptReconciliation();
         },
         handleScheduledPublicationSweepJob: async ({ reason }) => {
-          await sweepScheduledPublications(reason, app);
+          await sweepScheduledPublications(reason);
         },
         handleAnalyticsAggregationJob: async () => {
           await aggregateAnalyticsDaily();

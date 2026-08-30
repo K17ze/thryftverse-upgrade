@@ -1062,10 +1062,10 @@ export default function HomeScreen() {
             {newHomeFeedEnabled ? (
               <View style={styles.editorialHeader}>
                 <Text style={styles.editorialEyebrow} numberOfLines={1}>
-                  Editor’s picks
+                  Fresh today
                 </Text>
                 <Text style={styles.editorialTitle} numberOfLines={1}>
-                  Today’s drops, handpicked
+                  New listings from sellers you follow
                 </Text>
               </View>
             ) : null}

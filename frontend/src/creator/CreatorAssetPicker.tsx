@@ -510,14 +510,14 @@ function PermissionDeniedState({
   styles: ReturnType<typeof createStyles>;
 }) {
   const reduceMotion = useReducedMotion();
-  const { spring } = useMotionConfig();
   const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
 
   useEffect(() => {
     if (!reduceMotion) {
-      entranceSV.value = withDelay(100, withSpring(1, spring.entrance));
+      // Per §5.14: entrance uses timing (ease-out), not spring.
+      entranceSV.value = withDelay(100, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
     }
-  }, [reduceMotion, spring, entranceSV]);
+  }, [reduceMotion, entranceSV]);
 
   const entranceStyle = useAnimatedStyle(() => ({
     opacity: entranceSV.value,

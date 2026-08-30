@@ -836,7 +836,7 @@ export default function EditListingScreen() {
                   <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Good lighting</Text>
                 </View>
                 <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="cube-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                  <Ionicons name="camera-reverse-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                   <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Show all angles</Text>
                 </View>
                 <View style={styles.photoGuideTipRow}>

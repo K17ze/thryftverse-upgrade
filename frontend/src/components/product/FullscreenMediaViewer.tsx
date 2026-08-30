@@ -35,7 +35,8 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
-import { Video, ResizeMode } from '../compat/Video';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { Image as ExpoImage } from 'expo-image';
 import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
 
 const MAX_ZOOM = 5;
@@ -217,6 +218,7 @@ function FullscreenVideoPage({
 }) {
   // Pause when the app is backgrounded to prevent audio bleed.
   const [appIsActive, setAppIsActive] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const { colors } = useAppTheme();
   const subStyles = useMemo(() => createSubStyles(colors), [colors]);
 
@@ -228,6 +230,40 @@ function FullscreenVideoPage({
   }, []);
 
   const shouldPlay = isActive && appIsActive;
+
+  const player = useVideoPlayer(item.uri, (instance) => {
+    try {
+      instance.muted = true;
+      instance.loop = false;
+    } catch {
+      /* no-op */
+    }
+  });
+
+  // Sync play/pause with isActive and appIsActive.
+  useEffect(() => {
+    if (!player) return;
+    try {
+      if (shouldPlay && isPlaying) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    } catch {
+      /* no-op */
+    }
+  }, [shouldPlay, isPlaying, player]);
+
+  // Track playing state so the poster hides once playback starts.
+  useEffect(() => {
+    if (!player) return;
+    const sub = player.addListener?.('playingChange', ({ isPlaying: playing }: { isPlaying: boolean }) => {
+      setIsPlaying(playing);
+    });
+    return () => sub?.remove?.();
+  }, [player]);
+
+  const showPoster = !!item.posterUri && !isPlaying;
 
   // Single tap toggles chrome for video pages too.
   const singleTap = Gesture.Tap()
@@ -242,17 +278,25 @@ function FullscreenVideoPage({
         accessible
         accessibilityLabel={item.altText ?? 'Product video'}
       >
-        <Video
-          source={{ uri: item.uri }}
+        <VideoView
+          player={player}
           style={subStyles.image}
-          resizeMode={ResizeMode.CONTAIN}
-          shouldPlay={shouldPlay}
-          isMuted
-          isLooping={false}
-          useNativeControls
-          usePoster={!!item.posterUri}
-          posterSource={item.posterUri ? { uri: item.posterUri } : undefined}
+          contentFit={item.fit === 'cover' ? 'cover' : 'contain'}
+          nativeControls
         />
+
+        {/* Poster image shown until video starts playing */}
+        {showPoster && item.posterUri && (
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <ExpoImage
+              source={{ uri: item.posterUri }}
+              style={StyleSheet.absoluteFill}
+              contentFit={item.fit === 'cover' ? 'cover' : 'contain'}
+              cachePolicy="memory-disk"
+              recyclingKey={item.posterUri}
+            />
+          </View>
+        )}
       </View>
     </GestureDetector>
   );

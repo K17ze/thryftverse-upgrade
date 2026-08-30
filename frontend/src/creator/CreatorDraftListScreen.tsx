@@ -710,13 +710,18 @@ function DraftCard({
     transform: [{ scale: thumbScale.value }] }));
 
   // Refined stagger entrance — opacity only (no scale), 30ms delay per
-  // card, 200ms duration. Respects reduceMotion (opacity = 1 immediately).
+  // card, 200ms duration. Capped to the first viewport per Motion.stagger.maxItems
+  // so long lists do not animate their entire history (AGENTS §16).
+  // Respects reduceMotion (opacity = 1 immediately).
   const entranceOpacity = useSharedValue(reduceMotion ? 1 : 0);
   useEffect(() => {
     if (reduceMotion) {
       entranceOpacity.value = 1;
+    } else if (index < Motion.stagger.maxItems) {
+      entranceOpacity.value = withDelay(index * 30, withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) }));
     } else {
-      entranceOpacity.value = withDelay(index * 30, withTiming(1, { duration: 200 }));
+      // Beyond the first viewport — appear instantly, no cascade.
+      entranceOpacity.value = 1;
     }
   }, [reduceMotion, index, entranceOpacity]);
   const entranceStyle = useAnimatedStyle(() => ({
@@ -812,14 +817,14 @@ interface EmptyDraftsStateProps {
 }
 
 function EmptyDraftsState({ colors, styles, reduceMotion, onCreate }: EmptyDraftsStateProps) {
-  const { spring } = useMotionConfig();
   const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
 
   useEffect(() => {
     if (!reduceMotion) {
-      entranceSV.value = withDelay(100, withSpring(1, spring.entrance));
+      // Per §5.14: entrance uses timing (ease-out), not spring.
+      entranceSV.value = withDelay(100, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
     }
-  }, [reduceMotion, spring, entranceSV]);
+  }, [reduceMotion, entranceSV]);
 
   const entranceStyle = useAnimatedStyle(() => ({
     opacity: entranceSV.value,

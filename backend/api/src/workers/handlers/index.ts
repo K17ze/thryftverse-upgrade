@@ -75,7 +75,7 @@ export type { RetentionSweepJobData } from './retentionSweepHandler.js';
 export { aggregateAnalyticsDaily } from './analyticsAggregationHandler.js';
 export type { AnalyticsAggregationHandlerDeps } from './analyticsAggregationHandler.js';
 
-export { sweepScheduledPublications, executeScheduledPublicationViaApp } from './scheduledPublicationHandler.js';
+export { sweepScheduledPublications } from './scheduledPublicationHandler.js';
 
 export { processBackupExpiryCheck } from './backupExpiryHandler.js';
 export type { BackupExpiryJobData } from './backupExpiryHandler.js';

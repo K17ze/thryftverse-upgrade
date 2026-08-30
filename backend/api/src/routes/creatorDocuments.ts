@@ -10,6 +10,30 @@ type CreatorDocumentsRouteDependencies = {
   resolveAuthenticatedUserId: (request: FastifyRequest) => string;
 };
 
+// ── Canonical JSON serialisation ─────────────────────────────────────
+// Produces a stable string with object keys sorted recursively so the
+// SHA-256 digest is independent of property enumeration order. Both the
+// save and publish endpoints use this so the document hash is consistent
+// across the lifecycle.
+
+function canonicalizeValue(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(canonicalizeValue);
+  const sortedKeys = Object.keys(value as Record<string, unknown>).sort();
+  const result: Record<string, unknown> = {};
+  for (const key of sortedKeys) {
+    const v = (value as Record<string, unknown>)[key];
+    if (v !== undefined) {
+      result[key] = canonicalizeValue(v);
+    }
+  }
+  return result;
+}
+
+function canonicalizeJson(value: unknown): string {
+  return JSON.stringify(canonicalizeValue(value));
+}
+
 // ── Layer payload schemas (parity with frontend composition.ts) ──────
 
 // Effect node — a single adjustment/filter step in a media layer's effect stack.
@@ -301,8 +325,11 @@ const creatorDocumentBodySchema = z.object({
     sourceDocumentId: z.string().max(120).optional(),
     sourceCreatorId: z.string().max(120).optional(),
   }),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  // Server-owned timestamps — optional in the request body so the client
+  // never reconstructs authoritative metadata from new Date(). The server
+  // injects createdAt (preserved across updates) and updatedAt (this commit).
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
 });
 
 const documentIdParamsSchema = z.object({
@@ -409,8 +436,9 @@ export const registerCreatorDocumentRoutes = ({
         creator_id: string;
         status: string;
         lock_version: number;
+        created_at: Date;
       }>(
-        `SELECT creator_id, status, lock_version
+        `SELECT creator_id, status, lock_version, created_at
          FROM creator_documents
          WHERE id = $1
          LIMIT 1
@@ -424,7 +452,23 @@ export const registerCreatorDocumentRoutes = ({
         return { ok: false, error: 'Document belongs to another user' };
       }
 
+      // ── Server-owned canonical timestamps ────────────────────────
+      // The server injects createdAt/updatedAt so the client never
+      // reconstructs authoritative metadata from new Date(). createdAt
+      // is preserved across updates; updatedAt always reflects this commit.
+      const now = new Date();
+      const createdAt = existing.rowCount && existing.rows[0].created_at
+        ? new Date(existing.rows[0].created_at).toISOString()
+        : now.toISOString();
+      const canonicalDoc = { ...payload, createdAt, updatedAt: now.toISOString() };
+      const documentJson = JSON.stringify(canonicalDoc);
+      const documentHash = crypto
+        .createHash('sha256')
+        .update(canonicalizeJson(canonicalDoc))
+        .digest('hex');
+
       let serverVersion = 1;
+      let headRevision = 0;
       if (existing.rowCount) {
         if (existing.rows[0].status !== 'draft') {
           await client.query('ROLLBACK');
@@ -456,7 +500,7 @@ export const registerCreatorDocumentRoutes = ({
             serverVersion: existing.rows[0].lock_version,
           };
         }
-        const updated = await client.query<{ lock_version: number }>(
+        const updated = await client.query<{ lock_version: number; head_revision: number }>(
           `UPDATE creator_documents
            SET type = $3,
                version = $4,
@@ -464,13 +508,13 @@ export const registerCreatorDocumentRoutes = ({
                lock_version = lock_version + 1,
                updated_at = NOW()
            WHERE id = $1 AND creator_id = $2 AND status = 'draft' AND lock_version = $6
-           RETURNING lock_version`,
+           RETURNING lock_version, head_revision`,
           [
             payload.id,
             actorUserId,
             payload.type,
             payload.version,
-            JSON.stringify(payload),
+            documentJson,
             expectedVersion,
           ],
         );
@@ -484,18 +528,30 @@ export const registerCreatorDocumentRoutes = ({
           };
         }
         serverVersion = updated.rows[0].lock_version;
+        headRevision = updated.rows[0].head_revision;
       } else {
-        await client.query(
+        const inserted = await client.query<{ lock_version: number; head_revision: number }>(
           `INSERT INTO creator_documents (
              id, creator_id, type, version, document_json, lock_version, updated_at
            )
-           VALUES ($1, $2, $3, $4, $5, 1, NOW())`,
-          [payload.id, actorUserId, payload.type, payload.version, JSON.stringify(payload)],
+           VALUES ($1, $2, $3, $4, $5, 1, NOW())
+           RETURNING lock_version, head_revision`,
+          [payload.id, actorUserId, payload.type, payload.version, documentJson],
         );
+        serverVersion = inserted.rows[0].lock_version;
+        headRevision = inserted.rows[0].head_revision;
       }
 
       await client.query('COMMIT');
-      return { ok: true, documentId: payload.id, serverVersion };
+      return {
+        ok: true,
+        documentId: payload.id,
+        serverVersion,
+        documentHash,
+        headRevision,
+        etag: String(serverVersion),
+        updatedAt: now.toISOString(),
+      };
     } catch (error) {
       await client.query('ROLLBACK');
       app.log.error({ err: error }, 'Failed to save creator document');
@@ -545,9 +601,10 @@ export const registerCreatorDocumentRoutes = ({
       document_json: string;
       status: string;
       lock_version: number;
+      head_revision: number;
       updated_at: string;
     }>(
-      `SELECT id, creator_id, document_json, status, lock_version, updated_at
+      `SELECT id, creator_id, document_json, status, lock_version, head_revision, updated_at
        FROM creator_documents
        WHERE id = $1 LIMIT 1`,
       [documentId]
@@ -563,13 +620,21 @@ export const registerCreatorDocumentRoutes = ({
       return { ok: false, error: 'Access denied' };
     }
 
+    const storedDoc = JSON.parse(result.rows[0].document_json);
+    const documentHash = crypto
+      .createHash('sha256')
+      .update(canonicalizeJson(storedDoc))
+      .digest('hex');
+
     return {
       ok: true,
       document: {
-        ...JSON.parse(result.rows[0].document_json),
+        ...storedDoc,
         status: result.rows[0].status,
         serverVersion: result.rows[0].lock_version,
         serverUpdatedAt: result.rows[0].updated_at,
+        documentHash,
+        headRevision: result.rows[0].head_revision,
       },
     };
   });
@@ -674,7 +739,7 @@ export const registerCreatorDocumentRoutes = ({
       }
 
       const documentJson = JSON.stringify(doc);
-      const documentHash = crypto.createHash('sha256').update(documentJson).digest('hex');
+      const documentHash = crypto.createHash('sha256').update(canonicalizeJson(doc)).digest('hex');
       const publishKey = body.idempotencyKey ?? headerKey ?? `content:${documentHash}`;
 
       const existingRevision = await client.query<{

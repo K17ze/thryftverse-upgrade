@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Control, FontFamily, FontSize } from '../../theme/designTokens';
+import { Space, Control, FontFamily, PressScale } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PremiumToggle } from '../PremiumToggle';
@@ -51,6 +51,7 @@ export function SettingsRow({
   accessibilityHint,
   titleStyle }: SettingsRowProps) {
   const { colors } = useAppTheme();
+  const [isPressed, setIsPressed] = useState(false);
   const hasAction = !!onPress || !!onToggle;
   const showChevron = !!onPress && !onToggle && toggleValue === undefined;
   const isToggle = onToggle !== undefined;
@@ -78,23 +79,32 @@ export function SettingsRow({
     <AnimatedPressable
       onPress={onPress}
       activeOpacity={0.7}
-      scaleValue={0.995}
+      scaleValue={PressScale.tap}
       hapticFeedback="light"
       disabled={!hasAction || toggleDisabled}
+      onPressIn={() => setIsPressed(true)}
+      onPressOut={() => setIsPressed(false)}
       accessibilityRole={isToggle ? 'switch' : 'button'}
       accessibilityLabel={isToggle ? toggleA11yLabel : resolvedLabel}
       accessibilityHint={resolvedHint}
       accessibilityState={isToggle ? { checked: !!toggleValue } : undefined}
     >
-      <View style={[styles.root, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+      <View
+        style={[
+          styles.root,
+          !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+          isPressed && !toggleDisabled && { backgroundColor: colors.rowPressed },
+          toggleDisabled && { opacity: 0.4 },
+        ]}
+      >
         {icon ? (
-          // 44pt transparent hit target wrapping a 24pt glyph so the icon
-          // meets the AGENTS.md §13 touch-target minimum without visible chrome.
+          // Compact decorative slot for the leading glyph. The parent row owns the touch target.
           <View style={styles.iconTarget}>
             <Ionicons
               name={icon}
               size={24}
               color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
+              aria-hidden={true}
             />
           </View>
         ) : null}
@@ -103,7 +113,7 @@ export function SettingsRow({
           <Text
             style={[
               styles.title,
-              { color: disabled ? colors.textMuted : danger ? colors.danger : colors.textPrimary },
+              { color: danger ? colors.danger : colors.textPrimary },
               titleStyle,
             ]}
             numberOfLines={1}
@@ -111,7 +121,7 @@ export function SettingsRow({
             {title}
           </Text>
           {subtitle ? (
-            <Text style={[styles.subtitle, { color: colors.textMuted }]} numberOfLines={2}>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={2}>
               {subtitle}
             </Text>
           ) : null}
@@ -119,7 +129,7 @@ export function SettingsRow({
 
         <View style={styles.right}>
           {value ? (
-            <Text style={[styles.value, { color: colors.textMuted }]} numberOfLines={1}>
+            <Text style={[styles.value, { color: colors.textSecondary }]} numberOfLines={1}>
               {value}
             </Text>
           ) : null}
@@ -136,7 +146,7 @@ export function SettingsRow({
               />
             </>
           ) : showChevron ? (
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} aria-hidden={true} />
           ) : null}
           {children}
         </View>
@@ -153,30 +163,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     minHeight: 56,
     gap: Space.sm },
-  // 44pt transparent hit target — no visible chrome, just the touch area.
+  // Compact decorative slot for the leading glyph — optical centering only.
   iconTarget: {
-    width: Control.hit,
-    height: Control.hit,
+    width: 28,
+    height: 28,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -Space.xs },
+    justifyContent: 'center' },
   textWrap: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
     gap: Space.xs / 4 },
-  // Label: 16sp regular weight per 2026 mobile UX spec.
+  // Label: 15sp semibold per TypographyV2.bodyStrong (2026 mobile UX spec).
   title: {
-    fontSize: FontSize.bodyLarge,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.body.letterSpacing,
-    lineHeight: 22 },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   subtitle: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.captionElevated.size,
+    fontFamily: FontFamily.medium,
     marginTop: 0,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    lineHeight: TypographyV2.meta.lineHeight },
+    letterSpacing: TypographyV2.captionElevated.letterSpacing,
+    lineHeight: TypographyV2.captionElevated.lineHeight },
   right: {
     flexDirection: 'row',
     alignItems: 'center',

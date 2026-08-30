@@ -81,6 +81,16 @@ export interface ThemeColors {
   scrimDeltaPositive: string;
   /** Negative price delta over media scrims — light red visible on dark scrim in both themes. */
   scrimDeltaNegative: string;
+  /** Media overlay — semantic tokens for text/shadows on top of images.
+   *  These express intent (media overlay) not mechanism (scrim). Always
+   *  white-on-dark-scrim in both themes — identical values in light/dark. */
+  mediaOverlayText: string;
+  /** Secondary text on images in media overlays. */
+  mediaOverlayTextMuted: string;
+  /** Dark scrim for legibility behind media-overlay text. */
+  mediaOverlayScrim: string;
+  /** Text shadow for legibility on images in media overlays. */
+  mediaOverlayShadow: string;
   overlay: string;
   input: string;
   inputText: string;

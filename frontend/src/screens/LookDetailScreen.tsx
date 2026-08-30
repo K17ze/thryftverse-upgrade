@@ -25,6 +25,7 @@ import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Control, LetterSpacing, AspectRatio } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import type { SupportedCurrencyCode } from '../constants/currencies';
@@ -78,6 +79,7 @@ export default function LookDetailScreen() {
   const route = useRoute<RouteT>();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const { show } = useToast();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
@@ -91,7 +93,7 @@ export default function LookDetailScreen() {
   const [look, setLook] = useState<LookApiItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<{
-    kind: 'not-found' | 'connection';
+    kind: 'not-found' | 'connection' | 'offline' | 'missing';
     message: string;
   } | null>(null);
   const [commentsVisible, setCommentsVisible] = useState(false);
@@ -148,10 +150,14 @@ export default function LookDetailScreen() {
           message: res.error ?? 'This look may have been removed or is unavailable.' });
       }
     } catch (error) {
-      if (error instanceof ApiRequestError && error.status === 404) {
+      if (error instanceof ApiRequestError && (error.status === 404 || error.status === 410)) {
         setLoadError({
-          kind: 'not-found',
-          message: 'This look may have been removed or is unavailable.' });
+          kind: 'missing',
+          message: 'This content is no longer available.' });
+      } else if (isOffline) {
+        setLoadError({
+          kind: 'offline',
+          message: "You're offline. Check your connection and try again." });
       } else {
         setLoadError({
           kind: 'connection',
@@ -832,7 +838,7 @@ export default function LookDetailScreen() {
     }
     return (
       <View style={styles.exploreEmpty}>
-        <Ionicons name="sparkles-outline" size={32} color={colors.textMuted} aria-hidden={true} />
+        <Ionicons name="compass-outline" size={32} color={colors.textMuted} aria-hidden={true} />
         <Text style={styles.exploreEmptyTitle}>No more looks to explore</Text>
         <Text style={styles.exploreEmptySub}>Fresh looks drop daily — check back soon.</Text>
       </View>
@@ -858,7 +864,18 @@ export default function LookDetailScreen() {
   }
 
   if (!look || loadError) {
-    const canRetry = loadError?.kind === 'connection';
+    const canRetry = loadError?.kind === 'connection' || loadError?.kind === 'offline';
+    const isMissing = loadError?.kind === 'missing' || loadError?.kind === 'not-found';
+    const errorIcon = loadError?.kind === 'offline'
+      ? 'cloud-offline-outline' as const
+      : isMissing
+        ? 'trash-outline' as const
+        : 'cloud-offline-outline' as const;
+    const errorTitle = loadError?.kind === 'offline'
+      ? "You're offline"
+      : isMissing
+        ? 'This content is no longer available'
+        : "Couldn't load this look";
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
@@ -867,8 +884,8 @@ export default function LookDetailScreen() {
           </AnimatedPressable>
         </View>
         <EmptyState
-          icon={canRetry ? 'cloud-offline-outline' : 'images-outline'}
-          title={canRetry ? "Couldn't load this look" : 'Look not found'}
+          icon={errorIcon}
+          title={errorTitle}
           subtitle={loadError?.message ?? 'This look may have been removed or is unavailable.'}
           ctaLabel={canRetry ? 'Try again' : 'Back to Explore'}
           onCtaPress={canRetry ? loadLook : () => navigation.goBack()}

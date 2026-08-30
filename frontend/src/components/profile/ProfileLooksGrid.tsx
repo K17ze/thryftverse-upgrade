@@ -40,7 +40,7 @@ export function ProfileLooksGrid({
   navigation }: ProfileLooksGridProps) {
   const { colors } = useAppTheme();
   const { width: SCREEN_W } = useWindowDimensions();
-  const tileWidth = (SCREEN_W - Space.md * 2 - GRID_GAP) / 2;
+  const tileWidth = (SCREEN_W - Space.md * 2 - GRID_GAP * 2) / 3;
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (isLoading && looks.length === 0) {
     return (
@@ -150,7 +150,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm + Space.xs },
   tileImageWrap: {
     width: '100%',
-    aspectRatio: 0.8,
+    aspectRatio: 4 / 3,
     borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt },

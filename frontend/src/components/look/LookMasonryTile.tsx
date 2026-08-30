@@ -119,7 +119,12 @@ function LookMasonryTileImpl({
         />
         {hasItems && (
           <View style={styles.pricetagBadge}>
-            <Ionicons name="pricetag" size={14} color={colors.scrimTextPrimary} />
+            <Ionicons
+              name="pricetag"
+              size={14}
+              color={colors.mediaOverlayText}
+              style={{ textShadowColor: colors.mediaOverlayScrim, textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } }}
+            />
           </View>
         )}
         {(caption || creator) && (
@@ -161,7 +166,7 @@ const createStyles = (colors: ThemeColors, variant: 'default' | 'explore') => {
       right: Space.sm,
       bottom: Space.sm },
     caption: {
-      color: colors.scrimTextPrimary,
+      color: colors.mediaOverlayText,
       fontFamily: Typography.family.semibold,
       fontSize: TypographyV2.body.size,
       lineHeight: TypographyV2.body.lineHeight },
@@ -175,24 +180,25 @@ const createStyles = (colors: ThemeColors, variant: 'default' | 'explore') => {
     // ── Explore variant styles ──
     // Media badge: bare glyph, top-right. No chip/pill background —
     // Instagram uses bare glyphs with drop-shadow for legibility.
-    // textShadow provides the scrim over varying imagery.
+    // textShadow uses colors.mediaOverlayScrim (dark scrim token) for legibility over
+    // varying imagery in both themes.
     mediaBadge: {
       position: 'absolute',
       top: Space.xs,
       right: Space.xs,
-      textShadowColor: 'rgba(0,0,0,0.6)',
+      textShadowColor: colors.mediaOverlayScrim,
       textShadowOffset: { width: 0, height: 0 },
       textShadowRadius: 3 },
     mediaBadgeIcon: {
-      color: 'rgba(255,255,255,0.95)' },
+      color: colors.mediaOverlayText },
     // Pricetag badge for explore: bare glyph, bottom-right.
     pricetagBadgeExplore: {
       position: 'absolute',
       bottom: Space.xs,
       right: Space.xs,
-      textShadowColor: 'rgba(0,0,0,0.6)',
+      textShadowColor: colors.mediaOverlayScrim,
       textShadowOffset: { width: 0, height: 0 },
       textShadowRadius: 3 },
     pricetagBadgeIcon: {
-      color: 'rgba(255,255,255,0.95)' } });
+      color: colors.mediaOverlayText } });
 };

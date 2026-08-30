@@ -697,7 +697,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
                   <View style={styles.riskGroupHeader}>
                     <View style={styles.riskGroupTitleRow}>
                       <Ionicons
-                        name={RISK_DOT[group.risk] as any}
+                        name={RISK_DOT[group.risk] as keyof typeof Ionicons.glyphMap}
                         size={16}
                         color={group.risk === 'critical' ? colors.danger : colors.textSecondary}
                       />

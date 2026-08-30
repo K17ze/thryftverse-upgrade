@@ -480,6 +480,12 @@ interface StoreState {
   coOwnRuntime: Record<string, CoOwnRuntimeState>;
   coOwnCompliance: CoOwnComplianceProfile;
   updateCoOwnCompliance: (updates: Partial<CoOwnComplianceProfile>) => void;
+  // @deprecated Advisory-only — do NOT use this to authorise a financial action.
+  // Co-Own eligibility is server-authoritative. Use `fetchCoOwnEligibility`
+  // (services/marketApi) for the UI disabled state, and rely on the backend's
+  // transactional re-evaluation for any money mutation. This client-side check
+  // reads tamperable Zustand flags and is retained only for legacy local
+  // simulation flows that do not touch real funds.
   checkCoOwnEligibility: (settlementMode?: 'ONEZE') => CoOwnEligibilityResult;
   buyCoOwnUnits: (asset: CoOwnAsset, buyerId: string, units: number) => TradeActionResult;
   sellCoOwnUnits: (asset: CoOwnAsset, sellerId: string, units: number) => TradeActionResult;
@@ -1100,6 +1106,9 @@ export const useStore = create<StoreState>()(
         ...updates,
       },
     })),
+  // @deprecated Advisory-only — see interface docstring. Do not use to
+  // authorise a financial action. The backend re-evaluates eligibility
+  // transactionally before any money mutation.
   checkCoOwnEligibility: (_settlementMode = 'ONEZE') => {
     const c = get().coOwnCompliance;
     if (!c.kycVerified) {
@@ -1214,6 +1223,10 @@ export const useStore = create<StoreState>()(
       return { ok: false, message: 'Pool currently closed' };
     }
 
+    // Advisory-only local gate — mirrors the deprecated client flags. The
+    // authoritative eligibility check runs on the backend transactionally
+    // before any money mutation. Kept so the local simulation surfaces a
+    // reason to the user before they hit the server.
     const eligibility = get().checkCoOwnEligibility(asset.settlementMode);
     if (!eligibility.ok) {
       return { ok: false, message: eligibility.message };

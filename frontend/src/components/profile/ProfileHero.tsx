@@ -55,7 +55,7 @@ interface ProfileHeroProps {
   onEditProfile?: () => void;
   onShare: () => void;
   onOpenConnections: (segment: 'followers' | 'following') => void;
-  onTabSelect: (tab: 'Shop' | 'Reviews') => void;
+  onTabSelect: (tab: 'Listings' | 'Reviews') => void;
   onShopSegmentSelect: (segment: 'forsale' | 'sold') => void;
 }
 
@@ -230,7 +230,7 @@ export function ProfileHero({
             <View style={styles.seamStats}>
               <Pressable
                 style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.55 }]}
-                onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('forsale'); }}
+                onPress={() => { onTabSelect('Listings'); onShopSegmentSelect('forsale'); }}
                 accessibilityRole="button"
                 accessibilityLabel={`${formatFullCount(activeCount)} for sale — view shop`}
               >
@@ -328,7 +328,7 @@ export function ProfileHero({
                 {soldCount > 0 ? <Text style={styles.trustDot}> · </Text> : null}
                 {soldCount > 0 ? (
                   <Pressable
-                    onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('sold'); }}
+                    onPress={() => { onTabSelect('Listings'); onShopSegmentSelect('sold'); }}
                     accessibilityRole="button"
                     accessibilityLabel={`${soldCount} sold — view sold items`}
                     style={({ pressed }) => pressed && { opacity: 0.6 }}
@@ -537,8 +537,9 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.xs },
   displayName: {
-    fontSize: TypographyV2.priceList.size,
-    fontFamily: TypographyV2.priceList.fontFamily,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
     color: colors.textPrimary,
     letterSpacing: -0.4,
     marginBottom: 2,

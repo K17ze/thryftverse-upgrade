@@ -43,7 +43,7 @@ export interface CreatorPreviewOverlayProps {
  * user sees here is what gets published.
  *
  * For Poster (multi-page), the user can swipe horizontally to navigate
- * between pages with spring transitions. Pinch to zoom into the preview,
+ * between pages with timing transitions. Pinch to zoom into the preview,
  * double-tap to reset zoom. Page position is communicated by a minimal
  * "1 / 3" indicator in the top bar — no dots, no chevrons; swipe is the
  * native navigation gesture, matching Instagram Stories.
@@ -167,26 +167,28 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
       const next = i < pageCount - 1 ? i + 1 : 0;
       if (!reduceMotion) {
         pageOpacity.value = 0;
-        pageTranslateX.value = withSpring(0, spring.entrance);
+        // Per §5.14: viewer entrance uses timing, not spring.
+        pageTranslateX.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) });
         pageOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
       }
       haptic.light();
       return next;
     });
-  }, [pageCount, haptic, reduceMotion, spring.entrance, pageOpacity, pageTranslateX]);
+  }, [pageCount, haptic, reduceMotion, pageOpacity, pageTranslateX]);
 
   const goPrevPage = useCallback(() => {
     setPageIndex((i) => {
       const prev = i > 0 ? i - 1 : pageCount - 1;
       if (!reduceMotion) {
         pageOpacity.value = 0;
-        pageTranslateX.value = withSpring(0, spring.entrance);
+        // Per §5.14: viewer entrance uses timing, not spring.
+        pageTranslateX.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) });
         pageOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
       }
       haptic.light();
       return prev;
     });
-  }, [pageCount, haptic, reduceMotion, spring.entrance, pageOpacity, pageTranslateX]);
+  }, [pageCount, haptic, reduceMotion, pageOpacity, pageTranslateX]);
 
   // ── Horizontal swipe gesture for page navigation ──
   const swipeGesture = React.useRef(
@@ -225,12 +227,14 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
   ).current;
 
   // ── Double-tap to reset zoom ──
+  // Per §5.14: double-tap is a tap gesture, not direct manipulation (pinch).
+  // Use timing transition instead of spring.
   const doubleTapGesture = React.useRef(
     Gesture.Tap()
       .numberOfTaps(2)
       .onEnd(() => {
         if (zoomScale.value > 1.1) {
-          zoomScale.value = withSpring(1, spring.entrance);
+          zoomScale.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
           runOnJS(haptic.medium)();
         }
       })

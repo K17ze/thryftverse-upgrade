@@ -8,6 +8,7 @@ import {
   Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography, Radius, Space, EditorMaterial, Stroke} from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -51,7 +52,8 @@ function formatRelativeTime(iso: string): string {
 //
 // From the camera the user can:
 //   - capture (photo / video) → enters the editor directly
-//   - open the gallery (MediaBrowserSheet) → selects media → editor
+//   - open the gallery → system picker (zero-permission) → select → editor
+//     (long-press the gallery button for the full library browser)
 //   - switch capture mode (Look / Poster / Search) via the in-camera mode
 //     switch — no route transition, just a reframing
 //   - open Drafts (small affordance in the camera top bar)
@@ -226,6 +228,40 @@ export function CreatorEntryScreen({
     onMediaSelected(media);
   }, [mode, onMediaSelected, onVisualSearchCapture, haptic]);
 
+  // ── System picker (zero-permission path) ──
+  // The system image picker (iOS PHPicker / Android Photo Picker) runs
+  // out-of-process and grants access only to the selected items — no broad
+  // Photo Library permission is requested. This is the DEFAULT gallery path:
+  // tap the gallery button → system picker → select → editor. Zero
+  // intermediate decisions (Hick's Law: one choice, not a fork).
+  // The custom MediaBrowserSheet (broad library access) is reachable via
+  // long-press on the gallery button — progressive disclosure for power users.
+  const handleSystemPicker = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsMultipleSelection: mode !== 'visual-search',
+        allowsEditing: false,
+        quality: 1,
+        selectionLimit: mode === 'visual-search' ? 1 : isPoster ? 10 : 6,
+      });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      const assets: SelectedAsset[] = result.assets.map((a) => ({
+        uri: a.uri,
+        mediaType: a.type === 'video' ? 'video' : 'image',
+        width: a.width || undefined,
+        height: a.height || undefined,
+        durationMs: a.duration != null ? a.duration : undefined,
+        filename: a.fileName ?? undefined,
+      }));
+      handlePhotosConfirm(assets);
+    } catch {
+      // System picker failures are rare (e.g. transient OS state). No
+      // permission prompt was shown, so there's nothing to recover from —
+      // the user can retry from the gallery button.
+    }
+  }, [mode, isPoster, handlePhotosConfirm]);
+
   // ── Drafts: open a draft in the composer ──
   const handleOpenDraft = useCallback((draftId: string) => {
     setShowDrafts(false);
@@ -245,7 +281,8 @@ export function CreatorEntryScreen({
         onCapture={handleCapture}
         onCaptureBatch={handleCaptureBatch}
         onViewportChange={onViewportChange}
-        onGallery={() => { haptic.selection(); setShowPhotos(true); }}
+        onGallery={() => { haptic.selection(); void handleSystemPicker(); }}
+        onGalleryLongPress={() => { haptic.selection(); setShowPhotos(true); }}
         onClose={onClose}
         renderBottomOverlay={() => (
           <View
@@ -297,8 +334,10 @@ export function CreatorEntryScreen({
       )}
 
       {/* ── Photos: MediaBrowserSheet (gallery) ──
-          Accessible from the camera's gallery button. Confirms selection
-          → onMediaSelected directly (no intermediate action page). */}
+          Accessible from the camera's gallery button via long-press (the
+          power-user path for broad library access). The ordinary tap
+          launches the zero-permission system picker directly. Confirms
+          selection → onMediaSelected directly (no intermediate action page). */}
       <MediaBrowserSheet
         visible={showPhotos}
         onClose={() => setShowPhotos(false)}

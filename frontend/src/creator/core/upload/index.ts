@@ -24,4 +24,4 @@ export type {
 } from './UploadTypes';
 export { DEFAULT_PART_SIZE, MULTIPART_THRESHOLD_BYTES } from './UploadTypes';
 export type { QueueParams, UseUploadManagerResult } from './useUploadManager';
-export type { MultipartUploaderOptions } from './MultipartUploader';
+export type { MultipartUploaderOptions, MultipartCompleteResult } from './MultipartUploader';

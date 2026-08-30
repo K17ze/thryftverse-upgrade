@@ -62,6 +62,7 @@ import {
   viewPointToViewportNormalized,
   type CaptureViewport } from './capture/CaptureViewport';
 import { isCapabilitySupported } from './capabilities/registry';
+import { POSTER_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_ASPECT_RATIO } from './composition';
 
 // ── CreatorCamera ────────────────────────────────────────────────────
 // Camera component with:
@@ -162,6 +163,11 @@ export interface CreatorCameraProps {
   onCaptureBatch?: (captures: CreatorInitialMedia[]) => void;
   /** Called when the user taps the gallery thumbnail */
   onGallery: () => void;
+  /** Optional: called when the user long-presses the gallery thumbnail.
+   *  When provided, replaces the default recent-photos carousel behavior
+   *  so the parent can route the long-press to a custom browser (progressive
+   *  disclosure: tap = ordinary path, long-press = power-user path). */
+  onGalleryLongPress?: () => void;
   /** Called when the user taps close */
   onClose: () => void;
   /** Optional render prop for the bottom overlay (e.g. mode switcher) */
@@ -181,6 +187,7 @@ export default function CreatorCamera({
   onCapture,
   onCaptureBatch,
   onGallery,
+  onGalleryLongPress,
   onClose,
   renderBottomOverlay,
   renderTopRightAccessory,
@@ -316,7 +323,7 @@ export default function CreatorCamera({
   // frame within the available area so brackets describe the actual
   // capture crop.
   const showFramingGuides = isVisualSearch || framingMode;
-  const authoredAspectRatio = isPoster ? 3 / 4 : isVisualSearch ? undefined : 9 / 16;
+  const authoredAspectRatio = isPoster ? POSTER_DEFAULT_ASPECT_RATIO : isVisualSearch ? undefined : LOOK_DEFAULT_ASPECT_RATIO;
   const { viewport, onViewportLayout } = useCaptureViewport({
     authoredAspectRatio,
     showFramingGuides });
@@ -356,14 +363,15 @@ export default function CreatorCamera({
     opacity: countdownOpacity.value,
     transform: [{ scale: countdownScale.value }] }));
 
-  // ── Permission entrance: spring slide-up + fade when denied ──
+  // ── Permission entrance: timing slide-up + fade when denied ──
+  // Per §5.14: entrance uses timing (ease-out), not spring.
   useEffect(() => {
     if (!hasPermission) {
       permissionEntrance.value = 0;
       if (!reducedMotion) {
         permissionEntrance.value = withDelay(
           100,
-          withSpring(1, spring.entrance),
+          withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }),
         );
       } else {
         permissionEntrance.value = 1;
@@ -717,7 +725,8 @@ export default function CreatorCamera({
       zoomIndicatorOpacity.value = withSpring(1, spring.tap);
       zoomIndicatorScale.value = withSpring(1, spring.lift);
       zoomIndicatorOpacity.value = withDelay(1200, withTiming(0, { duration: Motion.duration.normal }));
-      zoomIndicatorScale.value = withDelay(1200, withSpring(0.8, spring.entrance));
+      // Per §5.14: auto-dismiss exit uses timing, not spring.
+      zoomIndicatorScale.value = withDelay(1200, withTiming(0.8, { duration: Motion.duration.normal, easing: Easing.in(Easing.cubic) }));
     }
   }, [reducedMotion, zoomIndicatorOpacity, zoomIndicatorScale, spring]);
 
@@ -1115,11 +1124,20 @@ export default function CreatorCamera({
   const handleOpenSettings = useCallback(() => Linking.openSettings(), []);
 
   const handleGalleryLongPress = useCallback(() => {
+    // When the parent provides a custom long-press handler (e.g. to open
+    // the full library browser), it takes precedence over the default
+    // recent-photos carousel. This follows progressive disclosure: the
+    // ordinary tap is the fast path, the long-press is the power-user path.
+    if (onGalleryLongPress) {
+      haptic.selection();
+      onGalleryLongPress();
+      return;
+    }
     if (recentImages.length > 1) {
       haptic.selection();
       setShowRecentCarousel((p) => !p);
     }
-  }, [haptic, recentImages.length]);
+  }, [haptic, recentImages.length, onGalleryLongPress]);
 
   // ── Permission: permanently denied ──
   if (!hasPermission && !canRequestPermission) {

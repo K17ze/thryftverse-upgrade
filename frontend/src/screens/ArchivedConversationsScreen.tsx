@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
@@ -104,6 +104,40 @@ export default function ArchivedConversationsScreen() {
       } });
   };
 
+  const renderItem = useCallback(
+    ({ item: convo, index }: { item: Conversation; index: number }) => {
+      return (
+        <ConversationManagementRow
+          conversation={convo}
+          currentUserId={currentUser?.id}
+          onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
+          actionIcon="arrow-undo-outline"
+          actionLabel="Restore"
+          onAction={() => handleRestore(convo.id)}
+          secondaryActionIcon="trash-outline"
+          secondaryActionLabel="Delete"
+          onSecondaryAction={() =>
+            handleDelete(
+              convo.id,
+              convo.type === 'group'
+                ? convo.title || 'Group conversation'
+                : convo.participantProfiles?.find(
+                    (profile) => profile.id !== currentUser?.id && profile.id !== 'me'
+                  )?.displayName ||
+                  convo.participantProfiles?.find(
+                    (profile) => profile.id !== currentUser?.id && profile.id !== 'me'
+                  )?.username ||
+                  'Conversation'
+            )
+          }
+          secondaryDestructive
+          isLast={index === archivedConversations.length - 1}
+        />
+      );
+    },
+    [navigation, currentUser, handleRestore, handleDelete, archivedConversations]
+  );
+
   return (
     <FlagshipScreen
       header={
@@ -143,36 +177,7 @@ export default function ArchivedConversationsScreen() {
         <FlashList
           data={archivedConversations}
           keyExtractor={(item) => item.id}
-          renderItem={({ item: convo, index }) => {
-            return (
-              <ConversationManagementRow
-                conversation={convo}
-                currentUserId={currentUser?.id}
-                onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
-                actionIcon="arrow-undo-outline"
-                actionLabel="Restore"
-                onAction={() => handleRestore(convo.id)}
-                secondaryActionIcon="trash-outline"
-                secondaryActionLabel="Delete"
-                onSecondaryAction={() =>
-                  handleDelete(
-                    convo.id,
-                    convo.type === 'group'
-                      ? convo.title || 'Group conversation'
-                      : convo.participantProfiles?.find(
-                          (profile) => profile.id !== currentUser?.id && profile.id !== 'me'
-                        )?.displayName ||
-                        convo.participantProfiles?.find(
-                          (profile) => profile.id !== currentUser?.id && profile.id !== 'me'
-                        )?.username ||
-                        'Conversation'
-                  )
-                }
-                secondaryDestructive
-                isLast={index === archivedConversations.length - 1}
-              />
-            );
-          }}
+          renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />

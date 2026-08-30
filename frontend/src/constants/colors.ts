@@ -92,6 +92,14 @@ export const DARK_COLORS = {
   scrimDeltaPositive: '#158d41',
   scrimDeltaNegative: '#a22e2e',
 
+  // Media overlay — semantic tokens for text/shadows on top of images.
+  // These express intent (media overlay) not mechanism (scrim). Always
+  // white-on-dark-scrim in both themes — identical values in light/dark.
+  mediaOverlayText: '#FFFFFF',
+  mediaOverlayTextMuted: 'rgba(255,255,255,0.7)',
+  mediaOverlayScrim: 'rgba(0,0,0,0.6)',
+  mediaOverlayShadow: 'rgba(0,0,0,0.6)',
+
   // Structural / utility colors (mirrors ThemeContext)
   overlay: 'rgba(0,0,0,0.6)',
   input: '#1A1A1A',
@@ -190,6 +198,14 @@ export const LIGHT_COLORS = {
   // Price deltas over media scrims — light enough to read on dark scrim in both themes
   scrimDeltaPositive: '#3a9d5e',
   scrimDeltaNegative: '#852a2a',
+
+  // Media overlay — semantic tokens for text/shadows on top of images.
+  // These express intent (media overlay) not mechanism (scrim). Always
+  // white-on-dark-scrim in both themes — identical values in light/dark.
+  mediaOverlayText: '#FFFFFF',
+  mediaOverlayTextMuted: 'rgba(255,255,255,0.7)',
+  mediaOverlayScrim: 'rgba(0,0,0,0.6)',
+  mediaOverlayShadow: 'rgba(0,0,0,0.6)',
 
   // Structural / utility colors (mirrors ThemeContext)
   overlay: 'rgba(0,0,0,0.4)',

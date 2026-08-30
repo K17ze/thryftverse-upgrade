@@ -10,6 +10,7 @@ import {
   LayoutAnimation,
   Platform,
   AppState,
+  ActivityIndicator,
   type AppStateStatus } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -32,13 +33,23 @@ import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import { createLookOnApi, fetchLookByIdFromApi, updateLookOnApi } from '../services/looksApi';
 import { createPosterStory, fetchPosterStoryById, scheduleCreatorDocument } from '../services/postersApi';
-import { publishCreatorDocument, lookupPublicationByKey, schedulePublication } from '../services/creatorPublicationsApi';
+import { publishCreatorDocument, lookupPublicationByKey, schedulePublication, lookupScheduleByKey } from '../services/creatorPublicationsApi';
 import type { PublishCommand, ExpectedMediaEntry } from '../services/creatorPublicationsApi';
+import { createCreatorDocument, updateCreatorDocument, fetchCreatorDocument, computeDocumentHash, CreatorDocumentConflictError } from '../services/creatorDocumentsApi';
+import type { CreatorDocumentSaveResult } from '../services/creatorDocumentsApi';
+import { ApiRequestError } from '../lib/apiClient';
+import {
+  savePublicationAttempt,
+  updatePublicationAttemptState,
+  getPendingAttemptForDocument,
+  reconcilePublicationAttempts,
+} from './publicationAttemptStore';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { uploadAllLocalMedia, hasLocalUris } from './mediaUploadPipeline';
 import { useUploadManager, detectMimeType } from './core/upload';
 import type { UploadJob, UploadJobStatus } from './core/upload';
 import type { CreatorDocument, CreatorLayer } from './composition';
+import { walkMediaReferences, isLocalUri as isLocalUriWalker } from './mediaReferenceWalker';
 import {
   validateDocumentStructure,
   validateForPublish,
@@ -48,6 +59,58 @@ import {
 import { queryClient, queryKeys } from '../platform/server';
 import { CreatorDraftService } from './drafts';
 import { useStore } from '../store/useStore';
+
+// ── Shared publish-command builder ──────────────────────────────────
+// A single pure function that constructs the PublishCommand from a
+// composition document and its server-side metadata. Used by every
+// publish path — publish now, initial schedule, schedule retry, and
+// resumed background publish — so no branch can rebuild media evidence
+// differently and diverge from the server walker's expectations.
+//
+// The expectedMedia list is derived from `walkMediaReferences`, which
+// mirrors the server's `extractMediaReferences` walker exactly. Roles
+// ('primary', 'thumbnail', 'product-snapshot', 'look-snapshot') match
+// the server's role strings — never 'frame:${page.id}' or other
+// ad-hoc values.
+function buildPublishCommand(
+  doc: CreatorDocument,
+  serverMeta: CreatorDocumentSaveResult,
+): PublishCommand {
+  const { payload: lookPayload } = doc.type === 'look'
+    ? serialiseToLookPayload(doc)
+    : { payload: null as null };
+  const { payload: posterPayload } = doc.type === 'poster'
+    ? serialiseToPosterPayload(doc)
+    : { payload: null as null };
+
+  const allRefs = walkMediaReferences(doc);
+  const expectedMedia: ExpectedMediaEntry[] = allRefs
+    .filter((ref) => ref.finalizationId && !isLocalUriWalker(ref.uri))
+    .map((ref) => ({
+      layerId: ref.layerId,
+      finalizationId: ref.finalizationId!,
+      assetId: ref.mediaAssetId,
+      mediaType: ref.mediaType,
+      suppliedUrl: ref.uri,
+      role: ref.role,
+    }));
+
+  return {
+    revision: serverMeta.headRevision + 1,
+    destination: doc.type === 'look' ? 'look' : 'poster',
+    // Close Friends is not a supported audience — fail closed to private.
+    audience: doc.metadata.visibility === 'closeFriends'
+      ? 'private'
+      : (doc.metadata.visibility as 'public' | 'private'),
+    expiresInHours: doc.metadata.expiresInHours ?? 24,
+    expectedMedia,
+    compositionDocument: doc.type === 'look'
+      ? lookPayload?.compositionDocument
+      : posterPayload?.compositionDocument,
+    expectedLockVersion: serverMeta.lockVersion,
+    expectedDocumentHash: serverMeta.documentHash,
+  };
+}
 
 // ── Feature flag ───────────────────────────────────────────────────
 // When true, uploads flow through the durable UploadManager (resumable,
@@ -255,17 +318,33 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   // queues local media through this manager instead of the legacy
   // foreground pipeline.
   const uploadManager = useUploadManager(document.id);
-  const [stage, setStage] = useState<'review' | 'uploading' | 'publishing' | 'success' | 'error' | 'unknown' | 'scheduleFailed'>('review');
+  const [stage, setStage] = useState<'review' | 'saving' | 'uploading' | 'processing' | 'publishing' | 'scheduled' | 'success' | 'error' | 'unknown' | 'scheduleFailed' | 'scheduleUnknown' | 'conflict'>('review');
   const [errorMessage, setErrorMessage] = useState('');
   const [isCheckingResult, setIsCheckingResult] = useState(false);
   const [publishedId, setPublishedId] = useState('');
   const [scheduleError, setScheduleError] = useState('');
   // Persisted publication attempt ID — generated once per publish attempt,
   // used as the idempotency key and for unknown-outcome recovery. A new
-  // attempt (retry, re-publish after edit) generates a new ID.
-  const publicationAttemptIdRef = useRef<string>('');
+  // attempt (retry, re-publish after edit) generates a new ID. Persisted
+  // to AsyncStorage via publicationAttemptStore so it survives unmount /
+  // process death.
+  const [publicationAttemptId, setPublicationAttemptId] = useState<string>('');
+  // Persisted schedule attempt ID — separate from the publish attempt so
+  // schedule unknown-outcome reconciliation hits the schedule endpoint,
+  // not the publication endpoint.
+  const [scheduleAttemptId, setScheduleAttemptId] = useState<string>('');
+  // Server-side document metadata from the last successful save. Used to
+  // populate expectedLockVersion, expectedDocumentHash, and revision on
+  // the publish command. Null until the document has been saved to the
+  // server at least once in this session.
+  const serverDocMetaRef = useRef<CreatorDocumentSaveResult | null>(null);
   const publishGuardRef = useRef(new PublishGuard());
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Detect video layers in the composition so the processing stage can
+  // show a truthful label: "Preparing video…" vs "Checking media…".
+  const hasVideoMedia = document.pages.some((p) =>
+    p.layers.some((l) => l.type === 'media' && l.payload.mediaType === 'video'));
 
   // ── Smooth progress bar (UI-thread animated) ────────────────────
   // During the upload stage, the bar reflects **real transmitted bytes**
@@ -294,7 +373,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       haptic.success();
     } else if (stage === 'error') {
       haptic.error();
-    } else if (stage === 'unknown') {
+    } else if (stage === 'unknown' || stage === 'scheduleUnknown') {
       haptic.warning();
     }
   }, [stage, haptic]);
@@ -306,11 +385,19 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     }
   }, [visible, haptic]);
 
+  // On mount, reconcile any persisted publication attempts from previous
+  // sessions. This resolves unknown outcomes (network dropped after the
+  // publish request was sent but before the response arrived) by checking
+  // the server's publication lookup endpoint.
+  useEffect(() => {
+    void reconcilePublicationAttempts();
+  }, []);
+
   const handleClose = useCallback(() => {
     // During upload/publishing, allow dismissing to background — the upload
     // continues and the user gets a toast on completion. This matches the
     // flagship pattern (IG background posting with progress in feed header).
-    if (stage === 'uploading' || stage === 'publishing') {
+    if (stage === 'uploading' || stage === 'processing' || stage === 'publishing') {
       haptic.selection();
       onClose();
       return;
@@ -321,8 +408,22 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     setScheduleError('');
     progressWidth.value = 0;
     publishGuardRef.current.reset();
+    setPublicationAttemptId('');
+    setScheduleAttemptId('');
     onClose();
   }, [stage, haptic, onClose, progressWidth]);
+
+  // Save draft with a visible "Saving draft…" state so the user knows
+  // their work is being persisted, not silently swallowed.
+  const handleSaveDraftWithState = useCallback(async () => {
+    haptic.light();
+    setStage('saving');
+    try {
+      await saveDraft();
+    } finally {
+      setStage('review');
+    }
+  }, [haptic, saveDraft]);
 
   // Cancel an in-progress upload: abort all active jobs for this document
   // and return to the review stage so the user can adjust and retry.
@@ -336,6 +437,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     }
     progressWidth.value = 0;
     publishGuardRef.current.reset();
+    setPublicationAttemptId('');
+    setScheduleAttemptId('');
     setStage('review');
   }, [haptic, uploadManager, progressWidth]);
 
@@ -351,7 +454,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     // Generate a unique attempt ID for this publish attempt. Used as the
     // idempotency key so retried requests replay safely, and for
     // unknown-outcome recovery lookup. A new retry generates a new ID.
-    publicationAttemptIdRef.current = generatePublicationAttemptId();
+    const attemptId = generatePublicationAttemptId();
+    setPublicationAttemptId(attemptId);
     try {
       // 1. Validate document structure (allows local URIs — they will be uploaded next)
       const structureValidation = validateDocumentStructure(document);
@@ -445,10 +549,74 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       }
 
       // 3. Re-validate after upload to ensure no local URIs remain
+      // ── Processing stage: post-upload validation + document save ──
+      // Truthful label: "Preparing video…" when the composition contains
+      // video layers, "Checking media…" otherwise. This is the real work
+      // of validating uploaded media and saving the canonical document.
+      setStage('processing');
+      progressWidth.value = reduceMotion ? 0.75 : withSpring(0.75, spring.entrance);
+
       const postUploadValidation = validateForPublish(workingDoc);
       if (!postUploadValidation.valid) {
         throw new Error(postUploadValidation.errors.join('; '));
       }
+
+      // 4. Save the canonical document to the server before publishing.
+      // The publication orchestrator reads document_json from the
+      // creator_documents row to build the public projection. If the row
+      // is missing or stale, the published content diverges from what the
+      // creator authored. This step ensures the server has the exact
+      // document we are about to publish.
+      const currentHash = await computeDocumentHash(workingDoc);
+      const existingMeta = serverDocMetaRef.current;
+      if (!existingMeta || existingMeta.documentHash !== currentHash) {
+        try {
+          let saveResult: CreatorDocumentSaveResult;
+          if (!existingMeta) {
+            // First save in this session. Try create; if the document
+            // already exists on the server (e.g. saved in a previous
+            // session), fetch its lock version and update instead.
+            try {
+              saveResult = await createCreatorDocument({
+                documentType: workingDoc.type,
+                documentJson: workingDoc,
+              });
+            } catch (err) {
+              // 428 = If-Match required → document already exists.
+              // Fetch the current server state and update from there.
+              if (err instanceof ApiRequestError && err.status === 428) {
+                const fetched = await fetchCreatorDocument(workingDoc.id);
+                saveResult = await updateCreatorDocument({
+                  documentId: workingDoc.id,
+                  documentJson: workingDoc,
+                  expectedLockVersion: fetched.lockVersion,
+                });
+              } else {
+                throw err;
+              }
+            }
+          } else {
+            saveResult = await updateCreatorDocument({
+              documentId: workingDoc.id,
+              documentJson: workingDoc,
+              expectedLockVersion: existingMeta.lockVersion,
+            });
+          }
+          serverDocMetaRef.current = saveResult;
+        } catch (err) {
+          if (err instanceof CreatorDocumentConflictError) {
+            // Document was edited on another device. Show conflict UI
+            // with reload / duplicate options instead of crashing.
+            setStage('conflict');
+            setErrorMessage(err.message);
+            publishGuardRef.current.fail();
+            return;
+          }
+          throw err;
+        }
+      }
+
+      const serverMeta = serverDocMetaRef.current!;
 
       setStage('publishing');
       const processingFraction = 0.8;
@@ -457,42 +625,10 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       // ── Build the unified publication command ──
       // The orchestrator creates the public projection transactionally
       // inside the same commit that writes the creator_publications row.
-      const { payload: lookPayload } = workingDoc.type === 'look'
-        ? serialiseToLookPayload(workingDoc)
-        : { payload: null as null };
-      const { payload: posterPayload } = workingDoc.type === 'poster'
-        ? serialiseToPosterPayload(workingDoc)
-        : { payload: null as null };
-
-      const expectedMedia: ExpectedMediaEntry[] = [];
-      for (const page of workingDoc.pages) {
-        for (const layer of page.layers) {
-          if (layer.type === 'media' && layer.payload.mediaUri && !isLocalUri(layer.payload.mediaUri)) {
-            if (layer.payload.mediaFinalizationId) {
-              expectedMedia.push({
-                layerId: layer.id,
-                finalizationId: layer.payload.mediaFinalizationId,
-                assetId: layer.payload.mediaAssetId,
-                mediaType: layer.payload.mediaType ?? 'image',
-                suppliedUrl: layer.payload.mediaUri,
-                role: workingDoc.type === 'look' ? 'primary' : `frame:${page.id}` });
-            }
-          }
-        }
-      }
-
-      const publishCommand: PublishCommand = {
-        revision: 0, // The orchestrator allocates the revision server-side
-        destination: workingDoc.type === 'look' ? 'look' : 'poster',
-        // Close Friends is not a supported audience — fail closed to private.
-        audience: workingDoc.metadata.visibility === 'closeFriends'
-          ? 'private'
-          : (workingDoc.metadata.visibility as 'public' | 'private'),
-        expiresInHours: workingDoc.metadata.expiresInHours ?? 24,
-        expectedMedia,
-        compositionDocument: workingDoc.type === 'look'
-          ? lookPayload?.compositionDocument
-          : posterPayload?.compositionDocument };
+      // The command is built by the shared pure `buildPublishCommand`
+      // function so every publish path (publish now, schedule, retry)
+      // produces an identical media contract.
+      const publishCommand = buildPublishCommand(workingDoc, serverMeta);
 
       // ── Branch: schedule vs publish now ──
       // When scheduledFor is set, create a server-owned schedule row.
@@ -501,23 +637,77 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       // path that replaces the old "publish now + attach schedule" bug.
       if (workingDoc.metadata.scheduledFor) {
         publicationRequestStarted = true;
+        // Generate a separate schedule attempt ID so schedule
+        // unknown-outcome reconciliation hits the schedule endpoint,
+        // not the publication endpoint.
+        const schedAttemptId = generatePublicationAttemptId();
+        setScheduleAttemptId(schedAttemptId);
+
+        // Persist the schedule attempt before sending so unknown-outcome
+        // recovery can resolve it even if the process dies before the
+        // response. The commandType 'schedule' routes reconciliation to
+        // the schedule lookup endpoint.
+        await savePublicationAttempt({
+          attemptId: schedAttemptId,
+          documentId: workingDoc.id,
+          expectedHash: serverMeta.documentHash,
+          destination: publishCommand.destination,
+          state: 'sending',
+          requestStartedAt: new Date().toISOString(),
+          lastCheckedAt: null,
+          targetId: null,
+          failureCode: null,
+          commandType: 'schedule',
+        });
+
         await schedulePublication(workingDoc.id, {
           dueAt: workingDoc.metadata.scheduledFor,
-          publishCommand });
+          publishCommand,
+          idempotencyKey: schedAttemptId });
+
+        // Update the persisted schedule attempt to committed.
+        await updatePublicationAttemptState(schedAttemptId, {
+          state: 'committed',
+          targetId: undefined,
+          lastCheckedAt: new Date().toISOString(),
+        });
 
         publishGuardRef.current.complete(workingDoc.id);
         progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
-        setStage('success');
+        setStage('scheduled');
         CreatorAnalytics.publishSuccess(workingDoc.type, `scheduled:${workingDoc.id}`);
       } else {
         // Publish now via the orchestrator.
         publicationRequestStarted = true;
+
+        // Persist the attempt before sending so unknown-outcome recovery
+        // can resolve it even if the process dies before the response.
+        await savePublicationAttempt({
+          attemptId,
+          documentId: workingDoc.id,
+          expectedHash: serverMeta.documentHash,
+          destination: publishCommand.destination,
+          state: 'sending',
+          requestStartedAt: new Date().toISOString(),
+          lastCheckedAt: null,
+          targetId: null,
+          failureCode: null,
+          commandType: 'publish',
+        });
+
         const pubResult = await publishCreatorDocument(
           workingDoc.id,
           publishCommand,
-          publicationAttemptIdRef.current,
+          attemptId,
         );
         const targetId = pubResult.targetId;
+
+        // Update the persisted attempt to committed.
+        await updatePublicationAttemptState(attemptId, {
+          state: 'committed',
+          targetId,
+          lastCheckedAt: new Date().toISOString(),
+        });
 
         publishGuardRef.current.complete(workingDoc.id);
         setPublishedId(targetId);
@@ -528,11 +718,74 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       }
     } catch (err: unknown) {
       publishGuardRef.current.fail();
+
+      // Detect stale-document conflicts from the publication endpoint (409
+      // with DOCUMENT_VERSION_CONFLICT or DOCUMENT_HASH_CONFLICT). The
+      // server rejected the publish because the document was edited on
+      // another device since the client last saved. Show the conflict UI
+      // with reload/duplicate options instead of a generic error — the
+      // user must choose how to reconcile before retrying.
+      if (err instanceof ApiRequestError && err.status === 409) {
+        const details = err.details as { code?: string; error?: string } | undefined;
+        const conflictCode = details?.code;
+        if (
+          conflictCode === 'DOCUMENT_VERSION_CONFLICT'
+          || conflictCode === 'DOCUMENT_HASH_CONFLICT'
+        ) {
+          setStage('conflict');
+          setErrorMessage(
+            details?.error
+              ?? 'The document was edited on another device. Reload the latest version or duplicate your changes.',
+          );
+          if (publicationRequestStarted && attemptId) {
+            void updatePublicationAttemptState(attemptId, {
+              state: 'failed',
+              failureCode: conflictCode,
+              lastCheckedAt: new Date().toISOString(),
+            });
+          }
+          // Clear the server doc meta so the next attempt re-fetches the
+          // current server state instead of reusing stale lock_version/hash.
+          serverDocMetaRef.current = null;
+          CreatorAnalytics.publishError(document.type, `Conflict: ${conflictCode}`);
+          return;
+        }
+      }
+
       const errorMessage = err instanceof Error ? err.message : 'Publishing failed';
       setErrorMessage(errorMessage);
       // Once a write has left the device, a dropped response is ambiguous:
       // the backend may have committed it. Never call that failure or success.
-      setStage(publicationRequestStarted && isNetworkError(errorMessage) ? 'unknown' : 'error');
+      const isUnknown = publicationRequestStarted && isNetworkError(errorMessage);
+      // Distinguish schedule unknown from publish unknown so the UI
+      // offers the correct reconciliation action ("Check schedule" vs
+      // "Check publish result") and analytics can separate the two.
+      const isSchedule = !!document.metadata.scheduledFor;
+      if (isUnknown) {
+        setStage(isSchedule ? 'scheduleUnknown' : 'unknown');
+      } else {
+        setStage('error');
+      }
+      // Update the persisted attempt: definitive failure → 'failed',
+      // network error → leave as 'sending' (becomes 'unknown' after
+      // the threshold in reconcilePublicationAttempts).
+      if (publicationRequestStarted) {
+        const failedAttemptId = isSchedule ? scheduleAttemptId : attemptId;
+        if (failedAttemptId && !isUnknown) {
+          void updatePublicationAttemptState(failedAttemptId, {
+            state: 'failed',
+            failureCode: err instanceof Error ? err.name : 'UNKNOWN',
+            lastCheckedAt: new Date().toISOString(),
+          });
+        }
+      }
+      if (isUnknown) {
+        if (isSchedule) {
+          CreatorAnalytics.scheduleUnknown(document.type);
+        } else {
+          CreatorAnalytics.publishUnknown(document.type);
+        }
+      }
       CreatorAnalytics.publishError(document.type, err instanceof Error ? err.message : 'Unknown error');
     }
   }, [document, editingLookId, reduceMotion, spring.entrance, spring.success, uploadManager, currentUser]);
@@ -545,7 +798,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     progressWidth.value = 0;
     publishGuardRef.current.reset();
     // Clear the attempt ID so handlePublish generates a fresh one.
-    publicationAttemptIdRef.current = '';
+    setPublicationAttemptId('');
+    setScheduleAttemptId('');
     handlePublish();
   }, [haptic, progressWidth, handlePublish]);
 
@@ -559,19 +813,37 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       // The orchestrator's creator_publications row is the source of truth —
       // if it exists, the publish committed, regardless of whether the public
       // projection has propagated to the read model yet.
-      // Use the persisted attempt ID; fall back to the legacy key for
-      // documents published before attempt IDs were introduced.
-      const attemptId = publicationAttemptIdRef.current || `pub_${document.id}_0`;
+      // Use the in-memory attempt ID, or fall back to the persisted store
+      // (for recovery after unmount/process death), then the legacy key.
+      let attemptId = publicationAttemptId;
+      if (!attemptId) {
+        const pending = await getPendingAttemptForDocument(document.id);
+        attemptId = pending?.attemptId ?? `pub_${document.id}_0`;
+      }
       const publication = await lookupPublicationByKey(document.id, attemptId);
       if (publication && publication.ok) {
         publishGuardRef.current.complete(publication.targetId);
         setPublishedId(publication.targetId);
         invalidateCachesAfterPublish(publication.targetId, currentUser?.id ?? null);
+        // Update the persisted attempt to committed.
+        void updatePublicationAttemptState(attemptId, {
+          state: 'committed',
+          targetId: publication.targetId,
+          lastCheckedAt: new Date().toISOString(),
+        });
         progressWidth.value = 1;
         setStage('success');
         CreatorAnalytics.publishSuccess(document.type, publication.targetId);
         return;
       }
+
+      // The lookup returned null (404) — the publication was not found.
+      // Update the persisted attempt to failed so the user can retry.
+      void updatePublicationAttemptState(attemptId, {
+        state: 'failed',
+        failureCode: 'NOT_FOUND',
+        lastCheckedAt: new Date().toISOString(),
+      });
 
       // Fallback: check the public projection directly (legacy path for
       // documents published before the orchestrator existed).
@@ -594,56 +866,135 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     } finally {
       setIsCheckingResult(false);
     }
-  }, [document.id, document.type, editingLookId, haptic, progressWidth, currentUser]);
+  }, [document.id, document.type, editingLookId, haptic, progressWidth, currentUser, publicationAttemptId]);
+
+  // Check schedule result — resolves an unknown schedule outcome by
+  // looking up the schedule row by idempotency key. This is separate
+  // from `handleCheckPublishResult` because schedule commands hit a
+  // different server endpoint (GET /schedule/:key, not GET /publications/:key).
+  const handleCheckSchedule = useCallback(async () => {
+    haptic.medium();
+    setIsCheckingResult(true);
+    setErrorMessage('');
+    try {
+      // Use the in-memory schedule attempt ID, or fall back to the
+      // persisted store (for recovery after unmount/process death).
+      let attemptId = scheduleAttemptId;
+      if (!attemptId) {
+        const pending = await getPendingAttemptForDocument(document.id);
+        // Only consider schedule-type attempts for schedule reconciliation.
+        if (pending?.commandType !== 'schedule') {
+          setErrorMessage('No schedule attempt found. It is safe to retry scheduling.');
+          setStage('scheduleFailed');
+          return;
+        }
+        attemptId = pending.attemptId;
+      }
+      const schedule = await lookupScheduleByKey(document.id, attemptId);
+      if (schedule && schedule.ok) {
+        // Schedule was committed on the server. Transition to the
+        // scheduled confirmation state.
+        publishGuardRef.current.complete(document.id);
+        void updatePublicationAttemptState(attemptId, {
+          state: 'committed',
+          targetId: schedule.scheduleId,
+          lastCheckedAt: new Date().toISOString(),
+        });
+        progressWidth.value = 1;
+        setStage('scheduled');
+        CreatorAnalytics.publishSuccess(document.type, `scheduled:${document.id}`);
+        return;
+      }
+
+      // 404 — the schedule command didn't reach the server. Mark as
+      // failed so the user can safely retry with a new attempt ID.
+      void updatePublicationAttemptState(attemptId, {
+        state: 'failed',
+        failureCode: 'NOT_FOUND',
+        lastCheckedAt: new Date().toISOString(),
+      });
+      setErrorMessage('No confirmed schedule yet. It is safe to retry scheduling.');
+      setStage('scheduleFailed');
+    } catch {
+      setErrorMessage('Could not reach the server to check the schedule. Try again.');
+      setStage('scheduleUnknown');
+    } finally {
+      setIsCheckingResult(false);
+    }
+  }, [document.id, document.type, haptic, progressWidth, scheduleAttemptId]);
 
   // Retry scheduling after a failure. With the new server-owned schedule,
   // this re-creates the schedule row (the old row was cancelled on retry).
   const handleRetrySchedule = useCallback(async () => {
     if (!document.metadata.scheduledFor) return;
+    const serverMeta = serverDocMetaRef.current;
+    if (!serverMeta) {
+      setScheduleError('Document metadata is not available. Save the document first.');
+      setStage('scheduleFailed');
+      return;
+    }
     haptic.medium();
     setStage('publishing');
     progressWidth.value = reduceMotion ? 0.8 : withSpring(0.8, spring.entrance);
+    let scheduleRequestStarted = false;
+    const schedAttemptId = generatePublicationAttemptId();
+    setScheduleAttemptId(schedAttemptId);
     try {
-      // Build the same publish command for the schedule.
-      const expectedMedia: ExpectedMediaEntry[] = [];
-      for (const page of document.pages) {
-        for (const layer of page.layers) {
-          if (layer.type === 'media' && layer.payload.mediaUri && !isLocalUri(layer.payload.mediaUri)) {
-            if (layer.payload.mediaFinalizationId) {
-              expectedMedia.push({
-                layerId: layer.id,
-                finalizationId: layer.payload.mediaFinalizationId,
-                assetId: layer.payload.mediaAssetId,
-                mediaType: layer.payload.mediaType ?? 'image',
-                suppliedUrl: layer.payload.mediaUri,
-                role: document.type === 'look' ? 'primary' : `frame:${page.id}` });
-            }
-          }
-        }
-      }
-      const retryCommand: PublishCommand = {
-        revision: 0,
-        destination: document.type === 'look' ? 'look' : 'poster',
-        // Close Friends is not a supported audience — fail closed to private.
-        audience: document.metadata.visibility === 'closeFriends'
-          ? 'private'
-          : (document.metadata.visibility as 'public' | 'private'),
-        expiresInHours: document.metadata.expiresInHours ?? 24,
-        expectedMedia };
+      // Build the same publish command via the shared pure builder so
+      // the schedule retry's media contract is identical to the initial
+      // schedule and publish-now paths.
+      const retryCommand = buildPublishCommand(document, serverMeta);
+
+      // Persist the schedule attempt before sending so unknown-outcome
+      // recovery can resolve it.
+      await savePublicationAttempt({
+        attemptId: schedAttemptId,
+        documentId: document.id,
+        expectedHash: serverMeta.documentHash,
+        destination: retryCommand.destination,
+        state: 'sending',
+        requestStartedAt: new Date().toISOString(),
+        lastCheckedAt: null,
+        targetId: null,
+        failureCode: null,
+        commandType: 'schedule',
+      });
+
+      scheduleRequestStarted = true;
       await schedulePublication(document.id, {
         dueAt: document.metadata.scheduledFor,
-        publishCommand: retryCommand });
+        publishCommand: retryCommand,
+        idempotencyKey: schedAttemptId });
+
+      // Update the persisted schedule attempt to committed.
+      await updatePublicationAttemptState(schedAttemptId, {
+        state: 'committed',
+        lastCheckedAt: new Date().toISOString(),
+      });
+
       progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
       setScheduleError('');
-      setStage('success');
+      setStage('scheduled');
       CreatorAnalytics.publishSuccess(document.type, `scheduled:${document.id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Scheduling failed';
-      setScheduleError(msg);
-      setStage('scheduleFailed');
+      const isUnknown = scheduleRequestStarted && isNetworkError(msg);
+      if (isUnknown) {
+        setScheduleError(msg);
+        setStage('scheduleUnknown');
+        CreatorAnalytics.scheduleUnknown(document.type);
+      } else {
+        setScheduleError(msg);
+        setStage('scheduleFailed');
+        void updatePublicationAttemptState(schedAttemptId, {
+          state: 'failed',
+          failureCode: err instanceof Error ? err.name : 'UNKNOWN',
+          lastCheckedAt: new Date().toISOString(),
+        });
+      }
       CreatorAnalytics.publishError(document.type, `Schedule retry failed: ${msg}`);
     }
-  }, [document.id, document.type, document.metadata.scheduledFor, document.metadata.visibility, document.metadata.expiresInHours, document.pages, haptic, reduceMotion, spring.entrance, spring.success, progressWidth]);
+  }, [document, haptic, reduceMotion, spring.entrance, spring.success, progressWidth]);
 
   // Accept that the content was published immediately (skip scheduling).
   const handleAcceptImmediate = useCallback(() => {
@@ -664,10 +1015,17 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         </View>
 
         {stage === 'review' && (
-          <PublishReview document={document} onPublish={handlePublish} onSaveDraft={saveDraft} onOpenPreview={onOpenPreview} />
+          <PublishReview document={document} onPublish={handlePublish} onSaveDraft={handleSaveDraftWithState} onOpenPreview={onOpenPreview} />
         )}
 
-        {(stage === 'uploading' || stage === 'publishing') && (
+        {stage === 'saving' && (
+          <View style={styles.centerState}>
+            <ActivityIndicator size="small" color={colors.brand} />
+            <Text style={styles.centerStateTitle}>Saving draft…</Text>
+          </View>
+        )}
+
+        {(stage === 'uploading' || stage === 'processing' || stage === 'publishing') && (
           <SharingStateView
             colors={colors}
             styles={styles}
@@ -678,6 +1036,9 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
             stage={stage}
             uploadedBytes={uploadManager.uploadedBytes}
             totalBytes={uploadManager.totalBytes}
+            uploadedCount={uploadManager.jobs.filter((j) => j.status === 'completed').length}
+            totalCount={uploadManager.jobs.length}
+            processingLabel={hasVideoMedia ? 'Preparing video…' : 'Checking media…'}
             onCancel={stage === 'uploading' ? handleCancelUpload : undefined}
           />
         )}
@@ -708,6 +1069,28 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           />
         )}
 
+        {stage === 'scheduled' && (
+          <ScheduledView
+            colors={colors}
+            reduceMotion={reduceMotion}
+            springCfg={spring.success}
+            scheduledFor={document.metadata.scheduledFor}
+            documentType={document.type}
+            onView={() => {
+              haptic.selection();
+              onClose();
+              setStage('review');
+              navigation.navigate('CreatorStudio', { type: document.type });
+            }}
+            onCreateNew={() => {
+              haptic.selection();
+              onClose();
+              setStage('review');
+              navigation.navigate('CreatorStudio', { type: document.type });
+            }}
+          />
+        )}
+
         {stage === 'error' && (
           <ErrorStateView
             colors={colors}
@@ -728,6 +1111,43 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
             detail={errorMessage}
             isChecking={isCheckingResult}
             onCheck={handleCheckPublishResult}
+          />
+        )}
+
+        {stage === 'scheduleUnknown' && (
+          <UnknownOutcomeView
+            colors={colors}
+            reduceMotion={reduceMotion}
+            springCfg={spring.entrance}
+            detail={errorMessage}
+            isChecking={isCheckingResult}
+            onCheck={handleCheckSchedule}
+            checkLabel="Check schedule"
+          />
+        )}
+
+        {stage === 'conflict' && (
+          <ConflictStateView
+            colors={colors}
+            reduceMotion={reduceMotion}
+            springCfg={spring.entrance}
+            errorMessage={errorMessage}
+            onReload={() => {
+              haptic.selection();
+              serverDocMetaRef.current = null;
+              setStage('review');
+              setErrorMessage('');
+              progressWidth.value = 0;
+              publishGuardRef.current.reset();
+            }}
+            onDuplicate={() => {
+              haptic.selection();
+              serverDocMetaRef.current = null;
+              setStage('review');
+              setErrorMessage('');
+              progressWidth.value = 0;
+              publishGuardRef.current.reset();
+            }}
           />
         )}
 
@@ -767,9 +1187,15 @@ interface SharingStateViewProps {
   springCfg: { damping: number; stiffness: number; mass: number };
   progressAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
   progressWidth: ReturnType<typeof useSharedValue<number>>;
-  stage: 'uploading' | 'publishing';
+  stage: 'saving' | 'uploading' | 'processing' | 'publishing';
   uploadedBytes: number;
   totalBytes: number;
+  /** Completed upload job count for "Uploading X of Y…" label. */
+  uploadedCount?: number;
+  /** Total upload job count for "Uploading X of Y…" label. */
+  totalCount?: number;
+  /** Truthful label for the processing stage. */
+  processingLabel?: string;
   onCancel?: () => void;
 }
 
@@ -780,18 +1206,28 @@ function SharingStateView({
   stage,
   uploadedBytes,
   totalBytes,
+  uploadedCount = 0,
+  totalCount = 0,
+  processingLabel = 'Checking media…',
   onCancel }: SharingStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const showByteProgress = stage === 'uploading' && totalBytes > 0;
   const showCancel = stage === 'uploading' && !!onCancel;
+  const showItemCount = stage === 'uploading' && totalCount > 1;
+  const current_item = Math.min(uploadedCount + 1, totalCount);
   return (
     <View style={localStyles.centerState}>
       <Text style={localStyles.centerStateTitle}>
-        {stage === 'uploading' ? 'Uploading…' : 'Publishing…'}
+        {stage === 'saving' ? 'Saving draft…'
+          : stage === 'uploading' ? (showItemCount ? `Uploading ${current_item} of ${totalCount}…` : 'Uploading…')
+          : stage === 'processing' ? processingLabel
+          : 'Publishing…'}
       </Text>
-      <View style={localStyles.progressBarTrack}>
-        <Reanimated.View style={[localStyles.progressBarFill, progressAnimatedStyle]} />
-      </View>
+      {stage !== 'saving' && (
+        <View style={localStyles.progressBarTrack}>
+          <Reanimated.View style={[localStyles.progressBarFill, progressAnimatedStyle]} />
+        </View>
+      )}
       {showByteProgress && (
         <Text style={localStyles.progressByteLabel}>
           {formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}
@@ -850,7 +1286,7 @@ function ErrorStateView({
       <View style={localStyles.errorCircle}>
         <Ionicons name="warning" size={IconGrammar.hero} color={colors.danger} aria-hidden={true} />
       </View>
-      <Text style={localStyles.centerStateTitle}>Publishing failed</Text>
+      <Text style={localStyles.centerStateTitle}>Couldn't publish</Text>
       <Text style={localStyles.centerStateText}>{errorMessage}</Text>
       <PressScale
         onPress={onRetry}
@@ -874,6 +1310,8 @@ interface UnknownOutcomeViewProps {
   detail: string;
   isChecking: boolean;
   onCheck: () => void;
+  /** Label for the check button (e.g. "Check publication" or "Check schedule"). */
+  checkLabel?: string;
 }
 
 function UnknownOutcomeView({
@@ -882,7 +1320,8 @@ function UnknownOutcomeView({
   springCfg,
   detail,
   isChecking,
-  onCheck }: UnknownOutcomeViewProps) {
+  onCheck,
+  checkLabel = 'Check publication' }: UnknownOutcomeViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const opacity = useSharedValue(0);
 
@@ -903,7 +1342,7 @@ function UnknownOutcomeView({
       <View style={localStyles.unknownCircle}>
         <Ionicons name="help" size={IconGrammar.hero} color={colors.warning} aria-hidden={true} />
       </View>
-      <Text style={localStyles.centerStateTitle}>Result not confirmed</Text>
+      <Text style={localStyles.centerStateTitle}>Result unknown</Text>
       <Text style={localStyles.centerStateText}>
         The connection dropped after publishing started. Your post may already be live.
       </Text>
@@ -914,15 +1353,78 @@ function UnknownOutcomeView({
         style={isChecking
           ? [localStyles.retryBtn, localStyles.publishBtnDisabled]
           : localStyles.retryBtn}
-        accessibilityLabel={isChecking ? 'Checking publication result' : 'Check publication result'}
-        accessibilityHint="Checks the server before attempting another publication"
+        accessibilityLabel={isChecking ? 'Checking…' : checkLabel}
+        accessibilityHint="Checks the server before attempting another action"
         accessibilityState={{ disabled: isChecking, busy: isChecking }}
         scale={0.97}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Ionicons name="refresh-outline" size={IconGrammar.metadata} color={colors.textInverse} style={{ marginRight: 6 }} aria-hidden={true} />
-        <Text style={localStyles.retryBtnText}>{isChecking ? 'Checking…' : 'Check result'}</Text>
+        <Text style={localStyles.retryBtnText}>{isChecking ? 'Checking…' : checkLabel}</Text>
       </PressScale>
+    </Reanimated.View>
+  );
+}
+
+// ── Conflict state — document was edited on another device ──────────
+interface ConflictStateViewProps {
+  colors: ThemeColors;
+  reduceMotion: boolean;
+  springCfg: { damping: number; stiffness: number; mass: number };
+  errorMessage: string;
+  onReload: () => void;
+  onDuplicate: () => void;
+}
+
+function ConflictStateView({
+  colors,
+  reduceMotion,
+  springCfg,
+  errorMessage,
+  onReload,
+  onDuplicate }: ConflictStateViewProps) {
+  const localStyles = useMemo(() => createStyles(colors), [colors]);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = reduceMotion
+      ? 1
+      : withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+  }, [opacity, reduceMotion, springCfg]);
+
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Reanimated.View style={[localStyles.centerState, animatedStyle]}>
+      <View style={localStyles.errorCircle}>
+        <Ionicons name="sync-outline" size={IconGrammar.hero} color={colors.warning} aria-hidden={true} />
+      </View>
+      <Text style={localStyles.centerStateTitle}>Document was edited elsewhere</Text>
+      <Text style={localStyles.centerStateText}>
+        {errorMessage || 'The document changed on another device. Reload the latest version or duplicate your changes.'}
+      </Text>
+      <View style={localStyles.successBtnGroup}>
+        <PressScale
+          onPress={onReload}
+          style={localStyles.viewBtn}
+          accessibilityLabel="Reload from server"
+          accessibilityHint="Reloads the latest server version of the document"
+          scale={0.97}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={localStyles.viewBtnText}>Reload</Text>
+        </PressScale>
+        <PressScale
+          onPress={onDuplicate}
+          style={localStyles.createBtn}
+          accessibilityLabel="Duplicate as new draft"
+          accessibilityHint="Creates a new document from your local changes"
+          scale={0.97}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={localStyles.createBtnText}>Duplicate</Text>
+        </PressScale>
+      </View>
     </Reanimated.View>
   );
 }
@@ -1053,7 +1555,7 @@ function QuietSuccessView({
   return (
     <Reanimated.View style={[styles.centerState, contentStyle]}>
       <Ionicons name="checkmark-circle" size={IconGrammar.hero} color={colors.success} aria-hidden={true} />
-      <Text style={styles.successTitle}>Shared</Text>
+      <Text style={styles.successTitle}>Published</Text>
       <Text style={styles.centerStateText}>
         {documentType === 'look' ? 'Your look is live' : 'Your story is live'}
       </Text>
@@ -1077,6 +1579,92 @@ function QuietSuccessView({
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Text style={styles.createBtnText}>New</Text>
+        </PressScale>
+      </View>
+    </Reanimated.View>
+  );
+}
+
+// ── Scheduled confirmation — truthful date/time, not "Shared" ──────
+// When content is scheduled (not published immediately), the confirmation
+// must show the actual scheduled date/time with timezone so the creator
+// knows exactly when it will go live. No generic "Shared" label.
+function formatScheduledDate(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+}
+
+interface ScheduledViewProps {
+  colors: ThemeColors;
+  reduceMotion: boolean;
+  springCfg: { damping: number; stiffness: number; mass: number };
+  scheduledFor?: string;
+  documentType: 'look' | 'poster';
+  onView: () => void;
+  onCreateNew: () => void;
+}
+
+function ScheduledView({
+  colors,
+  reduceMotion,
+  springCfg,
+  scheduledFor,
+  documentType,
+  onView,
+  onCreateNew }: ScheduledViewProps) {
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const contentOpacity = useSharedValue(reduceMotion ? 1 : 0);
+
+  useEffect(() => {
+    contentOpacity.value = reduceMotion
+      ? 1
+      : withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+  }, [reduceMotion, contentOpacity, springCfg]);
+
+  const contentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value }));
+
+  const dateLabel = scheduledFor ? formatScheduledDate(scheduledFor) : '';
+
+  return (
+    <Reanimated.View style={[styles.centerState, contentStyle]}>
+      <Ionicons name="time-outline" size={IconGrammar.hero} color={colors.brand} aria-hidden={true} />
+      <Text style={styles.successTitle}>Scheduled</Text>
+      {dateLabel ? (
+        <Text style={styles.centerStateText}>
+          {documentType === 'look' ? 'Your look will go live' : 'Your story will go live'}{'\n'}{dateLabel}
+        </Text>
+      ) : (
+        <Text style={styles.centerStateText}>
+          {documentType === 'look' ? 'Your look is scheduled' : 'Your story is scheduled'}
+        </Text>
+      )}
+      <View style={styles.successBtnGroup}>
+        <PressScale
+          onPress={onCreateNew}
+          style={styles.viewBtn}
+          accessibilityLabel="Create new post"
+          accessibilityHint="Starts a new creation in the studio"
+          scale={0.97}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={styles.viewBtnText}>New</Text>
+        </PressScale>
+        <PressScale
+          onPress={onView}
+          style={styles.createBtn}
+          accessibilityLabel="Back to studio"
+          accessibilityHint="Returns to the creator studio"
+          scale={0.97}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={styles.createBtnText}>Done</Text>
         </PressScale>
       </View>
     </Reanimated.View>

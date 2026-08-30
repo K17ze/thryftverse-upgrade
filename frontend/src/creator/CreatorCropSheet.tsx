@@ -119,7 +119,8 @@ export function CreatorCropSheet({
         backdropOpacitySV.value = 1;
         gridOpacitySV.value = 0.3;
       } else {
-        sheetYSV.value = withSpring(0, spring.entrance);
+        // Per §5.14: sheet entrance uses timing (ease-out), not spring.
+        sheetYSV.value = withTiming(0, { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) });
         backdropOpacitySV.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
         // Grid lines fade in after sheet settles
         gridOpacitySV.value = withDelay(Motion.duration.normal, withTiming(0.3, { duration: Motion.duration.normal }));

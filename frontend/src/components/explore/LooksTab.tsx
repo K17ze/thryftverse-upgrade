@@ -20,13 +20,16 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useConnectivity } from '../../hooks/useConnectivity';
 import { EmptyState } from '../EmptyState';
+import { OfflineBanner } from '../OfflineBanner';
 import { PremiumSkeletonTile } from '../discover/PremiumSkeletonTile';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { isVideoUri } from '../../utils/media';
 import {
   resolveLookTemplate,
   type LookTemplate } from '../../utils/lookTemplates';
+import { useReadiness } from '../../performance/visuallyComplete';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -94,7 +97,7 @@ function LookTile({
             contrast scrim). Fades from transparent to a 0.6 dark scrim
             over the bottom 45% of the tile. */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.6)']}
+          colors={['transparent', 'transparent', colors.mediaOverlayScrim]}
           locations={[0, 0.5, 1.0]}
           style={styles.tileScrim}
           pointerEvents="none"
@@ -119,7 +122,7 @@ function LookTile({
           )}
           {isShoppable && (
             <View style={styles.shoppableInline}>
-              <Ionicons name="pricetag" size={10} color={colors.textInverse} />
+              <Ionicons name="pricetag" size={10} color={colors.mediaOverlayText} />
               <Text style={styles.shoppableText}>{look.tags.length}</Text>
             </View>
           )}
@@ -158,9 +161,11 @@ export default function LooksTab() {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const { width: windowWidth } = useWindowDimensions();
+  const { isOffline } = useConnectivity();
   const scrollRef = useRef<any>(null);
   useScrollToTop(scrollRef);
   const haptic = useHaptic();
+  const reportReady = useReadiness('LooksTab');
 
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -174,6 +179,12 @@ export default function LooksTab() {
   useEffect(() => {
     loadedLookCountRef.current = looks.length;
   }, [looks.length]);
+
+  useEffect(() => {
+    if (looks.length > 0 && !isLoading) {
+      reportReady('interaction-ready');
+    }
+  }, [looks.length, isLoading, reportReady]);
 
   // Initial / refresh load. Resets the cursor and replaces the list.
   // The feed mode drives the `sort` parameter so the API can segment the feed.
@@ -197,9 +208,10 @@ export default function LooksTab() {
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
+        reportReady('data-ready');
       }
     },
-    [],
+    [reportReady],
   );
 
   useEffect(() => {
@@ -398,6 +410,7 @@ export default function LooksTab() {
 
     return (
       <View style={styles.scrollContent}>
+        {isOffline && <OfflineBanner />}
         {FeedTabs}
         <View style={styles.masonrySkeletonGrid}>
           <View style={styles.masonrySkeletonCol}>
@@ -452,6 +465,7 @@ export default function LooksTab() {
   if (looks.length === 0 && !loadError) {
     return (
       <View style={styles.scrollContent}>
+        {isOffline && <OfflineBanner />}
         {FeedTabs}
         <EmptyState
           icon="camera-outline"
@@ -476,6 +490,7 @@ export default function LooksTab() {
   return (
     <View style={styles.feedContainer}>
       <View style={styles.feedStaticHeader}>
+        {isOffline && <OfflineBanner />}
         {FeedTabs}
       </View>
       <FlashList
@@ -638,11 +653,11 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs },
-    // Username — 12pt semibold white. Fixed white ink because the gradient
-    // scrim is always dark at the bottom; a theme text token (black in dark
-    // mode) would render invisible.
+    // Username — 12pt semibold white. Uses mediaOverlayText (always white in
+    // both themes) because the gradient scrim is always dark at the bottom;
+    // a regular text token (black in dark mode) would render invisible.
     creatorText: {
-      color: '#FFFFFF',
+      color: colors.mediaOverlayText,
       fontSize: TypographyV2.meta.size,
       lineHeight: 16,
       fontFamily: TypographyV2.meta.fontFamily,
@@ -659,7 +674,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: 2 },
     shoppableText: {
-      color: '#FFFFFF',
+      color: colors.mediaOverlayText,
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily },
     // Media-type / multi-layer cue — top-right, small icon only.
@@ -681,11 +696,11 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 3 },
-    // Heart count — 11pt regular white. Fixed white ink because the gradient
-    // scrim guarantees contrast; a theme token would render black-on-dark in
-    // dark mode.
+    // Heart count — 11pt regular white. Uses mediaOverlayText (always white
+    // in both themes) because the gradient scrim guarantees contrast; a
+    // regular text token would render black-on-dark in dark mode.
     likeText: {
-      color: '#FFFFFF',
+      color: colors.mediaOverlayText,
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily } });
 }

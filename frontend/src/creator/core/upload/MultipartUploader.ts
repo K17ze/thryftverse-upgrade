@@ -79,6 +79,23 @@ interface CompleteResponse {
   sizeBytes: number;
   contentType: string;
   duplicate?: boolean;
+  mediaAsset?: {
+    id: string;
+    status: string;
+    mediaKind: 'image' | 'video' | 'audio' | 'document';
+    canonicalUrl: string | null;
+    publishable: boolean;
+    processingRequired: boolean;
+  } | null;
+}
+
+/** Result of completing a multipart upload — the final URL plus the
+ *  finalization and media-asset evidence the caller needs to converge
+ *  with the single-PUT path. */
+export interface MultipartCompleteResult {
+  publicUrl: string;
+  finalizationId: string;
+  mediaAssetId?: string;
 }
 
 /** Part ETag entry sent to the complete endpoint. */
@@ -231,13 +248,15 @@ export class MultipartUploader {
   /**
    * Complete the multipart upload. Sends the ETag list to the backend,
    * which tells S3 to assemble the parts into the final object and
-   * creates an `upload_finalizations` record.
+   * creates an `upload_finalizations` record + `media_assets` row.
    *
-   * Returns the public URL of the assembled object. The `finalizationId`
-   * is stored on the session so the caller can pass it to downstream
-   * consumers (listing publication, media assets).
+   * Returns the public URL of the assembled object, the finalization ID,
+   * and the media asset ID (when the backend creates one). The caller is
+   * responsible for waiting for the asset to reach a publishable state
+   * before treating the upload as complete — identical to the single-PUT
+   * path's `finalizePresignedMedia` contract.
    */
-  async complete(session: UploadSession): Promise<string> {
+  async complete(session: UploadSession): Promise<MultipartCompleteResult> {
     const completedParts: CompletedPart[] = session.parts
       .filter((p) => p.status === 'completed' && p.etag)
       .map((p) => ({ partNumber: p.partNumber, etag: p.etag! }));
@@ -265,7 +284,11 @@ export class MultipartUploader {
     // Store the finalizationId on the session so the caller can use it.
     session.finalizationId = response.finalizationId;
 
-    return response.publicUrl;
+    return {
+      publicUrl: response.publicUrl,
+      finalizationId: response.finalizationId,
+      mediaAssetId: response.mediaAsset?.id,
+    };
   }
 
   /** Abort an in-progress multipart upload, freeing S3 part storage. */
@@ -290,14 +313,14 @@ export class MultipartUploader {
    * have an ETag (status `completed`), uploads the remaining parts,
    * and completes the upload.
    *
-   * Returns the final public URL.
+   * Returns the completion result (public URL + finalization/asset IDs).
    */
   async resume(
     session: UploadSession,
     filePath: string,
     onProgress: (uploadedBytes: number) => void,
     signal: AbortSignal,
-  ): Promise<string> {
+  ): Promise<MultipartCompleteResult> {
     // Recompute uploadedBytes from completed parts.
     let uploadedBytes = 0;
     for (const part of session.parts) {

@@ -498,7 +498,12 @@ function LookDiscoveryTile({
         </View>
         {unit.itemIds.length > 0 ? (
           <View style={{ position: 'absolute', top: Space.sm, right: Space.sm }}>
-            <Ionicons name="pricetag" size={15} color={colors.scrimTextPrimary} />
+            <Ionicons
+              name="pricetag"
+              size={15}
+              color={colors.scrimTextPrimary}
+              style={{ textShadowColor: colors.mediaOverlayScrim, textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } }}
+            />
           </View>
         ) : null}
     </View>

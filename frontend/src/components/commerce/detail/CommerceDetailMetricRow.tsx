@@ -31,6 +31,11 @@ export interface CommerceDetailMetricRowProps {
    * Type.priceHero for total, right-aligned, tabular alignment for
    * numbers." Used for the estimated-total row in cost breakdowns. */
   emphasis?: boolean;
+  /** When true alongside `emphasis`, the value uses `Type.priceLarge`
+   * (28px / TypographyV2.priceHero) instead of `Type.priceList` (20px).
+   * Per Design.md: checkout totals are the dominant number and must
+   * use the larger price scale. */
+  large?: boolean;
   /** When true, a hairline separator is drawn above the row. Used to
    * detach a summary total from the line items above it. */
   separated?: boolean;
@@ -43,6 +48,7 @@ export function CommerceDetailMetricRow({
   trailing,
   subLabel,
   emphasis = false,
+  large = false,
   separated = false }: CommerceDetailMetricRowProps) {
   const { colors } = useAppTheme();
 
@@ -68,7 +74,7 @@ export function CommerceDetailMetricRow({
           <Text
             style={[
               styles.value,
-              emphasis && styles.valueEmphasis,
+              emphasis && (large ? styles.valueLarge : styles.valueEmphasis),
               { color: muted ? colors.textMuted : colors.textPrimary },
             ]}
             numberOfLines={2}
@@ -129,6 +135,13 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: TypographyV2.priceList.fontFamily,
     letterSpacing: TypographyV2.priceList.letterSpacing },
+  // Per Design.md: checkout totals use Type.priceLarge (28px), which
+  // maps to TypographyV2.priceHero in the V2 token system.
+  valueLarge: {
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: TypographyV2.priceHero.fontFamily,
+    letterSpacing: TypographyV2.priceHero.letterSpacing },
   subLabel: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,

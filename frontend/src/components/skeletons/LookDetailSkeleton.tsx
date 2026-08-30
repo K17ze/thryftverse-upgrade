@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Control, AvatarSize } from '../../theme/designTokens';
+import { Space, Radius, Typography, Control, AvatarSize, AspectRatio } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
 // Mirrors the LookDetailScreen layout: full-bleed hero (SCREEN_W x SCREEN_W*1.15),
@@ -14,8 +14,8 @@ export function LookDetailSkeleton() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Hero — matches heroWrap: SCREEN_W x SCREEN_W * 1.15 */}
-      <SkeletonLoader width={SCREEN_W} height={SCREEN_W * 1.15} borderRadius={Radius.none} />
+      {/* Hero — matches heroWrap: SCREEN_W x SCREEN_W / AspectRatio.marketplace (4:5) */}
+      <SkeletonLoader width={SCREEN_W} height={SCREEN_W / AspectRatio.marketplace} borderRadius={Radius.none} />
 
       {/* Info section — matches infoSection padding/gap */}
       <View style={styles.infoSection}>

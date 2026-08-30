@@ -24,7 +24,6 @@ import { useToast } from '../../context/ToastContext';
 import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
 import type { CreatorLayer, EffectNode } from '../composition';
-import { hasFullBleedMedia } from '../composition';
 import { layerTypeLabel } from '../shared/layerUtils';
 import { makeStableId } from '../../utils/createStableId';
 import { CreatorCanvas } from '../CreatorCanvas';
@@ -258,39 +257,31 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // ── Edit-surface geometry ──────────────────────────────────────────
-  // The 9:16 aspect ratio is the EXPORT ratio, not the edit surface ratio.
-  // When a full-bleed media layer exists (width=1, height=1), the edit
-  // surface fills the entire screen — the media uses contentFit="cover"
-  // to fill it (cropping if needed), matching Snapchat/Instagram where the
-  // viewfinder fills the screen and edits float over it.
-  // For documents WITHOUT full-bleed media (blank canvas, text-only),
-  // keep the centered 9:16 canvas so the authoring surface matches export.
+  // The authored canvas is immutable: it ALWAYS uses the document's
+  // aspect ratio (9:16 for posters), never the physical screen height.
+  // This guarantees "what I edit is what is exported" — the same document
+  // produces the same canvas dimensions on every device, letterboxed
+  // within the viewport when the screen is taller than the canvas.
+  // Full-bleed media (width=1, height=1) describes how media fits INSIDE
+  // this authored canvas via contentFit="cover" (cropping as needed); it
+  // does not redefine the canvas geometry itself.
   const canvasWidth = screenWidth;
-  const pageHasFullBleedMedia = hasFullBleedMedia(page);
   const canvasHeight = useMemo(() => {
-    if (pageHasFullBleedMedia) return screenHeight;
     const h = Math.floor(screenWidth / document.canvas.aspectRatio);
     return Math.min(h, screenHeight);
-  }, [pageHasFullBleedMedia, screenWidth, document.canvas.aspectRatio, screenHeight]);
+  }, [screenWidth, document.canvas.aspectRatio, screenHeight]);
 
   const canvasVerticalOffset = useMemo(() => {
-    if (pageHasFullBleedMedia) return 0;
     if (canvasHeight >= screenHeight) return 0;
     return Math.floor((screenHeight - canvasHeight) / 2);
-  }, [pageHasFullBleedMedia, canvasHeight, screenHeight]);
+  }, [canvasHeight, screenHeight]);
 
-  // ── Auto-show frame tray on frame change (doc 04) ──────────────────
-  // "show a bottom frame tray that appears when frame change occurs or
-  // user adds another frame." Auto-collapses after 2.5s to restore
-  // full-screen canvas — the frame tray is a transient navigation aid,
-  // not permanent chrome.
-  useEffect(() => {
-    if (!hasMultipleFrames) return;
-    setShowFrameTray(true);
-    setVideoInfoFrameIndex(null);
-    const timer = setTimeout(() => setShowFrameTray(false), 2500);
-    return () => clearTimeout(timer);
-  }, [hasMultipleFrames, activePageIndex, pageCount]);
+  // ── Frame organizer is transient ───────────────────────────────────
+  // Per Design.md: page dots (the top progress segments) are the persistent
+  // location indicator. The FrameTray is a transient organizer for
+  // reorder/duplicate/delete only — opened explicitly from the overflow
+  // menu, never auto-shown on frame change. This removes the duplicate
+  // navigation surfaces that competed with the canvas.
 
   // ── Truthful back — Save Draft / Discard / Keep Editing ────────────
   const handleBack = useCallback(() => {
@@ -1418,7 +1409,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   }, [selectedLayer, updateLayer]);
 
   // ── Tool groups for ContextToolRail ────────────────────────────────
-  // Each context maps to a ToolGroup with up to 6 primary tools + overflow.
+  // Each context maps to a ToolGroup with up to 4 primary tools + overflow.
   // All onPress handlers wire to EXISTING handlers — no new actions.
   const toolGroups = useMemo<ToolGroup[]>(() => {
     const mk = (
@@ -2037,17 +2028,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 </View>
               </Pressable>
             ))}
-            {/* Frame tray toggle */}
-            <PressScale
-              onPress={() => { haptic.light(); setShowFrameTray((p) => !p); setVideoInfoFrameIndex(null); }}
-              style={styles.pageSegmentToggle}
-              accessibilityLabel="Toggle frame tray"
-              accessibilityHint="Shows or hides the bottom frame thumbnail tray"
-              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-            >
-              <Ionicons name="film-outline" size={IconGrammar.metadata} color={showFrameTray ? colors.scrimTextPrimary : colors.scrimTextSecondary} />
-            </PressScale>
-            {/* Add frame */}
+            {/* Add frame — sits at the end of the page dots row */}
             {pageCount < 10 && (
               <PressScale
                 onPress={handleAddFrame}
@@ -2230,7 +2211,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       {/* ── Bottom tool rail — ContextToolRail (context-sensitive) ────── */}
       {/* The ContextToolRail is the single bottom surface for both default
           and selection states. It adapts its visible tool set based on the
-          active ToolContext (editor mode + selection state). Up to 6
+          active ToolContext (editor mode + selection state). Up to 4
           primary actions are always visible; additional tools (including
           Edit Clip for video, z-order, duplicate, delete, opacity) are
           revealed under the trailing "More" button. The legacy context
@@ -2255,20 +2236,13 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             pointerEvents="none"
           />
           <View style={styles.bottomRailContent}>
-            {/* Frame count — tappable to open frame tray */}
+            {/* Frame position label — non-interactive; page dots at top
+                handle navigation. The frame organizer is in the More menu. */}
             {hasMultipleFrames && !selectedLayer && (
               <>
-                <PressScale
-                  onPress={() => { haptic.light(); setShowFrameTray((p) => !p); setVideoInfoFrameIndex(null); }}
-                  style={styles.frameCountBtn}
-                  accessibilityLabel={`Frame ${activePageIndex + 1} of ${pageCount}`}
-                  accessibilityHint="Opens the frame tray to reorder, delete, or add frames"
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                  <Text style={styles.frameCountText}>
-                    {activePageIndex + 1}/{pageCount}
-                  </Text>
-                </PressScale>
+                <Text style={styles.frameCountText}>
+                  {activePageIndex + 1}/{pageCount}
+                </Text>
                 <View style={styles.railDivider} />
               </>
             )}
@@ -2283,9 +2257,11 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         </Reanimated.View>
       )}
 
-      {/* ── Frame tray (collapsible filmstrip) ───────────────────────── */}
-      {/* Per doc 04: appears when frame change occurs or user adds another
-          frame. Auto-collapses after 2.5s. Sits above the tool rail. */}
+      {/* ── Frame organizer (transient) ──────────────────────────────── */}
+      {/* Per Design.md: the frame organizer is a transient surface for
+          reorder/duplicate/delete. It opens from the overflow menu or
+          long-press on page dots, not as a persistent navigation aid.
+          Page dots at the top are the persistent position indicator. */}
       {hasMultipleFrames && showFrameTray && (
         <FrameTray
           pages={document.pages}
@@ -2361,6 +2337,17 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                   ))}
                 </View>
               ))}
+              {hasMultipleFrames && (
+                <>
+                  <View style={styles.overflowDivider} />
+                  <Text style={styles.overflowSectionLabel}>Frames</Text>
+                  <OverflowItem
+                    icon="film-outline"
+                    label="Manage frames"
+                    onPress={() => { setShowFrameTray(true); closeSheet(); }}
+                  />
+                </>
+              )}
               <View style={styles.overflowDivider} />
               <Text style={styles.overflowSectionLabel}>Access</Text>
               <OverflowItem
@@ -3055,12 +3042,6 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  pageSegmentToggle: {
-    width: 22,
-    height: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   // ── Canvas loading overlay ──
   canvasLoadingOverlay: {
     ...StyleSheet.absoluteFill,
@@ -3179,12 +3160,6 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     gap: Space.md,
     paddingVertical: Space.xs,
-  },
-  frameCountBtn: {
-    minWidth: 48,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   frameCountText: {
     fontFamily: FontFamily.semibold,

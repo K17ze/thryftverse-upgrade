@@ -29,7 +29,7 @@ import {
   Linking } from 'react-native';
 import { appStorage } from '../../storage/mmkv';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
 const DISMISSED_KEY = '@thryftverse/ai_disclosure_dismissed';
@@ -273,7 +273,7 @@ export function AITransparencyDisclosure({
       flex: 1,
       backgroundColor: colors.brand,
       paddingVertical: Space.md,
-      borderRadius: 16,
+      borderRadius: Radius.xl,
       alignItems: 'center' },
     primaryButtonText: {
       fontSize: TypographyV2.sectionTitle.size,

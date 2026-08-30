@@ -18,9 +18,16 @@ import type { LookApiItem } from '../services/looksApi';
 
 const EDITORIAL_ANCHOR_INTERVAL = 8;
 
-// Deterministic height rhythm: a 7-step cycle that creates organic masonry
+// FALLBACK height rhythm: a 7-step cycle that creates organic masonry
 // staggering without visible pattern repetition. Prime-length cycles avoid
 // the "every 4th item looks the same" tell.
+//
+// This is used ONLY when a look's real media dimensions are unavailable
+// (see deriveRealAspectRatio in resolveLookTemplate). The primary path uses
+// the look's real coverAspectRatio / mediaWidth / mediaHeight so the grid
+// reflects true media geometry rather than fabricated variety (Design.md
+// §1841: "clients do not fabricate variety from IDs or alternating
+// constants").
 //
 // Per Instagram Explore 2026 research: portrait/vertical ratios dominate
 // ~70-80% of discovery grids. This rhythm is weighted toward portrait and
@@ -51,8 +58,13 @@ export interface LookTemplate {
  *
  * Editorial anchors (span 2) appear every 8th item for visual rhythm.
  * Video and multi-layer collage looks get cinematic (span 2, 16:9).
- * All other looks get 1×1 tiles with deterministic height variation
- * from the 7-step HEIGHT_RHYTHM cycle.
+ * All other looks get 1×1 tiles whose aspect ratio is derived from the
+ * look's REAL media dimensions when the backend exposes them
+ * (`coverAspectRatio`, or `mediaWidth`/`mediaHeight`). Only when real
+ * dimensions are unavailable does the resolver fall back to the
+ * deterministic HEIGHT_RHYTHM cycle so the grid still staggers — this
+ * is an explicit fallback, not the primary path (Design.md §1841:
+ * "clients do not fabricate variety from IDs or alternating constants").
  *
  * When `maxSpan` is provided (e.g. for 3-column grids where span-2
  * is the maximum), editorial/cinematic tiles are clamped to that span.
@@ -74,14 +86,57 @@ export function resolveLookTemplate(
     return { span: 2, aspect: AspectRatio.wide, kind: 'cinematic' };
   }
 
-  // 1×1 tiles with deterministic height variation for true masonry rhythm.
-  // The cycle creates visual stagger between columns without randomness.
+  // Derive the real aspect ratio from the look's media dimensions when the
+  // backend exposes them. coverAspectRatio takes precedence over the raw
+  // pixel dimensions. This is the primary path — real data, not fabrication.
+  const realAspect = deriveRealAspectRatio(look);
+  if (realAspect != null) {
+    return classifyByAspectRatio(realAspect);
+  }
+
+  // FALLBACK: real media dimensions are unavailable, so use the deterministic
+  // HEIGHT_RHYTHM cycle to keep the grid staggering. This is a last-resort
+  // fallback only — the primary path above uses the look's real dimensions.
   const aspect = HEIGHT_RHYTHM[index % HEIGHT_RHYTHM.length];
   if (aspect === AspectRatio.portrait) {
     return { span: 1, aspect, kind: 'portrait' };
   }
   if (aspect === AspectRatio.square) {
     return { span: 1, aspect, kind: 'square' };
+  }
+  return { span: 1, aspect, kind: 'standard' };
+}
+
+/**
+ * Derive a real aspect ratio (width / height) from the look's media
+ * dimensions when available. Returns `null` when neither coverAspectRatio
+ * nor a valid mediaWidth/mediaHeight pair is present.
+ */
+function deriveRealAspectRatio(look: LookApiItem): number | null {
+  if (typeof look.coverAspectRatio === 'number' && look.coverAspectRatio > 0) {
+    return look.coverAspectRatio;
+  }
+  if (
+    typeof look.mediaWidth === 'number' && look.mediaWidth > 0 &&
+    typeof look.mediaHeight === 'number' && look.mediaHeight > 0
+  ) {
+    return look.mediaWidth / look.mediaHeight;
+  }
+  return null;
+}
+
+/**
+ * Classify a real aspect ratio into the template kind used by the grid.
+ * Portrait (< 0.9) → portrait; square-ish (0.9–1.1) → square; everything
+ * else → standard. Span is always 1 here — wide/cinematic tiles are handled
+ * earlier in resolveLookTemplate.
+ */
+function classifyByAspectRatio(aspect: number): LookTemplate {
+  if (aspect < 0.9) {
+    return { span: 1, aspect, kind: 'portrait' };
+  }
+  if (aspect <= 1.1) {
+    return { span: 1, aspect: AspectRatio.square, kind: 'square' };
   }
   return { span: 1, aspect, kind: 'standard' };
 }

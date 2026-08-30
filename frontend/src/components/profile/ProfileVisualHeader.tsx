@@ -153,8 +153,8 @@ export function ProfileVisualHeader({
             <AnimatedPressable style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={onEditProfile} {...PressPresets.primaryButton}>
               <Text style={styles.actionBtnPrimaryText}>Edit Profile</Text>
             </AnimatedPressable>
-            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); onShare?.(); }} {...PressPresets.iconButton}>
-              <Ionicons name="share-outline" size={16} color={colors.textPrimary} />
+            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); onShare?.(); }} accessibilityRole="button" accessibilityLabel="Share profile" {...PressPresets.iconButton}>
+              <Ionicons name="share-outline" size={16} color={colors.textPrimary} aria-hidden={true} />
             </AnimatedPressable>
           </>
         ) : (
@@ -166,11 +166,11 @@ export function ProfileVisualHeader({
             >
               <Text style={styles.actionBtnPrimaryText}>Message</Text>
             </AnimatedPressable>
-            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); onShare?.(); }} {...PressPresets.iconButton}>
-              <Ionicons name="share-outline" size={16} color={colors.textPrimary} />
+            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); onShare?.(); }} accessibilityRole="button" accessibilityLabel="Share profile" {...PressPresets.iconButton}>
+              <Ionicons name="share-outline" size={16} color={colors.textPrimary} aria-hidden={true} />
             </AnimatedPressable>
-            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); /* more actions */ }} {...PressPresets.iconButton}>
-              <Ionicons name="ellipsis-horizontal" size={16} color={colors.textPrimary} />
+            <AnimatedPressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={() => { haptic.light(); /* more actions */ }} accessibilityRole="button" accessibilityLabel="More options" {...PressPresets.iconButton}>
+              <Ionicons name="ellipsis-horizontal" size={16} color={colors.textPrimary} aria-hidden={true} />
             </AnimatedPressable>
           </>
         )}

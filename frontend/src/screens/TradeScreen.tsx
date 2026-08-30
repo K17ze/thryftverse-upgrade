@@ -17,6 +17,7 @@ import {
   sanitizeTradeQuantityInput,
   CO_OWN_FEE_RATE,
   TradeSide,
+  TradeEligibility,
   computeReservation,
   estimateFill,
   computeDepthWithinBand,
@@ -27,9 +28,11 @@ import {
   fetchCoOwnAssetById,
   fetchCoOwnHoldings,
   fetchCoOwnOrderBook,
+  fetchCoOwnEligibility,
   previewCoOwnOrder,
   reserveCoOwnOrder,
   type CoOwnOrderBookSnapshot,
+  type CoOwnEligibilityResult,
   type MarketCoOwnAsset } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
@@ -103,7 +106,10 @@ export default function TradeScreen() {
   const featureFlags = useCoOwnFeatureFlags();
 
   const currentUser = useStore((state) => state.currentUser);
-  const checkCoOwnEligibility = useStore((state) => state.checkCoOwnEligibility);
+
+  // Advisory only — the backend re-evaluates eligibility transactionally before any money mutation.
+  // The server is the source of truth; this state only drives the disabled UI + reason copy.
+  const [eligibilityResult, setEligibilityResult] = React.useState<CoOwnEligibilityResult | null>(null);
 
   const [side, setSide] = React.useState<TradeSide>(route.params?.side ?? 'buy');
   const [quantityInput, setQuantityInput] = React.useState('1');
@@ -157,6 +163,44 @@ export default function TradeScreen() {
 
     return () => { cancelled = true; };
   }, [tradeAssetId, currentUser?.id, show]);
+
+  // Fetch server-authoritative eligibility for the loaded asset. The result
+  // is advisory — it powers the disabled state and reason copy. The backend
+  // re-evaluates eligibility transactionally at order placement, so a stale
+  // or tampered value here can never authorise a trade. Re-fetches when the
+  // server-issued expiry lapses while the screen is mounted.
+  React.useEffect(() => {
+    if (!tradeAssetId) return;
+    let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const loadEligibility = () => {
+      fetchCoOwnEligibility(tradeAssetId)
+        .then((result) => {
+          if (cancelled) return;
+          setEligibilityResult(result);
+          const remainingMs = Date.parse(result.expiresAt) - Date.now();
+          // Re-fetch shortly after expiry, with a small floor so we never
+          // spin a tight loop on a malformed timestamp.
+          const nextDelay = Math.max(10_000, Math.min(remainingMs + 2_000, 60 * 60_000));
+          refreshTimer = setTimeout(loadEligibility, nextDelay);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // On failure, fall back to a restrictive local state so the UI
+          // shows a disabled button with a generic reason. The backend
+          // remains the authoritative gate at execution time.
+          setEligibilityResult(null);
+          refreshTimer = setTimeout(loadEligibility, 30_000);
+        });
+    };
+
+    loadEligibility();
+    return () => {
+      cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
+  }, [tradeAssetId]);
 
   // Poll the order book every 10s so traders see fresh depth without
   // manual refresh. Stops when the asset id changes or the screen unmounts.
@@ -294,7 +338,14 @@ export default function TradeScreen() {
     return { unitsAfter, ownershipPct, outstandingUnits };
   }, [side, quote.quantity, yourUnits, asset?.totalUnits]);
 
-  const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: t('trade.error.assetNotFound') };
+  // Advisory only — the backend re-evaluates eligibility transactionally before any money mutation.
+  // Map the server-evidenced result into the TradeEligibility shape consumed by the UI helpers.
+  const eligibility: TradeEligibility = (() => {
+    if (!asset) return { ok: false, message: t('trade.error.assetNotFound') };
+    if (!eligibilityResult) return { ok: false, message: t('trade.error.reconnectToReview') };
+    if (eligibilityResult.eligible) return { ok: true };
+    return { ok: false, message: eligibilityResult.message ?? t('trade.error.notEligible') };
+  })();
   const bookAgeSeconds = orderBook?.serverTimestamp
     ? Math.floor((Date.now() - new Date(orderBook.serverTimestamp).getTime()) / 1000)
     : 0;

@@ -123,7 +123,7 @@ export function CreatorCutoutSheet({
     }
   }, [visible, imageUri, show]);
 
-  // ── Sheet spring entrance/exit ───────────────────────────────────
+  // ── Sheet entrance/exit ──────────────────────────────────────────
   useEffect(() => {
     if (visible) {
       mountedRef.current = true;
@@ -131,7 +131,8 @@ export function CreatorCutoutSheet({
         sheetYSV.value = 0;
         backdropOpacitySV.value = 1;
       } else {
-        sheetYSV.value = withSpring(0, spring.entrance);
+        // Per §5.14: sheet entrance uses timing (ease-out), not spring.
+        sheetYSV.value = withTiming(0, { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) });
         backdropOpacitySV.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
       }
     } else if (mountedRef.current) {

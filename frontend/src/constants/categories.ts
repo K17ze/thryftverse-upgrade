@@ -145,7 +145,7 @@ export const CATEGORIES: Category[] = [
       { id: 'spt-racquet', name: 'Racquet sports', icon: 'tennisball-outline', hasChildren: true },
       { id: 'spt-golf', name: 'Golf', icon: 'golf-outline', hasChildren: true },
       { id: 'spt-equestrian', name: 'Equestrian', icon: 'ribbon-outline', hasChildren: true },
-      { id: 'spt-skate', name: 'Skateboards & scooters', icon: 'rocket-outline', hasChildren: true },
+      { id: 'spt-skate', name: 'Skateboards & scooters', icon: 'speedometer-outline', hasChildren: true },
       { id: 'spt-boxing', name: 'Boxing & martial arts', icon: 'shield-outline', hasChildren: true },
       { id: 'spt-casual', name: 'Casual sports & games', icon: 'game-controller-outline', hasChildren: true },
     ],

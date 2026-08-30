@@ -42,7 +42,7 @@ export function ChatActionSheet({
         description: "Take a new photo or video" },
       {
         id: "agent",
-        icon: "sparkles-outline",
+        icon: 'hardware-chip-outline',
         label: "Add assistant",
         description: "Deploy an AI assistant into this chat" },
     ],

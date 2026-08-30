@@ -189,7 +189,7 @@ async function fetchMediaAsset(assetId: string, signal?: AbortSignal): Promise<M
   return payload.asset;
 }
 
-async function publishMediaAsset(assetId: string, signal?: AbortSignal): Promise<MediaAssetReceipt> {
+export async function publishMediaAsset(assetId: string, signal?: AbortSignal): Promise<MediaAssetReceipt> {
   const payload = await fetchJson<{ ok: true; asset: MediaAssetReceipt }>(
     `/media/assets/${encodeURIComponent(assetId)}/publish`,
     {
@@ -202,7 +202,7 @@ async function publishMediaAsset(assetId: string, signal?: AbortSignal): Promise
   return payload.asset;
 }
 
-async function waitForPublishableMedia(
+export async function waitForPublishableMedia(
   assetId: string,
   signal?: AbortSignal,
 ): Promise<MediaAssetReceipt> {

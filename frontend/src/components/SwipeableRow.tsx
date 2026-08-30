@@ -310,7 +310,7 @@ export function SwipeableRow({
           pointerEvents="none"
         >
           <View style={styles.actionContent}>
-            <Ionicons name={leftAction.icon as any} size={Control.icon} color={colors.textInverse} />
+            <Ionicons name={leftAction.icon as keyof typeof Ionicons.glyphMap} size={Control.icon} color={colors.textInverse} />
             <Text style={styles.actionLabel} numberOfLines={1}>
               {leftAction.label}
             </Text>
@@ -328,7 +328,7 @@ export function SwipeableRow({
           pointerEvents="none"
         >
           <View style={styles.actionContent}>
-            <Ionicons name={rightAction.icon as any} size={Control.icon} color={colors.textInverse} />
+            <Ionicons name={rightAction.icon as keyof typeof Ionicons.glyphMap} size={Control.icon} color={colors.textInverse} />
             <Text style={styles.actionLabel} numberOfLines={1}>
               {rightAction.label}
             </Text>

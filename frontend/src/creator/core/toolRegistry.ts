@@ -10,13 +10,13 @@
  *      tools, text selected = text tools, etc.)
  *   2. The editor mode (Poster photo vs Poster video vs Look)
  *
- * Each {@link ToolContext} maps to a {@link ToolGroup} containing up to 6
+ * Each {@link ToolContext} maps to a {@link ToolGroup} containing up to 4
  * primary actions (always visible on the rail) and an overflow list (revealed
  * under the "More" button). The {@link ContextToolRail} surface consumes
  * these groups to render the appropriate tool set.
  *
  * Design references:
- *   - 09_VISUAL_SYSTEM spec: max 6 primary actions, overflow under "More"
+ *   - 09_VISUAL_SYSTEM spec: max 4 primary actions, overflow under "More"
  *   - AGENTS.md §4: composition and hierarchy over decoration
  *   - AGENTS.md §11: every visible control must perform a truthful action
  */

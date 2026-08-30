@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { fetchJson } from '../../../lib/apiClient';
-import { finalizePresignedMedia } from '../../../services/mediaUpload';
+import { finalizePresignedMedia, waitForPublishableMedia } from '../../../services/mediaUpload';
 import { createStableId } from '../../../utils/createStableId';
 import { detectMimeType, deriveFileName } from './MimeDetector';
 import { MultipartUploader } from './MultipartUploader';
@@ -529,6 +529,12 @@ export class UploadManager {
    *
    * This transport is **resumable** — on failure, only the failed part
    * is retried. On app restart, completed parts (with ETags) are skipped.
+   *
+   * After the backend assembles the final object and creates the
+   * media_asset row, this method polls until the asset reaches a
+   * publishable state and returns the canonical URL — identical to the
+   * single-PUT path's `finalizePresignedMedia` contract. The job is not
+   * marked complete until the asset is processed and ready.
    */
   private async performMultipartUpload(
     job: UploadJob,
@@ -551,7 +557,7 @@ export class UploadManager {
     }
 
     // Resume / upload remaining parts.
-    const remoteUrl = await this.multipartUploader.resume(
+    const result = await this.multipartUploader.resume(
       session,
       job.localPath,
       (uploadedBytes) => {
@@ -573,20 +579,35 @@ export class UploadManager {
 
     this.emitProgress(job.id, job.sizeBytes, job.sizeBytes);
 
-    // The backend's /complete endpoint creates an upload_finalizations
-    // record and returns the finalizationId. Store it on the job so
-    // downstream consumers (listing publication, media assets) can
-    // reference the verified object — identical to the single-PUT path.
-    const finalizationId = session.finalizationId;
+    const finalizationId = result.finalizationId;
+    let remoteUrl = result.publicUrl;
+    let mediaAssetId = result.mediaAssetId;
+
+    // Wait for the media asset to reach a publishable state — same
+    // guarantee as the single-PUT path. The backend's /complete endpoint
+    // creates the media_asset + processing job, but the asset may still
+    // be in 'integrity_verified' / 'processing' / 'moderation_pending'.
+    // Poll until it is 'publishable' or 'published', then use the
+    // canonical URL. If no media asset was created (e.g. the backend
+    // does not gate publication for this scope), fall back to the
+    // assembled object's public URL.
+    if (mediaAssetId) {
+      const publishedAsset = await waitForPublishableMedia(mediaAssetId, signal);
+      if (publishedAsset.canonicalUrl) {
+        remoteUrl = publishedAsset.canonicalUrl;
+      }
+    }
+
     await this.persistState(job.id, {
       status: 'completed',
       progress: 1,
       remoteUrl,
       finalizationId,
+      mediaAssetId,
       session,
     });
 
-    return { ok: true, remoteUrl, finalizationId };
+    return { ok: true, remoteUrl, finalizationId, mediaAssetId };
   }
 
   // ── XHR file upload with real byte progress ───────────────────────

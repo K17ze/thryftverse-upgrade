@@ -13,7 +13,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 const TAB_HEIGHT = 44;
 const TIMING_CONFIG = { duration: 220, easing: Easing.out(Easing.cubic) };
 
-export type TabKey = 'Shop' | 'Looks' | 'Reviews';
+export type TabKey = 'Listings' | 'Looks' | 'About' | 'Reviews';
 export type SegmentKey = 'forsale' | 'sold';
 
 interface TabRailProps {
@@ -237,7 +237,7 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    backgroundColor: colors.textPrimary,
+    backgroundColor: colors.brand,
     borderRadius: Radius.sm },
   segmentControl: {
     flexDirection: 'row',

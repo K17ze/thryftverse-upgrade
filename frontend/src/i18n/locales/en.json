@@ -524,7 +524,8 @@
     "tabs": {
       "shop": "Shop",
       "looks": "Looks",
-      "about": "About"
+      "about": "About",
+      "reviews": "Reviews"
     },
     "listings": {
       "emptyTitle": "List your first item",
@@ -702,8 +703,10 @@
       "title": "Pending approvals",
       "approving": "Approving…",
       "approve": "Approve",
+      "approveAction": "Approve request from {{botName}}",
       "rejecting": "Rejecting…",
       "reject": "Reject",
+      "rejectAction": "Reject request from {{botName}}",
       "errorApproveTitle": "Could not approve",
       "errorApproveMessage": "The request could not be approved.",
       "errorRejectTitle": "Could not reject",
@@ -712,6 +715,7 @@
     "cancel": {
       "cancelling": "Cancelling…",
       "cancel": "Cancel",
+      "cancelAction": "Cancel run for {{botName}}",
       "confirmTitle": "Cancel agent run",
       "confirmMessage": "Cancel the run for {{botName}}?",
       "confirmLabel": "Cancel run",

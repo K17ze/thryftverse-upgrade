@@ -610,8 +610,10 @@ const LayerRenderer = React.memo(function LayerRenderer({
   const lastGuideY = useSharedValue(0);
   const GUIDE_THROTTLE_PX = 2;
 
-  // Selection animation: border + handles fade/scale in with spring
-  // Premium: scale 0.8→1.0 on appearance, 1.0→0.8 + fade on disappearance
+  // Selection animation: border + handles fade/scale in.
+  // Per §5.14: replace decorative scale-from-0.8 spring with a quiet timing
+  // transition. Selection is a state change, not direct manipulation — use
+  // ease-out timing instead of spring bounce.
   const selectionOpacity = useSharedValue(0);
   const handleScale = useSharedValue(0.8);
   // Gesture lift shadow — increases during active gesture
@@ -623,34 +625,38 @@ const LayerRenderer = React.memo(function LayerRenderer({
 
   useEffect(() => {
     if (isSelected) {
-      selectionOpacity.value = reducedMotion ? withTiming(1, { duration: 0 }) : withSpring(1, spring.entrance);
-      handleScale.value = reducedMotion ? withTiming(1, { duration: 0 }) : withSpring(1, spring.success);
+      selectionOpacity.value = reducedMotion ? withTiming(1, { duration: 0 }) : withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) });
+      handleScale.value = reducedMotion ? withTiming(1, { duration: 0 }) : withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) });
       if (!reducedMotion) haptic.light();
     } else {
-      selectionOpacity.value = reducedMotion ? withTiming(0, { duration: 0 }) : withSpring(0, spring.entrance);
-      handleScale.value = reducedMotion ? withTiming(0.8, { duration: 0 }) : withSpring(0.8, spring.entrance);
+      selectionOpacity.value = reducedMotion ? withTiming(0, { duration: 0 }) : withTiming(0, { duration: 180, easing: Easing.in(Easing.cubic) });
+      handleScale.value = reducedMotion ? withTiming(0.8, { duration: 0 }) : withTiming(0.8, { duration: 180, easing: Easing.in(Easing.cubic) });
       if (!reducedMotion) haptic.light();
     }
-  }, [isSelected, selectionOpacity, handleScale, reducedMotion, spring, haptic]);
+  }, [isSelected, selectionOpacity, handleScale, reducedMotion, haptic]);
 
   // Gesture feedback badges (scale % and rotation angle)
   const [gestureBadge, setGestureBadge] = useState<string | null>(null);
 
-  // Sync shared values when document state changes (undo/redo/draft load/page change)
+  // Sync shared values when document state changes (undo/redo/draft load/page change).
+  // Per §5.14: spring is reserved for direct manipulation, not every state sync.
+  // These are programmatic position updates (undo/redo, draft load, page change),
+  // not user gestures — use a quiet timing transition instead of spring bounce.
   useEffect(() => {
     if (reducedMotion) {
-      // WCAG 2.2 §2.3.3 — instant snap, no spring bounce
+      // WCAG 2.2 §2.3.3 — instant snap, no animation when Reduce Motion is on
       translateX.value = withTiming(layer.x * canvasWidth, { duration: 0 });
       translateY.value = withTiming(layer.y * canvasHeight, { duration: 0 });
       scaleSV.value = withTiming(layer.scale, { duration: 0 });
       rotationSV.value = withTiming(normaliseDegrees(layer.rotation), { duration: 0 });
     } else {
-      translateX.value = withSpring(layer.x * canvasWidth, spring.entrance);
-      translateY.value = withSpring(layer.y * canvasHeight, spring.entrance);
-      scaleSV.value = withSpring(layer.scale, spring.entrance);
-      rotationSV.value = withSpring(normaliseDegrees(layer.rotation), spring.entrance);
+      const settle = { duration: 250, easing: Easing.out(Easing.cubic) };
+      translateX.value = withTiming(layer.x * canvasWidth, settle);
+      translateY.value = withTiming(layer.y * canvasHeight, settle);
+      scaleSV.value = withTiming(layer.scale, settle);
+      rotationSV.value = withTiming(normaliseDegrees(layer.rotation), settle);
     }
-  }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight, reducedMotion, spring]);
+  }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight, reducedMotion]);
 
   const handlePress = useCallback(() => {
     if (mode === 'edit' && onPress) {

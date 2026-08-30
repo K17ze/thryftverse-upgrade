@@ -54,7 +54,7 @@ function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: 
   };
 
   return (
-    <Text style={style} numberOfLines={expanded ? undefined : 2}>
+    <Text style={style} numberOfLines={expanded ? undefined : 3}>
       {segments.map((seg, i) =>
         seg.isLink ? (
           <Text
@@ -456,7 +456,8 @@ function createStyles(colors: ThemeColors) {
     flexShrink: 1,
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: TypographyV2.priceList.size,
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
     letterSpacing: -0.4,
     marginBottom: 2 },
   username: {

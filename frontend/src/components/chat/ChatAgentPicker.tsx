@@ -22,6 +22,12 @@ import { getAvailableAgents, type ChatAgent } from '../../services/chatAgentsApi
 import { useStore } from '../../store/useStore';
 import type { ConversationBotDeployment } from '../../domain';
 
+// Stable empty array reference for Zustand selector fallbacks.
+// Returning `[]` inline in a useStore selector creates a new array on
+// every call, which useSyncExternalStore interprets as a state change,
+// causing an infinite re-render loop (Maximum update depth exceeded).
+const EMPTY_DEPLOYMENTS: ConversationBotDeployment[] = [];
+
 interface ChatAgentPickerProps {
   visible: boolean;
   onClose: () => void;
@@ -46,7 +52,7 @@ export function ChatAgentPicker({
   // Real backend deployment state (production only).
   const loadConversationDeployments = useStore((s) => s.loadConversationDeployments);
   const deployments = useStore((s) =>
-    conversationId ? s.conversationDeployments[conversationId] ?? [] : [],
+    conversationId ? s.conversationDeployments[conversationId] ?? EMPTY_DEPLOYMENTS : EMPTY_DEPLOYMENTS,
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -188,7 +194,7 @@ function deploymentToAgent(d: ConversationBotDeployment): ChatAgent {
     id: d.botId,
     type: 'custom',
     name: d.botName,
-    avatar: 'sparkles-outline',
+    avatar: 'hardware-chip-outline',
     description: d.commandHint,
     capabilities: d.permissionsSnapshot,
     isDemo: false };

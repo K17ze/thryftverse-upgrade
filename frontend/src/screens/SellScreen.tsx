@@ -767,7 +767,7 @@ export default function SellScreen() {
                 <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipLighting')}</Text>
               </View>
               <View style={styles.contextualPromptRow}>
-                <Ionicons name="cube-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                <Ionicons name="camera-reverse-outline" size={12} color={colors.textMuted} aria-hidden={true} />
                 <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipAngles')}</Text>
               </View>
               <View style={styles.contextualPromptRow}>
@@ -832,7 +832,7 @@ export default function SellScreen() {
             >
               <View style={[styles.importShopSeparator, { backgroundColor: colors.borderSubtle }]} />
               <View style={styles.importShopContent}>
-                <Ionicons name="cube-outline" size={22} color={colors.brand} aria-hidden={true} />
+                <Ionicons name="download-outline" size={22} color={colors.brand} aria-hidden={true} />
                 <View style={styles.importShopText}>
                   <Text style={[styles.importShopTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                     {t('listing.create.importShop')}
@@ -890,7 +890,7 @@ export default function SellScreen() {
               When the flag is off, the current autofill-only behaviour runs. */}
           {aiListingAssistEnabled && mediaDraftItems.length > 0 ? (
             <View style={[styles.autofillCard, themed.autofillCard, { flexDirection: 'row', alignItems: 'center', gap: Space.sm }]}>
-              <Ionicons name="sparkles" size={18} color={colors.brand} aria-hidden={true} />
+              <Ionicons name="create-outline" size={18} color={colors.brand} aria-hidden={true} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.autofillTitle, themed.autofillTitle]}>{t('listing.create.aiAssist')}</Text>
                 <Text style={[themed.autofillDesc, { marginTop: 2 }]}>

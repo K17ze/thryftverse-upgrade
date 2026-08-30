@@ -886,7 +886,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                             accessibilityLabel={`Browse ${cat.label} category`}
                             accessibilityRole="button"
                           >
-                            <Ionicons name={cat.icon as any} size={18} color={colors.textMuted} aria-hidden={true} />
+                            <Ionicons name={cat.icon as keyof typeof Ionicons.glyphMap} size={18} color={colors.textMuted} aria-hidden={true} />
                             <Text style={[styles.categoryGridLabel, { color: colors.textPrimary }]} numberOfLines={1}>{cat.label}</Text>
                           </AnimatedPressable>
                         ))}
@@ -908,7 +908,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                       accessibilityLabel="AI Search — search in natural language"
                       accessibilityHint="Opens conversational AI search"
                     >
-                      <Ionicons name="sparkles" size={16} color={colors.brand} aria-hidden={true} />
+                      <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.brand} aria-hidden={true} />
                       <Text style={[styles.aiSearchPillText, { color: colors.brand }]}>Ask AI Search</Text>
                       <Ionicons name="arrow-forward" size={14} color={colors.brand} aria-hidden={true} />
                     </AnimatedPressable>
@@ -1078,7 +1078,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                         accessibilityLabel={`Browse ${cat.label} category`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name={cat.icon as any} size={16} color={colors.brand} aria-hidden={true} />
+                        <Ionicons name={cat.icon as keyof typeof Ionicons.glyphMap} size={16} color={colors.brand} aria-hidden={true} />
                         <Text style={[styles.trendingFocusText, t.trendingFocusText]}>{cat.label}</Text>
                       </AnimatedPressable>
                     ))}
@@ -1465,7 +1465,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                                 accessibilityLabel={`Browse ${cat.label} category`}
                                 accessibilityRole="button"
                               >
-                                <Ionicons name={cat.icon as any} size={12} color={colors.brand} aria-hidden={true} />
+                                <Ionicons name={cat.icon as keyof typeof Ionicons.glyphMap} size={12} color={colors.brand} aria-hidden={true} />
                                 <Text style={styles.recentChipText} numberOfLines={1}>{cat.label}</Text>
                               </AnimatedPressable>
                             ))}
@@ -1534,7 +1534,7 @@ const styles = StyleSheet.create({
 
   // Conversational AI Search pill — additive entry point gated by the
   // conversational_search feature flag. A hairline-bordered pill with a
-  // sparkles icon so it reads as a distinct search mode, not decoration.
+  // chatbubble icon so it reads as a conversational search mode, not magic decoration.
   // Brand-tinted colours are applied inline (static styles can't see theme).
   aiSearchPillWrap: {
     paddingHorizontal: Space.md,

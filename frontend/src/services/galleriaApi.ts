@@ -441,7 +441,7 @@ export async function fetchGalleriaCollections(): Promise<GalleriaCollection[]> 
     return data.items.map(mapApiCollection);
   } catch {
     await delay(420);
-    GALLERIA_DEMO_MODE = true;
+    GALLERIA_DEMO_MODE = __DEV__;
     return [...MOCK_COLLECTIONS].sort(
       (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
     );
@@ -460,7 +460,7 @@ export async function fetchGalleriaEditorials(): Promise<GalleriaEditorial[]> {
     return data.items.map(mapApiEditorial);
   } catch {
     await delay(380);
-    GALLERIA_DEMO_MODE = true;
+    GALLERIA_DEMO_MODE = __DEV__;
     return [...MOCK_EDITORIALS].sort(
       (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
     );
@@ -490,11 +490,11 @@ export async function fetchFeaturedAssets(): Promise<GalleriaFeaturedAsset[]> {
       GALLERIA_DEMO_MODE = false;
       return assets;
     }
-    GALLERIA_DEMO_MODE = true;
+    GALLERIA_DEMO_MODE = __DEV__;
     return [...MOCK_FEATURED_ASSETS];
   } catch {
     await delay(360);
-    GALLERIA_DEMO_MODE = true;
+    GALLERIA_DEMO_MODE = __DEV__;
     return [...MOCK_FEATURED_ASSETS];
   }
 }
@@ -514,7 +514,7 @@ export async function fetchCollectionDetail(id: string): Promise<GalleriaCollect
     };
   } catch {
     await delay(320);
-    GALLERIA_DEMO_MODE = true;
+    GALLERIA_DEMO_MODE = __DEV__;
     const collection = MOCK_COLLECTIONS.find((c) => c.id === id) ?? null;
     if (!collection) return null;
     const items = MOCK_FEATURED_ASSETS.filter((a) => collection.itemIds.includes(a.id));

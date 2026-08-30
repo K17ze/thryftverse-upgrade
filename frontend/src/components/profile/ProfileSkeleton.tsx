@@ -9,7 +9,7 @@ const CARD_ASPECT = 1.25;
 const LOOK_COLS = 2;
 const LOOK_GAP = Space.xxs;
 
-type SkeletonDestination = 'Shop' | 'Looks' | 'Reviews';
+type SkeletonDestination = 'Listings' | 'Looks' | 'About' | 'Reviews';
 
 interface ProfileSkeletonProps {
   coverHeight?: number;
@@ -34,7 +34,7 @@ export function ProfileSkeleton({
   coverHeight = ProfileLayout.coverHeightSkeleton,
   avatarSize = ProfileLayout.avatarSkeleton,
   screenWidth,
-  destination = 'Shop',
+  destination = 'Listings',
 }: ProfileSkeletonProps) {
   const { colors, isDark } = useAppTheme();
   const avatarOverlap = avatarSize / 2;
@@ -100,7 +100,7 @@ export function ProfileSkeleton({
           </View>
 
           {/* Destination-specific content skeletons */}
-          {destination === 'Shop' ? (
+          {destination === 'Listings' ? (
             <View style={styles.skeletonGrid}>
               <SkeletonLoader width={cardW} height={cardH} borderRadius={Radius.sm} />
               <SkeletonLoader width={cardW} height={cardH} borderRadius={Radius.sm} />

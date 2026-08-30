@@ -756,7 +756,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           </View>
 
           <View style={[styles.inputWrap, { borderColor: colors.border }]}>
-            <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+            <Ionicons name="bookmark-outline" size={16} color={colors.textMuted} />
             <TextInput
               style={[styles.input, { color: colors.inputText }]}
               placeholder={t('connect.labelOptional')}
@@ -1014,7 +1014,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 {/* Provider header row */}
                 <View style={styles.providerHeader}>
                   <View style={styles.providerIdentity}>
-                    <Ionicons name={config.icon as any} size={20} color={colors.textPrimary} />
+                    <Ionicons name={config.icon as keyof typeof Ionicons.glyphMap} size={20} color={colors.textPrimary} />
                     <View style={styles.providerNameWrap}>
                       <Text style={[styles.providerName, { color: colors.textPrimary }]} numberOfLines={1}>
                         {config.name}

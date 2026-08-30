@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -46,6 +46,11 @@ import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHe
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
 import { useSellerTrust, VERIFICATION_TIERS } from '../platform/product';
+import { useSellerReviewsInfinite } from '../platform/server';
+import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
+import { ShopRail, type ShopRailItem } from '../components/profile/ShopRail';
+import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
+import { openProfile } from '../navigation/openProfile';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
@@ -154,7 +159,7 @@ export default function MyProfileScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = React.useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
-  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'about'>('listings');
+  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'about' | 'reviews'>('listings');
   const tabContentY = React.useRef(0);
 
   const { show } = useToast();
@@ -173,6 +178,18 @@ export default function MyProfileScreen() {
 
   // Seller trust summary — verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
+
+  // Seller reviews — infinite list for the Reviews tab. Only rendered when
+  // the seller has reviews (reviewCount > 0), keeping the tab conditional.
+  const reviewsQuery = useSellerReviewsInfinite(currentUser?.id);
+  const myReviews: SellerReviewItem[] = React.useMemo(() => {
+    const pages = reviewsQuery.data?.pages ?? [];
+    const items: SellerReviewItem[] = [];
+    for (const page of pages) for (const item of page.items) items.push(item);
+    return items;
+  }, [reviewsQuery.data]);
+  const myReviewSummary: SellerReviewSummary | null = reviewsQuery.data?.pages?.[0]?.summary ?? null;
+  const myReviewCount = sellerTrust?.reviewCount ?? myReviewSummary?.reviewCount ?? 0;
 
   // Follow counts — followers/following for the seam row.
   // Status distinguishes loading/error from a real zero so the UI never
@@ -363,6 +380,24 @@ export default function MyProfileScreen() {
       });
   }, [listings, profileUserId]);
 
+  // Curated shop window — featured listings for the ShopRail. The rail renders
+  // only when featured items exist (ShopRail returns null for empty input),
+  // keeping the first viewport truthful — no fabricated placeholder content.
+  const shopRailItems = React.useMemo<ShopRailItem[]>(() => {
+    return allOwnedListings
+      .filter((item) => item.featured === true)
+      .slice(0, 10)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        imageUri: item.images?.[0] ?? '',
+        brand: item.brand ?? null,
+        isSold: item.isSold,
+        isPinned: true,
+      }));
+  }, [allOwnedListings]);
+
   // Profile completion — drives the progress prompt. Completion measures ONLY
   // identity fields the user can complete directly: display name, bio, profile
   // photo and cover. Audience growth (followers) and first listing are NOT
@@ -551,13 +586,66 @@ export default function MyProfileScreen() {
   const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
   const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait grid
 
+  const renderListingItem = useCallback(
+    ({ item, index }: { item: (typeof allOwnedListings)[number]; index: number }) => {
+      const isFeatured = item.featured === true;
+      const colIndex = index % 3;
+      return (
+        <View
+          style={{
+            paddingLeft: colIndex === 0 ? Space.md : Space.xs / 2,
+            paddingRight: colIndex === 2 ? Space.md : Space.xs / 2,
+            paddingBottom: Space.sm,
+          }}
+        >
+          <AnimatedPressable
+            style={styles.gridCard}
+            onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
+            accessibilityRole="button"
+            accessibilityLabel={`Manage ${item.title}${isFeatured ? ', pinned' : ''}`}
+          >
+            <SharedTransitionView
+              style={[styles.gridImageWrap, { height: CARD_HEIGHT }]}
+              sharedTransitionTag={`image-${item.id}-0`}
+            >
+              <CachedImage
+                uri={item.images?.[0] ?? ''}
+                style={styles.gridImage}
+                containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
+                contentFit="cover"
+              />
+              {isFeatured ? (
+                <View style={[styles.pinnedBadge, t.pinnedBadge]} pointerEvents="none">
+                  <Ionicons name="pin" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
+                </View>
+              ) : null}
+              {item.isSold ? (
+                <View style={[styles.soldOverlay, t.soldOverlay]}>
+                  <Text style={[styles.soldText, t.soldText]}>{tt('listings.sold')}</Text>
+                </View>
+              ) : null}
+            </SharedTransitionView>
+            <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
+              {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
+            </Text>
+            {item.brand ? (
+              <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
+            ) : null}
+          </AnimatedPressable>
+        </View>
+      );
+    },
+    [navigation, t, tt, colors, formatFromFiat, currencyCode, CARD_HEIGHT]
+  );
+
   const tabs = React.useMemo(
     () => [
       { key: 'listings', label: tt('tabs.shop'), count: allOwnedListings.length },
       { key: 'looks', label: tt('tabs.looks'), count: myLooks.length },
       { key: 'about', label: tt('tabs.about') },
+      ...(myReviewCount > 0 ? [{ key: 'reviews' as const, label: tt('tabs.reviews'), count: myReviewCount }] : []),
     ],
-    [tt, allOwnedListings.length, myLooks.length]
+    [tt, allOwnedListings.length, myLooks.length, myReviewCount]
   );
 
   return (
@@ -758,11 +846,21 @@ export default function MyProfileScreen() {
           {/* ── 8. COMPACT MARKETPLACE UTILITY RAIL ── */}
           <ProfileUtilityRail items={utilityItems} />
 
+          {/* ── 8b. CURATED SHOP WINDOW ──
+              Horizontal rail of featured listings — the shop's front window.
+              Renders only when featured items exist (ShopRail returns null
+              when empty). Sits between the utility rail and the tab rail so
+              the curated selection leads into the full shop grid. */}
+          <ShopRail
+            items={shopRailItems}
+            onPressItem={(id) => { haptic.light(); navigation.navigate('ManageListing', { itemId: id }); }}
+          />
+
           {/* ── 9. STICKY FLAT TAB RAIL ── */}
           <MyProfileTabRail
             tabs={tabs}
             activeKey={activeTab}
-            onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
+            onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about' | 'reviews')}
           />
         </View>
 
@@ -824,54 +922,7 @@ export default function MyProfileScreen() {
                   data={allOwnedListings}
                   numColumns={3}
                   keyExtractor={(item) => item.id}
-                  renderItem={({ item, index }) => {
-                    const isFeatured = item.featured === true;
-                    const colIndex = index % 3;
-                    return (
-                      <View
-                        style={{
-                          paddingLeft: colIndex === 0 ? Space.md : Space.xs / 2,
-                          paddingRight: colIndex === 2 ? Space.md : Space.xs / 2,
-                          paddingBottom: Space.sm,
-                        }}
-                      >
-                        <AnimatedPressable
-                          style={styles.gridCard}
-                          onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Manage ${item.title}${isFeatured ? ', pinned' : ''}`}
-                        >
-                          <SharedTransitionView
-                            style={[styles.gridImageWrap, { height: CARD_HEIGHT }]}
-                            sharedTransitionTag={`image-${item.id}-0`}
-                          >
-                            <CachedImage
-                              uri={item.images?.[0] ?? ''}
-                              style={styles.gridImage}
-                              containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
-                              contentFit="cover"
-                            />
-                            {isFeatured ? (
-                              <View style={[styles.pinnedBadge, t.pinnedBadge]} pointerEvents="none">
-                                <Ionicons name="pin" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
-                              </View>
-                            ) : null}
-                            {item.isSold ? (
-                              <View style={[styles.soldOverlay, t.soldOverlay]}>
-                                <Text style={[styles.soldText, t.soldText]}>{tt('listings.sold')}</Text>
-                              </View>
-                            ) : null}
-                          </SharedTransitionView>
-                          <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
-                            {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
-                          </Text>
-                          {item.brand ? (
-                            <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
-                          ) : null}
-                        </AnimatedPressable>
-                      </View>
-                    );
-                  }}
+                  renderItem={renderListingItem}
                   scrollEnabled={false}
                 />
               </>
@@ -1026,6 +1077,53 @@ export default function MyProfileScreen() {
 
             {!user.website && !sellerTrust && (
               <Text style={[styles.aboutEmpty, t.aboutEmpty]}>{tt('about.noDetails')}</Text>
+            )}
+          </Reanimated.View>
+        )}
+
+        {/* REVIEWS TAB — reputation summary + review rows.
+            Only rendered when the seller has reviews (the tab itself is
+            conditional on myReviewCount > 0). Owner can respond to reviews. */}
+        {activeTab === 'reviews' && (
+          <Reanimated.View
+            key="reviews"
+            entering={reducedMotion ? undefined : FadeIn.duration(200)}
+            style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
+          >
+            {myReviewSummary && myReviewCount > 0 ? (
+              <ReviewSummaryBlock summary={myReviewSummary} />
+            ) : null}
+            {reviewsQuery.isLoading && myReviews.length === 0 ? (
+              <View style={{ paddingVertical: Space.xl, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.brand} />
+              </View>
+            ) : reviewsQuery.error && myReviews.length === 0 ? (
+              <EmptyState
+                density="compact"
+                icon="cloud-offline-outline"
+                title="Couldn't load reviews"
+                subtitle="Check your connection and try again."
+                ctaLabel="Try again"
+                onCtaPress={() => { void reviewsQuery.refetch(); }}
+              />
+            ) : myReviews.length === 0 ? (
+              <EmptyState
+                density="compact"
+                icon="chatbubble-ellipses-outline"
+                title="No reviews yet"
+                subtitle="Reviews from completed orders will appear here."
+              />
+            ) : (
+              <View style={{ paddingHorizontal: Space.md }}>
+                {myReviews.map((review) => (
+                  <ProfileReviewRow
+                    key={review.id}
+                    item={review}
+                    onOpenReviewer={(uid) => openProfile(navigation, uid, currentUser?.id)}
+                    onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
+                  />
+                ))}
+              </View>
             )}
           </Reanimated.View>
         )}
@@ -1438,7 +1536,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.label.size,
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
     paddingTop: Space.md + 4,
     paddingBottom: Space.sm },
   aboutRow: {
@@ -1450,7 +1547,6 @@ const styles = StyleSheet.create({
   aboutLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    textTransform: 'uppercase',
     letterSpacing: TypographyV2.label.letterSpacing },
   aboutValue: {
     fontSize: TypographyV2.body.size,

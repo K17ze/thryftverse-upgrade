@@ -71,7 +71,7 @@ export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowPr
         {isBusy ? (
           <ActivityIndicator size={20} color={colors.danger} style={styles.icon} />
         ) : (
-          <Ionicons name="log-out-outline" size={24} color={colors.danger} style={styles.icon} />
+          <Ionicons name="log-out-outline" size={24} color={colors.danger} style={styles.icon} aria-hidden={true} />
         )}
         <Text style={styles.label}>
           {isBusy ? 'Signing out…' : 'Sign Out'}

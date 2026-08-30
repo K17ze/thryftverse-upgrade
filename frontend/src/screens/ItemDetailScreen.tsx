@@ -62,6 +62,7 @@ import {
   SizeGuideSheet,
   BundleUpsellRow,
   ListingQA,
+  SeenInLooksRail,
 } from '../components/product';
 import {
   CommerceMediaStage,
@@ -100,6 +101,7 @@ import {
   buildSellerTrustSummary,
   buildCapabilities,
   isRecommendationLook,
+  type RecommendationLook,
 } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
 import { track } from '../analytics/track';
@@ -647,6 +649,15 @@ export default function ItemDetailScreen() {
       )
     : [];
 
+  // "Seen in Looks" — community Looks that tag this item. Sourced from
+  // the `seen_in_looks` recommendation section. Only rendered when the
+  // backend supplies real look data (Design.md: "Seen in Looks" below
+  // core decision info).
+  const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
+  const seenInLooksItems: RecommendationLook[] = seenInLooksSection
+    ? seenInLooksSection.items.filter(isRecommendationLook)
+    : [];
+
   const handlePressRecommendation = (
     recItem: Listing,
     recSectionKey?: string,
@@ -713,7 +724,10 @@ export default function ItemDetailScreen() {
     formattedProtectionTotal ? `${formattedProtectionTotal} with Buyer Protection` : null,
   ].filter(Boolean).join(' · ') || undefined;
 
-  const familyStateAccent = item.isSold ? 'Sold' : null;
+  // The sold state is already shown via the media overlay "SOLD" badge
+  // and the dock "Sold" badge — don't repeat it on the ProductFamilyBadge.
+  // The family badge should communicate provenance, not transaction state.
+  const familyStateAccent = null;
 
   // ── Dock geometry ──
   const isDualActionDock = !capabilities.isOwner && !capabilities.isSold && capabilities.canBuy && capabilities.canOffer;
@@ -1517,6 +1531,16 @@ export default function ItemDetailScreen() {
           );
         })()}
 
+        {/* Seen in Looks — community-styled outfits featuring this item.
+            Per Design.md: "Seen in Looks" below core decision info.
+            Only rendered when the backend supplies real look data. */}
+        {seenInLooksItems.length > 0 ? (
+          <SeenInLooksRail
+            items={seenInLooksItems}
+            onPressItem={(look) => navigation.navigate('LookDetail', { lookId: look.id })}
+          />
+        ) : null}
+
         {recsError && recommendationSections.length === 0 && (
           <View style={styles.recErrorRow}>
             <CommerceDetailUnavailableInline
@@ -1871,6 +1895,7 @@ export default function ItemDetailScreen() {
               value={formattedProtectionTotal}
               subLabel={commerce.shippingPayer === 'seller' ? undefined : 'excl. shipping'}
               emphasis
+              large
               separated
             />
           ) : null}

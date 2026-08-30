@@ -26,6 +26,7 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
+  ScrollView,
   useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,17 +41,17 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useForYouFeed } from '../hooks/useForYouFeed';
 import { useBackendData } from '../context/BackendDataContext';
 
-import { Space, Radius, FontFamily, Control } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Control, AspectRatio } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { MasonrySkeleton } from '../components/skeletons/MasonrySkeleton';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { HorizontalRail } from '../components/HorizontalRail';
-import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 
 import { assembleDiscoveryFeed } from '../utils/discoveryFeedAssembly';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
@@ -188,7 +189,16 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
                 category: item.category ?? '',
                 createdAt: item.createdAt },
               item.imageUrl ?? '',
-              1, // Search API doesn't return aspect ratio; default to square
+              // The Search API does not currently return media dimensions or
+              // an aspect ratio. Most fashion marketplace imagery is portrait,
+              // so 4:5 (marketplace standard) is the correct fallback rather
+              // than 1:1 square, which would crop portrait items awkwardly.
+              // When the API later exposes aspectRatio or mediaWidth/
+              // mediaHeight, those real values are preferred here.
+              item.aspectRatio ??
+                (item.mediaWidth && item.mediaHeight
+                  ? item.mediaWidth / item.mediaHeight
+                  : AspectRatio.marketplace),
             )));
           }
         })
@@ -300,6 +310,15 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const showLoadingSkeleton = !hasAnyContent && (isDiscoveryLoading || forYouFeed.isLoading || (isSyncing && !lastError));
   const showError = !hasAnyContent && Boolean(lastError) && !isSyncing && !isDiscoveryLoading && !forYouFeed.isLoading;
   const showEmpty = !hasAnyContent && !isSyncing && !lastError && !isDiscoveryLoading && !forYouFeed.isLoading;
+  // Filtered-empty: a category pill is selected but returns 0 listings. This
+  // is distinct from the generic empty state (no data at all) — here we have
+  // data, just none matching the selected category. Takes precedence over
+  // showEmpty so the user gets a contextual message + "Browse all" action.
+  const showFilteredEmpty =
+    activeCategory !== 'All' &&
+    personalisedListings.length === 0 &&
+    !showLoadingSkeleton &&
+    !showError;
 
   // ── Search bar header — back button + search bar + camera, all in the
   //  header so the search bar sits right below the status bar with no
@@ -368,6 +387,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             isLoading={showLoadingSkeleton}
             showError={showError}
             showEmpty={showEmpty}
+            showFilteredEmpty={showFilteredEmpty}
             isOffline={isOffline}
             greeting={greeting}
             firstName={firstName}
@@ -403,6 +423,7 @@ function DiscoveryFeedView({
   isLoading,
   showError,
   showEmpty,
+  showFilteredEmpty,
   isOffline,
   greeting,
   firstName,
@@ -426,6 +447,7 @@ function DiscoveryFeedView({
   isLoading: boolean;
   showError: boolean;
   showEmpty: boolean;
+  showFilteredEmpty: boolean;
   isOffline: boolean;
   greeting: string;
   firstName: string;
@@ -462,6 +484,21 @@ function DiscoveryFeedView({
     );
   }
 
+  if (showFilteredEmpty) {
+    return (
+      <View style={styles.stateWrap}>
+        <EmptyState
+          density="compact"
+          icon="pricetags-outline"
+          title={`No ${activeCategory.toLowerCase()} items yet`}
+          subtitle="Try another category or check back soon."
+          ctaLabel="Browse all"
+          onCtaPress={() => onCategoryChange('All')}
+        />
+      </View>
+    );
+  }
+
   if (showEmpty) {
     return (
       <View style={styles.stateWrap}>
@@ -490,28 +527,36 @@ function DiscoveryFeedView({
         </Text>
       </View>
 
-      {/* Category pills — horizontal scroll, pill = filter not decoration */}
+      {/* Category pills — horizontal scroll, pill = filter not decoration.
+          Wrapped in a ScrollView so 8+ pills scroll on narrow screens with a
+          partial next pill visible at the edge (paddingRight: Space.md). */}
       <View style={styles.categoryBar}>
-        {(CATEGORY_PILLS as readonly CategoryPill[]).map((pill) => (
-          <Pressable
-            key={pill}
-            onPress={() => onCategoryChange(pill)}
-            style={[
-              styles.categoryPill,
-              activeCategory === pill && styles.categoryPillActive,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={`Filter by ${pill}`}
-            accessibilityState={{ selected: activeCategory === pill }}
-          >
-            <Text style={[
-              styles.categoryPillText,
-              activeCategory === pill && styles.categoryPillTextActive,
-            ]}>
-              {pill}
-            </Text>
-          </Pressable>
-        ))}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryBarContent}
+        >
+          {(CATEGORY_PILLS as readonly CategoryPill[]).map((pill) => (
+            <Pressable
+              key={pill}
+              onPress={() => onCategoryChange(pill)}
+              style={[
+                styles.categoryPill,
+                activeCategory === pill && styles.categoryPillActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Filter by ${pill}`}
+              accessibilityState={{ selected: activeCategory === pill }}
+            >
+              <Text style={[
+                styles.categoryPillText,
+                activeCategory === pill && styles.categoryPillTextActive,
+              ]}>
+                {pill}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Hero editorial — full-width media object, no decorative chrome */}
@@ -565,28 +610,13 @@ function DiscoveryFeedView({
     </>
   );
 
-  // Loading skeleton
+  // Loading skeleton — use the shared MasonrySkeleton so the loading frame
+  // matches the final FlashList masonry layout (no loading→final geometry
+  // shift). AGENTS.md §4 / §14: skeletons should resemble the final layout.
   if (isLoading) {
     return (
       <View style={styles.skeletonWrap}>
-        <PremiumSkeletonTile width="100%" height={200} borderRadius={Radius.lg} />
-        <View style={{ height: Space.md }} />
-        <View style={styles.skeletonRail}>
-          {Array.from({ length: 3 }).map((_, i) => (
-            <PremiumSkeletonTile key={i} width={160} height={200} borderRadius={Radius.lg} />
-          ))}
-        </View>
-        <View style={{ height: Space.lg }} />
-        <View style={styles.skeletonMasonry}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <PremiumSkeletonTile
-              key={i}
-              width="48%"
-              height={200 + (i % 2) * 60}
-              borderRadius={Radius.lg}
-            />
-          ))}
-        </View>
+        <MasonrySkeleton numColumns={2} itemCount={8} />
       </View>
     );
   }
@@ -865,10 +895,13 @@ function createStyles(colors: ThemeColors) {
       lineHeight: TypographyV2.screenTitle.lineHeight },
     // Category pills
     categoryBar: {
+      paddingVertical: Space.xs },
+    categoryBarContent: {
       flexDirection: 'row',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-      gap: Space.xs },
+      paddingRight: Space.md,
+      gap: Space.xs,
+      alignItems: 'center' },
     categoryPill: {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 2,
@@ -943,14 +976,6 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       paddingHorizontal: Space.md,
       paddingTop: Space.sm },
-    skeletonRail: {
-      flexDirection: 'row',
-      gap: Space.sm },
-    skeletonMasonry: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.sm,
-      justifyContent: 'space-between' },
     // Search results
     searchResultsWrap: {
       flex: 1 },

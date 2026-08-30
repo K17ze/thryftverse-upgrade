@@ -169,19 +169,42 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
     [manager, projectId],
   );
 
-  return {
-    jobs: filteredJobs,
-    isUploading,
-    progress,
-    totalBytes,
-    uploadedBytes,
-    queueUpload,
-    pauseJob,
-    resumeJob,
-    cancelJob,
-    retryJob,
-    isProjectComplete,
-    waitForCompletion,
-    projectProgress,
-  };
+  // Memoize the return value so the object reference is stable across
+  // re-renders when no underlying values have changed. Without this,
+  // consumers that include `uploadManager` in useCallback/useEffect
+  // dependency arrays would see a new reference on every render, causing
+  // those callbacks/effects to re-run unnecessarily — a common source of
+  // infinite update loops.
+  return useMemo(
+    () => ({
+      jobs: filteredJobs,
+      isUploading,
+      progress,
+      totalBytes,
+      uploadedBytes,
+      queueUpload,
+      pauseJob,
+      resumeJob,
+      cancelJob,
+      retryJob,
+      isProjectComplete,
+      waitForCompletion,
+      projectProgress,
+    }),
+    [
+      filteredJobs,
+      isUploading,
+      progress,
+      totalBytes,
+      uploadedBytes,
+      queueUpload,
+      pauseJob,
+      resumeJob,
+      cancelJob,
+      retryJob,
+      isProjectComplete,
+      waitForCompletion,
+      projectProgress,
+    ],
+  );
 }

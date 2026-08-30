@@ -341,6 +341,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
           </Text>
           <Pressable
             onPress={() => load(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t('error.retry')}
             hitSlop={8}
             style={({ pressed }) => [styles.retryBtn, { backgroundColor: colors.surfaceAlt, opacity: pressed ? 0.7 : 1 }]}
           >
@@ -466,6 +468,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                       <Pressable
                         onPress={() => handleApprove(approval)}
                         disabled={isBusy}
+                        accessibilityRole="button"
+                        accessibilityLabel={isApproving ? t('approvals.approving') : t('approvals.approveAction', { botName })}
                         hitSlop={8}
                         style={({ pressed }) => [
                           styles.actionBtn,
@@ -479,6 +483,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                       <Pressable
                         onPress={() => handleReject(approval)}
                         disabled={isBusy}
+                        accessibilityRole="button"
+                        accessibilityLabel={isRejecting ? t('approvals.rejecting') : t('approvals.rejectAction', { botName })}
                         hitSlop={8}
                         style={({ pressed }) => [
                           styles.actionBtn,
@@ -559,6 +565,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                     <Pressable
                       onPress={() => handleCancel(run)}
                       disabled={cancellingId === run.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={cancellingId === run.id ? t('cancel.cancelling') : t('cancel.cancelAction', { botName: name })}
                       hitSlop={8}
                       style={({ pressed }) => [
                         styles.cancelBtn,

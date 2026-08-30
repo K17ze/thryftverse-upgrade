@@ -251,7 +251,7 @@ export default function SellerHubScreen() {
             accessibilityLabel="Get verified to build buyer trust"
             accessibilityHint="Opens the identity verification flow"
           >
-            <Ionicons name="shield-checkmark-outline" size={18} color={colors.warning} />
+            <Ionicons name="person-circle-outline" size={18} color={colors.warning} />
             <View style={styles.verificationBannerText}>
               <Text style={[styles.verificationBannerTitle, { color: colors.textPrimary }]}>
                 Get verified
@@ -460,7 +460,7 @@ export default function SellerHubScreen() {
                 key={batch.id}
                 title={IMPORT_SOURCE_LABEL[batch.source] ?? 'Catalogue import'}
                 subtitle={importBatchStatusText(batch)}
-                icon="cube-outline"
+                icon="download-outline"
                 onPress={() => navigation.navigate('CatalogImportProgress', { batchId: batch.id })}
                 accessibilityLabel={`${IMPORT_SOURCE_LABEL[batch.source] ?? 'Catalogue import'}, ${importBatchStatusText(batch)}`}
                 accessibilityHint="Opens the import progress screen"
@@ -470,7 +470,7 @@ export default function SellerHubScreen() {
             <FlagshipNavigationRow
               title="Import a shop"
               subtitle="Bring your existing listings from eBay or a file"
-              icon="cube-outline"
+              icon="download-outline"
               onPress={() => navigation.navigate('CatalogImportStart')}
               accessibilityLabel="Import a shop"
               accessibilityHint="Start a catalogue import from eBay or a file"
@@ -569,7 +569,7 @@ export default function SellerHubScreen() {
           <FlagshipNavigationRow
             title="Auctions"
             subtitle="Auction listings"
-            icon="trophy-outline"
+            icon="hammer-outline"
             onPress={() => navigation.navigate('SellerAuctionCentre')}
             accessibilityLabel="Auctions"
             accessibilityHint="Opens the seller auction centre"
@@ -589,7 +589,7 @@ export default function SellerHubScreen() {
           <FlagshipNavigationRow
             title="Verification"
             subtitle={isVerified ? 'Verified' : 'ID and seller standards'}
-            icon="shield-checkmark-outline"
+            icon={isVerified ? 'shield-checkmark-outline' : 'person-circle-outline'}
             iconColor={isVerified ? colors.success : undefined}
             onPress={() => navigation.navigate('Verification')}
             accessibilityLabel="Verification status"

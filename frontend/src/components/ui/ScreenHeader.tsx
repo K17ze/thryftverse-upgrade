@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
 
-import { Space, Control, Typography } from '../../theme/designTokens';
+import { Space, Control, Typography, PressScale } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 export type ScreenHeaderVariant = 'standard' | 'large' | 'minimal' | 'modal';
 
@@ -44,14 +44,14 @@ export function ScreenHeader({
           accessibilityRole="button"
           accessibilityLabel="Go back"
           accessibilityHint="Returns to the previous screen"
-          scaleValue={0.92}
+          scaleValue={PressScale.icon}
           hapticFeedback="light"
           activeOpacity={0.62}
         >
-          <Ionicons name={backIcon} size={Control.icon} color={backButtonColor ?? colors.textPrimary} />
+          <Ionicons name={backIcon} size={Control.icon} color={backButtonColor ?? colors.textPrimary} aria-hidden={true} />
         </AnimatedPressable>
       ) : (
-        <View style={styles.backBtnPlaceholder} />
+        <View style={styles.backBtnPlaceholder} accessible={false} />
       )}
 
       <View style={styles.titleContainer}>
@@ -77,7 +77,7 @@ export function ScreenHeader({
       </View>
 
       <View style={styles.rightSlot}>
-        {rightAction || <View style={styles.spacer} />}
+        {rightAction || <View style={styles.spacer} accessible={false} />}
       </View>
     </View>
   );

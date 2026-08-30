@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useReducer, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, withSpring, withTiming, Easing } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Space, Radius, Typography, FontFamily, FontSize, Control, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
@@ -74,6 +74,7 @@ import { useLookEffects } from './useLookEffects';
 import { useBackendData } from '../../context/BackendDataContext';
 import { useLookMultiSelect } from './useLookMultiSelect';
 import { deriveLookToolContext, buildLookToolGroups } from './lookToolRailConfig';
+import { lookEditorReducer, initialLookEditorState } from './lookEditorState';
 
 // ── Look Composer V3 — Collage-Native Workspace ─────────────────────
 // Per spec 10 (Look Architecture V3):
@@ -106,6 +107,8 @@ type BottomSurface = 'tools' | 'items' | 'layout' | 'effects' | null;
 // Per spec: "Reanimated for surface transitions (slide in/out)." Each
 // bottom surface (items, layout, effects) slides up from below when it
 // mounts. Under reduced motion, the transition is instant.
+// Per §5.14: entrance uses timing (ease-out), not spring — spring is
+// reserved for direct manipulation or mode selection.
 function SlideUpSurface({ children }: { children: React.ReactNode }) {
   const motionConfig = useMotionConfig();
   const translateY = useSharedValue(1);
@@ -113,7 +116,7 @@ function SlideUpSurface({ children }: { children: React.ReactNode }) {
     if (motionConfig.isReducedMotion) {
       translateY.value = 0;
     } else {
-      translateY.value = withSpring(0, motionConfig.spring.entrance);
+      translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -162,11 +165,17 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     recoverCrashedProject,
     dismissRecovery } = useCreator();
 
-  // ── Sheet / overlay state ──────────────────────────────────────────
-  const [showLayers, setShowLayers] = useState(false);
-  const [showSafeZone, setShowSafeZone] = useState(false);
-  const [showPublish, setShowPublish] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  // ── Sheet / overlay state (single state machine) ──────────────────
+  // Replaces 13 parallel `show*` booleans with one discriminated-union
+  // mode. Only one non-idle mode is active at a time. `showSafeZone` and
+  // `showOverflow` are orthogonal (can be on in any mode).
+  const [editorState, dispatch] = useReducer(
+    lookEditorReducer,
+    { ...initialLookEditorState, mode: route.params?.openTemplates ? { type: 'choosingTemplate' as const } : { type: 'idle' as const } },
+  );
+  const state = editorState;
+  const showSafeZone = state.showSafeZone;
+  const showOverflow = state.showOverflow;
   const [pickerMode, setPickerMode] = useState<AssetPickerMode | null>(null);
   const [editingLayer, setEditingLayer] = useState<CreatorLayer | null>(null);
   // ── In-place text content editing (Snapchat/Instagram pattern) ──────
@@ -174,11 +183,6 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   // the canvas so the user can type in place. The bottom contextual rail
   // remains the single styling surface for the selected text layer.
   const [editingTextLayerId, setEditingTextLayerId] = useState<string | null>(null);
-  const [showTemplates, setShowTemplates] = useState(Boolean(route.params?.openTemplates));
-  const [showOverflow, setShowOverflow] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [showBackground, setShowBackground] = useState(false);
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
   const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
   const [cutoutTarget, setCutoutTarget] = useState<CreatorLayer | null>(null);
@@ -203,10 +207,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   // 'tools' = ContextToolRail (default). 'items' = Items drawer.
   // 'layout' = Layout panel. 'effects' = Effects panel (incl. AI effects).
   const [bottomSurface, setBottomSurface] = useState<BottomSurface>('tools');
-  const [showAIEffects, setShowAIEffects] = useState(false);
   const [autoLayoutId, setAutoLayoutId] = useState<LayoutStyle | null>(null);
-  const [showA11yMove, setShowA11yMove] = useState(false);
-  const [showA11yZOrder, setShowA11yZOrder] = useState(false);
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
     title: string;
@@ -223,8 +224,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   // appear at the top. Tapping empty canvas exits multi-select.
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   // Align sub-menu state — toggles a small horizontal align picker above
-  // the tool rail in multi-select mode.
-  const [showAlignPicker, setShowAlignPicker] = useState(false);
+  // the tool rail in multi-select mode. (Now part of the editor state machine.)
   // ── Canvas layout ref for drag-to-canvas coordinate conversion ──
   // Stores the canvas container's screen-space position so drag-to-canvas
   // drop coordinates can be converted to normalized (0–1) canvas coordinates.
@@ -232,6 +232,52 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const handleCanvasLayout = useCallback((e: LayoutChangeEvent) => {
     canvasLayoutRef.current = e.nativeEvent.layout;
   }, []);
+
+  // ── State machine dispatch wrappers ────────────────────────────────
+  // Preserve the (show: boolean) => void signatures expected by
+  // lookToolRailConfig and sheet onClose handlers, while routing through
+  // the reducer for mutually-exclusive modes.
+  const setShowLayers = useCallback((show: boolean) => {
+    dispatch(show ? { type: 'ARRANGE_LAYERS' } : { type: 'BACK' });
+  }, []);
+  const setShowPreview = useCallback((show: boolean) => {
+    dispatch(show ? { type: 'SHOW_PREVIEW' } : { type: 'BACK' });
+  }, []);
+  const setShowPublish = useCallback((show: boolean) => {
+    dispatch(show ? { type: 'SHOW_PUBLISH' } : { type: 'BACK' });
+  }, []);
+  const setShowSettings = useCallback((show: boolean) => {
+    dispatch(show ? { type: 'SHOW_SETTINGS' } : { type: 'BACK' });
+  }, []);
+  const setShowHelp = useCallback((show: boolean) => {
+    dispatch(show ? { type: 'SHOW_HELP' } : { type: 'BACK' });
+  }, []);
+  const setShowBackground = useCallback((show: boolean) => {
+    dispatch(show ? { type: 'SHOW_BACKGROUND' } : { type: 'BACK' });
+  }, []);
+  const setShowTemplates = useCallback((show: boolean) => {
+    dispatch(show ? { type: 'CHOOSE_TEMPLATE' } : { type: 'BACK' });
+  }, []);
+  const setShowAIEffects = useCallback((show: boolean) => {
+    dispatch(show ? { type: 'SHOW_AI_EFFECTS' } : { type: 'BACK' });
+  }, []);
+  const setShowA11yMove = useCallback((show: boolean) => {
+    dispatch(show ? { type: 'SHOW_A11Y_MOVE' } : { type: 'BACK' });
+  }, []);
+  const setShowA11yZOrder = useCallback((show: boolean) => {
+    dispatch(show ? { type: 'SHOW_A11Y_ZORDER' } : { type: 'BACK' });
+  }, []);
+  const setShowSafeZone = useCallback((show: boolean) => {
+    if (show !== state.showSafeZone) dispatch({ type: 'TOGGLE_SAFE_ZONE' });
+  }, [state.showSafeZone]);
+  const setShowOverflow = useCallback((show: boolean) => {
+    if (show !== state.showOverflow) dispatch({ type: 'TOGGLE_OVERFLOW' });
+  }, [state.showOverflow]);
+  const setShowAlignPicker = useCallback((fn: (prev: boolean) => boolean) => {
+    const prev = state.mode.type === 'alignPicker';
+    if (fn(prev)) dispatch({ type: 'SHOW_ALIGN_PICKER' });
+    else dispatch({ type: 'ENTER_IDLE' });
+  }, [state.mode.type]);
 
   const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
   const sourceMode = route.params?.sourceMode ?? 'edit';
@@ -376,24 +422,14 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         if (canRedo) redo();
       } else if (e.key === 'Escape') {
         if (editingTextLayerId) setEditingTextLayerId(null);
-        else if (showHelp) setShowHelp(false);
-        else if (showAIEffects) setShowAIEffects(false);
+        else if (state.mode.type !== 'idle') dispatch({ type: 'BACK' });
         else if (bottomSurface !== 'tools') setBottomSurface('tools');
-        else if (showA11yMove) setShowA11yMove(false);
-        else if (showA11yZOrder) setShowA11yZOrder(false);
         else if (cropTarget) setCropTarget(null);
         else if (cutoutTarget) setCutoutTarget(null);
         else if (cutoutPreviewTarget) setCutoutPreviewTarget(null);
-        else if (showPreview) setShowPreview(false);
-        else if (showBackground) setShowBackground(false);
-        else if (showSafeZone) setShowSafeZone(false);
-        else if (showOverflow) setShowOverflow(false);
-        else if (showPublish) setShowPublish(false);
-        else if (showTemplates) setShowTemplates(false);
-        else if (showLayers) setShowLayers(false);
-        else if (showSettings) setShowSettings(false);
+        else if (state.showSafeZone) dispatch({ type: 'TOGGLE_SAFE_ZONE' });
+        else if (state.showOverflow) dispatch({ type: 'TOGGLE_OVERFLOW' });
         else if (pickerMode) { setPickerMode(null); setEditingLayer(null); }
-        else if (showAlignPicker) setShowAlignPicker(false);
         else if (multiSelectMode) exitMultiSelect();
         else if (selectedLayerId) selectLayer(null);
         else handleBack();
@@ -407,37 +443,27 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, editingTextLayerId, showHelp, showAIEffects, bottomSurface, showA11yMove, showA11yZOrder, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, selectedLayerIds, exitMultiSelect, handleMultiDelete, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, editingTextLayerId, state, bottomSurface, cropTarget, cutoutTarget, cutoutPreviewTarget, pickerMode, multiSelectMode, selectedLayerIds, exitMultiSelect, handleMultiDelete, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // Hardware back button — intercept to close sheets first
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
         if (editingTextLayerId) { setEditingTextLayerId(null); return true; }
-        if (showHelp) { setShowHelp(false); return true; }
-        if (showAIEffects) { setShowAIEffects(false); return true; }
+        if (state.mode.type !== 'idle') { dispatch({ type: 'BACK' }); return true; }
         if (bottomSurface !== 'tools') { setBottomSurface('tools'); return true; }
-        if (showA11yMove) { setShowA11yMove(false); return true; }
-        if (showA11yZOrder) { setShowA11yZOrder(false); return true; }
         if (cropTarget) { setCropTarget(null); return true; }
         if (cutoutTarget) { setCutoutTarget(null); return true; }
         if (cutoutPreviewTarget) { setCutoutPreviewTarget(null); return true; }
-        if (showPreview) { setShowPreview(false); return true; }
-        if (showBackground) { setShowBackground(false); return true; }
-        if (showSafeZone) { setShowSafeZone(false); return true; }
-        if (showOverflow) { setShowOverflow(false); return true; }
-        if (showPublish) { setShowPublish(false); return true; }
-        if (showTemplates) { setShowTemplates(false); return true; }
-        if (showLayers) { setShowLayers(false); return true; }
-        if (showSettings) { setShowSettings(false); return true; }
+        if (state.showSafeZone) { dispatch({ type: 'TOGGLE_SAFE_ZONE' }); return true; }
+        if (state.showOverflow) { dispatch({ type: 'TOGGLE_OVERFLOW' }); return true; }
         if (pickerMode) { setPickerMode(null); setEditingLayer(null); return true; }
-        if (showAlignPicker) { setShowAlignPicker(false); return true; }
         if (multiSelectMode) { exitMultiSelect(); return true; }
         if (selectedLayerId) { selectLayer(null); return true; }
         return false;
       };
       return onBackPress;
-    }, [editingTextLayerId, showHelp, showAIEffects, bottomSurface, showA11yMove, showA11yZOrder, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, exitMultiSelect, selectedLayerId, selectLayer])
+    }, [editingTextLayerId, state, bottomSurface, cropTarget, cutoutTarget, cutoutPreviewTarget, pickerMode, multiSelectMode, exitMultiSelect, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
@@ -926,6 +952,11 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       handleMultiFront,
       handleMultiBack,
       handleMultiDelete,
+      setShowLayers,
+      setShowPreview,
+      setShowSettings,
+      setShowOverflow,
+      setShowAlignPicker,
       haptic,
       navigation,
     ],
@@ -1065,16 +1096,26 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
 
   // Apply preview transforms to the document without committing to
   // history. Uses updateLayer (no history entry) for a live preview.
+  // NOTE: mediaLayers is intentionally excluded from the dependency array.
+  // Including it would cause an infinite loop: the effect calls updateLayer
+  // → document changes → page changes → mediaLayers changes (new array from
+  // .filter()) → effect re-runs → updateLayer again → ...
+  // Instead, we read mediaLayers via a ref so the effect only re-runs when
+  // previewLayoutId or allLayouts changes (the actual triggers for a
+  // preview application).
+  const mediaLayersRef = useRef(mediaLayers);
+  mediaLayersRef.current = mediaLayers;
   useEffect(() => {
     if (previewLayoutId === null) return;
     const layout = allLayouts.find((l) => l.id === previewLayoutId);
     if (!layout) return;
-    mediaLayers.forEach((layer, i) => {
+    mediaLayersRef.current.forEach((layer, i) => {
       const t = layout.transforms[i];
       if (!t) return;
       updateLayer(layer.id, transformToLayerUpdate(t));
     });
-  }, [previewLayoutId, allLayouts, mediaLayers, updateLayer, transformToLayerUpdate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewLayoutId, allLayouts, updateLayer, transformToLayerUpdate]);
 
   // ── Camera → Editor crossfade ─────────────────────────────────────
   // Per the human-flow reconstruction spec, the captured/selected media
@@ -1665,23 +1706,23 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
 
       {/* ── Sheets ────────────────────────────────────────────────────── */}
       <CreatorPreviewOverlay
-        visible={showPreview}
+        visible={state.mode.type === 'previewing'}
         onClose={() => setShowPreview(false)}
         onPublish={() => {
           setShowPreview(false);
           setShowPublish(true);
         }}
       />
-      <CreatorLayersSheet visible={showLayers} onClose={() => setShowLayers(false)} />
-      <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} editingLookId={editingLookId ?? undefined} />
-      <CreatorSettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
-      <HelpShortcutsSheet visible={showHelp} onClose={() => setShowHelp(false)} />
+      <CreatorLayersSheet visible={state.mode.type === 'arrangingLayers'} onClose={() => setShowLayers(false)} />
+      <CreatorPublishSheet visible={state.mode.type === 'publishing'} onClose={() => setShowPublish(false)} editingLookId={editingLookId ?? undefined} />
+      <CreatorSettingsSheet visible={state.mode.type === 'settings'} onClose={() => setShowSettings(false)} />
+      <HelpShortcutsSheet visible={state.mode.type === 'help'} onClose={() => setShowHelp(false)} />
       {/* ── Background picker sheet ─────────────────────────────────── */}
       {/* Bottom sheet for picking the canvas background (solid, gradient,
           blurred photo, or image). On confirm, commits the selected
           background to document.canvas.background via updateCanvas. */}
       <BackgroundSheet
-        visible={showBackground}
+        visible={state.mode.type === 'background'}
         currentBackground={document.canvas.background}
         mediaLayers={mediaLayers}
         onConfirm={(bg: CreatorBackground) => {
@@ -1696,7 +1737,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           Skia render nodes. When applied, the effect is stored as a
           filter node in the selected media layer's effect stack. */}
       <AIEffectBrowserSheet
-        visible={showAIEffects}
+        visible={state.mode.type === 'aiEffects'}
         initialEffectId={activeAIEffectId}
         sourceImageUri={effectsSourceUri}
         onApply={handleAIEffectApply}
@@ -1708,7 +1749,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           cannot perform drag gestures. onMove wires to updateLayer;
           onReorder wires to reorderLayer. */}
       <AccessibilityMoveSheet
-        visible={showA11yMove}
+        visible={state.mode.type === 'a11yMove'}
         layerId={selectedLayerId}
         position={selectedLayer ? { x: selectedLayer.x, y: selectedLayer.y } : null}
         onClose={() => setShowA11yMove(false)}
@@ -1717,7 +1758,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         }}
       />
       <AccessibilityZOrderSheet
-        visible={showA11yZOrder}
+        visible={state.mode.type === 'a11yZOrder'}
         layers={(page?.layers ?? []).map((l) => ({
           id: l.id,
           label: layerTypeLabel(l.type, 'look'),
@@ -1727,7 +1768,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         onReorder={(layerId, direction) => reorderLayer(layerId, direction)}
       />
       <CreatorTemplateBrowser
-        visible={showTemplates}
+        visible={state.mode.type === 'choosingTemplate'}
         documentType="look"
         hasExistingWork={document.pages.some((p) => p.layers.length > 0)}
         onClose={() => setShowTemplates(false)}

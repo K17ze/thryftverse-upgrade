@@ -75,6 +75,7 @@ import { CreatorCanvas } from '../creator/CreatorCanvas';
 import * as Clipboard from 'expo-clipboard';
 import { Sentry } from '../platform/monitoring';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { ApiRequestError } from '../lib/apiClient';
 
 const TICK_MS = 50;
 
@@ -102,6 +103,7 @@ export default function PosterViewerScreen() {
   const [progress, setProgress] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState<{ kind: 'connection' | 'offline' | 'missing' } | null>(null);
   const [mediaError, setMediaError] = React.useState(false);
   const [recordedFrames, setRecordedFrames] = React.useState<Set<string>>(new Set());
   const [posterTags, setPosterTags] = React.useState<PosterTag[]>([]);
@@ -152,6 +154,7 @@ export default function PosterViewerScreen() {
   React.useEffect(() => {
     let mounted = true;
     setIsLoading(true);
+    setLoadError(null);
 
     const loadStories = async () => {
       try {
@@ -168,8 +171,15 @@ export default function PosterViewerScreen() {
           setStoryIndex(0);
           setFrameIndex(0);
         }
-      } catch {
-        if (mounted) show('Could not load poster stories', 'error');
+      } catch (err: unknown) {
+        if (!mounted) return;
+        if (err instanceof ApiRequestError && (err.status === 404 || err.status === 410)) {
+          setLoadError({ kind: 'missing' });
+        } else if (isOffline) {
+          setLoadError({ kind: 'offline' });
+        } else {
+          setLoadError({ kind: 'connection' });
+        }
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -177,7 +187,7 @@ export default function PosterViewerScreen() {
 
     loadStories();
     return () => { mounted = false; };
-  }, [storyId, startFrameIndex, show]);
+  }, [storyId, startFrameIndex, isOffline]);
 
   // Clear recorded-frames set when the storyId changes so view counts are
   // re-recorded for a freshly opened story (prevents stale-set memory leak).
@@ -666,6 +676,90 @@ export default function PosterViewerScreen() {
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" />
         <PosterViewerSkeleton />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    const isMissing = loadError.kind === 'missing';
+    const isOfflineErr = loadError.kind === 'offline';
+    const errorIcon: keyof typeof Ionicons.glyphMap = isMissing
+      ? 'trash-outline'
+      : isOfflineErr
+        ? 'cloud-offline-outline'
+        : 'alert-circle-outline';
+    const errorTitle = isMissing
+      ? 'This content is no longer available'
+      : isOfflineErr
+        ? "You're offline"
+        : "Couldn't load this story";
+    const errorSub = isMissing
+      ? 'It may have been removed by the creator.'
+      : isOfflineErr
+        ? 'Check your connection and try again.'
+        : 'Something went wrong. Try again in a moment.';
+    const canRetry = !isMissing;
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" />
+        <Ionicons name={errorIcon} size={48} color={colors.scrimTextSecondary} />
+        <Text style={styles.emptyText}>{errorTitle}</Text>
+        <Text style={styles.emptySubText}>{errorSub}</Text>
+        {canRetry ? (
+          <AnimatedPressable
+            onPress={() => {
+              setLoadError(null);
+              setIsLoading(true);
+              // Re-trigger the load effect by calling the same fetch logic
+              const reload = async () => {
+                try {
+                  if (storyId) {
+                    const story = await fetchPosterStoryById(storyId);
+                    setStories([story]);
+                    setStoryIndex(0);
+                    setFrameIndex(Math.min(startFrameIndex, story.frames.length - 1));
+                  } else {
+                    const res = await fetchPosterStories({ active: true, limit: 50 });
+                    setStories(res.items);
+                    setStoryIndex(0);
+                    setFrameIndex(0);
+                  }
+                } catch (err: unknown) {
+                  if (err instanceof ApiRequestError && (err.status === 404 || err.status === 410)) {
+                    setLoadError({ kind: 'missing' });
+                  } else if (isOffline) {
+                    setLoadError({ kind: 'offline' });
+                  } else {
+                    setLoadError({ kind: 'connection' });
+                  }
+                } finally {
+                  setIsLoading(false);
+                }
+              };
+              void reload();
+            }}
+            style={styles.closeBtn}
+            scaleValue={0.97}
+            activeOpacity={0.85}
+            hapticFeedback="light"
+            accessibilityLabel="Try again"
+            accessibilityHint="Retries loading the story"
+          >
+            <Ionicons name="refresh-outline" size={18} color={colors.scrimTextPrimary} />
+            <Text style={styles.closeBtnText}>Try again</Text>
+          </AnimatedPressable>
+        ) : null}
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          style={canRetry ? styles.secondaryBtn : styles.closeBtn}
+          scaleValue={0.97}
+          activeOpacity={0.85}
+          hapticFeedback="light"
+          accessibilityLabel="Close"
+          accessibilityHint="Closes the story viewer and returns to the previous screen"
+        >
+          <Text style={styles.closeBtnText}>Close</Text>
+        </AnimatedPressable>
       </View>
     );
   }
@@ -1221,6 +1315,11 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors'], screenWi
     color: colors.scrimTextPrimary,
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily },
+  emptySubText: {
+    color: colors.scrimTextSecondary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'center' },
   closeBtn: {
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.sm,
@@ -1232,6 +1331,16 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors'], screenWi
     color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.body.size },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md + 4,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder },
   mediaFull: {
     position: 'absolute',
     width: screenWidth,

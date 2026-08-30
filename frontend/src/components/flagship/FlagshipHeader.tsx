@@ -100,10 +100,10 @@ export function FlagshipHeader({
             hapticFeedback="light"
             activeOpacity={0.62}
           >
-            <Ionicons name={effectiveBackIcon} size={Control.icon} color={colors.textPrimary} />
+            <Ionicons name={effectiveBackIcon} size={Control.icon} color={colors.textPrimary} aria-hidden={true} />
           </AnimatedPressable>
         ) : (
-          <View style={styles.iconBtnPlaceholder} />
+          <View style={styles.iconBtnPlaceholder} accessible={false} />
         )}
 
         {onTitlePress ? (

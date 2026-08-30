@@ -1,8 +1,8 @@
- on ---
-version: "1.5"
+---
+version: "1.6"
 name: "ThryftVerse Neutral Flagship Native Design System"
-benchmark-date: "2026-07-22"
-description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current Pinterest, Instagram, Depop, Vinted, Vestiaire and Whatnot product patterns while remaining faithful to the ThryftVerse React Native codebase. v1.5 adds enforceable visual-chrome, shape, stroke, icon and density budgets so accessible controls no longer become oversized visible UI. The neutral palette remains canonical; quality comes from geometry, media integrity, hierarchy, interaction, state clarity, accessibility and performance."
+benchmark-date: "2026-08-30"
+description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current public Pinterest, Coinbase, Corner, Instagram, Depop, Vinted, Vestiaire and Whatnot product evidence while remaining faithful to the ThryftVerse React Native codebase. v1.6 adds reference-evidence discipline plus enforceable control anatomy, navigation geometry, direct-manipulation physics, sheet continuity, dense-row alignment and media-context rules. The neutral palette remains canonical; quality comes from geometry, media integrity, hierarchy, interaction, state clarity, accessibility and performance."
 
 implementation-status:
   current-runtime-theme: "VERIFIED — frontend/src/theme/ThemeContext.tsx currently exposes the neutral base palette and does not yet expose the proposed premium/luxury tokens below."
@@ -157,6 +157,30 @@ visual-geometry:
   discovery-density: "At least two meaningful media objects or a visible continuation above the fold"
   first-viewport-type-budget: "No more than three type sizes and one eyebrow in normal use"
   default-icon-containment: "transparent; persistent fill only for selection, primary action, status, input grouping or media contrast"
+  horizontal-screen-gutter: "16px compact handset default; 20-24px only when the composition benefits and useful density still passes"
+  top-bar-edge-inset: "16px from the content edge after safe-area resolution"
+  navigation-glyph-frame: "20-24px optical glyph inside a 44px minimum target; do not scale the visible circle to the target"
+  compact-icon-chrome: "32-36px visible circle/capsule inside a 44px target when contrast, state or commitment requires containment"
+  search-field-height: "44-48px; the field may dominate a search header but must not become a second page title"
+  filter-chip-height: "32-36px visible chrome inside a 44px interaction band"
+  flat-data-row-height: "52-64px depending on media and metadata; keep price/status baselines stable"
+  bottom-navigation-height: "49-56px visible navigation plus safe-area inset; never consume a second toolbar row"
+  bottom-sheet-context: "Default detent leaves enough parent media visible to preserve cause and effect; expand only for search, keyboard or long results"
+  media-overlay-scrim: "Use the minimum local contrast treatment around controls; never wash the entire image unless a modal state requires it"
+  numeric-alignment: "Right-align comparable values and use tabular numerals when the runtime font/token supports them"
+  authored-canvas-invariant: "Capture, edit, preview, export and viewer share one normalized document coordinate space independent of physical screen height"
+
+interaction-physics:
+  press-in: "90-120ms to scale 0.98 and/or opacity 0.86; never bounce"
+  press-out: "140-180ms to rest; interruptible"
+  direct-drag: "1:1 finger tracking with no easing while the gesture is active"
+  snap: "Use position plus predicted end velocity; settle once with no overshoot for utility UI"
+  sheet-settle: "180-260ms, interruptible, velocity-aware; preserve parent context"
+  navigation-push: "Use the platform hierarchy transition and shared content continuity; do not animate the entire destination as a floating card"
+  modal-present: "Use native vertical/modal presentation; Close dismisses, Back traverses hierarchy"
+  selection-change: "State fill/icon change is immediate or 120-180ms; haptic occurs on committed selection, not on mere touch-down"
+  reduced-motion: "No spatial travel beyond the platform minimum; use instant state or a 120-180ms opacity change"
+  repeated-actions: "Frequent navigation, list selection and tool use must not replay decorative entrance animation"
 
 components:
   button-primary:
@@ -219,11 +243,15 @@ The app must feel:
 
 ### Benchmark freshness
 
-The reference interpretation in this file was reviewed against public product imagery and announcements available on **11 July 2026**. Reference applications evolve continuously. Agents must preserve the underlying product logic rather than freeze ThryftVerse to one screenshot or one historical layout.
+The reference interpretation in this file was reviewed against public product imagery, first-party App Store screenshots, official product documentation and publicly accessible design-system material available on **30 August 2026**. Reference applications evolve continuously. Agents must preserve the underlying product logic rather than freeze ThryftVerse to one screenshot or one historical layout.
+
+The user-supplied Mobbin Pinterest, Coinbase and Corner URLs are the named benchmark anchors for this revision. Their screen libraries are subscription-gated in the available environment, so no rule below is represented as a direct measurement of protected Mobbin content. Screen-level observations are taken from the corresponding current first-party App Store screenshot sets and official documentation. This evidence boundary is mandatory: a link identifying an app is not proof that an agent inspected every protected flow inside it.
 
 Current benchmark lessons:
 
 - **Pinterest:** almost invisible chrome, highly colourful media, true image aspect ratios, modular discovery, boards/collages, visual re-rooting, multimodal relevance and strong perceived performance.
+- **Coinbase:** high-stakes state legibility, one dominant value, disciplined numeric alignment, flat data rows, compact filters, and containment reserved for commitment or grouping.
+- **Corner:** map/media-first curation, floating search/action islands, system share integration, avatar-as-data, social provenance and category controls that remain subordinate to the object.
 - **Instagram:** full-attention media, stable action grammar, Stories, taller profile thumbnails, pinning and user-controlled profile-grid arrangement.
 - **Depop:** seller identity, social storefronts, practical product actions, compact listing workflows and commerce embedded into community.
 - **Vinted:** transactional clarity, search/filter efficiency, buyer protection, low-friction listing and visual-search utility.
@@ -801,7 +829,7 @@ These specs define the exact token-level details that separate a functional comp
 ### Settings row micro spec
 
 - Min height: 56–64pt.
-- Icon area: 44pt square, icon 22–24pt, `colors.textSecondary` or `colors.brand`.
+- Icon area: decorative slot ~24pt, icon 22pt; the whole row owns the 44pt minimum target. A decorative leading icon does not get its own 44pt column.
 - Title: `Type.bodyEmphasis` (15/21/600), `colors.textPrimary`.
 - Subtitle: `Type.captionElevated` (13/18/400), `colors.textSecondary`.
 - Right value: `flexShrink: 1`, `textAlign: 'right'`, `colors.textSecondary`.
@@ -1219,12 +1247,528 @@ Every UI pass must name the reference logic being applied:
 ```text
 Instagram = media ownership, action grammar, stories, restrained chrome
 Pinterest = masonry, boards, visual search, save behaviour, no dead ends
+Coinbase = high-stakes hierarchy, numeric alignment, explicit state and commitment discipline
+Corner = curation identity, object-first maps/media, social provenance, system handoff
 Depop = social closet identity, compact edit-profile form, seller storefront energy
 Vinted = trust/transaction clarity, low-friction listing, practical settings
 Vestiaire = premium declutter, trust hierarchy, density discipline
 TikTok = profile as storefront, maximum media density, minimal chrome
 Whatnot = live/auction urgency, chat + bid loop
 ```
+
+### Reference evidence contract — Pinterest, Coinbase and Corner (30 August 2026)
+
+The supplied Mobbin URLs identify the exact benchmark applications:
+
+- [Pinterest iOS on Mobbin](https://mobbin.com/apps/pinterest-ios-757657c5-f7af-4a4a-a972-f33a77e77a8c?utm_source=copy_link&utm_medium=link&utm_campaign=app_sharing)
+- [Coinbase iOS on Mobbin](https://mobbin.com/apps/coinbase-ios-1d0a6f78-e687-4d7b-bbff-e9abe5cd09ff?utm_source=copy_link&utm_medium=link&utm_campaign=app_sharing)
+- [Corner iOS on Mobbin](https://mobbin.com/apps/corner-ios-59299513-be08-4409-95f2-9db957b978ed?utm_source=copy_link&utm_medium=link&utm_campaign=app_sharing)
+
+The protected Mobbin screen library was not accessible without a subscription. The screen observations in this revision come from the current first-party public screenshot sets for [Pinterest](https://apps.apple.com/us/app/pinterest/id429047995), [Coinbase](https://apps.apple.com/us/app/coinbase-buy-crypto-stocks/id886427730) and [Corner](https://apps.apple.com/us/app/corner-curate-share-places/id1668282277), supported by official Pinterest product guidance, the public Coinbase Design System and current Apple/Android platform guidance.
+
+Agents must label evidence as one of:
+
+```text
+OBSERVED — visible in a current first-party public screenshot or live product render
+DOCUMENTED — stated in official product/platform/design-system documentation
+INFERRED — a ThryftVerse rule derived from observed/documented principles
+UNVERIFIED — requires authenticated reference access or a native flow capture
+```
+
+Never write “Mobbin parity passed” from app identity links alone. Never infer motion duration, hidden state, Back behavior or touch target size from a static marketing screenshot. Those require a live flow or video capture.
+
+### Pinterest screen extraction
+
+#### P1 — visual discovery/results
+
+**Observed composition**
+
+- A compact leading Back control, one central search field and one trailing refinement action form the entire top navigation band.
+- The search query remains visible as the screen title; there is no duplicate heading below it.
+- One horizontally clipped row of intent refinements sits immediately below the search field.
+- The result grid starts high and uses media as the primary colour and hierarchy.
+- Bottom navigation stays visually quiet: compact familiar glyphs, a distinct create action, and a clear selected state without five large filled containers.
+
+**ThryftVerse translation**
+
+- Search results use `Back + SearchField + Refine`, not `Back + page title + SearchField + filter card`.
+- Keep a single 44–48pt search band after the safe area. The field may be a capsule because it is an input boundary; Back and Refine remain transparent 44pt targets.
+- Refinement chips occupy one 44pt interaction band with 32–36pt visible pills. They scroll horizontally and must reveal the beginning of the next option.
+- Default results begin within 8–12pt of the chip band. Do not insert a recommendation card, helper paragraph or decorative header between intent and media.
+- The first viewport must expose at least four meaningful result crops in a two-column grid or the clear continuation of the fourth object.
+- The query, selected chips and sort state share one URL/store/backend source of truth.
+
+#### P2 — visual refinement on the media object
+
+**Observed composition**
+
+- The source image remains dominant and nearly full screen.
+- Close is a small transparent control on the media, protected only by local contrast.
+- Recognition/refinement labels are anchored to relevant visual regions instead of repeated in a separate legend.
+- A rounded bottom results surface overlaps the image and preserves the visual relationship between the selected region and recommendations.
+- The sheet has a small handle and a strong media thumbnail row; it does not replace the image with a form.
+
+**ThryftVerse translation**
+
+- Visual Search and Look product tagging keep the source canvas visible during refinement.
+- Use a nonmodal contextual sheet at approximately 32–48% of the compact handset height by default. Expand only for text search, keyboard entry or long results.
+- Anchored labels use a compact 28–32pt visible chip with an independent 44pt hit region. Collision resolution must preserve the selected object and avoid covering faces/product identity.
+- The active region receives one restrained outline/reticle. Do not add glow, pulse and a second tinted overlay simultaneously.
+- Dragging or resizing a selection follows the finger 1:1. Suggestions update after the gesture settles; they must not reorder continuously under the finger.
+- Dismissing the sheet returns to the exact image transform and active region.
+
+#### P3 — shop-similar continuation
+
+**Observed composition**
+
+- The image and selection rectangle establish the question.
+- A short intent/category rail sits between the image and the recommendations.
+- “Shop similar” results appear as a horizontally browsable media row with identity/price below the crop.
+- The transition from seeing to shopping remains visually continuous.
+
+**ThryftVerse translation**
+
+- `See → select → refine → compare → product detail` is one chain; never route the user through an empty search landing page after they select a product region.
+- Preserve the selected crop as a compact pinned context object when the sheet expands.
+- Result cards use the commerce contract: true image, human title, current evidenced price, availability, source/seller identity and one save action. No fabricated discount, match score or trust badge.
+- Horizontal continuation must show at least 2.25 cards, signaling that the rail is scrollable without explanatory copy.
+- Opening a result uses a normal pushed product detail. Closing/Back returns to the same rail offset and selection.
+
+#### P4 — personalized Looks/search refinement
+
+**Observed composition**
+
+- The query remains editable at the top.
+- Refinements are compact semantic filters, not a large filter form.
+- A skin-tone range is shown as a visual control when it materially affects results.
+- Media results use a dense two-column layout with very low chrome.
+
+**ThryftVerse translation**
+
+- Looks discovery prioritizes visual filters only when they alter retrieval meaningfully: colour, garment/category, occasion, size/fit context, creator or owned/saved product.
+- Sensitive or identity-adjacent filters require inclusive labeling, user control and documented ranking behavior; never infer or display protected attributes as facts.
+- Use visual swatches for colour/range and text for semantics. Do not create a pill for every possible facet.
+- Keep selection state obvious through fill/stroke/icon change and accessibility value; colour alone is insufficient.
+
+#### Pinterest component-quality rules
+
+```text
+SearchHeader
+  leading: transparent Back target, 44pt
+  center: one 44–48pt input boundary
+  trailing: transparent Refine target, 44pt
+  gap: 4–8pt; no title duplication
+
+IntentChipRail
+  band: 44pt
+  visible chip: 32–36pt
+  gap: 6–8pt
+  selection: one fill/stroke grammar
+  overflow: partial next item visible
+
+VisualContextSheet
+  default detent: 32–48% handset height
+  expanded detent: keyboard/results need only
+  top radius: one modal radius token
+  handle: subtle, not a second action
+  parent media: remains visible
+
+MasonryResult
+  media: true aspect ratio within bounded quality policy
+  chrome: zero container by default
+  metadata: only what changes the decision
+  press: immediate opacity/scale response
+```
+
+### Coinbase screen extraction
+
+Coinbase is not a visual style reference for social discovery. It is the benchmark for **legibility under consequence**: dense information, explicit state and unambiguous commitment.
+
+#### C1 — portfolio/home hierarchy
+
+**Observed composition**
+
+- The top bar fits menu, search and compact utility actions into one stable row.
+- One total portfolio value dominates; daily change is directly attached to it.
+- The chart occupies the next hierarchy level and uses compact range controls.
+- A single raised category panel overlaps the chart region and groups comparable asset classes.
+- Category rows use small icons, left labels, right-aligned values/changes and chevrons.
+
+**ThryftVerse translation**
+
+- Money/ownership surfaces get one dominant balance/value, one directly related delta/status and one primary next action.
+- Comparable rows align label baselines and right-align money. Use tabular numerals when supported; never center money values.
+- One dominant grouping surface may overlap a chart/media region if it clarifies the relationship. Do not turn every metric into its own card.
+- Search is an input boundary; menu, alerts and profile remain compact transparent targets unless unread/selected state requires containment.
+- Collapse advanced details before reducing text below readable size.
+
+#### C2 — dense market/list rows
+
+**Observed composition**
+
+- A simple Back control and large title establish hierarchy.
+- Two compact filters communicate scope without becoming a toolbar wall.
+- Each row is flat: identity icon, asset name, secondary measure, price and directional change.
+- Directional colour is secondary to sign/value, not the only state cue.
+
+**ThryftVerse translation**
+
+- Orders, offers, bids, co-own holdings and seller analytics use a shared `DenseValueRow` anatomy.
+- Row height is 52–64pt; use a hairline only when spacing alone cannot establish grouping.
+- Left column: 32–40pt media/identity, primary label, one secondary fact.
+- Right column: primary numeric value, signed/worded secondary state, optional chevron.
+- Do not add a badge, card, eyebrow and subtitle to the same row.
+- Sort/filter controls appear only when they materially change the list and must expose their selected state to accessibility APIs.
+
+#### C3 — contextual opportunity module
+
+**Observed composition**
+
+- A white contextual module is layered above the underlying portfolio/content.
+- The module has one title, a directional action and a short list of comparable opportunities.
+- A compact circular arrow is contained because it advances into a distinct task, not merely because it is an icon.
+
+**ThryftVerse translation**
+
+- A floating/contextual module is justified only when it represents a distinct decision boundary: offer review, publication recovery, escrow action, or creator preflight.
+- Above the fold, permit at most one such non-media module.
+- Give the module one purpose and one exit. Never nest another card inside it.
+- Circular arrow containment is allowed for a committed continuation or carousel pagination; ordinary chevrons remain uncontained.
+
+#### C4 — advanced transaction surface
+
+**Observed composition**
+
+- Dark mode retains the same geometry and density as light mode.
+- Chart is the dominant object; controls are compact and aligned to its edges.
+- Tabs and chips communicate mode/time/indicator state without decorative containers.
+- Buy and Sell are the only dominant bottom actions and are visually separated by semantic colour and position.
+
+**ThryftVerse translation**
+
+- Auction/co-own advanced views keep the bid/value timeline dominant.
+- Mode tabs use one selected indicator. Time/filter chips are subordinate and may not visually compete with the primary action.
+- Positive/negative colour is reserved for evidenced financial direction or destructive/confirming action; it is not decoration.
+- Dual bottom actions are allowed only when both are real, mutually meaningful choices. Otherwise use one primary action.
+- Unknown, pending, failed and committed transaction states must have distinct copy and persisted backend evidence.
+
+#### Coinbase component-quality rules
+
+```text
+ValueHero
+  dominant value: one line when possible
+  delta/status: immediately adjacent
+  chart: next in reading order
+  action: no more than one primary above fold
+
+DenseValueRow
+  height: 52–64pt
+  media: 32–40pt
+  primary/secondary text: two lines maximum
+  trailing values: right aligned, stable width where practical
+  separator: hairline or spacing, not both plus a card
+
+CommitmentAction
+  one primary per task
+  loading preserves width and label context
+  disabled is visibly distinct and semantically exposed
+  destructive variant is isolated from the safe primary
+  result uses committed/pending/unknown/failed states
+
+CompactFilter
+  visible height: 32–36pt
+  target band: 44pt
+  selected state: fill/stroke/text plus accessibility value
+  count: only immediately useful facets; overflow owns the rest
+```
+
+### Corner screen extraction
+
+Corner is not a source for adding playful decoration to every screen. Its useful benchmark is the way a spatial/social object remains primary while search, categories and identity float around it.
+
+#### K1 — map-first discovery
+
+**Observed composition**
+
+- The map occupies almost the entire viewport and is the navigation surface.
+- Place labels and identity markers are data, not decorative stickers.
+- A compact floating search field sits above a small category/action rail.
+- Bottom navigation remains visually separate from map controls.
+- The location/recenter action is a small contained control because it represents spatial state.
+
+**ThryftVerse translation**
+
+- On media-first discovery, the object itself is the canvas; search and filters float only when they must remain continuously reachable.
+- Use persistent containment for spatial/current-state actions such as recenter, selected category or capture—not for ordinary Back/More.
+- A floating search field must have enough contrast over content but should not be paired with a second large header.
+- Category actions use icon plus short label only when the category meaning would otherwise be unclear.
+- Keep global navigation and contextual canvas tools in separate interaction bands.
+
+#### K2 — system import/share handoff
+
+**Observed composition**
+
+- Saving content from another app is presented through the native iOS share sheet.
+- The originating object remains visible above the system action destinations.
+- The platform handles familiar sharing destinations rather than a bespoke imitation.
+
+**ThryftVerse translation**
+
+- Import from Instagram, Pinterest, browser or Photos should enter through the native share extension/system picker where supported.
+- Do not build a fake share sheet or request broad library permission to simulate a platform capability.
+- The handoff contract must preserve source URL/app when legally and technically available, imported media ownership, attribution requirements and a recoverable processing state.
+- A share/import action is not complete until ThryftVerse has durably received or referenced the object; dismissing the system sheet is not success.
+
+#### K3 — social proof/provenance
+
+**Observed composition**
+
+- Human avatars, names and short reviews are the proof objects.
+- The presentation uses asymmetry and varied placement while preserving readable identity/message groups.
+- Reaction/count state remains compact and attached to the originating statement.
+
+**ThryftVerse translation**
+
+- Social proof uses real creator/buyer identity and evidenced content—not generic testimonial cards or fabricated counts.
+- Avatar, name, statement and action form one semantic/accessibility group.
+- Use asymmetric editorial composition only on discovery/marketing surfaces where overlap does not harm scanning. Transactional review lists remain flat and aligned.
+- Never use floating speech cards as a generic replacement for comments, reviews or support messages.
+
+#### K4 — friends and curation on the object
+
+**Observed composition**
+
+- Friend avatars are positioned as meaningful map markers and a compact contextual rail.
+- The primary map remains visible while social context is introduced.
+- Category controls and friend context are visually subordinate to location content.
+
+**ThryftVerse translation**
+
+- Looks, moodboards and collections may show collaborator/curator identity directly on the collection object.
+- Use a maximum of three visible avatars plus a count; the full list belongs in a sheet.
+- Avatar overlap communicates shared ownership/collaboration only when backend membership exists.
+- Preserve the object during collaborator selection; do not route to a generic people-management dashboard unless the task becomes administrative.
+
+#### Corner component-quality rules
+
+```text
+FloatingSearchIsland
+  height: 44–48pt
+  width: content/viewport constrained
+  contrast: local surface, one subtle border or elevation grammar
+  placement: above contextual rail/navigation, never over critical content
+
+ContextCategoryRail
+  interaction band: 44–52pt
+  selected action: one contained/fill state
+  labels: one or two words
+  overflow: More, not a second wrapped row
+
+AvatarDataMarker
+  avatar: real identity only
+  status: backend evidenced
+  overlap: max three plus count
+  target: 44pt even if visible avatar is 28–36pt
+
+SystemHandoff
+  use: native share/picker/permission surface
+  success: durable receipt, not sheet dismissal
+  recovery: import progress, failure, retry and attribution state
+```
+
+### Cross-reference control anatomy
+
+The strongest common pattern across the three references is **small visible controls with large interaction certainty**. ThryftVerse must stop equating accessibility with large grey circles.
+
+#### Transparent navigation control
+
+Use for Back, Close, More, search, notifications, camera flip and disclosure:
+
+```text
+hit target: at least 44×44pt
+glyph: 20–24pt optical size
+visible background: none by default
+edge inset: 16pt after safe area
+pressed feedback: scale 0.98 and/or opacity 0.86
+contrast: local scrim only when media makes the glyph unreadable
+accessibility: role + state-aware label
+```
+
+#### Contained compact control
+
+Use only for selection, spatial state, media contrast, carousel continuation or a genuinely distinct committed action:
+
+```text
+hit target: at least 44×44pt
+visible shape: 32–36pt
+glyph: 18–22pt
+radius: full for circular state; compact token for grouped utility
+stroke: 1pt; 2pt only for focus/selection
+shadow: none or one subtle floating grammar
+```
+
+#### Primary action
+
+```text
+count: one per task/viewport
+height: 48–52pt
+label: verb or verb + object
+loading: preserve width; disable duplicate submission
+disabled: explain through nearby state, not a toast after tap
+commit: medium haptic only when the action is accepted/committed
+unknown outcome: warning + check/reconcile action
+```
+
+#### Bottom navigation
+
+```text
+destinations: 3–5 stable top-level areas
+visible height: 49–56pt plus safe-area inset
+glyph: 22–24pt; labels only if required for clarity/brand grammar
+selected state: filled glyph, indicator or semantic emphasis — choose one
+create: may receive differentiated containment but must not overpower content
+hide: only for immersive/full-screen tasks with a clear Close/Back path
+keyboard: never float above the keyboard as a duplicate action row
+```
+
+### Navigation physics contract
+
+Navigation motion is a statement about information architecture. It must match the relationship between origin and destination.
+
+| Relationship | Presentation | Motion | Return behavior |
+|---|---|---|---|
+| Parent → child detail | Native push | Platform horizontal hierarchy transition | Back restores list offset, filter/query and focused object. |
+| Object → immersive media | Shared object expansion or restrained fade | 180–240ms, interruptible | Dismiss returns to the source crop and position. |
+| Scoped create/select task | Sheet or full-screen modal | Native vertical/modal transition | Close cancels; dirty cancel confirms only real loss. |
+| Contextual refinement | Nonmodal sheet | Finger-tracked detent with one velocity-aware settle | Parent object remains visible and interactive when safe. |
+| Tab/destination switch | Stable shell, content replacement | Instant/crossfade/short directional indicator | Each tab preserves its own root and scroll state. |
+| Filter/mode switch | In-place state change | 120–180ms indicator/content transition | Back does not traverse filter changes unless the product explicitly models history. |
+| Destructive/financial commitment | Confirmation surface | No celebratory pre-commit motion | Dismiss/return only after definitive committed/failed/unknown state. |
+
+Hard rules:
+
+- Back is never Close. Back traverses hierarchy; Close dismisses the presented task.
+- The motion direction used to reveal a surface must make physical sense when dismissing it.
+- Gesture-driven movement tracks the finger without easing; easing begins only after release.
+- Use position plus predicted velocity to choose a detent. Do not snap to a distant detent because of a tiny fast flick.
+- Sheets are interruptible during settling and preserve their content/scroll state between detents.
+- A selected object does not teleport into a generic detail card. Preserve crop, position or identity through the transition when technically safe.
+- Repeated navigation never replays entrance cascades across every row/card.
+- Reduced motion retains state continuity through instant replacement or a short fade.
+
+### Direct-manipulation physics contract
+
+For crop, layer movement, product tags, reorder, visual-search regions and canvas transforms:
+
+1. **Acquire:** target becomes visibly selected within one frame; do not wait for a spring.
+2. **Track:** object follows the pointer/finger 1:1 in authored coordinates.
+3. **Constrain:** safe-area/edge constraints resist softly near the boundary; they do not suddenly jump.
+4. **Guide:** center/edge/alignment guides appear only near a meaningful snap.
+5. **Commit:** on release, apply one short settle and one selection haptic if a snap/change committed.
+6. **Record:** coalesce the continuous gesture into one undo command.
+7. **Persist:** autosave after settle; never serialize on every pointer frame.
+
+For reorder:
+
+- long press may acquire only where drag affordance is standard or an explicit Reorder mode exists;
+- the lifted object may scale to 1.02 and receive one subtle elevation;
+- surrounding items move out of the way; the source slot does not disappear unpredictably;
+- auto-scroll speed increases near the edge and stops immediately on release;
+- screen reader actions expose Move before/after/top/bottom;
+- cancellation returns the object to its exact source position.
+
+### Sheet anatomy and continuity
+
+Pinterest's visual refinement and Corner's object-first controls reinforce the same rule: a sheet must maintain causal context.
+
+```text
+parent object
+  remains visible
+  retains selection/crop/scroll
+  provides the reason for the sheet
+
+sheet
+  one scoped task
+  one title only when needed
+  Cancel/Close leading, Done trailing for explicit edits
+  one radius grammar
+  one scroll owner
+  keyboard-aware expansion
+  typed loading/empty/error/partial states
+```
+
+Do not:
+
+- stack a confirmation sheet over an action sheet over a picker;
+- place a full navigation hierarchy inside a half-height sheet without an explicit multi-step contract;
+- allow the sheet pan gesture to steal a canvas drag or horizontal media carousel;
+- dismiss a dirty sheet from a background tap without a recovery path;
+- show a Done button as active when no valid change exists;
+- use sheet dismissal as proof that an upload, import or mutation succeeded.
+
+### Search, filter and category placement
+
+Reference-derived placement priority:
+
+1. Back/Close at leading safe edge.
+2. Search/query as the central dominant input when the screen is search-led.
+3. One Refine/More action at trailing edge.
+4. One horizontal intent band directly below.
+5. Content immediately below the intent band.
+6. Global bottom navigation only on top-level destinations.
+
+If filters require more than one compact row, move secondary facets into a sheet. Never wrap chips into two or three irregular rows above the first result. Never place the same category in the header, a chip, a section title and a card badge.
+
+### Density and alignment transfer
+
+Use Pinterest density for visual discovery, Coinbase density for comparable values and Corner object primacy for contextual/social surfaces:
+
+| Surface | Dominant object | Above-fold target | Supporting chrome |
+|---|---|---|---|
+| Discovery/Looks | Real media grid | Four meaningful crops or clear fourth continuation | Search + one chip band + bottom nav. |
+| Visual search | Source image | Source image plus first 2–3 results | Close + reticle + one contextual sheet. |
+| Money/ownership | One value/chart | Dominant value, delta, chart and 3–5 comparable rows | One top bar + one action group. |
+| Map/spatial | Map and markers | Useful map region with search and immediate categories | One search island + one context rail + global nav. |
+| Creator editor | Authored canvas | Canvas dominates at least 68% of available non-keyboard height | Transparent top controls + one tool rail. |
+| Publish/confirm | Exact preview or consequence | Preview/value, destination/consequence and primary action | Flat rows; at most one dominant panel. |
+
+Alignment rules:
+
+- Media edges define the grid; metadata aligns to media, not to an unrelated card inset.
+- Search, list and action baselines use the same horizontal gutter per screen.
+- Numeric columns are right aligned and stable across rows.
+- Avatars align optically with the first text line; chevrons align with the row's interaction center.
+- Icon and label pairs use optical rather than bounding-box centering.
+- A floating search island must not cover the selected marker, face, product or primary crop.
+
+### ThryftVerse differentiation matrix
+
+| Reference strength | Adopt | Reject | ThryftVerse extension |
+|---|---|---|---|
+| Pinterest visual discovery | True-aspect media, low chrome, visual continuation, contextual results. | Blind masonry everywhere, hidden commerce truth, inaccessible overlays. | Server-evidenced product identity, source provenance, alt text, exact creator geometry. |
+| Coinbase state clarity | Dominant value, flat comparable rows, explicit commitment states. | Finance-blue visual imitation, over-dense jargon, speculative data. | Escrow/co-own/bid truth with unknown-outcome recovery and human language. |
+| Corner object-first curation | Object/map primacy, floating context, system import, social provenance. | Decorative collage as utility UI, floating cards on transactional lists. | Looks/moodboards with owned product links, creator provenance and privacy-safe collaboration. |
+
+The visual result must belong to ThryftVerse. References define quality logic, not brand styling.
+
+### Reference-driven defect triggers
+
+Treat each as at least P1; truth/navigation failures remain P0 under the global severity rules:
+
+- Search-led screen repeats the query as a page title and a section heading.
+- Back/Close/More are rendered as 44pt grey circles solely to satisfy the target size.
+- Two or more filter rows delay the first media/result object.
+- A contextual sheet hides the source object completely at its default detent.
+- Comparable prices/amounts are center aligned or jump horizontally between rows.
+- A map/media/canvas surface is wrapped in a decorative card inside the viewport.
+- Bottom navigation and contextual tool rail occupy the same interaction band.
+- Primary action count exceeds one without a real mutually exclusive decision.
+- Direct manipulation eases behind the finger or updates persistence every frame.
+- Sheet/navigation gesture direction contradicts the presentation direction.
+- Share/import success is shown when only the system sheet closed.
+- Avatar, verification, availability, price, ranking reason or match score is not backend evidenced.
+- Dark mode changes density, adds glow or replaces flat hierarchy with translucent card stacks.
+- Native visual validation lacks the exact origin, intermediate and return-state captures.
 
 ### No-vision agent rule
 
@@ -1317,32 +1861,45 @@ Do not substitute ADB poking for design implementation.
 
 ### Poster / Story Composer
 
-The Poster composer (Instagram/Snapchat Stories equivalent) is a **media-first, full-screen, tools-on-top** surface. It is never a form, never a small canvas in a card, never a separate editor layout.
+The Poster composer (Instagram/Snapchat Stories equivalent) is a **media-first, full-screen task with tools over the authored object**. “Full-screen” describes the immersive task, not the document coordinate space. It is never a form, never a small canvas in a card, and never a device-dependent editor layout.
 
 **Architecture (non-negotiable):**
 
-- The canvas fills the entire screen. Media is the background layer. There is no padding, no card, no reserved space around the canvas.
-- All chrome floats on top of the media with gradient scrims or `LiquidGlassBackdrop`. The top bar is transparent with a dark gradient scrim (0.55 → 0). The bottom tool rail is a floating glass dock.
+- Poster has one immutable **9:16 authored canvas**. Capture, editor, exact preview, export and viewer use the same normalized coordinates. Physical screen height, safe areas, tool rails and full-bleed media never redefine the canvas.
+- Fit the full authored canvas inside the available editor viewport. Any residual device area is neutral/media-continuous presentation space outside document bounds; it is never serialized. Do not crop the authored canvas merely to fill a taller handset.
+- Media may be full bleed **inside the authored canvas**. There is no card, decorative border or padding around that authored object.
+- Chrome floats above or immediately outside the authored object. Transparent controls are the default. Use the smallest local contrast scrim around a control; a full-width top gradient is allowed only when varied media makes the whole control group unreadable. `LiquidGlassBackdrop` is not mandatory and must not become the editor's visual identity.
 - Entry is camera-first. The user opens the camera immediately, captures or selects from gallery, and the media becomes the canvas instantly. There is no "upload" step, no "start blank" button, no intermediate screen.
 - Camera permission is requested only after a user action. The initial surface explains the value and offers a distinct Settings recovery action after permanent denial; opening the camera must not trigger broad media-library permission merely to populate a recent thumbnail.
 - The shutter is disabled until the native camera emits readiness. Capture output is pinned in the viewfinder and transitions into the exact destination geometry of the editor over 220–240ms; reduced motion completes immediately. The transition never fades an empty layer.
-- Grid, brackets, focus point and crop affordances share one safe capture-viewport coordinate space. They are never positioned from full-screen percentages that include system bars, the top tool row, shutter deck or intent selector. The guide aspect ratio must either match the saved crop or be explicitly labelled as advisory.
+- Grid, brackets, focus point and crop affordances share the authored 9:16 capture-viewport coordinate space. They are never positioned from full-screen percentages that include system bars, the top tool row, shutter deck or intent selector. The guide is the saved crop, never an advisory approximation.
 - Look / Poster / Search is the only persistent bottom intent rail. Effects, timer, hands-free, grid and multi-capture are progressively disclosed behind Tools and may not occupy the intent rail's interaction band. A tool remains hidden until preview, editor, restored draft, viewer and export can honor the same result.
 - The 44pt accessibility target is independent from visible camera chrome. Close, flash, tools, gallery and flip use transparent hit areas unless media contrast requires a restrained scrim; they do not become five equal floating discs.
 - One-shot capture is the default. Multi Snap is an explicit mode, and its count is announced once in the Done action rather than duplicated in decorative badges.
 - Native video capture controls remain absent until audio permission, recording lifecycle, interruption, duration, foreground/background and recovery contracts are all implemented. Gallery video import remains available when its upload pipeline is valid.
 - A small "Aa" text-mode button in the top-right of the camera view is the only path to a blank text poster (Instagram "Create" pattern). It is never a large "Blank canvas" button.
-- After capture/selection, the user is in edit mode immediately. There is no separate "preview" step before editing. The canvas IS the preview.
-- Multi-frame posters use floating page dots (Liquid Glass pill) below the top bar, not a frame strip at the bottom.
+- After capture/selection, the user is in edit mode immediately. There is no separate preview step before editing. The canvas is the editable preview; Publish Review later reproduces it exactly at the same authored geometry.
+- Multi-frame Posters use compact floating page dots below the top bar, not a persistent frame strip. Dots may receive one shared local-contrast capsule when required; individual dots do not become separate pills.
+- Reorder, duplicate, duration and delete live in a transient Frame Organizer. Closing it restores the exact active frame and editor transform.
 
 **Tool layout (Instagram Stories pattern):**
 
-- Top bar (floating, transparent + scrim): Close, truthful history controls and the forward action. Standard navigation glyphs remain transparent 48pt targets; only the forward action receives persistent containment.
-- `ContextToolRail` is the canonical Poster rail. It shows at most four context-relevant actions plus More, with 48pt targets and one 20–24pt optical icon band.
+- Top bar: Close, state-aware Undo/Redo and the forward action. Standard navigation glyphs remain transparent 44–48pt targets with 20–24pt optical glyphs; only the forward action receives persistent containment.
+- `ContextToolRail` is the canonical Poster rail. It shows at most four context-relevant actions plus More, with 44–48pt targets, 20–24pt optical icons and one selected-state grammar.
 - Text selection owns one control surface. Do not duplicate Font, Color, Align or More in simultaneous top and bottom toolbars.
-- More opens a grouped, safe-area-aware, vertically scrollable sheet. Keep only five or six 48dp rows visible at once; every advanced action remains reachable on a 360×640 viewport.
+- More opens one grouped, safe-area-aware, vertically scrollable sheet. Keep five or six 48–56pt rows visible at once; every advanced action remains reachable on a 360×640 viewport.
 - Selected modes use shape plus accent and expose `accessibilityState.selected`; selection never changes the glyph family's stroke weight.
 - Drawing mode retracts UI to the edges and makes the entire canvas drawable.
+- A layer tap selects. A second tap may enter its direct edit mode. Canvas taps never dismiss the route, and a resize/drag gesture never pages to another frame.
+- Continuous transform gestures follow the finger 1:1 and coalesce into one undo command. Autosave occurs after settle, not on every gesture frame.
+
+**Media import:**
+
+- The system photo picker is the default image/video import surface. Do not request broad library permission for ordinary selection.
+- Ordered multi-select maps explicitly to Poster frame order. Selection numbers are visible and accessible before import.
+- Android content URI permission is persisted before any background upload; iOS picker results are copied or referenced through a durable supported path.
+- Import moves through `selected → importing → locally durable → probed → editor-ready`, with typed unsupported, permission-lost and retry states.
+- The recent-media thumbnail must not appear unless it is real and authorized. A camera entry remains useful when no thumbnail is available.
 
 **Publication truth:**
 
@@ -1352,10 +1909,15 @@ The Poster composer (Instagram/Snapchat Stories equivalent) is a **media-first, 
 - The complete versioned composition document is stored with the Poster story and is the WYSIWYG viewer source. Narrow frame/sticker rows support indexing and interaction but must not replace authored layer geometry.
 - Scheduled publishing is not shown until scheduling and publication are one atomic backend operation. A legacy draft containing schedule metadata is blocked with a clear action to remove it.
 - Temporary `file:`, content-provider and cache URIs never enter a published document. Process death requeues interrupted jobs; a completed PUT with an interrupted finalization reconciles the same object key instead of creating duplicates.
+- The client creates and conditionally saves the server creator document before publication. Publish carries the expected lock version and canonical document hash; a mismatch produces a recoverable `DOCUMENT_CHANGED` state.
+- Every media-bearing field is covered by an owned, processed, moderated canonical receipt. Single PUT and multipart transport converge to the same publishable receipt type.
+- A publication-attempt ID is persisted before request dispatch. Timeout after dispatch becomes `Result unknown — Check publication`; it is never converted into success or a new blind retry.
+- Scheduling is visible only when the production worker calls the same route-neutral publication transaction as Publish Now and has an integration-tested exactly-once/idempotent outcome.
 
 ### Looks Composer
 
 - Looks uses the same camera-to-editor continuity, authoritative upload receipts and versioned composition contract as Poster.
+- Look has one immutable **4:5 authored canvas** across capture, editor, preview, export and viewer. It is fitted into the available viewport and never replaced with a 9:16 or device-height coordinate space.
 - The published composition, not only its primary cover URL, owns collage geometry, crop, stacking, text, product tags and playback.
 - Edit and Remix are distinct operations: Edit retains the owned document ID; Remix creates a new document with source attribution and never PATCHes the source.
 - Audience labels map only to implemented backend privacy projections. Unsupported close-friends or scheduled-publication controls stay absent rather than silently widening access.
@@ -1363,18 +1925,19 @@ The Poster composer (Instagram/Snapchat Stories equivalent) is a **media-first, 
 **Visual quality:**
 
 - Pure black background behind the canvas in dark mode; the media dominates.
-- Gradient scrims at top (0.55 → 0) and bottom (Liquid Glass) ensure chrome legibility without solid bars.
-- All chrome icons are white on the dark scrim, never `colors.textPrimary`.
-- The Publish button is a premium pill (`Radius.full`, brand color, white text).
-- Page dots use Liquid Glass with a gradient active dot.
-- The rail may use one restrained media-contrast backdrop. Individual tools stay flat and transparent unless selected; no rings or filled circles on every action.
+- Chrome colour is chosen from semantic media-overlay tokens after contrast evaluation; do not hardcode every icon white when the canvas is light.
+- Use local top/bottom scrims only when the underlying crop requires them. The rail may use one restrained media-contrast backdrop; individual tools stay flat and transparent unless selected.
+- Publish is the one persistent contained action. Its shape follows the canonical primary-action token; “premium” never means adding a unique gradient, glow or radius.
+- Product tags are compact anchored markers. The selected tag opens one contextual product sheet while the Look remains visible.
+- Product identity, price, availability, ownership and trust state come from live backend projections and fail closed. The editor never fabricates a product card from local display text.
+- Up to three collaborator/curator avatars plus a count may appear only when backend membership exists. Social identity is data, not decoration.
 
 **Entry point (HomeScreen):**
 
-- The story tray has a "Your Poster" create card as the first item, with a gradient ring and camera icon.
+- The story tray has a "Your Poster" create object as the first item. The camera/create affordance is visually distinct; a gradient ring is used only if it is the established unseen/creator state grammar, not as generic decoration.
 - Tapping it navigates to `CreateCamera` with `mode: 'poster'` (camera-first), never to `CreatePoster` (legacy redirect).
 - The section header says "Posters" (not "Stories") with a camera button on the right.
-- Story cards have a 3.5px gradient ring (unseen) and 2px muted ring (seen), with subtle shadow.
+- Poster cards use one consistent unseen/seen state grammar. If a ring is retained, use a measured token and do not combine gradient, thick stroke and shadow as three simultaneous state signals.
 
 **Legacy prohibition:**
 
@@ -1553,6 +2116,36 @@ A discovery surface fails if:
 - modules are inserted by arbitrary fixed frequency rather than relevance;
 - the canvas or accent treatment overwhelms photography;
 - visual search is displayed as functional when it is not.
+
+### Coinbase gate (money / ownership / commitment / dense values)
+
+A value-dense or high-consequence surface fails if:
+
+- more than one value competes for primary hierarchy above the fold;
+- comparable money/quantity values are not right aligned or shift unpredictably between rows;
+- positive/negative state is communicated by colour alone;
+- every metric is wrapped in a separate rounded card;
+- filters occupy more visual weight than the chart, balance, order or consequence they control;
+- loading changes the width or position of the commitment action;
+- disabled, pending, committed, failed and unknown outcomes are visually conflated;
+- a destructive/negative action sits beside the safe primary with equal styling and no separation;
+- a client-owned flag is rendered as compliance, eligibility, verification or financial authorization;
+- a dense list shows fewer than four useful rows on a standard phone without a strong content reason.
+
+### Corner gate (curation / map / collections / social provenance)
+
+An object-first curation or spatial surface fails if:
+
+- the map, media, collection or authored object is placed inside a decorative dashboard card;
+- search, categories and global navigation overlap one another or obscure the selected object;
+- contextual actions and global destinations share one ambiguous bottom rail;
+- avatar markers, collaborators, saves or social proof are fabricated or not tied to real identities;
+- a platform share/picker capability is imitated with a custom sheet without a product reason;
+- closing a picker/share sheet is treated as durable import success;
+- floating controls use multiple unrelated radii, shadows or glass treatments;
+- curation is reduced to an unsearchable visual gallery with no source, note, list, tag, privacy or provenance model;
+- asymmetric editorial composition is used on transactional/utility lists where alignment and scanning are more important;
+- the selected object is discarded when the user opens a contextual collaborator, tag, source or category task.
 
 ### Instagram gate (feed / social / stories)
 
@@ -2027,17 +2620,43 @@ Remaining weaknesses:
 Final status:
 ~~~
 
-## Benchmark Verification Notes — 11 July 2026
+## Benchmark Verification Notes — 30 August 2026
 
 This document's latest-reference corrections are based on:
 
-- current Pinterest public mobile imagery showing a predominantly neutral white canvas, vivid natural-aspect media, low chrome and category/topic navigation;
+- the user-supplied Pinterest, Coinbase and Corner Mobbin app URLs as benchmark identifiers; the protected Mobbin screen library was not accessible without a subscription and no protected screen is claimed as directly inspected;
+- current first-party Pinterest App Store screenshots showing a compact search header, one-row refinements, dense true-aspect media, visual-region refinement and a media-preserving contextual results sheet;
+- current first-party Coinbase App Store screenshots showing a dominant value/chart hierarchy, right-aligned dense value rows, compact filters, one contextual module and restrained high-stakes actions;
+- current first-party Corner App Store screenshots showing object/map primacy, a floating search island, compact category/context rails, system share-sheet handoff and social identity embedded as data;
 - Pinterest's 2026 engineering focus on visual completion, multimodal retrieval, fresh-content distribution and scalable visual relevance;
+- official Pinterest creation/product-tagging guidance describing media capture/import, text/sticker editing, links, product tagging, review and publishing metadata;
+- Coinbase Design System guidance for one-primary-action hierarchy, transparent supplementary actions, loading/disabled width stability, accessible icon labels, controlled segmented tabs and compact chips;
+- Apple Human Interface Guidelines updated through 2026 for purposeful/interruptible motion, 44pt default controls, platform Back/Close semantics, sheet button placement and direct-manipulation feedback;
+- Android 2026 adaptive layout/navigation guidance, including reflowing bottom sheets to side sheets and avoiding handset bottom-navigation geometry on expanded layouts;
 - Instagram's 2026 rollout of free profile-grid rearrangement and its shift toward taller profile thumbnails;
 - current Depop product imagery showing direct product actions, seller identity, product/social proof and practical listing creation;
 - current Vinted/Vestiaire/Whatnot product principles around visual search, trust, transaction clarity and live auction action.
 
 These references inform product logic. They are not licences to copy proprietary layouts, branding or exact interactions.
+
+Primary public sources for this revision:
+
+- [Pinterest App Store](https://apps.apple.com/us/app/pinterest/id429047995)
+- [Pinterest — Guide to creating Pins](https://help.pinterest.com/en/guide/guide-to-creating-pins)
+- [Pinterest — Product tagging](https://help.pinterest.com/en/business/article/tag-your-products-in-your-pins)
+- [Coinbase App Store](https://apps.apple.com/us/app/coinbase-buy-crypto-stocks/id886427730)
+- [Coinbase Design System — Button](https://cds.coinbase.com/components/inputs/Button/)
+- [Coinbase Design System — SegmentedTabs](https://cds.coinbase.com/components/navigation/SegmentedTabs/)
+- [Coinbase Design System — BrowserBar](https://cds.coinbase.com/components/navigation/BrowserBar/)
+- [Coinbase Design System — Chip](https://cds.coinbase.com/components/inputs/Chip/)
+- [Corner App Store](https://apps.apple.com/us/app/corner-curate-share-places/id1668282277)
+- [Apple HIG — Motion](https://developer.apple.com/design/human-interface-guidelines/motion)
+- [Apple HIG — Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
+- [Apple HIG — Gestures](https://developer.apple.com/design/human-interface-guidelines/gestures/)
+- [Apple HIG — Sheets](https://developer.apple.com/design/human-interface-guidelines/sheets)
+- [Apple HIG — Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars)
+- [Android — Adaptive layouts](https://developer.android.com/design/ui/mobile/guides/layout-and-content/adapt-layout)
+- [Android — Layout and navigation patterns](https://developer.android.com/design/ui/mobile/guides/layout-and-content/layout-and-nav-patterns)
 
 ## Final Report Standard
 

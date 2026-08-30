@@ -12,6 +12,8 @@ type CreatorAnalyticsEvent =
   | 'creator_publish_start'
   | 'creator_publish_success'
   | 'creator_publish_error'
+  | 'creator_publish_unknown'
+  | 'creator_schedule_unknown'
   | 'creator_page_add'
   | 'creator_page_remove'
   | 'creator_capture_photo'
@@ -96,6 +98,12 @@ export const CreatorAnalytics = {
 
   publishError: (documentType: 'look' | 'poster', errorMessage: string) =>
     trackCreatorEvent('creator_publish_error', { documentType, errorMessage }),
+
+  scheduleUnknown: (documentType: 'look' | 'poster') =>
+    trackCreatorEvent('creator_schedule_unknown', { documentType }),
+
+  publishUnknown: (documentType: 'look' | 'poster') =>
+    trackCreatorEvent('creator_publish_unknown', { documentType }),
 
   pageAdd: (documentType: 'look' | 'poster', pageCount: number) =>
     trackCreatorEvent('creator_page_add', { documentType, pageCount }),

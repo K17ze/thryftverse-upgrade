@@ -46,6 +46,15 @@ export interface LookApiItem {
   saveCount: number;
   likedByViewer: boolean;
   savedByViewer: boolean;
+  /** Native media pixel width, when the backend exposes it. Used by
+   *  resolveLookTemplate to derive the real tile aspect ratio instead of
+   *  fabricating one from the item index (Design.md §1841). */
+  mediaWidth?: number;
+  /** Native media pixel height, when the backend exposes it. */
+  mediaHeight?: number;
+  /** Pre-computed cover aspect ratio (width / height), when the backend
+   *  exposes it. Takes precedence over mediaWidth/mediaHeight. */
+  coverAspectRatio?: number;
   /** Versioned composition document for collage looks. When present, the
    * viewer should render this canonical composition instead of only mediaUrl. */
   compositionDocument?: unknown;

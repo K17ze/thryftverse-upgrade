@@ -126,7 +126,7 @@ export interface AlgorithmTransparencyProfile {
 let _algorithmDemoMode = true;
 export function getAlgorithmDemoMode(): boolean { return _algorithmDemoMode; }
 export function setAlgorithmDemoMode(value: boolean): void { _algorithmDemoMode = value; }
-export const ALGORITHM_DEMO_MODE = true;
+export const ALGORITHM_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Mock data

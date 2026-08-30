@@ -122,6 +122,14 @@ export interface SearchApiResult {
     size?: string | null;
     condition?: string | null;
     category?: string | null;
+    /** Native media pixel width, when the backend exposes it. Used to derive
+     *  the tile aspect ratio instead of forcing a square crop. */
+    mediaWidth?: number;
+    /** Native media pixel height, when the backend exposes it. */
+    mediaHeight?: number;
+    /** Pre-computed cover aspect ratio (width / height), when the backend
+     *  exposes it. Takes precedence over mediaWidth/mediaHeight. */
+    aspectRatio?: number;
   }>;
   fallback?: boolean;
   error?: string;

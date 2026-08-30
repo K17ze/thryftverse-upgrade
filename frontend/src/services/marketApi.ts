@@ -2201,6 +2201,45 @@ export async function fetchCoOwnHoldings(userId: string): Promise<MarketCoOwnHol
   }
 }
 
+// ── Co-Own eligibility (server-authoritative) ────────────────────────
+// The server is the source of truth for co-own eligibility. The result is
+// ADVISORY for the UI only — it drives the disabled state and reason copy.
+// The backend re-evaluates eligibility transactionally before any money
+// mutation, so a tampered or stale client response can never authorise a
+// trade.
+export interface CoOwnEligibilityResult {
+  eligible: boolean;
+  reasonCodes: string[];
+  policyVersion: string;
+  evaluatedAt: string;
+  expiresAt: string;
+  message?: string;
+}
+
+interface CoOwnEligibilityResponse {
+  ok: true;
+  eligible: boolean;
+  reasonCodes: string[];
+  policyVersion: string;
+  evaluatedAt: string;
+  expiresAt: string;
+  message?: string;
+}
+
+export async function fetchCoOwnEligibility(assetId: string): Promise<CoOwnEligibilityResult> {
+  const payload = await fetchJson<CoOwnEligibilityResponse>(
+    `/co-own/eligibility/${encodeURIComponent(assetId)}`
+  );
+  return {
+    eligible: payload.eligible,
+    reasonCodes: payload.reasonCodes,
+    policyVersion: payload.policyVersion,
+    evaluatedAt: payload.evaluatedAt,
+    expiresAt: payload.expiresAt,
+    message: payload.message,
+  };
+}
+
 export async function listUserMarketHistory(
   userId: string,
   options: ListUserMarketHistoryOptions = {}

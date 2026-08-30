@@ -338,10 +338,10 @@ export default function PulseTab() {
         <DiscoverySectionHeader
           title="Find Your Aesthetic"
         />
-        <AnimatedPressable style={styles.quizCard} onPress={() => navigation.navigate('StyleQuiz')} activeOpacity={0.92}>
-          <Ionicons name="color-palette-outline" size={22} color={colors.brand} />
+        <AnimatedPressable style={styles.quizCard} onPress={() => navigation.navigate('StyleQuiz')} activeOpacity={0.92} accessibilityRole="button" accessibilityLabel="Take the style quiz">
+          <Ionicons name="color-palette-outline" size={22} color={colors.brand} aria-hidden={true} />
           <Text style={styles.quizActionText}>Take the style quiz</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
         </AnimatedPressable>
       </View>
 

@@ -95,7 +95,7 @@ export function FlagshipNavigationRow({
 
   const resolvedLabel = accessibilityLabel ?? [title, subtitle].filter(Boolean).join(', ');
 
-  const leadingWidth = icon ? Control.iconCompact : 0;
+  const leadingWidth = icon ? Control.icon : 0;
 
   const content = (
     <View style={[styles.inner, { minHeight }, style]}>
@@ -103,8 +103,9 @@ export function FlagshipNavigationRow({
         {icon ? (
           <Ionicons
             name={icon}
-            size={Control.iconCompact}
+            size={Control.icon}
             color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
+            aria-hidden={true}
           />
         ) : null}
 
@@ -129,7 +130,7 @@ export function FlagshipNavigationRow({
           <View style={styles.trailing}>{trailing}</View>
         ) : resolvedShowChevron ? (
           <View style={styles.trailing}>
-            <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} aria-hidden={true} />
           </View>
         ) : null}
       </View>
@@ -141,7 +142,7 @@ export function FlagshipNavigationRow({
           style={[
             styles.separator,
             { backgroundColor: colors.border },
-            separatorInset && { marginLeft: Space.md + leadingWidth + Space.sm },
+            separatorInset && { marginLeft: icon ? leadingWidth + Space.sm : 0 },
           ]}
         />
       ) : null}
@@ -149,7 +150,17 @@ export function FlagshipNavigationRow({
   );
 
   if (!isTappable) {
-    return content;
+    return (
+      <View
+        accessible
+        accessibilityRole={onPress ? 'button' : 'text'}
+        accessibilityLabel={resolvedLabel}
+        accessibilityHint={accessibilityHint}
+        accessibilityState={{ disabled: !!disabled }}
+      >
+        {content}
+      </View>
+    );
   }
 
   return (
@@ -172,14 +183,13 @@ export function FlagshipNavigationRow({
 const styles = StyleSheet.create({
   pressable: {},
   inner: {
-    paddingVertical: Space.sm + Space.xs,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     justifyContent: 'center' },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    minHeight: Control.hit },
+    gap: Space.sm },
   textWrap: {
     flex: 1,
     minWidth: 0,
@@ -204,4 +214,4 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginTop: Space.sm + Space.xs } });
+    marginTop: Space.sm } });

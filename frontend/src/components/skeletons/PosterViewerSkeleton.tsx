@@ -1,12 +1,16 @@
 import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, AspectRatio } from '../../theme/designTokens';
 
-// Mirrors PosterViewerScreen layout: full-screen dark immersive media viewer
-// with story progress segments at top and a subtle media placeholder.
+// Mirrors PosterViewerScreen layout: full-screen 9:16 dark immersive media
+// viewer with story progress segments at top and a subtle media placeholder
+// that matches the final geometry (full-screen, not a centered rectangle).
 export function PosterViewerSkeleton() {
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  // The poster viewer fills the entire screen — the skeleton must match
+  // that geometry so there's no layout shift when the real content loads.
+  const mediaHeight = Math.min(SCREEN_H, SCREEN_W / AspectRatio.portraitTall);
   return (
     <View style={styles.container}>
       {/* Story progress segments — matches progressSegments layout */}
@@ -18,12 +22,13 @@ export function PosterViewerSkeleton() {
         ))}
       </View>
 
-      {/* Media placeholder — subtle shimmer on dark background */}
+      {/* Media placeholder — full-screen 9:16 geometry with subtle shimmer.
+          Matches the final canvas dimensions so there's no layout shift. */}
       <View style={styles.mediaArea}>
         <SkeletonLoader
-          width={SCREEN_W * 0.7}
-          height={SCREEN_H * 0.5}
-          borderRadius={Radius.xl}
+          width={SCREEN_W}
+          height={mediaHeight}
+          borderRadius={Radius.none}
           style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
         />
       </View>

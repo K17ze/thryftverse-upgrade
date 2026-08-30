@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
@@ -11,6 +11,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { ConversationListSkeleton } from '../components/SkeletonLoader';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
+import type { Conversation } from '../domain';
 import { useToast } from '../context/ToastContext';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -37,6 +38,21 @@ export default function MutedConversationsScreen() {
     });
   };
 
+  const renderItem = useCallback(
+    ({ item: convo, index }: { item: Conversation; index: number }) => (
+      <ConversationManagementRow
+        conversation={convo}
+        currentUserId={currentUser?.id}
+        onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
+        actionIcon="notifications-outline"
+        actionLabel="Unmute"
+        onAction={() => handleUnmute(convo.id)}
+        isLast={index === mutedConversations.length - 1}
+      />
+    ),
+    [navigation, currentUser, handleUnmute, mutedConversations]
+  );
+
   return (
     <FlagshipScreen
       header={
@@ -61,17 +77,7 @@ export default function MutedConversationsScreen() {
         <FlashList
           data={mutedConversations}
           keyExtractor={(item) => item.id}
-          renderItem={({ item: convo, index }) => (
-            <ConversationManagementRow
-              conversation={convo}
-              currentUserId={currentUser?.id}
-              onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
-              actionIcon="notifications-outline"
-              actionLabel="Unmute"
-              onAction={() => handleUnmute(convo.id)}
-              isLast={index === mutedConversations.length - 1}
-            />
-          )}
+          renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />

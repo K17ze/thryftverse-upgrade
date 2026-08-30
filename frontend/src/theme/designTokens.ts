@@ -475,8 +475,11 @@ export const IconGrammar = {
   badge: 12,
   /** Hero/empty-state glyph. 28–32pt optical band. */
   hero: 28,
-  /** Outline = default/resting state. Filled = selected/active/saved. */
-  filledStates: ['heart', 'bookmark', 'star', 'bookmark-outline', 'heart-outline'] as readonly string[] } as const;
+  /** Outline = default/resting state. Filled = selected/active/saved.
+   *  Only filled (selected-state) glyph names belong here — outline names
+   *  are the default, not a filled state. Used by semantic state pairs at
+   *  consuming controls (saved/unsaved, sound-on/muted, visibility-on/hidden). */
+  filledStates: ['heart', 'bookmark', 'star'] as readonly string[] } as const;
 
 // ============================================================================
 // PRESS FEEDBACK — scale values for press interactions
@@ -487,8 +490,8 @@ export const PressScale = {
   tap: 0.97,
   /** Gentle press — large surfaces, cards */
   gentle: 0.985,
-  /** Icon-only press — controls with transparent background */
-  icon: 0.92 } as const;
+  /** Icon-only press — subtle scale for transparent header/overlay controls (0.97–0.985 band) */
+  icon: 0.975 } as const;
 
 // ============================================================================
 // ASPECT RATIOS (width / height)

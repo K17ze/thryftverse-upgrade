@@ -20,7 +20,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { updateMyProfile } from '../services/profileApi';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow } from '../components/flagship';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { queryKeys } from '../platform/server/queryKeys';
 
@@ -274,6 +274,59 @@ export default function EditProfileScreen() {
             isLast
           />
         </View>
+
+        {/* ── Private details — read-only account info ── */}
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionLabel}>Private details</Text>
+
+          <ProfileEditField
+            label="Email"
+            value={user.email ?? '—'}
+            onChangeText={() => {}}
+            readOnly
+          />
+
+          <ProfileEditField
+            label="Account status"
+            value="Active"
+            onChangeText={() => {}}
+            readOnly
+            isLast
+          />
+        </View>
+
+        {/* ── Security — credentials & 2FA ── */}
+        <View style={styles.navSection}>
+          <Text style={[styles.sectionLabel, styles.navSectionLabel]}>Security</Text>
+
+          <FlagshipNavigationRow
+            title="Password"
+            onPress={() => navigation.navigate('ChangePassword')}
+            accessibilityHint="Change your password"
+          />
+
+          <FlagshipNavigationRow
+            title="Two-factor authentication"
+            subtitle={user.twoFactorEnabled ? 'On' : 'Off'}
+            onPress={() => navigation.navigate('TwoFactorSetup')}
+            separator={false}
+            accessibilityHint="Manage two-factor authentication"
+          />
+        </View>
+
+        {/* ── Account — control & deletion ── */}
+        <View style={styles.navSection}>
+          <Text style={[styles.sectionLabel, styles.navSectionLabel]}>Account</Text>
+
+          <FlagshipNavigationRow
+            title="Account control"
+            subtitle="Deactivate or delete your account"
+            danger
+            onPress={() => navigation.navigate('AccountControl')}
+            separator={false}
+            accessibilityHint="Manage account control and deletion"
+          />
+        </View>
       </KeyboardAwareScrollView>
 
       <ConfirmationSheet
@@ -293,7 +346,7 @@ export default function EditProfileScreen() {
 interface ProfileEditFieldProps {
   label: string;
   value: string;
-  onChangeText: (v: string) => void;
+  onChangeText?: (v: string) => void;
   onBlur?: () => void;
   placeholder?: string;
   helper?: string;
@@ -304,6 +357,8 @@ interface ProfileEditFieldProps {
   keyboardType?: 'default' | 'url' | 'email-address' | 'phone-pad';
   returnKeyType?: 'done' | 'next' | 'go';
   isLast?: boolean;
+  /** Read-only detail row — renders plain muted text, no input border. */
+  readOnly?: boolean;
 }
 
 function ProfileEditField({
@@ -319,7 +374,8 @@ function ProfileEditField({
   autoCapitalize = 'none',
   keyboardType = 'default',
   returnKeyType = 'next',
-  isLast }: ProfileEditFieldProps) {
+  isLast,
+  readOnly }: ProfileEditFieldProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [isFocused, setIsFocused] = useState(false);
@@ -327,6 +383,18 @@ function ProfileEditField({
   const showCounter = maxLength !== undefined;
   const counterText = showCounter ? `${value.length}/${maxLength}` : helper;
   const isNearLimit = showCounter && value.length >= (maxLength ?? 0) * 0.9;
+
+  // Read-only detail — flat label + muted value, no input chrome.
+  if (readOnly) {
+    return (
+      <View style={[styles.fieldGroup, isLast && styles.fieldGroupLast]}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <Text style={styles.readOnlyValue} numberOfLines={1}>
+          {value || '—'}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.fieldGroup, isLast && styles.fieldGroupLast]}>
@@ -342,7 +410,7 @@ function ProfileEditField({
         <TextInput
           style={[styles.fieldInput, multiline && styles.fieldInputMultiline]}
           value={value}
-          onChangeText={onChangeText}
+          onChangeText={onChangeText ?? undefined}
           onFocus={() => setIsFocused(true)}
           onBlur={() => { setIsFocused(false); onBlur?.(); }}
           placeholder={placeholder}
@@ -440,19 +508,33 @@ function createStyles(colors: ThemeColors) {
     sectionGroup: {
       paddingTop: Space.lg,
       paddingHorizontal: Space.md },
+    // Navigation-row sections — rows own their horizontal padding, so the
+    // wrapper only adds vertical rhythm; the label is padded inline.
+    navSection: {
+      paddingTop: Space.lg },
     sectionLabel: {
-      fontSize: TypographyV2.label.size,
-      fontFamily: TypographyV2.label.fontFamily,
-      color: colors.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: TypographyV2.label.letterSpacing,
+      fontSize: TypographyV2.captionElevated.size,
+      fontFamily: TypographyV2.captionElevated.fontFamily,
+      color: colors.textSecondary,
+      letterSpacing: TypographyV2.captionElevated.letterSpacing,
+      lineHeight: TypographyV2.captionElevated.lineHeight,
       marginBottom: Space.sm },
+    // Section label used inside navSection — needs its own horizontal inset
+    // since the wrapper has none (rows own their padding).
+    navSectionLabel: {
+      paddingHorizontal: Space.md },
 
     // ── Fields — premium inputs with clear focus states ──
     fieldGroup: {
       marginBottom: Space.md },
     fieldGroupLast: {
       marginBottom: 0 },
+    // Read-only detail value — flat muted text, no input chrome.
+    readOnlyValue: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textMuted,
+      paddingVertical: Space.sm },
     fieldLabel: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
