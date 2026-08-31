@@ -1061,6 +1061,52 @@ No grabbers, no subtitles, no IA changes; TextEditorSheet's functional form labe
 - `tsc --noEmit` → **exit 0, zero errors** (full project, after all four agents + parent fixes)
 - Rendered-UI claims remain code-level (no device screenshots in this environment) — the anatomy audit's §"could not verify" note stands: dark-mode token mapping and `SheetContainer` grabber behavior should be confirmed on device in the next device-run pass
 
+### 9.9 Round-5 Implementation — Tool IA Overhaul (2026-08-31, device-screenshot-driven)
+
+*Trigger: device screenshot of the Look composer's "More" menu showed duplicated rows (Layers ×2, Preview ×2, Drafts ×2, Settings ×2), a permanently-disabled Cutout, and an ungrouped 14-row flat list. Method: 2026 tool-IA research (Instagram Edits bottom-toolbar + clip-context pattern, Snapchat right rail, CapCut's context-switch/scroll/sheet three-layer disclosure, Hick's Law + 4±1 chunking, Material 3/iOS menu anatomy) → two parallel audits (tool-IA census + benchmark research) → two file-disjoint implementation agents. Verification: `tsc --noEmit` exit 0; 22/22 tests.*
+
+#### 9.9.1 Root cause (from the audit)
+
+`LookComposerScreen.tsx` concatenated two independent tool arrays in the same menu — `contextOverflowTools` from `lookToolRailConfig.ts` (which already contained Layers/Preview/Drafts/Settings + a permanently-disabled Cutout) and a hardcoded global list repeating the same four — with no dedup. Poster was already correct (single source + grouped sections).
+
+#### 9.9.2 Dead and misleading tools removed (root-cause fixes, not symptoms)
+
+| Removed | Evidence |
+|---|---|
+| `look-cutout` in default context | `disabled: !selectedLayer \|\| type !== 'media'` — permanently disabled dead entry |
+| `look-product-price` | Verified `handleProductPriceAction` opened the identical product picker as Item — the "Price" label was false |
+| `look-sticker-edit` | Verified no-op: sets `editingLayer` but no `pickerMode`, nothing renders |
+| Poster "Crop"-labeled cutout row | Opened CutoutPreviewSheet which displays "Cutout unavailable" when the capability probe fails — mislabeled dead end; now gated on the capability probe |
+| Poster video-context Duplicate/Delete | Were in BOTH rail and overflow — primary∩overflow dedup |
+| Dead contract params | `handleCropAction`, `handleEditLayer`, `navigate`, `haptic` params that only served removed tools |
+
+#### 9.9.3 Look overflow — final IA (grouped, Poster-parity)
+
+Structure: context tools → one hairline divider → Canvas (Background, Safe Area) → Project (Preview, Drafts, Settings) → Accessibility (Layers, Move, Arrange) → Help. Default context: **9 rows, down from 14 with duplicates**. Media-selected rail: **Replace / Crop / Adjust / Effects** (the research's high-frequency four; Auto moved to overflow). Delete renders last with danger styling in every context that has it. Menu is scrollable (`maxHeight: min(68% , 620)`) — Help was previously unreachable on short screens. Dedup safety net filters context tools against global ids *and* labels before render.
+
+#### 9.9.4 Implemented-but-unexposed operations wired
+
+| Operation | Was | Now |
+|---|---|---|
+| Multi-select Align (`handleMultiAlign` — returned by hook, never called) | Dead code | "Center horizontally" / "Center vertically" overflow items in multi-select context |
+| Copy/Paste layer (`copyLayer`/`pasteLayer` in CreatorContext) | Exposed nowhere | Copy + Paste in media/text-selected overflow; Paste disabled when clipboard empty (`canPaste`) |
+| Multi-select Duplicate | — | Present via existing primary (verified) |
+
+Deliberately NOT added (unimplemented in the model): opacity control, flip/mirror, group/ungroup — flagged as future capability work, not fake-wired.
+
+#### 9.9.5 Poster overflow polish
+
+- **Destructive separation**: Delete extracted from mid-list to its own final gap-separated group with `danger` styling (Material 3/iOS pattern)
+- **Real duplicate fixed**: video-media context had Duplicate/Delete in both rail AND overflow — gated to `!isVideoMedia`
+- **Dead entry fixed**: cutout row rendered as "Crop" but opened an "unavailable" sheet when the capability probe failed — now renders only when the probe passes
+- **Manage frames** folded into the Project group with a distinct icon + a11y hint (was a lone single-item group with an icon colliding with Timeline's)
+
+#### 9.9.6 Round-5 verification
+
+- `tsc --noEmit` → **exit 0** (including the user's in-progress `AppIcon`/`AppIconButton`/`LookMasonryTile` files — one missing `SemanticIconDef` type export resolved during the pass)
+- `vitest creatorStudio.test.ts` → **22/22 passed**
+- Overflow row counts: Look default **14 (with dupes) → 9**; every context grouped, dedup-safe, destructive-separated
+
 ---
 
 ## 10. Validation Methodology
