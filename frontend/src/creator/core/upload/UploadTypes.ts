@@ -82,6 +82,8 @@ export type UploadJobStatus =
   | 'queued'
   | 'initiating'
   | 'uploading'
+  | 'confirming'
+  | 'stalled'
   | 'paused'
   | 'completed'
   | 'failed';
@@ -127,6 +129,8 @@ export type UploadJob = {
   error?: string;
   retries: number;
   maxRetries: number;
+  /** Timestamp (ms) of the last real progress event. Used for stall detection. */
+  lastProgressAt?: number;
   /** Folder/scope passed to the upload endpoint (e.g. "looks", "posters"). */
   folder: string;
   createdAt: number;
@@ -150,6 +154,7 @@ export type UploadEvent =
   | { type: 'jobAdded'; job: UploadJob }
   | { type: 'jobStarted'; job: UploadJob }
   | { type: 'progress'; progress: UploadProgress }
+  | { type: 'jobConfirming'; job: UploadJob }
   | { type: 'jobComplete'; job: UploadJob }
   | { type: 'jobFailed'; job: UploadJob; error: string }
   | { type: 'allComplete'; projectId: string };
@@ -192,3 +197,6 @@ export const DEFAULT_PART_SIZE = 5 * 1024 * 1024; // 5 MB
 
 /** Files below this threshold use single-PUT even when multipart is available. */
 export const MULTIPART_THRESHOLD_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/** No progress for this many ms during 'uploading' → transition to 'stalled'. */
+export const STALL_THRESHOLD_MS = 15_000; // 15 seconds

@@ -30,7 +30,6 @@ import Reanimated, {
   withTiming,
   withSpring,
   runOnJS,
-  Easing,
   useReducedMotion } from 'react-native-reanimated';
 import { Space, Radius, FontFamily, Control, Stroke, ZIndex, IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
@@ -83,7 +82,7 @@ const HANDLE_VISIBLE = 8;
 const HANDLE_HIT = Control.hit;
 /** Minimum crop region size in normalized coords — prevents collapse. */
 const MIN_CROP = 0.05;
-const TIMING_FADE = { duration: 180, easing: Easing.out(Easing.ease) } as const;
+const TIMING_FADE = { duration: Motion.duration.normal, easing: Motion.easing.entrance } as const;
 
 // ── Handle identifiers ───────────────────────────────────────────────
 type HandleId =
@@ -153,7 +152,7 @@ export function InCanvasCropOverlay({
       mountedRef.current = true;
       overlayOpacity.value = reduceMotion ? 1 : withTiming(1, TIMING_FADE);
     } else if (mountedRef.current) {
-      overlayOpacity.value = reduceMotion ? 0 : withTiming(0, { duration: 140 });
+      overlayOpacity.value = reduceMotion ? 0 : withTiming(0, { duration: Motion.duration.fast });
     }
   }, [visible, reduceMotion, overlayOpacity]);
 

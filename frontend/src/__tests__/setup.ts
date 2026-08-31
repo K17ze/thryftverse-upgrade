@@ -286,6 +286,7 @@ vi.mock('expo-modules-core', () => {
       addListener: () => ({ remove: () => {} }),
       removeListener: () => {},
     }),
+    requireOptionalNativeModule: () => null,
     requireNativeViewManager: (name: string) =>
       React.forwardRef((props: any, ref: any) =>
         React.createElement(name, { ref, ...props })

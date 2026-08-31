@@ -13,7 +13,7 @@ import type {
   QueueUploadParams,
   ProjectProgress,
 } from './UploadTypes';
-import { MULTIPART_THRESHOLD_BYTES } from './UploadTypes';
+import { MULTIPART_THRESHOLD_BYTES, STALL_THRESHOLD_MS } from './UploadTypes';
 
 /** Base delay (ms) for exponential backoff between retry attempts. */
 const BASE_BACKOFF_MS = 1000;
@@ -105,6 +105,9 @@ export class UploadManager {
   /** Whether multipart transport is enabled. Defaults to true — the backend
    *  exposes /uploads/multipart/* endpoints for resumable large-file uploads. */
   private multipartEnabled: boolean;
+  /** Interval handle for the periodic stall-detection checker. Stored so it
+   *  could be cleared if the manager is ever torn down. */
+  private stallCheckInterval: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     jobStore: UploadJobStore,
@@ -120,6 +123,11 @@ export class UploadManager {
     this.multipartUploader = new MultipartUploader({
       partSize: options?.partSize,
     });
+    // Stall detection: poll every 5 seconds for uploads that haven't
+    // received a progress event within STALL_THRESHOLD_MS. Transition
+    // them to 'stalled' so the UI can surface feedback instead of a
+    // frozen progress bar.
+    this.stallCheckInterval = setInterval(() => this.checkStalledJobs(), 5_000);
   }
 
   /**
@@ -565,8 +573,12 @@ export class UploadManager {
     }
 
     // The bytes have landed, but the job is not complete until the backend
-    // verifies and publishes a canonical asset.
+    // verifies and publishes a canonical asset. Transition to 'confirming'
+    // so the UI can distinguish "bytes transferring" from "server confirming".
     this.emitProgress(job.id, job.sizeBytes, job.sizeBytes);
+    await this.persistState(job.id, { status: 'confirming' });
+    const confirming = this.jobsCache.get(job.id);
+    if (confirming) this.emit({ type: 'jobConfirming', job: confirming });
     const uploaded = await finalizePresignedMedia({
       presign,
       fileName: job.fileName,
@@ -658,6 +670,12 @@ export class UploadManager {
     );
 
     this.emitProgress(job.id, job.sizeBytes, job.sizeBytes);
+
+    // All parts uploaded — transition to 'confirming' while the backend
+    // assembles the final object and the asset reaches a publishable state.
+    await this.persistState(job.id, { status: 'confirming' });
+    const confirming = this.jobsCache.get(job.id);
+    if (confirming) this.emit({ type: 'jobConfirming', job: confirming });
 
     const finalizationId = result.finalizationId;
     let remoteUrl = result.publicUrl;
@@ -841,7 +859,16 @@ export class UploadManager {
     // read-modify-write of the job store on each tick starves the JS thread.
     const current = this.jobsCache.get(jobId);
     if (current) {
-      this.jobsCache.set(jobId, { ...current, progress, updatedAt: Date.now() });
+      // If the job had stalled, real progress has resumed — transition
+      // back to 'uploading' so the UI reflects the recovery.
+      const nextStatus = current.status === 'stalled' ? 'uploading' : current.status;
+      this.jobsCache.set(jobId, {
+        ...current,
+        progress,
+        status: nextStatus,
+        lastProgressAt: Date.now(),
+        updatedAt: Date.now(),
+      });
     }
     const now = Date.now();
     if (now - this.lastProgressPersistMs >= 500) {
@@ -855,6 +882,33 @@ export class UploadManager {
   private async maybeEmitAllComplete(projectId: string): Promise<void> {
     if (await this.isProjectComplete(projectId)) {
       this.emit({ type: 'allComplete', projectId });
+    }
+  }
+
+  /**
+   * Periodic stall checker. Scans all jobs currently in the 'uploading'
+   * state and transitions any that haven't received a progress event for
+   * longer than `STALL_THRESHOLD_MS` to 'stalled', emitting a `jobFailed`
+   * event with a descriptive message so the UI can surface feedback. The
+   * job is not marked terminal — when progress resumes, `emitProgress`
+   * transitions it back to 'uploading'.
+   */
+  private checkStalledJobs(): void {
+    const now = Date.now();
+    for (const job of this.jobsCache.values()) {
+      if (job.status !== 'uploading') continue;
+      const lastProgress = job.lastProgressAt ?? job.updatedAt;
+      if (now - lastProgress > STALL_THRESHOLD_MS) {
+        void this.persistState(job.id, { status: 'stalled' });
+        const stalled = this.jobsCache.get(job.id);
+        if (stalled) {
+          this.emit({
+            type: 'jobFailed',
+            job: stalled,
+            error: 'Upload stalled — no progress for an extended period.',
+          });
+        }
+      }
     }
   }
 

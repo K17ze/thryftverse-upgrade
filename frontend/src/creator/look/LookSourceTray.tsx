@@ -20,6 +20,7 @@ import Reanimated, {
 import { Space, Radius, Typography, Elevation, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -156,7 +157,7 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
           'worklet';
           previewX.value = e.absoluteX;
           previewY.value = e.absoluteY;
-          previewVisible.value = withTiming(1, { duration: 100 });
+          previewVisible.value = withTiming(1, { duration: Motion.duration.fast });
           runOnJS(onDragStart)(item);
         })
         .onUpdate((e) => {
@@ -166,7 +167,7 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
         })
         .onEnd((e) => {
           'worklet';
-          previewVisible.value = withTiming(0, { duration: 120 });
+          previewVisible.value = withTiming(0, { duration: Motion.duration.fast });
           const isOverCanvas = e.absoluteY < trayYSV.value;
           runOnJS(onDragEnd)(item, e.absoluteX, e.absoluteY, isOverCanvas);
         }),

@@ -27,7 +27,6 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
@@ -95,7 +94,7 @@ export function CreatorDestructiveButton({
     setConfirming(false);
     confirmSV.value = withTiming(0, {
       duration: Motion.duration.fast,
-      easing: Easing.inOut(Easing.cubic),
+      easing: Motion.easing.crisp,
     });
     clearConfirmTimeout();
   }, [confirmSV, clearConfirmTimeout]);
@@ -119,7 +118,7 @@ export function CreatorDestructiveButton({
       setConfirming(true);
       confirmSV.value = withTiming(1, {
         duration: Motion.duration.fast,
-        easing: Easing.out(Easing.cubic),
+        easing: Motion.easing.entrance,
       });
       // Auto-reset after 3s
       clearConfirmTimeout();
@@ -133,7 +132,7 @@ export function CreatorDestructiveButton({
       setConfirming(false);
       confirmSV.value = withTiming(0, {
         duration: Motion.duration.fast,
-        easing: Easing.inOut(Easing.cubic),
+        easing: Motion.easing.crisp,
       });
       onPress?.();
     }

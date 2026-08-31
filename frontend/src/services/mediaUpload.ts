@@ -406,12 +406,22 @@ export async function uploadMedia(
   let fileUri: string;
   let fileName: string;
   let contentType: string;
+  let preloadedBlob: Blob | undefined;
 
   if (typeof source === 'string') {
     fileUri = source;
+    // Fetch the blob early so we can use blob.type for MIME detection.
+    // Extension-based detection is unreliable for ph:// and content://
+    // URIs (e.g. "ph://EB4F8C9C-.../L/0") which often lack extensions.
+    const probedBlob = await fetch(fileUri).then((response) => response.blob());
+    preloadedBlob = probedBlob;
     const ext = fileUri.split('.').pop()?.toLowerCase() ?? 'jpg';
+    // Prefer blob.type when the platform provides a non-empty value;
+    // fall back to extension-based inference otherwise.
     contentType =
-      ext === 'png'
+      probedBlob.type && probedBlob.type.length > 0
+        ? probedBlob.type
+        : ext === 'png'
         ? 'image/png'
         : ext === 'gif'
         ? 'image/gif'
@@ -435,7 +445,9 @@ export async function uploadMedia(
     contentType = source.mimeType;
   }
 
-  const blob = await fetch(fileUri).then((response) => response.blob());
+  const blob: Blob = preloadedBlob !== undefined
+    ? preloadedBlob
+    : await fetch(fileUri).then((response) => response.blob());
   const presign = await presignUpload(fileName, contentType, folder, blob.size);
   await uploadToPresignedUrl(presign.url, fileUri, contentType, blob);
 

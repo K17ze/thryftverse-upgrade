@@ -819,7 +819,7 @@ function createStyles(colors: ThemeColors) {
       alignSelf: 'flex-end' },
     autoBtnText: {
       fontFamily: Typography.family.medium,
-      fontSize: 13 },
+      fontSize: TypographyV2.captionElevated.size },
     noticeBox: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -888,7 +888,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.body.size },
     captionTime: {
       fontFamily: Typography.family.medium,
-      fontSize: 12,
+      fontSize: TypographyV2.caption.size,
       fontVariant: ['tabular-nums'] },
     // ── Edit row ──
     editRow: {

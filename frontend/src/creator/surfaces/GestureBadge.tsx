@@ -20,7 +20,6 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
   type SharedValue } from 'react-native-reanimated';
 import { Space, Radius, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
@@ -63,8 +62,8 @@ export function GestureBadge({
       } else {
         opacitySV.value = withTiming(1, {
           duration: Motion.duration.fast,
-          easing: Easing.out(Easing.cubic) });
-        scaleSV.value = withSpring(1, { damping: 16, stiffness: 200 });
+          easing: Motion.easing.entrance });
+        scaleSV.value = withSpring(1, Motion.spring.layerLift);
       }
     } else {
       // Fade out — displayText retains the last value for the exit.
@@ -73,8 +72,8 @@ export function GestureBadge({
       } else {
         opacitySV.value = withTiming(0, {
           duration: Motion.duration.fast,
-          easing: Easing.in(Easing.cubic) });
-        scaleSV.value = withSpring(0.85, { damping: 16, stiffness: 200 });
+          easing: Motion.easing.exit });
+        scaleSV.value = withSpring(0.85, Motion.spring.layerLift);
       }
     }
   }, [badgeText, reducedMotion, opacitySV, scaleSV]);
@@ -93,6 +92,7 @@ export function GestureBadge({
       pointerEvents="none"
       accessibilityLabel={badgeText ? `Transform ${badgeText}` : undefined}
       accessibilityRole="text"
+      accessibilityLiveRegion="polite"
     >
       <View style={[styles.pill, { backgroundColor: colors.mediaOverlayScrim }]}>
         <Text style={[styles.text, { color: colors.scrimTextPrimary }]} numberOfLines={1}>

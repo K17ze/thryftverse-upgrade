@@ -19,12 +19,12 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  Easing,
   runOnJS } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { Space, Radius, Typography, Stroke, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
@@ -36,7 +36,7 @@ import type { GradientDefinition, GradientStop, CreatorColor } from './ColorType
 // ── Constants ────────────────────────────────────────────────────────
 const MIN_STOPS = 2;
 const MAX_STOPS = 4;
-const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
+const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
 // Canvas-specific geometry — these describe the gradient bar and draggable
 // stop thumbs. No design token maps to them; they are interaction geometry,
 // not layout spacing or type scale.
@@ -195,10 +195,6 @@ export function GradientEditor({
 
   const handleStopDragChange = useCallback((position: number) => {
     if (!selectedStopId) return;
-    const newStops = gradient.stops.map((s) =>
-      s.id === selectedStopId ? { ...s, position: normalize({ ...s.color, r: position }).r } : s,
-    );
-    // Actually just set position directly
     const updatedStops = gradient.stops.map((s) =>
       s.id === selectedStopId ? { ...s, position } : s,
     );
@@ -317,12 +313,11 @@ export function GradientEditor({
             {gradient.stops.map((stop) => (
               <Pressable
                 key={`thumb-wrapper-${stop.id}`}
-                accessibilityLabel="Gradient stop"
+                accessible={false}
                 onPress={() => {
                   haptic.selection();
                   setSelectedStopId(stop.id);
                 }}
-              accessibilityRole="checkbox"
               >
                 <StopThumb
                   stop={stop}

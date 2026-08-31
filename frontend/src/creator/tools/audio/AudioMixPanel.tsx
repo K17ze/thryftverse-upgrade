@@ -85,15 +85,22 @@ function clamp(v: number, min: number, max: number): number {
 /**
  * Extract all music layers from the document across all pages.
  * Voiceover layers are music layers whose trackName indicates a voiceover
- * recording (prefixed with "Voiceover"). This convention is established by
- * the VoiceoverRecorderSheet when it adds a voiceover to the composition.
+ * recording (prefixed with "Voiceover", "Voice-over", or "Voice_over").
+ * This convention is established by the VoiceoverRecorderSheet when it adds
+ * a voiceover to the composition.
+ * TODO: This string-based detection should be replaced with a proper
+ * `sourceType` field on the MusicLayerPayload schema (e.g. 'music' | 'voiceover').
  */
 function extractAudioTracks(layers: CreatorLayer[]): AudioTrackInfo[] {
   const tracks: AudioTrackInfo[] = [];
   for (const layer of layers) {
     if (layer.type !== 'music' || layer.hidden) continue;
     const payload = layer.payload;
-    const isVoiceover = payload.trackName.toLowerCase().startsWith('voiceover');
+    const lowerName = payload.trackName.toLowerCase();
+    const isVoiceover =
+      lowerName.startsWith('voiceover') ||
+      lowerName.startsWith('voice-over') ||
+      lowerName.startsWith('voice_over');
     tracks.push({
       layer,
       type: isVoiceover ? 'voiceover' : 'music',
@@ -541,7 +548,7 @@ function createStyles(colors: ThemeColors) {
       height: 44 },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: 17,
+      fontSize: TypographyV2.sectionTitle.size,
       textAlign: 'center' },
     closeBtn: {
       width: Control.hit,

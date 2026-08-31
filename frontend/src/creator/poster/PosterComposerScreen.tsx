@@ -15,12 +15,13 @@ import { Ionicons } from '@expo/vector-icons';
 
 import type { VideoPlayer } from 'expo-video';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
+import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, withDelay } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
 import { Space, FontFamily, Radius, IconGrammar, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Motion } from '../../theme/motionTokens';
 import { useToast } from '../../context/ToastContext';
 import { useCreator } from '../CreatorContext';
 import { type NativeStackNavigationProp, type RootStackParamList, type CreatorInitialMedia } from '../../navigation/types';
@@ -129,6 +130,8 @@ import { usePerformanceMonitor } from '../core/performance/usePerformanceMonitor
 // frame-native composer.
 // ───────────────────────────────────────────────────────────────────────────
 
+const ZOOM_INDICATOR_HIDE_DELAY_MS = 700;
+
 function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'look' | 'poster') => void }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'CreatorStudio'>>();
   const route = useRoute<RouteProp<RootStackParamList, 'CreatorStudio'>>();
@@ -151,6 +154,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     selectLayer,
     canUndo,
     canRedo,
+    undoLabel,
+    redoLabel,
     undo,
     redo,
     isDirty,
@@ -465,8 +470,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // content. This is the Snapchat/Instagram "infinite canvas" pattern.
   const chromeFadeStyle = useAnimatedStyle(() => ({
     opacity: withTiming(manipulationActiveSV.value === 1 ? 0.05 : 1, {
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
+      duration: Motion.duration.railSwap,
+      easing: Motion.easing.entrance,
     }),
   }));
 
@@ -899,13 +904,16 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   }, [sessionKey]);
 
   const showZoomIndicator = useCallback(() => {
-    zoomIndicatorOpacitySV.value = withTiming(1, { duration: 120 });
+    zoomIndicatorOpacitySV.value = withTiming(1, {
+      duration: Motion.duration.fast,
+      easing: Motion.easing.entrance,
+    });
   }, [zoomIndicatorOpacitySV]);
 
   const fadeZoomIndicator = useCallback(() => {
     zoomIndicatorOpacitySV.value = withDelay(
-      700,
-      withTiming(0, { duration: 400, easing: Easing.out(Easing.ease) }),
+      ZOOM_INDICATOR_HIDE_DELAY_MS,
+      withTiming(0, { duration: Motion.duration.slower, easing: Motion.easing.entrance }),
     );
   }, [zoomIndicatorOpacitySV]);
 
@@ -1116,7 +1124,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           const minSplit = clip.trimStartMs + 100; // min 100ms on each side
           const maxSplit = clip.trimEndMs - 100;
           if (splitPoint <= minSplit || splitPoint >= maxSplit) {
-            haptic.light();
+            haptic.error();
             show("Can't split here", 'info');
             break;
           }
@@ -1134,7 +1142,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           const splitClips = splitClip(timelineClips, op.clipId, splitPoint);
           if (splitClips === timelineClips) {
             // No-op — the pure function rejected the split point.
-            haptic.light();
+            haptic.error();
             show("Can't split here", 'info');
             break;
           }
@@ -1413,7 +1421,13 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // allows the user to collapse it if desired.
   const handleTimelineToggle = useCallback(() => {
     if (timelineClips.length === 0) {
-      show("Add a video to use the timeline", 'info');
+      if (!hasContent) {
+        show("Add a video to use the timeline", 'info');
+        return;
+      }
+      haptic.light();
+      setUserRequestedTimeline(true);
+      setBottomSurface('timeline');
       return;
     }
     haptic.light();
@@ -1422,7 +1436,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       setBottomSurface(next ? 'timeline' : 'tools');
       return next;
     });
-  }, [haptic, timelineClips.length, show]);
+  }, [haptic, timelineClips.length, hasContent, show]);
 
   // ── Timeline Done — collapses the timeline, returns to canvas tools ──
   // Per spec: "Done returns to canvas tools." This is the exit from the
@@ -2165,6 +2179,9 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               <Text style={[styles.canvasEmptyHintTitle, { color: colors.textSecondary }]}>
                 Add media
               </Text>
+              <Text style={styles.canvasEmptyHintSubtitle}>
+                Add clips or capture video to start editing
+              </Text>
             </View>
           )}
 
@@ -2198,9 +2215,9 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           {/* Safe zone overlay (advanced — behind More) */}
           {showSafeZone && (
             <View style={styles.safeZoneOverlay} pointerEvents="none">
-              <View style={[styles.safeZoneTop, { top: 0, height: insets.top + 56 }]} />
+              <View style={[styles.safeZoneTop, { top: 0, height: insets.top + 52 }]} />
               <View style={[styles.safeZoneBottom, { bottom: 0, height: insets.bottom + 120 }]} />
-              <View style={[styles.safeZoneContent, { top: insets.top + 56, bottom: insets.bottom + 120 }]} />
+              <View style={[styles.safeZoneContent, { top: insets.top + 52, bottom: insets.bottom + 120 }]} />
             </View>
           )}
         </View>
@@ -2219,10 +2236,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           recedes (fades to 0.15 opacity) during active layer manipulation,
           making the canvas feel infinite (Snapchat/Instagram pattern). */}
       <Reanimated.View style={[styles.topBarContainer, { paddingTop: insets.top }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
-        <View style={[styles.topBar, { backgroundColor: colors.surface }]} >
+        <View style={styles.topBar}>
           <View style={styles.topBarRow}>
             {selectedLayer ? (
-              /* During selection: Done · object name · More */
+              /* During selection: Done · More */
               <>
                 <PressScale
                   onPress={() => { haptic.light(); selectLayer(null); }}
@@ -2234,11 +2251,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                   <Text style={styles.doneText}>Done</Text>
                 </PressScale>
 
-                <View style={styles.topCenter}>
-                  <Text style={styles.titleText} numberOfLines={1}>
-                    {layerTypeLabel(selectedLayer.type)}
-                  </Text>
-                </View>
+                <View style={styles.topCenter} />
 
                 <View style={styles.topRight}>
                   <PressScale
@@ -2248,7 +2261,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     accessibilityHint="Opens the overflow menu with undo, redo, preview and more"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="ellipsis-horizontal" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
+                    <Ionicons name="ellipsis-horizontal" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                 </View>
               </>
@@ -2263,7 +2276,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     accessibilityHint="Closes the composer, offers to save draft if there are unsaved changes"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="close" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
+                    <Ionicons name="close" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                   {isDirty && <View style={[styles.unsavedDot, { backgroundColor: colors.brand }]} />}
                 </View>
@@ -2274,24 +2287,24 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     disabled={!canUndo}
                     style={[styles.topBtn, { opacity: canUndo ? 1 : 0.3 }]}
                     accessibilityLabel="Undo"
-                    accessibilityHint="Reverts the last edit"
+                    accessibilityHint={undoLabel ? `Undo ${undoLabel}` : 'Reverts the last edit'}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canUndo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-undo" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
+                    <Ionicons name="arrow-undo" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                   <PressScale
                     onPress={handleRedo}
                     disabled={!canRedo}
                     style={[styles.topBtn, { opacity: canRedo ? 1 : 0.3 }]}
                     accessibilityLabel="Redo"
-                    accessibilityHint="Reapplies the last undone edit"
+                    accessibilityHint={redoLabel ? `Redo ${redoLabel}` : 'Reapplies the last undone edit'}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canRedo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-redo" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
+                    <Ionicons name="arrow-redo" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                 </View>
 
@@ -2340,7 +2353,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                       styles.pageSegmentFill,
                       {
                         flex: i === activePageIndex ? 1 : 0,
-                        backgroundColor: i <= activePageIndex ? colors.scrimTextPrimary : colors.scrimTextTertiary,
+                        backgroundColor: i <= activePageIndex ? colors.textSecondary : colors.border,
                       },
                     ]}
                   />
@@ -2356,7 +2369,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityHint="Adds a new frame to the story"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Ionicons name="add" size={IconGrammar.metadata} color={colors.scrimTextPrimary} />
+                <Ionicons name="add" size={IconGrammar.metadata} color={colors.textSecondary} />
               </PressScale>
             )}
           </View>
@@ -2408,7 +2421,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               disabled={!canUndo}
               style={[styles.timelineUndoRedoBtn, { opacity: canUndo ? 1 : 0.3 }]}
               accessibilityLabel="Undo"
-              accessibilityHint="Reverts the last edit"
+              accessibilityHint={undoLabel ? `Undo ${undoLabel}` : 'Reverts the last edit'}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canUndo }}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -2420,7 +2433,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               disabled={!canRedo}
               style={[styles.timelineUndoRedoBtn, { opacity: canRedo ? 1 : 0.3 }]}
               accessibilityLabel="Redo"
-              accessibilityHint="Reapplies the last undone edit"
+              accessibilityHint={redoLabel ? `Redo ${redoLabel}` : 'Reapplies the last undone edit'}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canRedo }}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -2546,6 +2559,24 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         </View>
       )}
 
+      {bottomSurface === 'timeline' && timelineClips.length === 0 && hasContent && (
+        <View style={[styles.timelineContainer, { bottom: insets.bottom }]}>
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]} />
+          <View style={styles.timelineEmptyRow}>
+            <Text style={styles.timelineEmptyText}>Add your first clip</Text>
+            <Pressable
+              onPress={() => { haptic.light(); setPickerMode('media'); }}
+              style={styles.timelineEmptyCta}
+              accessibilityLabel="Add media"
+              accessibilityHint="Opens the library to add your first clip"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.timelineEmptyCtaText, { color: colors.brand }]}>Add</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       {/* ── Bottom tool rail — ContextToolRail (context-sensitive) ────── */}
       {/* The ContextToolRail is the single bottom surface for both default
           and selection states. It adapts its visible tool set based on the
@@ -2635,7 +2666,6 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceElevated, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl }]} />
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
             <View style={styles.overflowHeader}>
-              <Text style={styles.overflowTitle}>Tools</Text>
               <Pressable
                 onPress={closeSheet}
                 style={({ pressed }) => [styles.overflowClose, pressed && styles.overflowClosePressed]}
@@ -2657,9 +2687,6 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                   key={section.title}
                   style={[styles.overflowGroup, sectionIndex > 0 && styles.overflowGroupGap]}
                 >
-                  <Text style={styles.overflowSectionLabel}>
-                    {section.title.toUpperCase()}
-                  </Text>
                   {section.tools.map((tool) => (
                     <OverflowItem
                       key={tool.id}
@@ -2934,6 +2961,18 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <CreatorCropSheet
           visible={cropMode}
           imageUri={selectedLayer.payload.mediaUri}
+          focalPoint={selectedLayer.payload.focalPoint}
+          onFocalPointChange={(point) => {
+            if (selectedLayer && selectedLayer.type === 'media') {
+              updateLayer(selectedLayer.id, {
+                type: 'media',
+                payload: {
+                  ...selectedLayer.payload,
+                  focalPoint: point,
+                },
+              }, 'Set focal point');
+            }
+          }}
           onClose={() => setCropMode(false)}
           onCropComplete={(newUri) => {
             if (selectedLayer && selectedLayer.type === 'media') {
@@ -3027,7 +3066,6 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             showsVerticalScrollIndicator={false}
             style={styles.effectsSheetScroll}
           >
-            <Text style={styles.effectsSectionLabel}>Filters</Text>
             <EffectPreviewRail
               sourceUri={effectsSourceUri}
               presets={FILTER_PRESETS}
@@ -3195,9 +3233,8 @@ function createStyles(colors: ThemeColors) {
     zIndex: 100,
   },
   topBar: {
-    height: 56,
+    height: 52,
     paddingHorizontal: Space.sm,
-    borderBottomWidth: 0,
   },
   topBarRow: {
     flexDirection: 'row',
@@ -3218,15 +3255,10 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     justifyContent: 'center',
   },
-  titleText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.bodyStrong.size,
-    color: colors.scrimTextPrimary,
-  },
   doneText: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.bodyStrong.size,
-    color: colors.scrimTextPrimary,
+    color: colors.textPrimary,
   },
   topRight: {
     flexDirection: 'row',
@@ -3251,15 +3283,15 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   publishBtn: {
+    height: 36,
     borderRadius: RadiusRoleValue.pillAvatar,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm,
+    paddingHorizontal: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
   publishBtnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size,
+    fontSize: TypographyV2.bodyStrong.size,
   },
   unsavedDot: {
     width: 7,
@@ -3288,7 +3320,7 @@ function createStyles(colors: ThemeColors) {
   pageSegmentTrack: {
     height: 2,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: colors.scrimTextTertiary,
+    backgroundColor: colors.border,
     overflow: 'hidden',
     flexDirection: 'row',
   },
@@ -3300,7 +3332,7 @@ function createStyles(colors: ThemeColors) {
     width: 22,
     height: 22,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: colors.scrimTextTertiary,
+    backgroundColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3383,9 +3415,9 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(201,164,106,0.06)',
+    backgroundColor: colors.brandSubtle,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(201,164,106,0.4)',
+    borderBottomColor: colors.brand,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'flex-end',
@@ -3395,9 +3427,9 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(201,164,106,0.06)',
+    backgroundColor: colors.brandSubtle,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(201,164,106,0.4)',
+    borderTopColor: colors.brand,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'flex-start',
@@ -3408,7 +3440,7 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(201,164,106,0.25)',
+    borderColor: colors.brand,
     borderStyle: 'dashed',
   },
   safeZoneLabel: {
@@ -3439,7 +3471,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     gap: Space.md,
     paddingVertical: Space.xs,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
@@ -3476,14 +3508,9 @@ function createStyles(colors: ThemeColors) {
     paddingRight: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.scrimTextTertiary,
-  },
-  overflowTitle: {
-    flex: 1,
-    color: colors.scrimTextPrimary,
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size,
   },
   overflowClose: {
     width: 48,
@@ -3504,14 +3531,6 @@ function createStyles(colors: ThemeColors) {
   },
   overflowGroupGap: {
     marginTop: Space.md,
-  },
-  overflowSectionLabel: {
-    color: colors.textMuted,
-    fontFamily: FontFamily.regular,
-    fontSize: 10,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    paddingLeft: Space.xs,
   },
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,
@@ -3602,17 +3621,33 @@ function createStyles(colors: ThemeColors) {
     lineHeight: TypographyV2.meta.lineHeight,
     fontVariant: ['tabular-nums'],
   },
+  timelineEmptyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 52,
+  },
+  timelineEmptyText: {
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    color: colors.textSecondary,
+    flexShrink: 1,
+  },
+  timelineEmptyCta: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space.sm,
+  },
+  timelineEmptyCtaText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
+  },
   // ── Effects sheet ──
   effectsSheetScroll: {
     paddingVertical: Space.sm,
-  },
-  effectsSectionLabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: TypographyV2.meta.size,
-    color: colors.scrimTextSecondary,
-    paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
-    marginTop: Space.xs,
   },
   effectsAdjustWrap: {
     marginTop: Space.md,

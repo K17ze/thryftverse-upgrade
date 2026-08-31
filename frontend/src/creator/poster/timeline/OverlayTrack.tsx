@@ -141,6 +141,7 @@ const OverlayBar = React.memo(function OverlayBar({
   // dragging right away — no long-press delay (Instagram/CapCut behaviour).
   const tapGesture = React.useMemo(() =>
     Gesture.Tap()
+      .hitSlop({ top: 10, bottom: 10 })
       .onEnd(() => {
         'worklet';
         runOnJS(onPress)();
@@ -150,6 +151,7 @@ const OverlayBar = React.memo(function OverlayBar({
 
   const panGesture = React.useMemo(() =>
     Gesture.Pan()
+      .hitSlop({ top: 10, bottom: 10 })
       .onBegin(() => {
         'worklet';
         dragOffsetSV.value = 0;

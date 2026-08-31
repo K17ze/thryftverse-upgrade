@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
 import type { CreatorDocument } from './composition';
 import { migrateDocument } from './composition';
 import { createStableId } from '../utils/createStableId';
@@ -182,6 +183,52 @@ export class CreatorDraftService {
       return JSON.parse(raw) as Folder[];
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Verify that local thumbnail URIs in the draft index still point to
+   * existing files. Drafts whose thumbnailUri is a local URI (file://,
+   * ph://, content://, asset-library://) that no longer exists have
+   * their thumbnailUri cleared — the draft content is preserved, only
+   * the broken thumbnail preview is removed so the list can show a
+   * graceful fallback instead of a broken image.
+   *
+   * Remote URIs (https://) are not checked — they are assumed valid.
+   *
+   * Call this on app launch or when the draft list mounts.
+   */
+  static async verifyAndPruneThumbnails(): Promise<void> {
+    const items = await this.listDrafts();
+    const LOCAL_PREFIXES = ['file://', 'ph://', 'content://', 'asset-library://'];
+    const toUpdate: DraftMeta[] = [];
+
+    for (const item of items) {
+      if (!item.thumbnailUri) continue;
+      const isLocal = LOCAL_PREFIXES.some((p) => item.thumbnailUri!.startsWith(p));
+      if (!isLocal) continue;
+
+      try {
+        const info = await FileSystem.getInfoAsync(item.thumbnailUri);
+        if (!info.exists) {
+          toUpdate.push({ ...item, thumbnailUri: undefined });
+        }
+      } catch {
+        // getInfoAsync may throw for ph:// or content:// URIs on some platforms.
+        // If we can't verify, keep the thumbnail — don't purge on uncertainty.
+      }
+    }
+
+    if (toUpdate.length > 0) {
+      const raw = await AsyncStorage.getItem(DRAFT_INDEX_KEY);
+      const all: DraftMeta[] = raw ? JSON.parse(raw) : [];
+      for (const updated of toUpdate) {
+        const idx = all.findIndex((i) => i.id === updated.id);
+        if (idx >= 0) {
+          all[idx] = { ...all[idx], thumbnailUri: undefined };
+        }
+      }
+      await AsyncStorage.setItem(DRAFT_INDEX_KEY, JSON.stringify(all));
     }
   }
 }

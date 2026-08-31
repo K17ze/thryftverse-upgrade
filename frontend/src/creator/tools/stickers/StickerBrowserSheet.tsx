@@ -211,6 +211,7 @@ export function StickerBrowserSheet({
   const keyExtractor = useCallback((item: StickerDef) => item.id, []);
 
   return (
+    <>
     <SheetContainer visible={visible} onClose={handleClose} compact>
       <View style={styles.container}>
         {/* Header */}
@@ -365,23 +366,24 @@ export function StickerBrowserSheet({
             />
           )}
         </View>
-
-        {/* StickerPinOverlay — shown while pin mode is active so the user
-            can drag the anchor point on the media layer. The overlay is
-            driven by Reanimated shared values and only intercepts touches
-            on the 44pt drag handle (pointerEvents="box-none"). */}
-        {pinMode && pin && pinStickerCenterPx && pinMediaLayerBoxPx && onPinAnchorChange && onPinAnchorCommit && (
-          <StickerPinOverlay
-            visible={pinMode}
-            pin={pin}
-            stickerCenterPx={pinStickerCenterPx}
-            mediaLayerBoxPx={pinMediaLayerBoxPx}
-            onAnchorChange={onPinAnchorChange}
-            onAnchorCommit={onPinAnchorCommit}
-          />
-        )}
       </View>
     </SheetContainer>
+
+      {/* StickerPinOverlay — rendered as a sibling OUTSIDE the sheet so it
+          can cover the full canvas, not just the sheet's bounds. The overlay
+          uses pointerEvents="box-none" so it doesn't block sheet interactions. */}
+      {/* TODO: StickerPinOverlay must render at screen root, not inside sheet */}
+      {pinMode && pin && pinStickerCenterPx && pinMediaLayerBoxPx && onPinAnchorChange && onPinAnchorCommit && (
+        <StickerPinOverlay
+          visible={pinMode}
+          pin={pin}
+          stickerCenterPx={pinStickerCenterPx}
+          mediaLayerBoxPx={pinMediaLayerBoxPx}
+          onAnchorChange={onPinAnchorChange}
+          onAnchorCommit={onPinAnchorCommit}
+        />
+      )}
+    </>
   );
 }
 

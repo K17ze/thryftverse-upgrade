@@ -17,7 +17,6 @@ import Reanimated, {
   withSpring,
   withDelay,
   runOnJS,
-  Easing,
   interpolate,
   Extrapolation,
   useReducedMotion,
@@ -204,15 +203,19 @@ export function CreatorDraftListScreen() {
 
   const showToast = useCallback(() => {
     toastTranslateY.value = withSpring(0, spring.entrance);
-    toastOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+    toastOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
   }, [toastTranslateY, toastOpacity, spring.entrance]);
 
   const hideToast = useCallback(() => {
-    toastTranslateY.value = withTiming(100, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+    toastTranslateY.value = withTiming(100, { duration: Motion.duration.normal, easing: Motion.easing.exit });
     toastOpacity.value = withTiming(0, { duration: Motion.duration.normal });
   }, [toastTranslateY, toastOpacity]);
 
   const loadDrafts = useCallback(async () => {
+    // Verify local thumbnail URIs still exist before rendering the list.
+    // Stale local URIs (OS cleaned up temp files) are cleared so the list
+    // shows a graceful fallback instead of a broken image.
+    await CreatorDraftService.verifyAndPruneThumbnails();
     const items = await CreatorDraftService.listDrafts();
     setDrafts(items);
     const docs: Record<string, CreatorDocument | null> = {};
@@ -716,7 +719,7 @@ function DraftCard({
     if (reduceMotion) {
       entranceOpacity.value = 1;
     } else if (index < Motion.stagger.maxItems) {
-      entranceOpacity.value = withDelay(index * 30, withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) }));
+      entranceOpacity.value = withDelay(index * 30, withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance }));
     } else {
       // Beyond the first viewport — appear instantly, no cascade.
       entranceOpacity.value = 1;
@@ -817,7 +820,7 @@ function EmptyDraftsState({ colors, styles, reduceMotion, onCreate }: EmptyDraft
   useEffect(() => {
     if (!reduceMotion) {
       // Per §5.14: entrance uses timing (ease-out), not spring.
-      entranceSV.value = withDelay(100, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
+      entranceSV.value = withDelay(100, withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance }));
     }
   }, [reduceMotion, entranceSV]);
 
@@ -865,14 +868,14 @@ function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }
         backdropOpacity.value = 1;
       } else {
         translateY.value = withSpring(0, Motion.spring.entrance);
-        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
       }
     } else if (mounted.current) {
       if (reduceMotion) {
         translateY.value = 400;
         backdropOpacity.value = 0;
       } else {
-        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Motion.easing.exit });
         backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }

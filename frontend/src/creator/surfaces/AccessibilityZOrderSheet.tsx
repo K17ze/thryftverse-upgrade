@@ -21,7 +21,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView } from 'react-native';
+  ScrollView,
+  AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Typography, FontFamily, Stroke } from '../../theme/designTokens';
@@ -89,8 +90,24 @@ export function AccessibilityZOrderSheet({
       if (!selectedLayerId) return;
       haptic.light();
       onReorder(selectedLayerId, direction);
+      const layer = sortedLayers.find((l) => l.id === selectedLayerId);
+      if (layer) {
+        const directionDelta: Record<ReorderDirection, number> = {
+          front: -selectedIndex,
+          back: sortedLayers.length - 1 - selectedIndex,
+          forward: -1,
+          backward: 1,
+        };
+        const newIndex = Math.max(
+          0,
+          Math.min(sortedLayers.length - 1, selectedIndex + directionDelta[direction]),
+        );
+        AccessibilityInfo.announceForAccessibility(
+          `Moved ${layer.label} to position ${newIndex + 1}`,
+        );
+      }
     },
-    [selectedLayerId, haptic, onReorder],
+    [selectedLayerId, haptic, onReorder, sortedLayers, selectedIndex],
   );
 
   const reorderActions: {
@@ -159,7 +176,10 @@ export function AccessibilityZOrderSheet({
         ) : (
           <View style={styles.body}>
             {/* ── Current position readout — flat with hairline ── */}
-            <View style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}>
+            <View
+              style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}
+              accessibilityLiveRegion="polite"
+            >
               <Ionicons name="layers-outline" size={IconGrammar.standard} color={colors.textMuted} />
               <Text style={[styles.readoutText, { color: colors.textPrimary }]}>
                 Position {selectedIndex + 1} of {sortedLayers.length}
@@ -213,6 +233,7 @@ export function AccessibilityZOrderSheet({
                         styles.stackRow,
                         i > 0 && { borderTopColor: colors.borderSubtle, borderTopWidth: StyleSheet.hairlineWidth },
                       ]}
+                      accessibilityState={{ selected: isSelected }}
                     >
                       <Text
                         style={[

@@ -23,7 +23,8 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  Keyboard } from 'react-native';
+  Keyboard,
+  AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Typography, FontFamily, Stroke } from '../../theme/designTokens';
@@ -87,6 +88,9 @@ export function AccessibilityMoveSheet({
         y: axis === 'y' ? clamp(position.y + delta) : position.y };
       haptic.selection();
       onMove(next.x, next.y);
+      AccessibilityInfo.announceForAccessibility(
+        `Position ${Math.round(next.x * 100)} percent X, ${Math.round(next.y * 100)} percent Y`,
+      );
     },
     [position, clamp, haptic, onMove],
   );
@@ -100,12 +104,18 @@ export function AccessibilityMoveSheet({
     haptic.light();
     onMove(nx, ny);
     Keyboard.dismiss();
+    AccessibilityInfo.announceForAccessibility(
+      `Position ${Math.round(nx * 100)} percent X, ${Math.round(ny * 100)} percent Y`,
+    );
   }, [position, xText, yText, clamp, haptic, onMove]);
 
   const handleCenter = useCallback(() => {
     if (!position) return;
     haptic.medium();
     onMove(0.5, 0.5);
+    AccessibilityInfo.announceForAccessibility(
+      'Position 50 percent X, 50 percent Y',
+    );
   }, [position, haptic, onMove]);
 
   const handleCoarseToggle = useCallback(() => {
@@ -148,7 +158,10 @@ export function AccessibilityMoveSheet({
         ) : (
           <View style={styles.body}>
             {/* ── Current position readout — flat with hairline ── */}
-            <View style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}>
+            <View
+              style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}
+              accessibilityLiveRegion="polite"
+            >
               <View style={styles.readoutCell}>
                 <Text style={[styles.readoutLabel, { color: colors.textMuted }]}>
                   X

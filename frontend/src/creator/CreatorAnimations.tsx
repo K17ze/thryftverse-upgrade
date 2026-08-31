@@ -39,7 +39,7 @@ interface PressScaleProps extends Omit<PressableProps, 'style'> {
   style?: ViewStyle | ViewStyle[];
   scale?: number; // override default scale
   accessibilityLabel: string;
-  accessibilityRole?: 'button' | 'image' | 'link';
+  accessibilityRole?: 'button' | 'image' | 'link' | 'menuitem';
   disabled?: boolean;
 }
 
@@ -157,8 +157,8 @@ export function SheetContainer({
         backdropOpacity.value = 1;
       } else {
         // Sheet entrance — 220ms ease-out timing, no spring bounce.
-        translateY.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
-        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+        translateY.value = withTiming(0, { duration: Motion.duration.slow, easing: Motion.easing.entrance });
+        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
       }
     } else if (mountedRef.current) {
       if (reduceMotion) {
@@ -211,7 +211,7 @@ export function SheetContainer({
         // Settle back to rest — 200ms ease-out, no spring overshoot.
         translateY.value = reduceMotion
           ? withTiming(0, { duration: 0 })
-          : withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+          : withTiming(0, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
       }
     });
 

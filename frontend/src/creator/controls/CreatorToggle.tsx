@@ -28,7 +28,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { Radius, Space, Elevation } from '../../theme/designTokens';
+import { Radius, Space } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -72,6 +72,10 @@ export function CreatorToggle({
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
 
+  if (__DEV__ && !accessibilityLabel && !label) {
+    console.warn('CreatorToggle requires an accessibilityLabel or label prop for screen reader users.');
+  }
+
   const toggleSV = useSharedValue(value ? 1 : 0);
   const springConfig = reduceMotion ? REDUCED_SPRING : Motion.spring.press;
 
@@ -110,6 +114,7 @@ export function CreatorToggle({
       disabled={disabled}
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityValue={{ text: value ? 'On' : 'Off' }}
       accessibilityState={{
         disabled: disabled || undefined,
         checked: value,
@@ -158,13 +163,8 @@ const styles = StyleSheet.create({
   track: {
     justifyContent: 'center',
     padding: 1,
-    // Subtle shadow for depth
-    ...Elevation.card,
   },
-  thumb: {
-    // Subtle elevation — thumb lifts above the track
-    ...Elevation.modal,
-  },
+  thumb: {},
 });
 
 export default CreatorToggle;

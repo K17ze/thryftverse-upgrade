@@ -19,22 +19,18 @@
  *   - Matches FreezeFramePicker / KeyframeEditor visual style.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  LayoutChangeEvent,
-  PanResponder,
-  GestureResponderEvent,
-  PanResponderGestureState,
   ViewStyle,
 } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { CreatorSlider } from '../../controls/CreatorSlider';
 import {
   Space,
-  Radius,
   Control,
   FontFamily,
   FontSize,
@@ -54,14 +50,6 @@ export interface AudioFadeControlsProps {
 
 const DEFAULT_MAX_MS = 5000;
 const STEP_MS = 100;
-
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(Math.max(v, min), max);
-}
-
-function roundToStep(v: number, step: number): number {
-  return Math.round(v / step) * step;
-}
 
 function formatSeconds(ms: number): string {
   const s = ms / 1000;
@@ -114,7 +102,6 @@ export function AudioFadeControls({
         max={maxMs}
         onValueChange={setLocalFadeIn}
         onRelease={commitFadeIn}
-        colors={colors}
       />
       <FadeSlider
         label="Fade Out"
@@ -123,15 +110,15 @@ export function AudioFadeControls({
         max={maxMs}
         onValueChange={setLocalFadeOut}
         onRelease={commitFadeOut}
-        colors={colors}
       />
     </View>
   );
 }
 
 // ── FadeSlider ────────────────────────────────────────────────────────
-// Internal labelled slider. PanResponder drives live updates; onRelease
-// commits a single mutation to the host.
+// Internal labelled slider. Delegates the track to the shared
+// CreatorSlider (RNGH + Reanimated); onCommit fires on release so the
+// host performs a single document mutation per gesture.
 
 interface FadeSliderProps {
   label: string;
@@ -140,7 +127,6 @@ interface FadeSliderProps {
   max: number;
   onValueChange: (v: number) => void;
   onRelease: (v: number) => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
 }
 
 function FadeSlider({
@@ -150,48 +136,8 @@ function FadeSlider({
   max,
   onValueChange,
   onRelease,
-  colors,
 }: FadeSliderProps) {
-  const [trackWidth, setTrackWidth] = useState(0);
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const ratio = useMemo(() => {
-    if (max <= min) return 0;
-    return clamp((value - min) / (max - min), 0, 1);
-  }, [value, min, max]);
-
-  const xToValue = useCallback(
-    (x: number) => {
-      if (trackWidth <= 0 || max <= min) return min;
-      const r = clamp(x / trackWidth, 0, 1);
-      return roundToStep(min + r * (max - min), STEP_MS);
-    },
-    [trackWidth, min, max],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderMove: (e: GestureResponderEvent) => {
-          onValueChange(xToValue(e.nativeEvent.locationX));
-        },
-        onPanResponderRelease: (e: GestureResponderEvent) => {
-          const v = xToValue(e.nativeEvent.locationX);
-          onValueChange(v);
-          onRelease(v);
-        },
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [trackWidth, min, max, onValueChange, onRelease],
-  );
-
-  const pct = Math.round(ratio * 100);
-
+  const { colors } = useAppTheme();
   return (
     <View style={styles.sliderRow}>
       <View style={styles.sliderHeader}>
@@ -202,38 +148,15 @@ function FadeSlider({
           {formatSeconds(value)}
         </Text>
       </View>
-      <View
-        style={styles.sliderTrack}
-        onLayout={handleLayout}
-        {...panResponder.panHandlers}
-        accessibilityRole="adjustable"
+      <CreatorSlider
+        value={value}
+        min={min}
+        max={max}
+        step={STEP_MS}
+        onValueChange={onValueChange}
+        onCommit={onRelease}
         accessibilityLabel={label}
-        accessibilityValue={{
-          min,
-          max,
-          now: value,
-          text: formatSeconds(value),
-        }}
-      >
-        <View
-          style={[
-            styles.sliderTrackBg,
-            { backgroundColor: colors.borderSubtle },
-          ]}
-        />
-        <View
-          style={[
-            styles.sliderFill,
-            { width: `${pct}%`, backgroundColor: colors.brand },
-          ]}
-        />
-        <View
-          style={[
-            styles.sliderThumb,
-            { left: `${pct}%`, backgroundColor: colors.textInverse },
-          ]}
-        />
-      </View>
+      />
     </View>
   );
 }
@@ -265,29 +188,6 @@ const styles = StyleSheet.create({
     letterSpacing: LetterSpacing.normal,
     minWidth: 40,
     textAlign: 'right',
-  },
-  sliderTrack: {
-    height: Control.hit,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  sliderTrackBg: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 4,
-    borderRadius: Radius.full,
-  },
-  sliderFill: {
-    height: 4,
-    borderRadius: Radius.full,
-  },
-  sliderThumb: {
-    position: 'absolute',
-    width: 18,
-    height: 18,
-    borderRadius: Radius.full,
-    marginLeft: -9,
   },
 });
 

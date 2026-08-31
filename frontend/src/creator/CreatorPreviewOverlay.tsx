@@ -16,8 +16,7 @@ import Reanimated, {
   withSpring,
   withTiming,
   runOnJS,
-  useReducedMotion,
-  Easing } from 'react-native-reanimated';
+  useReducedMotion } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Typography } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -28,6 +27,7 @@ import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { Motion } from '../theme/motionTokens';
 
 
 export interface CreatorPreviewOverlayProps {
@@ -168,8 +168,8 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
       if (!reduceMotion) {
         pageOpacity.value = 0;
         // Per §5.14: viewer entrance uses timing, not spring.
-        pageTranslateX.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) });
-        pageOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+        pageTranslateX.value = withTiming(0, { duration: Motion.duration.slow, easing: Motion.easing.entrance });
+        pageOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
       }
       haptic.light();
       return next;
@@ -182,8 +182,8 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
       if (!reduceMotion) {
         pageOpacity.value = 0;
         // Per §5.14: viewer entrance uses timing, not spring.
-        pageTranslateX.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) });
-        pageOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+        pageTranslateX.value = withTiming(0, { duration: Motion.duration.slow, easing: Motion.easing.entrance });
+        pageOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
       }
       haptic.light();
       return prev;
@@ -234,7 +234,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
       .numberOfTaps(2)
       .onEnd(() => {
         if (zoomScale.value > 1.1) {
-          zoomScale.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
+          zoomScale.value = withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance });
           runOnJS(haptic.medium)();
         }
       })

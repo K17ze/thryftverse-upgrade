@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, useAnimatedReaction, withTiming, Easing } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, useAnimatedReaction, withTiming } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
 import { Space, Radius, Typography, FontFamily, FontSize, Control, IconGrammar, Stroke, Elevation} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
@@ -73,6 +73,7 @@ import type { AssetTransform, LayoutPreview, LayoutId } from './layout/layoutTyp
 // layout surface now (one engine, one coordinate convention, one commit path).
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
+import { Motion } from '../../theme/motionTokens';
 import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 import { fetchLookByIdFromApi } from '../../services/looksApi';
 import { lookToDocument } from '../viewerAdapters';
@@ -124,7 +125,7 @@ function SlideUpSurface({ children }: { children: React.ReactNode }) {
     if (motionConfig.isReducedMotion) {
       translateY.value = 0;
     } else {
-      translateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+      translateY.value = withTiming(0, { duration: Motion.tier.deliberate, easing: Motion.easing.entrance });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -161,6 +162,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     sendSelectedToBack,
     canUndo,
     canRedo,
+    undoLabel,
+    redoLabel,
     undo,
     redo,
     isDirty,
@@ -433,6 +436,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   // Multi-select bulk delete — defined early for keyboard shortcut access.
   const handleMultiDelete = useCallback(() => {
     haptic.medium();
+    haptic.warning();
     deleteMultiSelected();
     setMultiSelectMode(false);
   }, [deleteMultiSelected, haptic]);
@@ -576,7 +580,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       if (active === prev) return;
       chromeOpacitySV.value = withTiming(
         active === 1 ? 0.15 : 1,
-        { duration: 200, easing: Easing.out(Easing.cubic) },
+        { duration: Motion.tier.deliberate, easing: Motion.easing.entrance },
       );
     },
   );
@@ -746,7 +750,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       snapshotPriceGbp: item.snapshotPriceGbp,
       x,
       y });
-    haptic.medium();
+    haptic.light();
   }, [addLookProduct, haptic]);
 
   // ── Bottom surface switching ──────────────────────────────────────
@@ -1078,6 +1082,12 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     () => mediaLayers.map((l) => l.type === 'media' ? l.payload.mediaUri : '').filter(Boolean),
     [mediaLayers],
   );
+  const mediaFocalPoints = useMemo(
+    () => mediaLayers
+      .filter((l): l is typeof l & { type: 'media' } => l.type === 'media' && !!l.payload.mediaUri)
+      .map((l) => l.payload.focalPoint),
+    [mediaLayers],
+  );
   const hasMultipleMedia = mediaAssetUris.length >= 2;
 
   const { defaultLayout, alternatives } = useMemo(
@@ -1246,6 +1256,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
               // Medium haptic when the dragged layer enters the trash
               // zone — "you're about to delete" feedback.
               haptic.medium();
+              haptic.warning();
             }}
             showSafeZone={showSafeZone}
             safeZoneTop={insets.top + 56}
@@ -1413,24 +1424,24 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                     disabled={!canUndo}
                     style={[styles.topBtn, { opacity: canUndo ? 0.6 : 0.2 }]}
                     accessibilityLabel="Undo"
-                    accessibilityHint="Undo last edit"
+                    accessibilityHint={undoLabel ? `Undo ${undoLabel}` : 'Undo last edit'}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canUndo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-undo" size={18} color={colors.textPrimary} />
+                    <Ionicons name="arrow-undo" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                   <PressScale
                     onPress={handleRedo}
                     disabled={!canRedo}
                     style={[styles.topBtn, { opacity: canRedo ? 0.6 : 0.2 }]}
                     accessibilityLabel="Redo"
-                    accessibilityHint="Redo last edit"
+                    accessibilityHint={redoLabel ? `Redo ${redoLabel}` : 'Redo last edit'}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canRedo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-redo" size={18} color={colors.textPrimary} />
+                    <Ionicons name="arrow-redo" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                 </View>
 
@@ -1529,6 +1540,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 {mediaLayers.length > 0 ? (
                   <LayoutPreviewRail
                     assetUris={mediaAssetUris}
+                    assetFocalPoints={mediaFocalPoints}
                     layouts={allLayouts}
                     selectedId={selectedLayoutId}
                     onSelect={handleLayoutSelect}
@@ -1575,9 +1587,6 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 showsVerticalScrollIndicator={false}
               style={styles.effectsSheetScroll}
             >
-              <Text style={[styles.effectsSectionLabel, { color: colors.textMuted }]}>
-                Filters
-              </Text>
               <EffectPreviewRail
                 sourceUri={effectsSourceUri}
                 presets={FILTER_PRESETS}
@@ -1600,7 +1609,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
               >
                 <Ionicons name="bulb-outline" size={IconGrammar.metadata} color={colors.textPrimary} />
                 <Text style={[styles.aiEffectsBtnText, { color: colors.textPrimary }]}>
-                  Effects
+                  AI Styles
                 </Text>
                 <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} />
               </PressScale>
@@ -1825,6 +1834,16 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         <CreatorCropSheet
           visible={!!cropTarget}
           imageUri={cropTarget.payload.mediaUri}
+          focalPoint={cropTarget.payload.focalPoint}
+          onFocalPointChange={(point) => {
+            if (cropTarget && cropTarget.type === 'media') {
+              updateLayer(cropTarget.id, {
+                type: 'media',
+                payload: {
+                  ...cropTarget.payload,
+                  focalPoint: point } });
+            }
+          }}
           onClose={() => setCropTarget(null)}
           onCropComplete={(newUri) => {
             if (cropTarget && cropTarget.type === 'media') {
@@ -2105,9 +2124,6 @@ const styles = StyleSheet.create({
     gap: 6,
     flex: 1,
     justifyContent: 'center' },
-  titleText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size },
   doneText: {
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.bodyStrong.size },
@@ -2137,7 +2153,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' },
   publishBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13 },
+    fontSize: TypographyV2.bodyStrong.size },
   unsavedDot: {
     width: 7,
     height: 7,
@@ -2243,7 +2259,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth },
   effectsSheetTitle: {
     fontFamily: Typography.family.regular,
-    fontSize: 14 },
+    fontSize: TypographyV2.body.size },
   effectsSheetDone: {
     minWidth: 44,
     minHeight: 44,
@@ -2260,14 +2276,6 @@ const styles = StyleSheet.create({
   effectsEmptyText: {
     fontFamily: Typography.family.regular,
     fontSize: TypographyV2.body.size },
-  effectsSectionLabel: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
-    marginTop: Space.xs },
   effectsAdjustWrap: {
     marginTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,

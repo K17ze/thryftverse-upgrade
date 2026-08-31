@@ -19,9 +19,8 @@ import Reanimated, {
   withSpring,
   withTiming,
   useReducedMotion,
-  Easing,
   type SharedValue } from 'react-native-reanimated';
-import { Space, Radius, Typography, Stroke, IconGrammar } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, IconGrammar, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -1095,7 +1094,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         <View style={styles.header}>
           <Text style={styles.title}>Share</Text>
           <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close share" accessibilityHint="Closes the share sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textPrimary} aria-hidden={true} />
           </PressScale>
         </View>
 
@@ -1117,6 +1116,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
             progressAnimatedStyle={progressAnimatedStyle}
             progressWidth={progressWidth}
             onCancel={stage === 'uploading' ? handleCancelUpload : undefined}
+            isConfirming={stage === 'uploading' && uploadManager.isConfirming}
+            isStalled={stage === 'uploading' && uploadManager.isStalled}
           />
         )}
 
@@ -1265,6 +1266,10 @@ interface SharingStateViewProps {
   progressAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
   progressWidth: SharedValue<number>;
   onCancel?: () => void;
+  /** True when uploads are in the server-confirmation phase (bytes done, awaiting DB row + moderation). */
+  isConfirming?: boolean;
+  /** True when an upload has stalled (no progress for an extended period). */
+  isStalled?: boolean;
 }
 
 function SharingStateView({
@@ -1272,20 +1277,33 @@ function SharingStateView({
   stage,
   progressAnimatedStyle,
   progressWidth,
-  onCancel }: SharingStateViewProps) {
+  onCancel,
+  isConfirming,
+  isStalled }: SharingStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const showCancel = stage === 'uploading' && !!onCancel;
   const percentLabel = useMemo(() => {
     const pct = Math.round(progressWidth.value * 100);
     return `${Math.min(100, Math.max(0, pct))}%`;
   }, [progressWidth.value]);
+
+  // Truthful phase label — distinguishes "bytes transferring" from
+  // "server confirming" from "stalled". Never shows 100% until the
+  // server has confirmed the DB row + moderation (AGENTS.md §11).
+  const phaseLabel = useMemo(() => {
+    if (stage !== 'uploading') return 'Sharing…';
+    if (isStalled) return 'Taking longer than usual…';
+    if (isConfirming) return 'Confirming…';
+    return `Uploading… ${percentLabel}`;
+  }, [stage, isStalled, isConfirming, percentLabel]);
+
   return (
     <View style={localStyles.progressState}>
       <View style={localStyles.progressBarTrack} accessibilityRole="progressbar">
         <Reanimated.View style={[localStyles.progressBarFill, progressAnimatedStyle]} />
       </View>
       <Text style={localStyles.progressLabel}>
-        {stage === 'uploading' ? `Uploading… ${percentLabel}` : 'Sharing…'}
+        {phaseLabel}
       </Text>
       {showCancel && (
         <Pressable
@@ -1326,7 +1344,7 @@ function ErrorStateView({
     if (reduceMotion) {
       opacity.value = 1;
     } else {
-      opacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+      opacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
     }
   }, [reduceMotion, opacity]);
 
@@ -1364,7 +1382,7 @@ function ErrorStateView({
 
 // ── Success state — minimal and confident ──────────────────────────
 // A checkmark inside a 72pt success-tinted circle with a spring scale
-// entrance, "Shared" in 20pt bold, and one full-width "Done" button.
+// entrance, "Shared" in 17pt semibold, and one full-width "Done" button.
 interface SuccessViewProps {
   colors: ThemeColors;
   reduceMotion: boolean;
@@ -1384,7 +1402,7 @@ function SuccessView({
   useEffect(() => {
     contentOpacity.value = reduceMotion
       ? 1
-      : withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+      : withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
     iconScale.value = reduceMotion
       ? 1
       : withSpring(1, Motion.spring.settle);
@@ -1447,7 +1465,7 @@ function UnknownOutcomeView({
   useEffect(() => {
     opacity.value = reduceMotion
       ? 1
-      : withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+      : withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
   }, [opacity, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
@@ -1506,7 +1524,7 @@ function ConflictStateView({
   useEffect(() => {
     opacity.value = reduceMotion
       ? 1
-      : withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+      : withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
   }, [opacity, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
@@ -1574,7 +1592,7 @@ function ScheduleFailedView({
     if (reduceMotion) {
       opacity.value = 1;
     } else {
-      opacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+      opacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
     }
   }, [reduceMotion, opacity]);
 
@@ -1679,7 +1697,7 @@ function ConfirmationView({
   useEffect(() => {
     contentOpacity.value = reduceMotion
       ? 1
-      : withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+      : withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
   }, [reduceMotion, contentOpacity]);
 
   const contentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value }));
@@ -1983,11 +2001,11 @@ function createStyles(colors: ThemeColorsType) {
       paddingVertical: Space.sm },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.sectionTitle.size,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textPrimary },
     closeBtn: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: Radius.sm },
@@ -2242,9 +2260,9 @@ function createStyles(colors: ThemeColorsType) {
       justifyContent: 'center',
       alignItems: 'center' },
     successTitle: {
-      fontFamily: Typography.family.bold,
-      fontSize: 20,
-      lineHeight: 26,
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
       color: colors.textPrimary },
     doneBtn: {
       width: '100%',

@@ -150,7 +150,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm + Space.xs },
   tileImageWrap: {
     width: '100%',
-    aspectRatio: 4 / 3,
+    aspectRatio: 3 / 4,
     borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt },

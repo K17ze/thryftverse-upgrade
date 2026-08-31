@@ -5,11 +5,11 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-  Easing } from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { Space, Radius, Elevation } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -53,7 +53,7 @@ export function Tooltip({ label, floating, colors, onShow, visible }: TooltipPro
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Timing config derived from motion tokens — 120ms ease-out cubic fade.
-  const fadeTiming = { duration: (duration as { fast: number }).fast, easing: Easing.out(Easing.cubic) };
+  const fadeTiming = { duration: (duration as { fast: number }).fast, easing: Motion.easing.entrance };
 
   // Cleanup tooltip timer on unmount
   useEffect(() => {

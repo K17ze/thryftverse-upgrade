@@ -696,7 +696,7 @@ export default function LookDetailScreen() {
 
   const renderExploreTile = useCallback(
     ({ item, index }: { item: LookApiItem; index: number }) => {
-      const template = resolveLookTemplate(item, index, 2);
+      const template = resolveLookTemplate(item, index, 1);
       return (
         <View style={{ paddingHorizontal: exploreGap / 2, paddingBottom: exploreGap, width: '100%' }}>
           <LookMasonryTile

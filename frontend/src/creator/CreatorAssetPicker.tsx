@@ -35,6 +35,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { withAlpha } from '../components/poster/shared/colorUtils';
 import type { CreatorLayer } from './composition';
 import { isCapabilitySupported, getCapabilityForLayerType, isVisualLayer } from './capabilities/registry';
@@ -160,7 +161,7 @@ function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; o
           text: sticker.emoji,
           textStyle: 'clean',
           fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
-          textColor: '#ffffff',
+          textColor: TEXT_COLORS[0],
           alignment: 'center',
           opacity: 1,
           textEffect: 'none',
@@ -172,7 +173,7 @@ function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; o
         type: 'decorative',
         width: 0.15,
         height: 0.15,
-        payload: { shape: 'star', color: '#ffffff', opacity: 1 } });
+        payload: { shape: 'star', color: SHAPE_COLORS[0], opacity: 1 } });
     }
     onClose();
   }, [onAddLayer, onClose]);
@@ -510,7 +511,7 @@ function PermissionDeniedState({
   useEffect(() => {
     if (!reduceMotion) {
       // Per §5.14: entrance uses timing (ease-out), not spring.
-      entranceSV.value = withDelay(100, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
+      entranceSV.value = withDelay(100, withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance }));
     }
   }, [reduceMotion, entranceSV]);
 
@@ -707,7 +708,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
   const toggleSelect = useCallback((asset: MediaAsset) => {
     if (asset.mediaType === 'video') {
       if (asset.durationMs != null && asset.durationMs > MAX_VIDEO_DURATION_MS) {
-        haptic.medium();
+        haptic.error();
         showToast(`Video is ${Math.floor(asset.durationMs / 1000)}s — max 60s`, 'error');
         return;
       }
@@ -776,7 +777,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     if (!result.canceled && result.assets[0]) {
       const durationMs = result.assets[0].duration ?? 0;
       if (durationMs > MAX_VIDEO_DURATION_MS) {
-        haptic.medium();
+        haptic.error();
         showToast(`Video is ${Math.floor(durationMs / 1000)}s — max 60s`, 'error');
         return;
       }
@@ -1793,6 +1794,14 @@ const TEXT_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9
 
 const TEXT_BG_COLORS = ['transparent', '#000000', '#ffffff', '#9b0202', '#215634', '#06489A', '#C9A46A', '#6B3245'];
 
+const RAINBOW_GRADIENT = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000'] as const;
+
+// Content constant: the text-sticker preview stage mimics the dark document
+// canvas in both themes, so it must not track the app background.
+const TEXT_PREVIEW_STAGE_BG = '#0d0d0d';
+
+const DEFAULT_STICKER_BG_COLOR = '#C9A46A';
+
 const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { key: 'left', icon: 'text-outline' },
   { key: 'center', icon: 'text' },
@@ -1825,7 +1834,7 @@ const TextPicker = React.memo(function TextPicker({ onClose, onAddLayer, editing
 
   const [text, setText] = useState(existingPayload?.text ?? '');
   const [textStyle, setTextStyle] = useState<string>(existingPayload?.textStyle ?? 'clean');
-  const [textColor, setTextColor] = useState(existingPayload?.textColor ?? '#ffffff');
+  const [textColor, setTextColor] = useState(existingPayload?.textColor ?? TEXT_COLORS[0]);
   const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>(existingPayload?.alignment ?? 'center');
   const [textEffect, setTextEffect] = useState<string>(existingPayload?.textEffect ?? 'none');
   const [textAnimation, setTextAnimation] = useState<string>(existingPayload?.textAnimation ?? 'none');
@@ -1943,7 +1952,7 @@ const TextPicker = React.memo(function TextPicker({ onClose, onAddLayer, editing
         {showSpectrum && (
           <View style={styles.spectrumWrap}>
             <LinearGradient
-              colors={['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000']}
+              colors={RAINBOW_GRADIENT}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.spectrumBar}
@@ -2150,7 +2159,7 @@ const DrawPicker = React.memo(function DrawPicker({ onClose, onAddLayer, editing
   const [strokes, setStrokes] = useState<DrawStroke[]>(existingStrokes);
   const [redoStack, setRedoStack] = useState<DrawStroke[]>([]);
   const [activeTool, setActiveTool] = useState<'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk'>('pen');
-  const [activeColor, setActiveColor] = useState('#ffffff');
+  const [activeColor, setActiveColor] = useState(DRAW_COLORS[0]);
   const [brushSize, setBrushSize] = useState(4);
   const [canvasLayout, setCanvasLayout] = useState({ width: 320, height: 400 });
   const [showDrawSpectrum, setShowDrawSpectrum] = useState(false);
@@ -2220,6 +2229,7 @@ const DrawPicker = React.memo(function DrawPicker({ onClose, onAddLayer, editing
 
   const handleClear = useCallback(() => {
     haptic.medium();
+    haptic.warning();
     setStrokes([]);
     setRedoStack([]);
   }, [haptic]);
@@ -2375,7 +2385,7 @@ const DrawPicker = React.memo(function DrawPicker({ onClose, onAddLayer, editing
             {showDrawSpectrum && (
               <View style={styles.spectrumWrap}>
                 <LinearGradient
-                  colors={['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000']}
+                  colors={RAINBOW_GRADIENT}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.spectrumBar}
@@ -2872,7 +2882,7 @@ const QuizPicker = React.memo(function QuizPicker({ onClose, onAddLayer, editing
 
   const handleAdd = useCallback(() => {
     if (!question.trim() || options.filter(o => o.trim()).length < 2) return;
-    haptic.medium();
+    haptic.light();
     const cleanOptions = options.filter(o => o.trim()).slice(0, 4);
     const optionObjs = cleanOptions.map((label, i) => ({ id: `opt_${i}_${Date.now()}`, label: label.trim() }));
     const payload: any = {
@@ -3048,11 +3058,11 @@ const QuestionPicker = React.memo(function QuestionPicker({ onClose, onAddLayer,
   const isEditing = editingLayer?.type === 'question';
   const existing = editingLayer?.type === 'question' ? editingLayer.payload : null;
 
+  const QUESTION_BG_COLORS = ['#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a', '#C9A46A'];
+
   const [prompt, setPrompt] = useState(existing?.prompt ?? '');
   const [placeholder, setPlaceholder] = useState(existing?.placeholder ?? 'Type something...');
-  const [bgColor, setBgColor] = useState(existing?.backgroundColor ?? '#9b0202');
-
-  const QUESTION_BG_COLORS = ['#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a', '#C9A46A'];
+  const [bgColor, setBgColor] = useState(existing?.backgroundColor ?? QUESTION_BG_COLORS[0]);
 
   const handleAdd = useCallback(() => {
     if (!prompt.trim()) return;
@@ -3061,7 +3071,7 @@ const QuestionPicker = React.memo(function QuestionPicker({ onClose, onAddLayer,
       prompt: prompt.trim(),
       placeholder: placeholder.trim() || 'Type something...',
       backgroundColor: bgColor,
-      textColor: '#ffffff' };
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -3154,12 +3164,12 @@ const EmojiSliderPicker = React.memo(function EmojiSliderPicker({ onClose, onAdd
   const isEditing = editingLayer?.type === 'emojiSlider';
   const existing = editingLayer?.type === 'emojiSlider' ? editingLayer.payload : null;
 
+  const SLIDER_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#E06666'];
+
   const [question, setQuestion] = useState(existing?.question ?? '');
   const [emoji, setEmoji] = useState(existing?.emoji ?? '😍');
   const [endLabel, setEndLabel] = useState(existing?.endLabel ?? '');
-  const [sliderColor, setSliderColor] = useState(existing?.sliderColor ?? '#C9A46A');
-
-  const SLIDER_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#E06666'];
+  const [sliderColor, setSliderColor] = useState(existing?.sliderColor ?? SLIDER_COLORS[0]);
 
   const handleAdd = useCallback(() => {
     if (!question.trim()) return;
@@ -3276,6 +3286,8 @@ const CountdownPicker = React.memo(function CountdownPicker({ onClose, onAddLaye
   const isEditing = editingLayer?.type === 'countdown';
   const existing = editingLayer?.type === 'countdown' ? editingLayer.payload : null;
 
+  const COUNTDOWN_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a'];
+
   const [label, setLabel] = useState(existing?.label ?? '');
   const [endDate, setEndDate] = useState(() => {
     if (existing?.endDateTime) return new Date(existing.endDateTime);
@@ -3284,9 +3296,7 @@ const CountdownPicker = React.memo(function CountdownPicker({ onClose, onAddLaye
     d.setHours(18, 0, 0, 0);
     return d;
   });
-  const [color, setColor] = useState(existing?.color ?? '#C9A46A');
-
-  const COUNTDOWN_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a'];
+  const [color, setColor] = useState(existing?.color ?? COUNTDOWN_COLORS[0]);
 
   const handleAdd = useCallback(() => {
     if (!label.trim()) return;
@@ -3295,7 +3305,7 @@ const CountdownPicker = React.memo(function CountdownPicker({ onClose, onAddLaye
       label: label.trim(),
       endDateTime: endDate.toISOString(),
       color,
-      textColor: '#ffffff' };
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -3403,7 +3413,7 @@ const ShapePicker = React.memo(function ShapePicker({ onClose, onAddLayer }: { o
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
-  const [activeColor, setActiveColor] = useState('#ffffff');
+  const [activeColor, setActiveColor] = useState(SHAPE_COLORS[0]);
   const handleSelect = useCallback((shape: typeof SHAPES[0]) => {
     haptic.selection();
     onAddLayer({
@@ -3867,7 +3877,7 @@ const LinkPicker = React.memo(function LinkPicker({ onClose, onAddLayer, editing
 
   const [url, setUrl] = useState(existingPayload?.url ?? '');
   const [ctaText, setCtaText] = useState(existingPayload?.ctaText ?? 'Link');
-  const [bgColor, setBgColor] = useState(existingPayload?.backgroundColor ?? '#C9A46A');
+  const [bgColor, setBgColor] = useState(existingPayload?.backgroundColor ?? DEFAULT_STICKER_BG_COLOR);
 
   const canSave = url.trim().length > 0 && (url.startsWith('http://') || url.startsWith('https://'));
 
@@ -3877,7 +3887,7 @@ const LinkPicker = React.memo(function LinkPicker({ onClose, onAddLayer, editing
       url: url.trim(),
       ctaText: ctaText.trim() || 'Link',
       backgroundColor: bgColor,
-      textColor: '#ffffff' };
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4019,8 +4029,8 @@ const HashtagPicker = React.memo(function HashtagPicker({ onClose, onAddLayer, e
     const cleanTag = tag.trim().replace(/^#/, '');
     const payload: any = {
       tag: cleanTag,
-      backgroundColor: '#C9A46A',
-      textColor: '#ffffff' };
+      backgroundColor: DEFAULT_STICKER_BG_COLOR,
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4084,7 +4094,7 @@ const TimePicker = React.memo(function TimePicker({ onClose, onAddLayer, editing
     const payload: any = {
       displayTime: new Date().toISOString(),
       format,
-      textColor: '#ffffff' };
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4166,7 +4176,7 @@ const WeatherPicker = React.memo(function WeatherPicker({ onClose, onAddLayer, e
       condition,
       emoji,
       locationName: locationName.trim(),
-      textColor: '#ffffff' };
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4278,11 +4288,11 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     height: 48 },
   albumPickerItemText: {
     fontFamily: Typography.family.medium,
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
     flex: 1 },
   albumPickerItemCount: {
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: TypographyV2.caption.size,
     color: colors.textMuted },
   // ── Category tabs ──
   categoryTabRow: {
@@ -4303,7 +4313,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     zIndex: 1 },
   categoryTabLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: 14 },
+    fontSize: TypographyV2.body.size },
   // ── Limited-access banner ──
   limitedAccessBanner: {
     flexDirection: 'row',
@@ -4494,7 +4504,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   textPreview: {
     minHeight: 90,
     borderRadius: Radius.lg,
-    backgroundColor: '#0d0d0d',
+    backgroundColor: TEXT_PREVIEW_STAGE_BG,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: Space.md + 2,
@@ -4533,7 +4543,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     flex: 1,
     minHeight: 280,
     borderRadius: Radius.lg,
-    backgroundColor: '#161616',
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.scrimTextTertiary,
     overflow: 'hidden',
@@ -4706,7 +4716,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   productTabBar: { flexDirection: 'row', paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   productTabBarContent: { gap: Space.md },
   productTab: { paddingVertical: Space.md },
-  productTabLabel: { fontFamily: Typography.family.medium, fontSize: 14, color: colors.textSecondary },
+  productTabLabel: { fontFamily: Typography.family.medium, fontSize: TypographyV2.body.size, color: colors.textSecondary },
   // ── Long-press preview overlay ──
   previewOverlay: {
     ...StyleSheet.absoluteFill,

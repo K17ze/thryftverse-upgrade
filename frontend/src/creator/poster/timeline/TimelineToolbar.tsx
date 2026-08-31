@@ -119,6 +119,7 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
           min={SPEED_MIN}
           max={SPEED_MAX}
           step={0.25}
+          neutralValue={1}
           formatValue={(v) => `${v.toFixed(2)}x`}
           color={colors.brand}
           onChange={onSpeedChange}
@@ -202,6 +203,7 @@ interface SliderRowProps {
   min: number;
   max: number;
   step: number;
+  neutralValue?: number;
   formatValue: (v: number) => string;
   color: string;
   onChange: (v: number) => void;
@@ -215,6 +217,7 @@ const SliderRow = React.memo(function SliderRow({
   min,
   max,
   step,
+  neutralValue,
   formatValue,
   color,
   onChange,
@@ -230,6 +233,12 @@ const SliderRow = React.memo(function SliderRow({
   const range = max - min;
   const ratio = range > 0 ? (value - min) / range : 0;
   const pct = Math.round(ratio * 100);
+  const neutralPct =
+    neutralValue !== undefined && range > 0 && neutralValue >= min && neutralValue <= max
+      ? Math.round(((neutralValue - min) / range) * 100)
+      : undefined;
+  const fillLeft = neutralPct === undefined ? 0 : Math.min(pct, neutralPct);
+  const fillWidth = neutralPct === undefined ? pct : Math.abs(pct - neutralPct);
 
   const panGesture = React.useMemo(() =>
     Gesture.Pan()
@@ -266,7 +275,12 @@ const SliderRow = React.memo(function SliderRow({
           accessibilityRole="adjustable"
         >
           <View style={[toolbarStyles.sliderTrackBg, { backgroundColor: colors.border }]} />
-          <View style={[toolbarStyles.sliderFill, { width: `${pct}%`, backgroundColor: color }]} />
+          <View
+            style={[
+              toolbarStyles.sliderFill,
+              { left: `${fillLeft}%`, width: `${fillWidth}%`, backgroundColor: color },
+            ]}
+          />
           <View style={[toolbarStyles.sliderThumb, { left: `${pct}%`, backgroundColor: color }]} />
         </View>
       </GestureDetector>

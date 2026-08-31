@@ -12,24 +12,25 @@
  * onCommit fires once on gesture end.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, View, LayoutChangeEvent } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  Easing,
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { Radius, Stroke } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { toRgbaString } from './ColorMath';
 import type { CreatorColor } from './ColorTypes';
 
 // ── Timing ───────────────────────────────────────────────────────────
-const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
+const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
 
 // ── Props ────────────────────────────────────────────────────────────
 interface AlphaSliderProps {
@@ -52,31 +53,34 @@ interface AlphaSliderProps {
  * Render a checkerboard pattern using a grid of View cells.
  * This is lightweight and works without Skia or SVG.
  */
-function CheckerboardPattern({ size }: { size: number }) {
+const CheckerboardPattern = React.memo(function CheckerboardPattern({ size }: { size: number }) {
   const { colors } = useAppTheme();
   const cellSize = 6;
   const cols = Math.ceil(size / cellSize);
   const rows = 2;
-  const cells: React.ReactNode[] = [];
+  const cells = useMemo(() => {
+    const arr: React.ReactNode[] = [];
 
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const isLight = (row + col) % 2 === 0;
-      cells.push(
-        <View
-          key={`${row}-${col}`}
-          style={{
-            position: 'absolute',
-            left: col * cellSize,
-            top: row * cellSize,
-            width: cellSize,
-            height: cellSize,
-            backgroundColor: isLight ? colors.scrimTextPrimary : '#cccccc',
-          }}
-        />,
-      );
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const isLight = (row + col) % 2 === 0;
+        arr.push(
+          <View
+            key={`${row}-${col}`}
+            style={{
+              position: 'absolute',
+              left: col * cellSize,
+              top: row * cellSize,
+              width: cellSize,
+              height: cellSize,
+              backgroundColor: isLight ? colors.surfaceElevated : colors.border,
+            }}
+          />,
+        );
+      }
     }
-  }
+    return arr;
+  }, [cols, colors.surfaceElevated, colors.border]);
 
   return (
     <View
@@ -93,7 +97,7 @@ function CheckerboardPattern({ size }: { size: number }) {
       {cells}
     </View>
   );
-}
+});
 
 // ── Component ────────────────────────────────────────────────────────
 export function AlphaSlider({
@@ -181,10 +185,11 @@ export function AlphaSlider({
         ]}
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
+        accessibilityHint="Drag left for transparent, right for fully opaque"
         accessibilityValue={{
           min: 0,
-          max: 1,
-          now: alpha,
+          max: 100,
+          now: Math.round(alpha * 100),
           text: `Opacity ${Math.round(alpha * 100)} percent`,
         }}
       >
@@ -201,15 +206,6 @@ export function AlphaSlider({
             },
           ]}
         >
-          {/* Use a simple View with background for the gradient effect.
-              We layer two views: transparent on left, opaque on right */}
-          <View
-            style={{
-              ...StyleSheet.absoluteFill,
-              backgroundColor: opaqueColor,
-              opacity: 1,
-            }}
-          />
           {/* Linear gradient from transparent to opaque */}
           <AlphaGradient
             transparentColor={transparentColor}
@@ -237,8 +233,6 @@ export function AlphaSlider({
 }
 
 // ── Alpha gradient (uses expo-linear-gradient) ───────────────────────
-import { LinearGradient } from 'expo-linear-gradient';
-
 function AlphaGradient({
   transparentColor,
   opaqueColor,

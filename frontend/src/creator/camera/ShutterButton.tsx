@@ -5,9 +5,8 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withSequence,
 } from 'react-native-reanimated';
-import { Radius, Typography, Type, Space } from '../../theme/designTokens';
+import { Radius, Typography, Space } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
@@ -20,8 +19,6 @@ import { RecordingRing } from './RecordingRing';
 const SHUTTER_SIZE = 78;
 const SHUTTER_INNER = 60;
 const SHUTTER_RING_WIDTH = 4;
-
-export type CameraMode = 'photo' | 'video' | 'boomerang';
 
 export interface ShutterButtonProps {
   /** Called when the user presses the shutter. The press spring animation
@@ -78,13 +75,15 @@ export function ShutterButton({
     transform: [{ scale: shutterScale.value }],
   }));
 
-  const handlePress = React.useCallback(() => {
-    // Snappy down, smooth back up — use withSequence so both animations run
+  const handlePressIn = React.useCallback(() => {
     if (!reducedMotion) {
-      shutterScale.value = withSequence(
-        withSpring(0.92, spring.tap),
-        withSpring(1, spring.entrance),
-      );
+      shutterScale.value = withSpring(0.92, spring.tap);
+    }
+  }, [reducedMotion, shutterScale, spring]);
+
+  const handlePress = React.useCallback(() => {
+    if (!reducedMotion) {
+      shutterScale.value = withSpring(1, spring.entrance);
     }
     onPress();
   }, [reducedMotion, shutterScale, spring, onPress]);
@@ -103,12 +102,14 @@ export function ShutterButton({
   return (
     <Pressable
       onPress={handlePress}
+      onPressIn={handlePressIn}
       onLongPress={videoCaptureEnabled && !handsFreeMode ? onLongPress : undefined}
       onPressOut={videoCaptureEnabled ? onPressOut : undefined}
       delayLongPress={250}
       hitSlop={24}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
     >
       <Reanimated.View

@@ -7,6 +7,7 @@ import Reanimated, {
   useAnimatedStyle,
   withTiming } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
+import { Motion } from '../theme/motionTokens';
 import { Space, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
@@ -88,7 +89,7 @@ export function CreatorToolDock({
     if (reduceMotion) {
       dockOpacity.value = 1;
     } else {
-      dockOpacity.value = withTiming(1, { duration: 200 });
+      dockOpacity.value = withTiming(1, { duration: Motion.tier.deliberate, easing: Motion.easing.entrance });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -103,7 +104,7 @@ export function CreatorToolDock({
       toolListOpacity.value = 1;
     } else {
       toolListOpacity.value = 0.7;
-      toolListOpacity.value = withTiming(1, { duration: 120 });
+      toolListOpacity.value = withTiming(1, { duration: Motion.tier.micro });
     }
   }, [isSelectionMode, reduceMotion, toolListOpacity]);
 
@@ -116,7 +117,7 @@ export function CreatorToolDock({
       if (reduceMotion) {
         secondaryExpandSV.value = next ? 1 : 0;
       } else {
-        secondaryExpandSV.value = withTiming(next ? 1 : 0, { duration: 150 });
+        secondaryExpandSV.value = withTiming(next ? 1 : 0, { duration: Motion.tier.micro, easing: Motion.easing.crisp });
       }
       haptic.light();
       return next;

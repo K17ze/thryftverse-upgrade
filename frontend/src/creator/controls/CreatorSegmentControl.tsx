@@ -25,14 +25,11 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
-  useDerivedValue,
-  runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
-import { Radius, Space, IconGrammar, Elevation } from '../../theme/designTokens';
+import { Radius, Space, IconGrammar } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
@@ -99,11 +96,11 @@ export function CreatorSegmentControl({
       } else {
         contentOpacitySV.value = withTiming(0, {
           duration: Motion.duration.fast / 2,
-          easing: Easing.in(Easing.cubic),
+          easing: Motion.easing.exit,
         }, () => {
           contentOpacitySV.value = withTiming(1, {
             duration: Motion.duration.fast / 2,
-            easing: Easing.out(Easing.cubic),
+            easing: Motion.easing.entrance,
           });
         });
       }
@@ -233,8 +230,6 @@ const styles = StyleSheet.create({
     top: INDICATOR_PADDING,
     bottom: INDICATOR_PADDING,
     left: INDICATOR_PADDING,
-    // Shadow for depth separation
-    ...Elevation.card,
   },
   segmentsRow: {
     flexDirection: 'row',

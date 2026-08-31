@@ -17,6 +17,10 @@ export interface SeenInLooksRailProps {
   onSeeAll?: () => void;
 }
 
+const RailItemSeparator = React.memo(function RailItemSeparator() {
+  return <View style={{ width: Space.sm }} />;
+});
+
 export function SeenInLooksRail({ items, onPressItem, onSeeAll }: SeenInLooksRailProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -91,7 +95,7 @@ export function SeenInLooksRail({ items, onPressItem, onSeeAll }: SeenInLooksRai
         contentContainerStyle={styles.listContent}
         keyExtractor={(item) => item.id}
         renderItem={renderLookItem}
-        ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
+        ItemSeparatorComponent={RailItemSeparator}
       />
     </View>
   );

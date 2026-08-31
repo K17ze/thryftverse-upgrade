@@ -24,8 +24,8 @@ const DEFAULT_SIZE = 70;
 
 export interface FocusReticleProps {
   /** The screen-space point where the reticle should appear. When non-null,
-   *  the reticle springs in (0→1), transitions from blue→green after 600ms,
-   *  then fades out after 1.5s and calls `onDismiss`. */
+   *  the reticle springs in (0→1), then fades out after 1.6s and calls
+   *  `onDismiss`. */
   focusPoint: { x: number; y: number } | null;
   /** Reticle diameter in pixels (default 70). */
   size?: number;
@@ -107,6 +107,9 @@ export function FocusReticle({ focusPoint, size = DEFAULT_SIZE, onDismiss }: Foc
         reticleStyle,
       ]}
       pointerEvents="none"
+      accessibilityLabel="Focus point"
+      accessibilityHint="Camera focused at this point"
+      accessibilityLiveRegion="polite"
     >
       <Svg width={size} height={size}>
         <ReanimatedCircle

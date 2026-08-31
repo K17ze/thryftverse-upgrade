@@ -7,10 +7,8 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   runOnJS,
-  withTiming,
-  Easing,
 } from 'react-native-reanimated';
-import { Space, FontFamily, Radius } from '../../../theme/designTokens';
+import { Space, FontFamily, Radius, Typography } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
@@ -95,7 +93,7 @@ export const ClipThumb = React.memo(function ClipThumb({
         const deltaMs = pxToMs(trimDeltaSV.value);
         if (onTrimCommit) runOnJS(onTrimCommit)('start', deltaMs);
         runOnJS(haptic.light)();
-        trimDeltaSV.value = withTiming(0, { duration: 1, easing: Easing.linear });
+        trimDeltaSV.value = 0;
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pxToMs, onTrimCommit, haptic, trimDeltaSV]
@@ -118,7 +116,7 @@ export const ClipThumb = React.memo(function ClipThumb({
         const deltaMs = pxToMs(trimDeltaSV.value);
         if (onTrimCommit) runOnJS(onTrimCommit)('end', deltaMs);
         runOnJS(haptic.light)();
-        trimDeltaSV.value = withTiming(0, { duration: 1, easing: Easing.linear });
+        trimDeltaSV.value = 0;
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pxToMs, onTrimCommit, haptic, trimDeltaSV]
@@ -347,7 +345,7 @@ const clipStyles = StyleSheet.create({
   },
   badgeText: {
     fontFamily: FontFamily.semibold,
-    fontSize: 10,
+    fontSize: Typography.size.micro,
     lineHeight: 12,
   },
 });

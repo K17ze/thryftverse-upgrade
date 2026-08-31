@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { View, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSharedValue } from 'react-native-reanimated';
-import { Space } from '../../../theme/designTokens';
+import { Space, Control } from '../../../theme/designTokens';
 import { IconGrammar } from '../../../theme/designTokens';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
@@ -143,7 +143,12 @@ export const TimelineTrack = React.memo(function TimelineTrack({
               <Pressable
                 key={`transition-${i}`}
                 onPress={() => handleTransitionPress(i)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={{
+                  top: (Control.hit - TRANSITION_ICON_SIZE) / 2,
+                  bottom: (Control.hit - TRANSITION_ICON_SIZE) / 2,
+                  left: (Control.hit - TRANSITION_ICON_SIZE) / 2,
+                  right: (Control.hit - TRANSITION_ICON_SIZE) / 2,
+                }}
                 accessibilityLabel={
                   hasTransition ? `Transition ${presetId}, tap to change` : 'Add transition between clips'
                 }
@@ -195,7 +200,8 @@ const trackStyles = StyleSheet.create({
   },
   // Transition icon — a compact 22pt circle centered on the clip boundary.
   // The visible glyph is 14pt; the 22pt circle is the visual anchor. The
-  // hitSlop on the Pressable extends the tap target to ~42pt (AGENTS.md §13).
+  // hitSlop on the Pressable extends the tap target to 44pt (Control.hit,
+  // AGENTS.md §13).
   transitionIcon: {
     position: 'absolute',
     top: '50%',

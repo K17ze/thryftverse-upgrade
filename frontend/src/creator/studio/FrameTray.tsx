@@ -46,8 +46,7 @@ export function FrameTray({
   onAddPage,
   onCollapse,
   bottomOffset,
-  onVideoBadgePress,
-  videoInfoFrameIndex }: FrameTrayProps) {
+  onVideoBadgePress }: FrameTrayProps) {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { colors } = useAppTheme();
@@ -74,6 +73,7 @@ export function FrameTray({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         pointerEvents="box-none"
+        accessibilityLabel="Frame strip"
       >
         {pages.map((page, i) => {
           const mediaLayer = page.layers.find((l) => l.type === 'media');
@@ -96,7 +96,7 @@ export function FrameTray({
               <View
                 style={[
                   styles.thumb,
-                  { backgroundColor: colors.scrimTextTertiary },
+                  { backgroundColor: colors.surfaceAlt },
                   isActive && { borderColor: colors.brand, borderWidth: 2 },
                 ]}
               >
@@ -114,14 +114,13 @@ export function FrameTray({
                 {/* Video duration marker — tappable to show trim info */}
                 {isVideo && durationMs != null && (
                   <Pressable
-                    style={styles.durationBadge}
+                    style={[styles.durationBadge, { backgroundColor: colors.mediaOverlayScrim }]}
                     onPress={(e) => {
                       e.stopPropagation();
                       haptic.light();
                       onVideoBadgePress?.(i);
                     }}
                     accessibilityLabel={`Video frame ${i + 1}, ${Math.ceil(durationMs / 1000)} seconds`}
-                    accessibilityHint="Trim and mute coming soon"
                     accessibilityRole="button"
                     hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                   >
@@ -130,14 +129,6 @@ export function FrameTray({
                       {Math.ceil(durationMs / 1000)}s
                     </Text>
                   </Pressable>
-                )}
-                {/* Video trim info — inline text label on the frame */}
-                {isVideo && videoInfoFrameIndex === i && (
-                  <View style={[styles.videoInfoLabel, { backgroundColor: colors.mediaOverlayScrim }]} pointerEvents="none">
-                    <Text style={[styles.videoInfoText, { color: colors.scrimTextPrimary }]}>
-                      Trim and mute coming soon.
-                    </Text>
-                  </View>
                 )}
               </View>
               {/* Frame number — subtle, below thumbnail */}
@@ -211,19 +202,6 @@ const styles = StyleSheet.create({
   durationText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium },
-  videoInfoLabel: {
-    position: 'absolute',
-    top: 2,
-    left: 2,
-    right: 2,
-    borderRadius: RadiusRoleValue.compactControl,
-    paddingHorizontal: 4,
-    paddingVertical: 3 },
-  videoInfoText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-    lineHeight: 9,
-    textAlign: 'center' },
   thumbLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium },

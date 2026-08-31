@@ -23,6 +23,10 @@ export type QueueParams = QueueUploadParams;
 export interface UseUploadManagerResult {
   jobs: UploadJob[];
   isUploading: boolean;
+  /** True when any job is in the server-confirmation phase. */
+  isConfirming: boolean;
+  /** True when any job has stalled (no progress for an extended period). */
+  isStalled: boolean;
   /**
    * Aggregate completion fraction 0–1 across the project's jobs, based
    * on **real transmitted bytes** (not job count). This is the truthful
@@ -123,8 +127,21 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
         (j) =>
           j.status === 'uploading' ||
           j.status === 'queued' ||
-          j.status === 'initiating',
+          j.status === 'initiating' ||
+          j.status === 'confirming' ||
+          j.status === 'stalled',
       ),
+    [filteredJobs],
+  );
+
+  /** True when any job is in the server-confirmation phase. */
+  const isConfirming = useMemo(
+    () => filteredJobs.some((j) => j.status === 'confirming'),
+    [filteredJobs],
+  );
+  /** True when any job has stalled (no progress for an extended period). */
+  const isStalled = useMemo(
+    () => filteredJobs.some((j) => j.status === 'stalled'),
     [filteredJobs],
   );
 
@@ -196,6 +213,8 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
     () => ({
       jobs: filteredJobs,
       isUploading,
+      isConfirming,
+      isStalled,
       progress,
       totalBytes,
       uploadedBytes,
@@ -212,6 +231,8 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
     [
       filteredJobs,
       isUploading,
+      isConfirming,
+      isStalled,
       progress,
       totalBytes,
       uploadedBytes,

@@ -66,7 +66,7 @@ export const OverflowItem = React.memo(function OverflowItem({
       disabled={disabled}
       style={[styles.overflowItem, disabled ? { opacity: 0.4 } : {}]}
       accessibilityLabel={label}
-      accessibilityRole="button"
+      accessibilityRole="menuitem"
       accessibilityState={selected ? { selected: true } : disabled ? { disabled: true } : undefined}
       hitSlop={12}
     >
@@ -140,6 +140,7 @@ export function OverflowMenu({
       onPress={onClose}
       accessibilityLabel="Close menu"
       accessibilityRole="button"
+      accessibilityHint="Double-tap to dismiss menu"
     >
       <View
         style={[
@@ -150,6 +151,8 @@ export function OverflowMenu({
             top,
             right: 12 },
         ]}
+        accessibilityViewIsModal
+        accessibilityRole="menu"
       >
         <OverflowItem
           icon="arrow-undo"

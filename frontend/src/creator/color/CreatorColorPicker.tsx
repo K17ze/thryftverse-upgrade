@@ -379,8 +379,8 @@ function usePickerStyles(colors: ThemeColors) {
           gap: Space.sm,
           minHeight: Control.hit },
         colorWell: {
-          width: 36,
-          height: 36,
+          width: 44,
+          height: 44,
           borderRadius: Radius.md,
           borderWidth: Stroke.hairline,
           borderColor: colors.borderSubtle,

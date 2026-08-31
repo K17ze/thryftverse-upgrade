@@ -27,11 +27,11 @@ import Reanimated, {
   useAnimatedStyle,
   runOnJS,
   withTiming,
-  Easing,
   useDerivedValue,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { Radius, Control, Stroke} from '../../../theme/designTokens';
+import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import type { StickerPin } from './StickerPinTracker';
@@ -63,7 +63,7 @@ export interface StickerPinOverlayProps {
   onAnchorCommit: (anchor: { x: number; y: number }) => void;
 }
 
-const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
+const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
 
 // ── Component ──────────────────────────────────────────────────────────
 

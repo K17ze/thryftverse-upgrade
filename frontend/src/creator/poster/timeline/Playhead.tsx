@@ -5,11 +5,12 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   runOnJS,
-  withTiming,
-  Easing,
+  withSpring,
 } from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { FontFamily } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
+import { Motion } from '../../../theme/motionTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 
@@ -100,20 +101,14 @@ export const Playhead = React.memo(function Playhead({
     // During playback the clock advances the playhead by small frame deltas
     // (< 5px). Setting the shared value directly avoids a 40ms animation per
     // frame, which would lag behind the audio. Only discrete jumps (seek /
-    // scrub) use the short ease.
+    // scrub) use the snapTo spring.
     const isPlaybackFrame = Math.abs(lineLeft - lineLeftSV.value) < 5;
     if (isPlaybackFrame || reducedMotion) {
       lineLeftSV.value = lineLeft;
       handleLeftSV.value = handleLeft;
     } else {
-      lineLeftSV.value = withTiming(lineLeft, {
-        duration: 40,
-        easing: Easing.out(Easing.ease),
-      });
-      handleLeftSV.value = withTiming(handleLeft, {
-        duration: 40,
-        easing: Easing.out(Easing.ease),
-      });
+      lineLeftSV.value = withSpring(lineLeft, Motion.spring.snapTo);
+      handleLeftSV.value = withSpring(handleLeft, Motion.spring.snapTo);
     }
   }, [positionMs, totalDurationMs, trackWidth, reducedMotion, lineLeftSV, handleLeftSV, isScrubbingSV]);
 
@@ -222,6 +217,8 @@ export const Playhead = React.memo(function Playhead({
           ]}
           accessibilityLabel="Playhead"
           accessibilityRole="adjustable"
+          accessibilityValue={{ text: formatTimecode(positionMs) }}
+          accessibilityLiveRegion="polite"
         >
           <Reanimated.View
             style={[
@@ -288,7 +285,7 @@ const playheadStyles = StyleSheet.create({
     alignItems: 'center',
   },
   bubbleText: {
-    fontSize: 11,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
   },
 });

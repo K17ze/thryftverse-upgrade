@@ -21,22 +21,19 @@
  *   - Matches KeyframeEditor / SpeedCurveEditor visual style.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
-  LayoutChangeEvent,
-  PanResponder,
-  GestureResponderEvent,
-  PanResponderGestureState,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PressScale } from '../../CreatorAnimations';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { CreatorSlider } from '../../controls/CreatorSlider';
 import {
   Space,
   Radius,
@@ -70,14 +67,6 @@ const MAX_DURATION_MS = 5000;
 const DEFAULT_DURATION_MS = 1000;
 const TIMESTAMP_STEP_MS = 50;
 const DURATION_STEP_MS = 100;
-
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(Math.max(v, min), max);
-}
-
-function roundToStep(v: number, step: number): number {
-  return Math.round(v / step) * step;
-}
 
 function formatSeconds(ms: number): string {
   const s = ms / 1000;
@@ -223,8 +212,9 @@ export function FreezeFramePicker({
 
 // ── LabeledSlider ─────────────────────────────────────────────────────
 // A small internal horizontal slider with a label and value readout.
-// Uses PanResponder for drag + release semantics; commits on release via
-// onRelease so the host performs a single document mutation per gesture.
+// Delegates the track to the shared CreatorSlider (RNGH + Reanimated);
+// commits on release via onRelease so the host performs a single document
+// mutation per gesture.
 
 interface LabeledSliderProps {
   label: string;
@@ -251,57 +241,6 @@ function LabeledSlider({
   disabled,
   colors,
 }: LabeledSliderProps) {
-  const [trackWidth, setTrackWidth] = useState(0);
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const ratio = useMemo(() => {
-    if (max <= min) return 0;
-    return clamp((value - min) / (max - min), 0, 1);
-  }, [value, min, max]);
-
-  const xToValue = useCallback(
-    (x: number) => {
-      if (trackWidth <= 0 || max <= min) return min;
-      const r = clamp(x / trackWidth, 0, 1);
-      return roundToStep(min + r * (max - min), step);
-    },
-    [trackWidth, min, max, step],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => !disabled,
-        onMoveShouldSetPanResponder: () => !disabled,
-        onPanResponderGrant: (_e: GestureResponderEvent) => {
-          if (disabled) return;
-        },
-        onPanResponderMove: (
-          e: GestureResponderEvent,
-          _g: PanResponderGestureState,
-        ) => {
-          if (disabled) return;
-          onValueChange(xToValue(e.nativeEvent.locationX));
-        },
-        onPanResponderRelease: (
-          e: GestureResponderEvent,
-          _g: PanResponderGestureState,
-        ) => {
-          if (disabled) return;
-          const v = xToValue(e.nativeEvent.locationX);
-          onValueChange(v);
-          onRelease(v);
-        },
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [disabled, trackWidth, min, max, step, onValueChange, onRelease],
-  );
-
-  const pct = Math.round(ratio * 100);
-
   return (
     <View style={styles.sliderRow}>
       <View style={styles.sliderHeader}>
@@ -312,38 +251,16 @@ function LabeledSlider({
           {valueLabel}
         </Text>
       </View>
-      <View
-        style={[styles.sliderTrack, disabled && styles.sliderTrackDisabled]}
-        onLayout={handleLayout}
-        {...panResponder.panHandlers}
-        accessibilityRole="adjustable"
+      <CreatorSlider
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onValueChange={onValueChange}
+        onCommit={onRelease}
+        disabled={disabled}
         accessibilityLabel={label}
-        accessibilityValue={{
-          min,
-          max,
-          now: value,
-          text: valueLabel,
-        }}
-      >
-        <View
-          style={[
-            styles.sliderTrackBg,
-            { backgroundColor: colors.borderSubtle },
-          ]}
-        />
-        <View
-          style={[
-            styles.sliderFill,
-            { width: `${pct}%`, backgroundColor: colors.brand },
-          ]}
-        />
-        <View
-          style={[
-            styles.sliderThumb,
-            { left: `${pct}%`, backgroundColor: colors.textInverse },
-          ]}
-        />
-      </View>
+      />
     </View>
   );
 }
@@ -397,32 +314,6 @@ const styles = StyleSheet.create({
     letterSpacing: LetterSpacing.normal,
     minWidth: 40,
     textAlign: 'right',
-  },
-  sliderTrack: {
-    height: Control.hit,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  sliderTrackDisabled: {
-    opacity: 0.4,
-  },
-  sliderTrackBg: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 4,
-    borderRadius: Radius.full,
-  },
-  sliderFill: {
-    height: 4,
-    borderRadius: Radius.full,
-  },
-  sliderThumb: {
-    position: 'absolute',
-    width: 18,
-    height: 18,
-    borderRadius: Radius.full,
-    marginLeft: -9,
   },
   clearButton: {
     flexDirection: 'row',

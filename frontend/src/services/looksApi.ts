@@ -202,8 +202,12 @@ export interface LookCommentApiItem {
   id: string;
   lookId: string;
   authorId: string;
+  parentId: string | null;
   author: LookCreator;
   body: string;
+  likeCount: number;
+  likedByViewer: boolean;
+  replyCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -218,7 +222,7 @@ export async function fetchLookCommentsFromApi(lookId: string): Promise<LookComm
 
 export async function createLookCommentOnApi(
   lookId: string,
-  body: { id: string; body: string }
+  body: { id: string; body: string; parentId?: string }
 ): Promise<{ ok: boolean; comment: LookCommentApiItem }> {
   return fetchJson<{ ok: boolean; comment: LookCommentApiItem }>(`/looks/${lookId}/comments`, {
     method: 'POST',
@@ -234,4 +238,24 @@ export async function deleteLookCommentOnApi(
   return fetchJson<{ ok: boolean }>(`/looks/${lookId}/comments/${commentId}`, {
     method: 'DELETE',
   });
+}
+
+export async function likeLookCommentOnApi(
+  lookId: string,
+  commentId: string
+): Promise<{ ok: boolean; likeCount: number; likedByViewer: boolean }> {
+  return fetchJson<{ ok: boolean; likeCount: number; likedByViewer: boolean }>(
+    `/looks/${lookId}/comments/${commentId}/like`,
+    { method: 'POST' }
+  );
+}
+
+export async function unlikeLookCommentOnApi(
+  lookId: string,
+  commentId: string
+): Promise<{ ok: boolean; likeCount: number; likedByViewer: boolean }> {
+  return fetchJson<{ ok: boolean; likeCount: number; likedByViewer: boolean }>(
+    `/looks/${lookId}/comments/${commentId}/like`,
+    { method: 'DELETE' }
+  );
 }

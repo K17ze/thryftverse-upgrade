@@ -261,7 +261,7 @@ export function AIEffectGrid({
               accessibilityLabel={`${tab.label} effects`}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               style={[
                 styles.tab,
                 isActive && { borderColor: colors.brand, backgroundColor: colors.brandSubtle },

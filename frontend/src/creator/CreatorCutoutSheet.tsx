@@ -648,7 +648,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     height: 44 },
   title: {
-    fontSize: 17,
+    fontSize: TypographyV2.sectionTitle.size,
     fontFamily: Typography.family.semibold,
     textAlign: 'center' },
   closeBtn: {

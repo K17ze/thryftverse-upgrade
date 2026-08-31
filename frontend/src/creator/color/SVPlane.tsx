@@ -23,17 +23,17 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  Easing,
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { Radius } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { hsvToRgb, toHexString } from './ColorMath';
 import type { HSV } from './ColorTypes';
 
 // ── Timing ───────────────────────────────────────────────────────────
-const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
+const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
 
 // ── Props ────────────────────────────────────────────────────────────
 interface SVPlaneProps {
@@ -165,7 +165,7 @@ export function SVPlane({
 
         {/* Saturation gradient (white → transparent, left to right) */}
         <LinearGradient
-          colors={[colors.scrimTextPrimary, 'rgba(255,255,255,0)']}
+          colors={['#ffffff', 'rgba(255,255,255,0)']}
           style={[StyleSheet.absoluteFill]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}

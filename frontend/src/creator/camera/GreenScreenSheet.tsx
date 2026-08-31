@@ -14,7 +14,8 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView } from 'react-native';
+  ScrollView,
+  Linking } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -115,7 +116,7 @@ export function GreenScreenSheet({
           confirmLabel: 'Open Settings',
           variant: 'default',
           onConfirm: () => {
-            void ImagePicker.requestMediaLibraryPermissionsAsync();
+            void Linking.openSettings();
           } });
         return;
       }

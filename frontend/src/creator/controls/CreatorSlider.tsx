@@ -43,6 +43,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { Radius, Space } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { Motion } from '../../theme/motionTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -83,6 +84,8 @@ export interface CreatorSliderProps {
   label?: string;
   /** Accessibility label for screen readers. */
   accessibilityLabel?: string;
+  /** Accessibility hint for screen readers. */
+  accessibilityHint?: string;
   /** When true, fires a selection haptic when the value crosses neutral. */
   hapticAtNeutral?: boolean;
   /**
@@ -111,6 +114,7 @@ export function CreatorSlider({
   onCommit,
   label,
   accessibilityLabel,
+  accessibilityHint,
   hapticAtNeutral = false,
   showNeutralTick = false,
   disabled = false,
@@ -148,7 +152,7 @@ export function CreatorSlider({
       // Timing-based settle — no overshoot for utility UI.
       thumbPos.value = reduceMotion
         ? withTiming(clampedRatio * width, { duration: 0 })
-        : withTiming(clampedRatio * width, { duration: 100 });
+        : withTiming(clampedRatio * width, { duration: Motion.duration.fast });
     }
     valueSV.value = value;
   }, [value, width, min, RANGE, reduceMotion, thumbPos, isDraggingSV, valueSV]);
@@ -233,7 +237,7 @@ export function CreatorSlider({
             // for utility UI per AGENTS.md §4 / Design.md snap physics.
             thumbPos.value = reduceMotion
               ? withTiming(thumbPos.value, { duration: 0 })
-              : withTiming(thumbPos.value, { duration: 100 });
+              : withTiming(thumbPos.value, { duration: Motion.duration.fast });
           }
           isDraggingSV.value = false;
           if (onDragStateChange) runOnJS(onDragStateChange)(false);
@@ -341,10 +345,12 @@ export function CreatorSlider({
           accessible
           accessibilityRole={'adjustable' as AccessibilityRole}
           accessibilityLabel={accessibilityLabel ?? label ?? 'Slider'}
+          accessibilityHint={accessibilityHint}
           accessibilityValue={{
             min,
             max,
-            now: value,
+            now: Math.round(value * 100) / 100,
+            text: displayValue,
           }}
           accessibilityActions={[
             { name: 'increment', label: 'Increment' },

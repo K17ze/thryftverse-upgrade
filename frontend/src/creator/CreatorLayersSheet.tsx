@@ -10,7 +10,6 @@ import Reanimated, {
   withTiming,
   runOnJS,
   useReducedMotion,
-  Easing,
   type SharedValue } from 'react-native-reanimated';
 import { Space, Radius, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -122,7 +121,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
     setDraggingId(id);
     if (!reduceMotion) {
       LayoutAnimation.configureNext({
-        duration: 300,
+        duration: Motion.duration.slow,
         update: { type: LayoutAnimation.Types.easeInEaseOut } });
     }
     reorderLayer(id, dir);
@@ -142,7 +141,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
     haptic.warning();
     if (!reduceMotion) {
       LayoutAnimation.configureNext({
-        duration: 250,
+        duration: Motion.duration.slow,
         update: { type: LayoutAnimation.Types.easeInEaseOut },
         delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity } });
     }
@@ -174,7 +173,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
       setOverflowLayer(null);
       if (!reduceMotion) {
         LayoutAnimation.configureNext({
-          duration: 300,
+          duration: Motion.duration.slow,
           update: { type: LayoutAnimation.Types.easeInEaseOut },
           delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity } });
       }
@@ -215,7 +214,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
         stepCount += 1;
         if (!reduceMotion) {
           LayoutAnimation.configureNext({
-            duration: 200,
+            duration: Motion.duration.normal,
             update: { type: LayoutAnimation.Types.easeInEaseOut } });
         }
         reorderLayer(layerId, dir);
@@ -375,7 +374,7 @@ function LayerRow({
     if (reduceMotion) {
       thumbOpacity.value = 1;
     } else {
-      thumbOpacity.value = withTiming(1, { duration: 150, easing: Easing.out(Easing.ease) });
+      thumbOpacity.value = withTiming(1, { duration: Motion.duration.deleteDismiss, easing: Motion.easing.entrance });
     }
   }, [reduceMotion, thumbOpacity]);
   const thumbAnimatedStyle = useAnimatedStyle(() => ({ opacity: thumbOpacity.value }));
@@ -552,14 +551,14 @@ function LayerOverflowActionSheet({
         backdropOpacity.value = 1;
       } else {
         translateY.value = withSpring(0, Motion.spring.entrance);
-        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
       }
     } else if (mounted.current) {
       if (reduceMotion) {
         translateY.value = 400;
         backdropOpacity.value = 0;
       } else {
-        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Motion.easing.exit });
         backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }

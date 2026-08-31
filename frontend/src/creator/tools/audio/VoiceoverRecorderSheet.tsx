@@ -119,6 +119,7 @@ export function VoiceoverRecorderSheet({
   );
   const [recordedClip, setRecordedClip] = useState<VoiceoverClip | null>(null);
   const [meteringAvailable, setMeteringAvailable] = useState(true);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
 
   // Reanimated shared values
   const ringOpacitySV = useSharedValue(0);
@@ -133,6 +134,7 @@ export function VoiceoverRecorderSheet({
     setPhase('idle');
     setElapsedMs(0);
     setRecordedClip(null);
+    setRecordingError(null);
     setWaveformBars(new Array(WAVEFORM_BAR_COUNT).fill(0));
 
     // Check availability and request permission on open
@@ -229,6 +231,7 @@ export function VoiceoverRecorderSheet({
   // ── Recording actions ─────────────────────────────────────────────
   const handleStartRecording = useCallback(async () => {
     const recorder = recorderRef.current!;
+    setRecordingError(null);
     try {
       if (!reducedMotion) haptic.medium();
       await recorder.startRecording();
@@ -244,6 +247,7 @@ export function VoiceoverRecorderSheet({
         setPhase('unavailable');
       } else {
         if (!reducedMotion) haptic.error();
+        setRecordingError(err instanceof Error ? err.message : 'Recording failed. Try again.');
       }
     }
   }, [haptic, reducedMotion, startTimer, startMetering, startPulse]);
@@ -296,6 +300,7 @@ export function VoiceoverRecorderSheet({
     setRecordedClip(null);
     setElapsedMs(0);
     setWaveformBars(new Array(WAVEFORM_BAR_COUNT).fill(0));
+    setRecordingError(null);
     setPhase('idle');
   }, [haptic, reducedMotion]);
 
@@ -440,6 +445,24 @@ export function VoiceoverRecorderSheet({
                 haptic={haptic}
               />
             </View>
+
+            {recordingError && (
+              <View style={styles.recordingErrorBanner}>
+                <Text style={[styles.recordingErrorText, { color: colors.danger }]}>
+                  {recordingError}
+                </Text>
+                <PressScale
+                  onPress={() => { setRecordingError(null); handleStartRecording(); }}
+                  style={[styles.recordingErrorRetry, { borderColor: colors.danger }]}
+                  accessibilityLabel="Try recording again"
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.recordingErrorRetryText, { color: colors.danger }]}>
+                    Try again
+                  </Text>
+                </PressScale>
+              </View>
+            )}
 
             {/* ── Secondary controls ────────────────────────────────── */}
             <View style={styles.secondaryControls}>
@@ -802,7 +825,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.lg },
     timer: {
       fontFamily: FontFamily.semibold,
-      fontSize: 24,
+      fontSize: TypographyV2.screenTitle.size,
       fontVariant: ['tabular-nums'],
       letterSpacing: 1 },
     recordingDot: {
@@ -853,6 +876,26 @@ function createStyles(colors: ThemeColors) {
     secondaryBtnText: {
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.body.size },
+    recordingErrorBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm },
+    recordingErrorText: {
+      flex: 1,
+      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      textAlign: 'center' },
+    recordingErrorRetry: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.standard },
+    recordingErrorRetryText: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size },
     // ── Playback bar ──
     playbackBar: {
       flexDirection: 'row',

@@ -5,16 +5,17 @@ import {
   safeValidateDocument,
   hasFullBleedMedia,
   isDefaultBackground,
+  LATEST_DOCUMENT_VERSION,
 } from './composition';
 import type { LookCreateBody, LookCreateTag, LookMediaEntry } from '../services/looksApi';
 import type { PosterStoryCreateBody, PosterStickerType } from '../services/postersApi';
 import type { CreatorStoryCreateFrame } from './publishTypes';
 
 // ── Schema version strategy ───────────────────────────────────────
-export const COMPOSITION_SCHEMA_VERSION = 1;
+export const COMPOSITION_SCHEMA_VERSION = LATEST_DOCUMENT_VERSION;
 
 export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
-export const MAX_SUPPORTED_SCHEMA_VERSION = 1;
+export const MAX_SUPPORTED_SCHEMA_VERSION = LATEST_DOCUMENT_VERSION;
 
 // ── Local URI detection ───────────────────────────────────────────
 const LOCAL_URI_PREFIXES = ['file://', 'ph://', 'asset://', 'data:', 'content://', 'assets-library://'];
@@ -330,9 +331,9 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
 
   const frames: CreatorStoryCreateFrame[] = doc.pages.map((page, i) => {
     const mediaLayer = page.layers.find((l) => l.type === 'media');
-    const textLayer = page.layers.find(
-      (l) => l.type === 'text' && l.id.startsWith('caption_'),
-    );
+    const isCaptionLayer = (l: CreatorLayer) =>
+      l.type === 'text' && (l.payload.isCaption === true || l.id.startsWith('caption_'));
+    const textLayer = page.layers.find(isCaptionLayer);
 
     return {
       id: page.id,
@@ -354,7 +355,7 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
       durationMs: page.durationMs ?? 5000,
       sortOrder: i,
       stickers: page.layers
-        .filter((l) => l.type !== 'media' && !(l.type === 'text' && l.id.startsWith('caption_')))
+        .filter((l) => l.type !== 'media' && !isCaptionLayer(l))
         .map((l, si) => {
           const stickerType = mapLayerTypeToStickerType(l.type);
           if (stickerType === null) return null; // no backend projection — lives only in compositionDocument

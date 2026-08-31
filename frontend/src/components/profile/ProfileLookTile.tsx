@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
@@ -58,7 +59,7 @@ const ProfileLookTile = React.memo(function ProfileLookTile({
             tagged indicator only when no video. One visual signal. */}
         {isVideo ? (
           <View style={styles.videoGlyph}>
-            <View style={styles.videoPlayTriangle} />
+            <Ionicons name="play" size={10} color={colors.textPrimary} style={{ marginLeft: 1 }} />
           </View>
         ) : hasTags ? (
           <View style={styles.tagGlyph} />
@@ -89,16 +90,6 @@ function createStyles(colors: ThemeColors) {
     shadowOpacity: 0.18,
     shadowRadius: 2,
     elevation: 2,
-  },
-  videoPlayTriangle: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-    borderBottomWidth: 0,
-    borderLeftColor: colors.textPrimary,
-    marginLeft: 2,
   },
   // Small tagged-piece indicator — subtle dark dot, no text
   tagGlyph: {

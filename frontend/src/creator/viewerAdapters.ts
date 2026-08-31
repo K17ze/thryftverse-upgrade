@@ -238,6 +238,7 @@ export function posterStoryToDocument(story: PosterStoryViewData): CreatorDocume
           backgroundColor: frame.backgroundColor ?? undefined,
           alignment: 'center',
           opacity: 1,
+          isCaption: true,
         },
       });
     }

@@ -28,14 +28,11 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  PanResponder,
   Animated,
-  type TextStyle,
-  type LayoutChangeEvent,
-  type GestureResponderEvent,
-  type PanResponderGestureState } from 'react-native';
+  type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CreatorGlyph, type CreatorGlyphName } from '../../controls/CreatorGlyph';
+import { CreatorSlider } from '../../controls/CreatorSlider';
 import {
   Space,
   Radius,
@@ -433,7 +430,7 @@ export function TextEditorSheet({
             accessibilityHint="Closes the text editor sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textPrimary} />
           </PressScale>
         </View>
 
@@ -847,7 +844,7 @@ export function TextEditorSheet({
   );
 }
 
-// ── MiniSlider (PanResponder-based, no new deps) ─────────────────────
+// ── MiniSlider (delegates to shared CreatorSlider) ──────────────────
 
 interface MiniSliderProps {
   label: string;
@@ -869,45 +866,8 @@ function MiniSlider({
   valueFormatter,
   onChange,
   colors }: MiniSliderProps) {
-  const trackWidthRef = useRef(0);
-  const [trackWidth, setTrackWidth] = useState(0);
   const styles = useEditorStyles(colors);
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    trackWidthRef.current = e.nativeEvent.layout.width;
-    setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const range = max - min;
   const clamped = clamp(value, min, max);
-  const ratio = range === 0 ? 0 : (clamped - min) / range;
-  const trackLayoutWidth = trackWidth > 0 ? trackWidth : 1;
-  const thumbPosition = ratio * trackLayoutWidth;
-
-  const valueToPosition = useCallback(
-    (x: number) => {
-      const r = Math.min(1, Math.max(0, x / trackLayoutWidth));
-      const raw = min + r * range;
-      // Snap to step
-      return Math.round(raw / step) * step;
-    },
-    [trackLayoutWidth, min, range, step],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-          const next = valueToPosition(thumbPosition + g.dx);
-          onChange(clamp(next, min, max));
-        },
-        onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thumbPosition, valueToPosition, onChange],
-  );
 
   return (
     <View style={styles.sliderRow}>
@@ -919,32 +879,14 @@ function MiniSlider({
           {valueFormatter(clamped)}
         </Text>
       </View>
-      <View
-        style={styles.trackWrap}
-        onLayout={handleLayout}
-        {...panResponder.panHandlers}
+      <CreatorSlider
+        value={clamped}
+        min={min}
+        max={max}
+        step={step}
+        onValueChange={onChange}
         accessibilityLabel={`${label} slider`}
-        accessibilityRole="adjustable"
-        accessibilityValue={{
-          min,
-          max,
-          now: clamped,
-          text: valueFormatter(clamped) }}
-      >
-        <View style={[styles.track, { backgroundColor: colors.border }]} />
-        <View
-          style={[
-            styles.fill,
-            { width: thumbPosition, backgroundColor: colors.brand },
-          ]}
-        />
-        <View
-          style={[
-            styles.thumb,
-            { left: thumbPosition, backgroundColor: colors.textPrimary },
-          ]}
-        />
-      </View>
+      />
     </View>
   );
 }
@@ -963,9 +905,8 @@ function useEditorStyles(colors: ThemeColors) {
           paddingTop: Space.sm,
           paddingBottom: Space.sm },
         title: {
-          fontFamily: Typography.family.bold,
-          fontSize: TypographyV2.sectionTitle.size,
-          letterSpacing: TypographyV2.sectionTitle.letterSpacing },
+          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size },
         closeBtn: {
           width: Control.hit,
           height: Control.hit,
@@ -1054,7 +995,7 @@ function useEditorStyles(colors: ThemeColors) {
           fontFamily: Typography.family.medium,
           fontSize: TypographyV2.meta.size,
           flex: 1 },
-        // ── Slider ──
+        // ── Slider label row (track rendered by CreatorSlider) ──
         sliderRow: {
           paddingVertical: Space.xs },
         sliderHeader: {
@@ -1069,29 +1010,6 @@ function useEditorStyles(colors: ThemeColors) {
           fontFamily: Typography.family.medium,
           fontSize: TypographyV2.meta.size,
           fontVariant: ['tabular-nums'] },
-        trackWrap: {
-          height: Control.hit,
-          justifyContent: 'center',
-          position: 'relative' },
-        track: {
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          height: 3,
-          borderRadius: Radius.full },
-        fill: {
-          position: 'absolute',
-          left: 0,
-          height: 3,
-          borderRadius: Radius.full },
-        thumb: {
-          position: 'absolute',
-          width: 16,
-          height: 16,
-          borderRadius: Radius.full,
-          marginLeft: -8,
-          borderWidth: Stroke.standard,
-          borderColor: 'rgba(0,0,0,0)' },
         // ── Animation ──
         animContent: {
           gap: Space.sm,

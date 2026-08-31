@@ -97,7 +97,11 @@ function NumericInput({
         keyboardType="number-pad"
         maxLength={3}
         accessibilityLabel={`${label} value, ${value} of ${max}`}
-        accessibilityRole="adjustable"
+        accessibilityValue={{
+          min: 0,
+          max,
+          now: value,
+          text: `${label} ${value} of ${max}` }}
       />
     </View>
   );

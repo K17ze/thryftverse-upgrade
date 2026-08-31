@@ -32,12 +32,11 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
-import { Control, EditorRadius, EditorMaterial } from '../../theme/designTokens';
+import { Control, Radius } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -157,7 +156,7 @@ export function CreatorIconButton({
     return {
       opacity: withTiming(target, {
         duration: Motion.duration.fast,
-        easing: Easing.out(Easing.cubic),
+        easing: Motion.easing.entrance,
       }),
     };
   });
@@ -177,6 +176,7 @@ export function CreatorIconButton({
       accessibilityState={{
         disabled: isDisabled || undefined,
         selected: selected || undefined,
+        busy: loading || undefined,
       }}
       testID={testID}
       hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
@@ -189,7 +189,8 @@ export function CreatorIconButton({
           {
             width: BACKPLATE_SIZE,
             height: BACKPLATE_SIZE,
-            borderRadius: EditorRadius.plate,
+            top: (targetSize - BACKPLATE_SIZE) / 2,
+            borderRadius: Radius.md,
             backgroundColor: colors.brand,
           },
           backplateStyle,
@@ -197,9 +198,8 @@ export function CreatorIconButton({
         pointerEvents="none"
       />
 
-      {/* Media contrast overlay — glass plate (2026: blur + overlay + hairline
-          replaces the flat black square). Only shown when not selected and
-          overlay mode is requested for on-media legibility. */}
+      {/* Media contrast overlay — glass plate for on-media legibility.
+          Only shown when not selected and overlay mode is requested. */}
       {overlay && !selected && (
         <View
           style={[
@@ -207,20 +207,21 @@ export function CreatorIconButton({
             {
               width: BACKPLATE_SIZE,
               height: BACKPLATE_SIZE,
-              borderRadius: EditorRadius.plate,
+              top: (targetSize - BACKPLATE_SIZE) / 2,
+              borderRadius: Radius.md,
               overflow: 'hidden',
               borderWidth: StyleSheet.hairlineWidth,
-              borderColor: EditorMaterial.plate.hairline,
+              borderColor: 'rgba(255,255,255,0.14)',
             },
           ]}
           pointerEvents="none"
         >
           <BlurView
-            intensity={EditorMaterial.plate.blurIntensity}
-            tint={EditorMaterial.plate.tint}
+            intensity={16}
+            tint="dark"
             style={StyleSheet.absoluteFill}
           />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.30)' }]} />
         </View>
       )}
 

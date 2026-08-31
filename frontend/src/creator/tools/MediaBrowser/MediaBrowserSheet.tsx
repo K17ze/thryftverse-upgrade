@@ -72,8 +72,7 @@ import Reanimated, {
   withTiming,
   withDelay,
   interpolate,
-  Extrapolation,
-  Easing } from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -326,7 +325,8 @@ function PermissionDeniedState({
   useEffect(() => {
     if (!reduceMotion) {
       // Per §5.14: entrance uses timing (ease-out), not spring.
-      entranceSV.value = withDelay(100, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
+      const entranceDelayMs = 100;
+      entranceSV.value = withDelay(entranceDelayMs, withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance }));
     }
   }, [reduceMotion, entranceSV]);
 
@@ -609,6 +609,7 @@ export function MediaBrowserSheet({
   const [status, requestPermission] = MediaLibrary.usePermissions();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   // Ordered selection — preserved as an array so tap order is deterministic.
@@ -663,6 +664,7 @@ export function MediaBrowserSheet({
     async (reset: boolean) => {
       if (reset) {
         setIsLoading(true);
+        setLoadError(false);
         cursorRef.current = undefined;
       } else {
         if (!hasMore || loadingMore) return;
@@ -700,6 +702,7 @@ export function MediaBrowserSheet({
         setHasMore(page.hasNextPage);
       } catch {
         if (reset) setAssets([]);
+        setLoadError(true);
         setHasMore(false);
       } finally {
         if (mountedRef.current) {
@@ -988,7 +991,7 @@ export function MediaBrowserSheet({
                 accessibilityLabel={`Tab ${tab.label}`}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               >
                 <Text
                   style={[
@@ -1014,6 +1017,23 @@ export function MediaBrowserSheet({
           />
         ) : isLoading ? (
           <MediaGridSkeleton />
+        ) : loadError && filteredAssets.length === 0 ? (
+          <View style={styles.centerState}>
+            <StaticStateIcon name="alert-circle-outline" size={IconGrammar.hero} color={colors.textMuted} />
+            <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
+              Couldn't load photos
+            </Text>
+            <PressScale
+              onPress={() => { setLoadError(false); loadRecentMedia(true); }}
+              style={[styles.stateBtn, { backgroundColor: colors.brand }]}
+              accessibilityLabel="Retry loading photos"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={[styles.stateBtnText, { color: colors.textInverse }]}>
+                Retry
+              </Text>
+            </PressScale>
+          </View>
         ) : filteredAssets.length === 0 ? (
           <View style={styles.centerState}>
             <StaticStateIcon name="images-outline" size={IconGrammar.hero} color={colors.textMuted} />

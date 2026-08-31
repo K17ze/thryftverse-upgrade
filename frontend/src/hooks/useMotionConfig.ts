@@ -37,6 +37,10 @@ export function useMotionConfig() {
           urgency: REDUCED_SPRING,
           indicator: REDUCED_SPRING,
           glide: REDUCED_SPRING,
+          snapTo: REDUCED_SPRING,
+          layerLift: REDUCED_SPRING,
+          railSwap: REDUCED_SPRING,
+          deleteDismiss: REDUCED_SPRING,
         }
       : Motion.spring;
 

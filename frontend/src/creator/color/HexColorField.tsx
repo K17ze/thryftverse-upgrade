@@ -112,14 +112,12 @@ export function HexColorField({
         keyboardType="ascii-capable"
         accessibilityLabel={accessibilityLabel}
         accessibilityHint="Enter a hex color value like #RRGGBB or #RRGGBBAA"
+        accessibilityRole="text"
         accessibilityValue={{
-          text: displayValue,
-          min: 0,
-          max: 1,
-          now: isValid ? 1 : 0 }}
+          text: displayValue }}
       />
       {!isValid && (
-        <Text style={styles.errorText}>Invalid hex</Text>
+        <Text style={styles.errorText} accessibilityLiveRegion="polite">Invalid hex</Text>
       )}
     </View>
   );

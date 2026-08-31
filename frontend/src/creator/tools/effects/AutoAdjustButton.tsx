@@ -17,6 +17,7 @@ import {
   Radius,
   Control,
 } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 
@@ -184,6 +185,6 @@ const styles = StyleSheet.create({
     height: ICON_SIZE,
   },
   label: {
-    fontSize: 13,
+    fontSize: TypographyV2.captionElevated.size,
   },
 });

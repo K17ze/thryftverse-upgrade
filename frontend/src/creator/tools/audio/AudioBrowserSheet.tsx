@@ -13,25 +13,17 @@
  * duration display) are truthfully disabled until a library track is
  * selected — which is not possible today because the library is empty.
  *
- * The slider is a self-contained PanResponder-based control so this module
- * introduces no new dependencies (the codebase has no slider library).
- *
- * Per AGENTS.md §4: authored composition, clear hierarchy, restraint.
- * Per AGENTS.md §13: 44pt touch targets for interactive controls.
+ * The slider uses the shared CreatorSlider control.
  */
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   ScrollView,
-  PanResponder,
   LayoutAnimation,
-  TextInput,
-  type LayoutChangeEvent,
-  type GestureResponderEvent,
-  type PanResponderGestureState } from 'react-native';
+  TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
@@ -44,6 +36,7 @@ import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
+import { CreatorSlider } from '../../controls/CreatorSlider';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import {
@@ -615,7 +608,7 @@ function PreviewButton({ colors, disabled, haptic, reducedMotion }: PreviewButto
   );
 }
 
-// ── Slider row (PanResponder-based, no new deps) ───────────────────
+// ── Slider row (delegates track to shared CreatorSlider) ───────────
 
 interface SliderRowProps {
   label: string;
@@ -638,52 +631,12 @@ function SliderRow({
   min,
   max,
   value,
-  trackColor,
-  fillColor,
-  thumbColor,
   labelColor,
   valueColor,
   onChange,
   disabled = false }: SliderRowProps) {
   const { colors } = useAppTheme();
   const styles = useSheetStyles(colors);
-  const trackWidthRef = useRef(0);
-  const [trackWidth, setTrackWidth] = useState(0);
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    trackWidthRef.current = e.nativeEvent.layout.width;
-    setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const range = max - min;
-  const clamped = clamp(value, min, max);
-  const ratio = range === 0 ? 0 : (clamped - min) / range;
-  const trackLayoutWidth = trackWidth > 0 ? trackWidth : 1;
-  const thumbPosition = ratio * trackLayoutWidth;
-
-  const valueToPosition = useCallback(
-    (x: number) => {
-      const r = Math.min(1, Math.max(0, x / trackLayoutWidth));
-      return min + r * range;
-    },
-    [trackLayoutWidth, min, range],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => !disabled,
-        onMoveShouldSetPanResponder: () => !disabled,
-        onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-          const next = valueToPosition(thumbPosition + g.dx);
-          onChange(Math.round(next * 1000) / 1000);
-        },
-        onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thumbPosition, valueToPosition, onChange, disabled],
-  );
-
   const opacity = disabled ? 0.4 : 1;
 
   return (
@@ -696,29 +649,16 @@ function SliderRow({
           {valueText}
         </Text>
       </View>
-      <View
-        style={styles.trackWrap}
-        onLayout={handleLayout}
-        {...panResponder.panHandlers}
-      >
-        <View style={[styles.track, { backgroundColor: trackColor }]} />
-        <View
-          style={[
-            styles.fill,
-            {
-              width: thumbPosition,
-              backgroundColor: fillColor },
-          ]}
-        />
-        <View
-          style={[
-            styles.thumb,
-            {
-              left: thumbPosition,
-              backgroundColor: thumbColor },
-          ]}
-        />
-      </View>
+      <CreatorSlider
+        value={value}
+        min={min}
+        max={max}
+        step={0}
+        onValueChange={onChange}
+        onCommit={onChange}
+        disabled={disabled}
+        accessibilityLabel={label}
+      />
     </View>
   );
 }
@@ -880,29 +820,6 @@ function createStyles(colors: ThemeColors) {
     sliderValue: {
       fontSize: TypographyV2.meta.size,
       fontVariant: ['tabular-nums'] },
-    trackWrap: {
-      height: Control.hit,
-      justifyContent: 'center',
-      position: 'relative' },
-    track: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      height: 3,
-      borderRadius: Radius.full },
-    fill: {
-      position: 'absolute',
-      left: 0,
-      height: 3,
-      borderRadius: Radius.full },
-    thumb: {
-      position: 'absolute',
-      width: 16,
-      height: 16,
-      borderRadius: Radius.full,
-      marginLeft: -8,
-      borderWidth: Stroke.standard,
-      borderColor: 'transparent' },
     // ── Preview ──
     previewBtn: {
       flexDirection: 'row',

@@ -203,7 +203,7 @@ export const CaptionRenderer = React.memo(function CaptionRenderer({
       } else {
         opacitySV.value = withTiming(1, {
           duration: Motion.duration.normal,
-          easing: Easing.out(Easing.ease) });
+          easing: Motion.easing.entrance });
       }
     } else {
       if (reducedMotion) {

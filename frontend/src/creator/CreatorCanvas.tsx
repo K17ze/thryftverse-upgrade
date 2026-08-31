@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useEffect, useState } from 'react';
+import React, { useCallback, useMemo, useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, type ViewStyle, type TextStyle } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
 import { Image as ExpoImage } from 'expo-image';
@@ -38,10 +38,9 @@ import { Motion } from '../theme/motionTokens';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
 import { getVisibleLayersSorted, hasFullBleedMedia, isDefaultBackground } from './composition';
-// Scene evaluator + render profiles — the single pure owner of scene state
-// (AGENTS.md §6.3). The canvas evaluates the scene once per render and
-// passes resolved per-layer data (effect graph, Skia-video-frame gating)
-// down to the layer renderers.
+// Scene evaluator + render profiles — the single pure owner of scene state.
+// The canvas evaluates the scene once per render and passes resolved
+// per-layer data down to the layer renderers.
 import {
   evaluateScene,
   type ResolvedLayer,
@@ -53,6 +52,7 @@ import {
 // Playback pipeline — single clock, keyframe evaluator, effect evaluator
 import type { PlaybackClock } from './core/playback/PlaybackClock';
 import { evaluateKeyframes } from './core/playback/KeyframeEvaluator';
+import { keyframeEasingToReanimated, type KeyframeEasing } from './poster/keyframes/KeyframeTypes';
 import {
   evaluateCompositionEffectStack,
   multiplyMatrix,
@@ -70,6 +70,7 @@ import { SafeZoneOverlay } from './surfaces/SafeZoneOverlay';
 import { GestureBadge } from './surfaces/GestureBadge';
 
 const RAD_TO_DEG = 180 / Math.PI;
+const KEYFRAME_SEEK_JUMP_MS = 120;
 
 // ── Video player ref contract ──────────────────────────────────────
 // The canvas populates this ref with the active expo-video player
@@ -263,7 +264,7 @@ export function CreatorCanvas({
   const { colors } = useAppTheme();
   const isEmpty = visibleLayers.length === 0;
 
-  // ── Scene evaluation pipeline (AGENTS.md §6.3) ───────────────────
+  // ── Scene evaluation pipeline ───────────────────
   // The canvas evaluates the scene once per render through the pure
   // evaluateScene function. The resolved scene carries per-layer effect
   // graphs, transforms, and the Skia-video-frame gating decision. Layer
@@ -307,10 +308,8 @@ export function CreatorCanvas({
     // When a full-bleed media layer is present AND the background is still
     // the factory default (no user customisation), skip the background fill.
     // The media IS the canvas surface — edits land directly on it, not on
-    // an intermediate card. This is the Snapchat/Instagram architecture:
-    // SCREEN = MEDIA, edits are siblings on the media, chrome floats over.
-    // A user-customised background (gradient, image, non-default color) is
-    // still rendered — the user chose it.
+    // an intermediate card. A user-customised background (gradient, image,
+    // non-default color) is still rendered — the user chose it.
     if (hasFullBleedMedia(page) && isDefaultBackground(canvas.background, document.type)) {
       return null;
     }
@@ -472,10 +471,7 @@ export function CreatorCanvas({
 }
 
 // ── Empty canvas state ─────────────────────────────────────────────
-// A flagship empty state for a creative canvas is not an overlay card or
-// an illustration — it is confident typography placed directly on the
-// canvas surface. The prompt reads as part of the stage, not as chrome
-// floating above it. Short, direct, actionable (AGENTS.md §4).
+// Confident typography placed directly on the canvas surface.
 function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['colors'] }) {
   return (
     <View style={styles.emptyState} pointerEvents="none" accessibilityLabel="Empty canvas, add media to begin" accessibilityRole="text">
@@ -542,8 +538,8 @@ interface LayerRendererProps {
 const SNAP_THRESHOLD = 0.02;
 const SAFE_MARGIN = 0.05;
 const ROTATION_SNAP_DEG = 15;
-// Drag-to-trash: normalized y (0–1) past which the bottom trash zone
-// activates. 0.85 = lower 15% of the canvas (Snapchat/Instagram pattern).
+const SMART_GUIDE_THRESHOLD_PX = 4;
+// Drag-to-trash: normalized y (0–1) past which the bottom trash zone activates.
 const TRASH_ZONE_THRESHOLD = 0.85;
 
 const LayerRenderer = React.memo(function LayerRenderer({
@@ -594,7 +590,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
   // dragged layer's edges/centre align with a sibling's edges/centre.
   const [smartGuides, setSmartGuides] = useState<{ vertical: number[]; horizontal: number[] }>({ vertical: [], horizontal: [] });
   // Center guide visibility — only show center lines when the layer's center
-  // is within 8pt of the canvas center (Canva/Figma/Instagram Stories pattern)
+  // is within 8pt of the canvas center.
   const [centerGuideVisible, setCenterGuideVisible] = useState(false);
   // Guide appearance animation — spring scale + fade
   const guideOpacity = useSharedValue(0);
@@ -616,15 +612,16 @@ const LayerRenderer = React.memo(function LayerRenderer({
   // was inside the trash zone on the previous update, so we only fire the
   // enter haptic / callback on the rising edge (not every frame).
   const wasInTrashZoneSV = useSharedValue(0);
+  const didSnap = useSharedValue(0);
 
   useEffect(() => {
     if (isSelected) {
-      selectionOpacity.value = reducedMotion ? withTiming(1, { duration: 0 }) : withTiming(1, { duration: 80, easing: Easing.out(Easing.cubic) });
-      handleScale.value = reducedMotion ? withTiming(1, { duration: 0 }) : withTiming(1, { duration: 80, easing: Easing.out(Easing.cubic) });
+      selectionOpacity.value = withSpring(1, spring.tap);
+      handleScale.value = withSpring(1, spring.tap);
       if (!reducedMotion) haptic.light();
     } else {
-      selectionOpacity.value = reducedMotion ? withTiming(0, { duration: 0 }) : withTiming(0, { duration: 180, easing: Easing.in(Easing.cubic) });
-      handleScale.value = reducedMotion ? withTiming(0.8, { duration: 0 }) : withTiming(0.8, { duration: 180, easing: Easing.in(Easing.cubic) });
+      selectionOpacity.value = withSpring(0, spring.settle);
+      handleScale.value = withSpring(0.8, spring.settle);
     }
   }, [isSelected, selectionOpacity, handleScale, reducedMotion, haptic]);
 
@@ -637,17 +634,16 @@ const LayerRenderer = React.memo(function LayerRenderer({
   // not user gestures — use a quiet timing transition instead of spring bounce.
   useEffect(() => {
     if (reducedMotion) {
-      // WCAG 2.2 §2.3.3 — instant snap, no animation when Reduce Motion is on
+      // Instant snap, no animation when Reduce Motion is on
       translateX.value = withTiming(layer.x * canvasWidth, { duration: 0 });
       translateY.value = withTiming(layer.y * canvasHeight, { duration: 0 });
       scaleSV.value = withTiming(layer.scale, { duration: 0 });
       rotationSV.value = withTiming(normaliseDegrees(layer.rotation), { duration: 0 });
     } else {
-      const settle = { duration: 250, easing: Easing.out(Easing.cubic) };
-      translateX.value = withTiming(layer.x * canvasWidth, settle);
-      translateY.value = withTiming(layer.y * canvasHeight, settle);
-      scaleSV.value = withTiming(layer.scale, settle);
-      rotationSV.value = withTiming(normaliseDegrees(layer.rotation), settle);
+      translateX.value = withSpring(layer.x * canvasWidth, spring.settle);
+      translateY.value = withSpring(layer.y * canvasHeight, spring.settle);
+      scaleSV.value = withSpring(layer.scale, spring.settle);
+      rotationSV.value = withSpring(normaliseDegrees(layer.rotation), spring.settle);
     }
   }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight, reducedMotion]);
 
@@ -711,9 +707,8 @@ const LayerRenderer = React.memo(function LayerRenderer({
     normX = Math.max(minX, Math.min(maxX, normX));
     normY = Math.max(minY, Math.min(maxY, normY));
 
-    // Spring settle for natural position commit (spring physics)
-    translateX.value = withSpring(normX * canvasWidth, spring.settle);
-    translateY.value = withSpring(normY * canvasHeight, spring.settle);
+    translateX.value = withSpring(normX * canvasWidth, snappedX || snappedY ? spring.snapTo : spring.settle);
+    translateY.value = withSpring(normY * canvasHeight, snappedX || snappedY ? spring.snapTo : spring.settle);
 
     if (snappedX || snappedY) haptic.light();
     setShowGuides(false);
@@ -735,11 +730,37 @@ const LayerRenderer = React.memo(function LayerRenderer({
       haptic.light();
     }
 
-    // Spring settle for natural transform commit (spring physics)
+    const didSnapRotation = snappedRotation !== normalisedRotation;
     scaleSV.value = withSpring(clampedScale, spring.settle);
-    rotationSV.value = withSpring(snappedRotation, spring.settle);
+    rotationSV.value = withSpring(snappedRotation, didSnapRotation ? spring.snapTo : spring.settle);
     onTransformChange?.(layer.id, { scale: clampedScale, rotation: snappedRotation });
   }, [layer.id, onTransformChange, scaleSV, rotationSV, reducedMotion, haptic]);
+
+  const snapTargetX = useMemo(() => {
+    const halfW = (layer.width * layer.scale * canvasWidth) / 2;
+    const targets: number[] = [canvasWidth / 2];
+    for (const sib of siblingLayers) {
+      const sHalfW = (sib.width * sib.scale * canvasWidth) / 2;
+      const sCx = sib.x * canvasWidth;
+      const sLeft = sCx - sHalfW;
+      const sRight = sCx + sHalfW;
+      targets.push(sLeft + halfW, sRight + halfW, sLeft - halfW, sRight - halfW, sCx);
+    }
+    return targets;
+  }, [layer.width, layer.scale, canvasWidth, siblingLayers]);
+
+  const snapTargetY = useMemo(() => {
+    const halfH = (layer.height * layer.scale * canvasHeight) / 2;
+    const targets: number[] = [canvasHeight / 2];
+    for (const sib of siblingLayers) {
+      const sHalfH = (sib.height * sib.scale * canvasHeight) / 2;
+      const sCy = sib.y * canvasHeight;
+      const sTop = sCy - sHalfH;
+      const sBottom = sCy + sHalfH;
+      targets.push(sTop + halfH, sBottom + halfH, sTop - halfH, sBottom - halfH, sCy);
+    }
+    return targets;
+  }, [layer.height, layer.scale, canvasHeight, siblingLayers]);
 
   const panGesture = useMemo(
     () =>
@@ -755,6 +776,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
           // Reset trash-zone tracking at the start of every drag.
           wasInTrashZoneSV.value = 0;
           if (isInTrashZoneSV) isInTrashZoneSV.value = 0;
+          didSnap.value = 0;
           runOnJS(handlePress)();
           runOnJS(setShowGuides)(true);
           if (isMultiSelectActive && onMultiDragStart) {
@@ -762,16 +784,37 @@ const LayerRenderer = React.memo(function LayerRenderer({
           }
         })
         .onUpdate((e) => {
-          translateX.value = startX.value + e.translationX;
-          translateY.value = startY.value + e.translationY;
+          let newX = startX.value + e.translationX;
+          let newY = startY.value + e.translationY;
+          if (!isMultiSelectActive) {
+            let snapped = false;
+            for (let i = 0; i < snapTargetX.length; i++) {
+              if (Math.abs(newX - snapTargetX[i]) < SMART_GUIDE_THRESHOLD_PX) {
+                newX = snapTargetX[i];
+                snapped = true;
+                break;
+              }
+            }
+            for (let i = 0; i < snapTargetY.length; i++) {
+              if (Math.abs(newY - snapTargetY[i]) < SMART_GUIDE_THRESHOLD_PX) {
+                newY = snapTargetY[i];
+                snapped = true;
+                break;
+              }
+            }
+            if (snapped && didSnap.value === 0) {
+              didSnap.value = 1;
+              runOnJS(haptic.selection)();
+            } else if (!snapped && didSnap.value === 1) {
+              didSnap.value = 0;
+            }
+          }
+          translateX.value = newX;
+          translateY.value = newY;
           if (isMultiSelectActive && onMultiDragUpdate) {
             runOnJS(onMultiDragUpdate)(e.translationX / canvasWidth, e.translationY / canvasHeight);
           } else if (isInTrashZoneSV) {
-            // Drag-to-trash (Snapchat/Instagram pattern): when the layer's
-            // center passes the bottom threshold, mark it as inside the
-            // trash zone. Rising edge fires the enter haptic + parent
-            // callback; falling edge clears the highlight.
-            const normY = (startY.value + e.translationY) / canvasHeight;
+            const normY = newY / canvasHeight;
             const inside = normY > TRASH_ZONE_THRESHOLD ? 1 : 0;
             if (inside !== wasInTrashZoneSV.value) {
               wasInTrashZoneSV.value = inside;
@@ -815,7 +858,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
           if (onManipulationChange) runOnJS(onManipulationChange)(false);
           liftSV.value = 0;
         }),
-    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit, isMultiSelectActive, onMultiDragStart, onMultiDragUpdate, onMultiDragCommit, canvasWidth, canvasHeight, manipulationActiveSV, onManipulationChange, isInTrashZoneSV, onTrashZoneEnter, onDelete, haptic, reducedMotion, liftSV]
+    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit, isMultiSelectActive, onMultiDragStart, onMultiDragUpdate, onMultiDragCommit, canvasWidth, canvasHeight, manipulationActiveSV, onManipulationChange, isInTrashZoneSV, onTrashZoneEnter, onDelete, haptic, reducedMotion, liftSV, snapTargetX, snapTargetY, didSnap]
   );
 
   const pinchGesture = useMemo(
@@ -904,7 +947,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
     [mode, handleLongPress]
   );
 
-  // ── Simultaneous gestures (Instagram Stories / Canva pattern) ──
+  // ── Simultaneous gestures ──
   // Pan, pinch, and rotation all work together simultaneously so the user
   // can drag + resize + rotate a layer in one fluid motion. Tap,
   // double-tap, and long-press race with the transform gestures so they
@@ -947,21 +990,53 @@ const LayerRenderer = React.memo(function LayerRenderer({
     return Object.keys(result).length > 0 ? result : null;
   }, [hasPlaybackClock, layer.keyframes, timeMs]);
 
+  // Declared easing of the active keyframe segment per property (the
+  // outgoing keyframe's easing, matching the evaluator's contract). Null
+  // outside an active segment (holds before the first / after the last
+  // keyframe have no easing to honour).
+  const activeKeyframeEasings = useMemo(() => {
+    if (!hasPlaybackClock || !layer.keyframes || layer.keyframes.length === 0) return null;
+    const result: Partial<Record<'position' | 'scale' | 'rotation' | 'opacity', KeyframeEasing>> = {};
+    const props: Array<'position' | 'scale' | 'rotation' | 'opacity'> = ['position', 'scale', 'rotation', 'opacity'];
+    for (const prop of props) {
+      const track = layer.keyframes.filter((k) => k.property === prop).sort((a, b) => a.timeMs - b.timeMs);
+      if (track.length < 2) continue;
+      if (timeMs <= track[0].timeMs || timeMs >= track[track.length - 1].timeMs) continue;
+      const after = track.find((k) => k.timeMs >= timeMs);
+      if (after) result[prop] = after.easing;
+    }
+    return Object.keys(result).length > 0 ? result : null;
+  }, [hasPlaybackClock, layer.keyframes, timeMs]);
+
   // Apply keyframe values to shared values when in playback mode
+  const lastKeyframeTimeRef = useRef<number | null>(null);
   useEffect(() => {
     if (!hasPlaybackClock || !keyframeValues) return;
+    const prevTimeMs = lastKeyframeTimeRef.current;
+    lastKeyframeTimeRef.current = timeMs;
+    const isSeekJump = prevTimeMs !== null && Math.abs(timeMs - prevTimeMs) > KEYFRAME_SEEK_JUMP_MS;
+    const applyKeyframed = (sv: SharedValue<number>, target: number, easing: KeyframeEasing | undefined) => {
+      if (!isSeekJump || reducedMotion || !easing) {
+        sv.value = target;
+        return;
+      }
+      const mapped = keyframeEasingToReanimated(easing);
+      sv.value = mapped
+        ? withTiming(target, { duration: Motion.duration.fast, easing: mapped })
+        : withSpring(target, spring.settle);
+    };
     if (keyframeValues.position !== undefined) {
       // Position keyframes drive the center position (normalized 0-1)
       // The keyframe value is interpreted as a normalized position
-      translateX.value = keyframeValues.position * canvasWidth;
+      applyKeyframed(translateX, keyframeValues.position * canvasWidth, activeKeyframeEasings?.position);
     }
     if (keyframeValues.scale !== undefined) {
-      scaleSV.value = keyframeValues.scale;
+      applyKeyframed(scaleSV, keyframeValues.scale, activeKeyframeEasings?.scale);
     }
     if (keyframeValues.rotation !== undefined) {
-      rotationSV.value = keyframeValues.rotation;
+      applyKeyframed(rotationSV, keyframeValues.rotation, activeKeyframeEasings?.rotation);
     }
-  }, [hasPlaybackClock, keyframeValues, canvasWidth, canvasHeight, translateX, scaleSV, rotationSV]);
+  }, [hasPlaybackClock, keyframeValues, activeKeyframeEasings, timeMs, canvasWidth, canvasHeight, reducedMotion, spring, translateX, scaleSV, rotationSV]);
 
   // Compute effective opacity (layer opacity * keyframe opacity * temporal visibility)
   const effectiveOpacity = useMemo(() => {
@@ -1006,7 +1081,6 @@ const LayerRenderer = React.memo(function LayerRenderer({
   // guide) or top/bottom/centre (horizontal guide). Computed on the UI
   // thread from the live translate shared values and committed sibling
   // geometry, then mirrored to JS state for rendering.
-  const SMART_GUIDE_THRESHOLD_PX = 4;
   const computeSmartGuides = useCallback(
     (cx: number, cy: number) => {
       const halfW = (layer.width * layer.scale * canvasWidth) / 2;
@@ -1132,10 +1206,9 @@ const LayerRenderer = React.memo(function LayerRenderer({
             {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} smartGuides={smartGuides} centerGuideVisible={centerGuideVisible} />}
           </Reanimated.View>
         </GestureDetector>
-        {/* Gesture feedback badge — floating pill near the manipulated layer
-            (Snapchat/Instagram pattern). Positioned by shared values so it
-            tracks the layer center in real-time during drag/pinch/rotate.
-            Visual-only — pointerEvents="none". */}
+        {/* Gesture feedback badge — floating pill near the manipulated layer.
+            Positioned by shared values so it tracks the layer center in
+            real-time during drag/pinch/rotate. Visual-only — pointerEvents="none". */}
         <GestureBadge
           badgeText={gestureBadge}
           positionXSv={translateX}
@@ -1177,7 +1250,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
 });
 
 // ── Per-type layer corner radius ───────────────────────────────────
-// Two non-avatar radii per viewport (AGENTS.md §4 radius budget):
+// Two non-avatar radii per viewport:
 //   Radius.sm (4px) — sharp media edges (media, draw, decorative, gif)
 //   Radius.md (8px) — compact utility content (product, mention, look,
 //     vote, quiz, question, countdown, music, link, location, hashtag,
@@ -1467,7 +1540,7 @@ function MediaLayerContent({
   const hasPlaybackClock = !!playbackClock;
   const timeMs = currentTimeMs ?? 0;
 
-  // ── Scene-evaluator gating (AGENTS.md §6.3) ─────────────────────
+  // ── Scene-evaluator gating ─────────────────────
   // The resolved scene carries the authoritative decision on whether this
   // video layer should render through Skia video frames (useVideo) with
   // per-pixel effects, or fall back to the native VideoView without
@@ -1490,8 +1563,7 @@ function MediaLayerContent({
   //   - vignette / grain amounts are summed (clamped to 0..1)
   const evaluatedEffect = useMemo<EvaluatedEffect>(() => {
     // Compare-to-original: when the user long-presses the canvas background,
-    // skip all effect evaluation so they see the ungraded image (Lightroom
-    // long-press compare pattern — recognition over recall, AGENTS.md §4).
+    // skip all effect evaluation so they see the ungraded image.
     if (compareOriginal) return {};
     const clipEffects = payload.effects ?? [];
     // Resolve active adjustment layers from the sibling set at the current
@@ -1660,12 +1732,11 @@ function MediaLayerContent({
       fill: 'fill' };
     const fit = contentFitMap[payload.contentFit] ?? 'cover';
 
-    // Focal-point art direction for Skia image paths (AGENTS.md §4 — no
-    // blind `cover`). Skia's cover fit crops from center by default. When
-    // the layer carries a focalPoint, compute a translate offset that
-    // shifts the over-scaled image so the focal region stays in frame.
-    // The offset is the difference between the focal point and center,
-    // scaled by the overflow on each axis.
+    // Focal-point art direction for Skia image paths. Skia's cover fit
+    // crops from center by default. When the layer carries a focalPoint,
+    // compute a translate offset that shifts the over-scaled image so the
+    // focal region stays in frame. The offset is the difference between
+    // the focal point and center, scaled by the overflow on each axis.
     const focalTransform = useMemo(() => {
       if (fit !== 'cover' || !payload.focalPoint || !skiaImage) return undefined;
       const imgW = skiaImage.width();
@@ -1733,10 +1804,9 @@ function MediaLayerContent({
   // with the rest of the app. CachedImage handles its own loading shimmer
   // and error fallback graphic internally.
   //
-  // Focal-point art direction (AGENTS.md §4 — no blind `cover`): when the
-  // layer carries a focalPoint, pass it through so CachedImage shifts the
-  // cover crop to keep the important region in frame. Absent focalPoint
-  // defaults to center (0.5, 0.5) — the existing cover behaviour.
+  // Focal-point art direction: when the layer carries a focalPoint, pass
+  // it through so CachedImage shifts the cover crop to keep the important
+  // region in frame. Absent focalPoint defaults to center (0.5, 0.5).
   const contentFit = payload.contentFit === 'contain' ? 'contain' : payload.contentFit === 'fill' ? 'fill' : 'cover';
   return (
     <CachedImage
@@ -1754,7 +1824,7 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
 
-  // Text entrance animation (Instagram 2025-2026: typewriter, bounce, fade, slide)
+  // Text entrance animation: typewriter, bounce, fade, slide
   const animProgress = useSharedValue(0);
   const animOpacity = useSharedValue(0);
   const animTranslateY = useSharedValue(0);
@@ -1766,7 +1836,7 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
     animOpacity.value = 0;
     animTranslateY.value = 0;
     if (animation === 'none' || reducedMotion) {
-      // WCAG 2.2 §2.3.3 — show text immediately with no animation when Reduce Motion is on
+      // Show text immediately with no animation when Reduce Motion is on
       animOpacity.value = 1;
       animProgress.value = 1;
       animTranslateY.value = 0;
@@ -1774,13 +1844,13 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       return;
     }
     if (animation === 'fade') {
-      animOpacity.value = withTiming(1, { duration: Motion.duration.crawl, easing: Easing.out(Easing.ease) });
+      animOpacity.value = withTiming(1, { duration: Motion.duration.crawl, easing: Motion.easing.entrance });
       setTypewriterText(payload.text);
     } else if (animation === 'slide') {
       animTranslateY.value = 24;
       animOpacity.value = 0;
-      animOpacity.value = withTiming(1, { duration: Motion.duration.slower, easing: Easing.out(Easing.ease) });
-      animTranslateY.value = withTiming(0, { duration: Motion.duration.slower, easing: Easing.out(Easing.exp) });
+      animOpacity.value = withTiming(1, { duration: Motion.duration.slower, easing: Motion.easing.entrance });
+      animTranslateY.value = withTiming(0, { duration: Motion.duration.slower, easing: Motion.easing.entrance });
       setTypewriterText(payload.text);
     } else if (animation === 'bounce') {
       animOpacity.value = 1;
@@ -1809,7 +1879,6 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
     transform: [{ translateY: animTranslateY.value }] }));
 
   // Per-style typography — real visual distinction, not just font size
-  // Instagram 2025-2026: 10 fonts with distinct visual character
   type TextStyleId = 'headline' | 'editorial' | 'clean' | 'compact' | 'handwritten' | 'bubble' | 'deco' | 'poster' | 'squeeze' | 'signature';
   const styleMap: Record<TextStyleId, TextStyle> = {
     headline: {
@@ -1882,7 +1951,7 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       fontSize: TypographyV2.bodyStrong.size + 2,
       lineHeight: (TypographyV2.bodyStrong.size + 2) * 1.4 } };
 
-  // Text effect styles (Instagram 2025-2026)
+  // Text effect styles
   const effectStyle: TextStyle = {};
   if (payload.textEffect === 'shadow') {
     effectStyle.textShadowColor = colors.mediaOverlayScrim;
@@ -2149,8 +2218,7 @@ function EmojiSliderLayerContent({ layer }: { layer: Extract<CreatorLayer, { typ
 }
 
 // ── Countdown layer content ────────────────────────────────────────
-// Instagram 2026: countdown to a date/time with live timer.
-// Premium rendering: card with depth, gradient surface, tabular time display.
+// Countdown to a date/time with live timer.
 function CountdownLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'countdown' }> }) {
   const { payload } = layer;
   const [now, setNow] = useState(Date.now());
@@ -2361,8 +2429,7 @@ function GifLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'gif'
 }
 
 // ── Music layer content ────────────────────────────────────────────
-// Instagram-style music sticker: album art + track name + artist.
-// Premium rendering: darker glass surface, proper album art with shadow.
+// Music sticker: album art + track name + artist.
 function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'music' }> }) {
   const { payload } = layer;
   const { colors } = useAppTheme();
@@ -2554,9 +2621,8 @@ function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 // connected by a 1pt brand line (16pt length).
 //
 // Each handle owns its own press-scale SharedValue so simultaneous
-// multi-touch on two corners does not cross-talk (AGENTS.md §4 —
-// one system, not many). Haptic fires on touch-down (selection) and
-// again on commit (light) per Design.md interaction-physics.
+// multi-touch on two corners does not cross-talk. Haptic fires on
+// touch-down (selection) and again on commit (light).
 //
 // Resize is 1:1: the new scale is derived from the actual
 // finger-to-centre distance ratio, not a fixed multiplier, so the
@@ -2608,7 +2674,7 @@ function SelectionHandles({
   // Per-corner resize gestures. Each corner knows its sign multipliers so
   // dragging away from the layer centre enlarges and dragging toward the
   // centre shrinks. Scale is computed from the actual finger-to-centre
-  // distance ratio for true 1:1 tracking (AGENTS.md §4 — direct-drag).
+  // distance ratio for true 1:1 tracking.
   //   top-left:     -X / -Y  (centre is bottom-right; drag up-left enlarges)
   //   top-right:    +X / -Y  (centre is bottom-left;  drag up-right enlarges)
   //   bottom-left:  -X / +Y  (centre is top-right;    drag down-left enlarges)
@@ -2809,7 +2875,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center' },
   multiSelectBadgeText: {
-    fontSize: 10,
+    fontSize: Typography.size.micro,
     lineHeight: 12,
     fontFamily: Typography.family.semibold,
     textAlign: 'center' },

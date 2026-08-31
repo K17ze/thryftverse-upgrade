@@ -1,6 +1,7 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Platform, ActivityIndicator } from 'react-native';
-import { Space } from '../../../theme/designTokens';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, Platform, ActivityIndicator, Pressable } from 'react-native';
+import { Space, FontFamily } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { extractWaveform } from '../../core/audio';
@@ -73,22 +74,32 @@ export const WaveformTrack = React.memo(function WaveformTrack({
   // ── Async waveform extraction state ──
   const [extractedSamples, setExtractedSamples] = useState<number[] | undefined>(undefined);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractError, setExtractError] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
+
+  const handleRetryExtraction = useCallback(() => {
+    setExtractError(false);
+    setRetryNonce((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     // If samples are provided directly, skip extraction.
     if (providedSamples) {
       setExtractedSamples(undefined);
       setIsExtracting(false);
+      setExtractError(false);
       return;
     }
     if (!audioUri) {
       setExtractedSamples(undefined);
       setIsExtracting(false);
+      setExtractError(false);
       return;
     }
 
     let cancelled = false;
     setIsExtracting(true);
+    setExtractError(false);
 
     extractWaveform(audioUri, barCount)
       .then((data) => {
@@ -103,13 +114,14 @@ export const WaveformTrack = React.memo(function WaveformTrack({
         if (!cancelled) {
           setExtractedSamples(undefined);
           setIsExtracting(false);
+          setExtractError(true);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [audioUri, barCount, providedSamples]);
+  }, [audioUri, barCount, providedSamples, retryNonce]);
 
   // Use provided samples, then extracted samples, then nothing.
   const effectiveSamples = providedSamples ?? extractedSamples;
@@ -128,22 +140,39 @@ export const WaveformTrack = React.memo(function WaveformTrack({
       style={[
         waveStyles.container,
         {
-          height,
+          height: extractError ? undefined : height,
           backgroundColor: 'transparent',
         },
       ]}
       accessibilityLabel={
         isExtracting
           ? 'Audio waveform track, extracting waveform'
-          : hasSamples
-            ? 'Audio waveform track'
-            : 'Audio waveform track, no audio waveform'
+          : extractError
+            ? "Audio waveform track, couldn't load waveform"
+            : hasSamples
+              ? 'Audio waveform track'
+              : 'Audio waveform track, no audio waveform'
       }
     >
       {isExtracting ? (
         // ── Loading state: small spinner while extracting ──
         <View style={waveStyles.loading}>
           <ActivityIndicator size="small" color={colors.textMuted} />
+        </View>
+      ) : extractError ? (
+        <View style={waveStyles.errorRow}>
+          <Text style={[waveStyles.errorText, { color: colors.textSecondary }]}>
+            Couldn't load waveform
+          </Text>
+          <Pressable
+            onPress={handleRetryExtraction}
+            style={waveStyles.errorRetry}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Retry waveform extraction"
+            accessibilityRole="button"
+          >
+            <Text style={[waveStyles.errorRetryText, { color: colors.brand }]}>Retry</Text>
+          </Pressable>
         </View>
       ) : hasSamples && trackWidth > 0 ? (
         skiaAvailable ? (
@@ -295,6 +324,30 @@ const waveStyles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    flex: 1,
+  },
+  errorText: {
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    flexShrink: 1,
+  },
+  errorRetry: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space.xs,
+  },
+  errorRetryText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
   },
   flatLine: {
     position: 'absolute',

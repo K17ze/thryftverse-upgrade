@@ -86,6 +86,7 @@ const patchLookBodySchema = z.object({
 const createCommentBodySchema = z.object({
   id: z.string().min(2).max(120),
   body: z.string().trim().min(1).max(1000),
+  parentId: z.string().min(2).max(120).optional(),
 });
 
 type VerifiedLookMedia = {
@@ -1319,23 +1320,42 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       id: string;
       look_id: string;
       author_id: string;
+      parent_id: string | null;
       body: string;
       created_at: string;
       updated_at: string;
       author_username: string | null;
       author_avatar: string | null;
+      like_count: string;
+      reply_count: string;
+      liked_by_viewer: boolean;
     }>(
       `
-        SELECT c.id, c.look_id, c.author_id, c.body, c.created_at, c.updated_at,
+        SELECT c.id, c.look_id, c.author_id, c.parent_id, c.body, c.created_at, c.updated_at,
           u.username AS author_username,
-          u.avatar AS author_avatar
+          u.avatar AS author_avatar,
+          COALESCE(lc.like_count, '0') AS like_count,
+          COALESCE(rc.reply_count, '0') AS reply_count,
+          COALESCE(lv.liked, false) AS liked_by_viewer
         FROM look_comments c
         LEFT JOIN users u ON u.id = c.author_id
+        LEFT JOIN (
+          SELECT comment_id, COUNT(*)::text AS like_count
+          FROM look_comment_likes GROUP BY comment_id
+        ) lc ON lc.comment_id = c.id
+        LEFT JOIN (
+          SELECT parent_id, COUNT(*)::text AS reply_count
+          FROM look_comments WHERE parent_id IS NOT NULL GROUP BY parent_id
+        ) rc ON rc.parent_id = c.id
+        LEFT JOIN (
+          SELECT comment_id, true AS liked
+          FROM look_comment_likes WHERE user_id = $2
+        ) lv ON lv.comment_id = c.id
         WHERE c.look_id = $1
-        ORDER BY c.created_at ASC
-        LIMIT 200
+        ORDER BY c.parent_id NULLS FIRST, c.created_at ASC
+        LIMIT 500
       `,
-      [lookId]
+      [lookId, viewerUserId]
     );
 
     return {
@@ -1343,12 +1363,16 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
         id: row.id,
         lookId: row.look_id,
         authorId: row.author_id,
+        parentId: row.parent_id,
         author: {
           id: row.author_id,
           username: row.author_username,
           avatar: row.author_avatar,
         },
         body: row.body,
+        likeCount: Number(row.like_count),
+        likedByViewer: row.liked_by_viewer,
+        replyCount: Number(row.reply_count),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       })),
@@ -1366,14 +1390,31 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       return { ok: false, error: 'Look not found' };
     }
 
+    // Validate parentId if provided: must be a root comment on the same look
+    let resolvedParentId: string | null = null;
+    if (payload.parentId) {
+      const parentResult = await db.query<{ id: string; parent_id: string | null }>(
+        `SELECT id, parent_id FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
+        [payload.parentId, lookId]
+      );
+      const parent = parentResult.rows[0];
+      if (!parent) {
+        reply.code(404);
+        return { ok: false, error: 'Parent comment not found' };
+      }
+      // Flatten replies-to-replies to the root (Instagram 2-level model)
+      resolvedParentId = parent.parent_id ?? parent.id;
+    }
+
     await db.query(
-      `INSERT INTO look_comments (id, look_id, author_id, body) VALUES ($1, $2, $3, $4)`,
-      [payload.id, lookId, actorUserId, payload.body]
+      `INSERT INTO look_comments (id, look_id, author_id, body, parent_id) VALUES ($1, $2, $3, $4, $5)`,
+      [payload.id, lookId, actorUserId, payload.body, resolvedParentId]
     );
 
     const commentResult = await db.query<{
       id: string;
       author_id: string;
+      parent_id: string | null;
       body: string;
       created_at: string;
       updated_at: string;
@@ -1381,7 +1422,7 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       author_avatar: string | null;
     }>(
       `
-        SELECT c.id, c.author_id, c.body, c.created_at, c.updated_at,
+        SELECT c.id, c.author_id, c.parent_id, c.body, c.created_at, c.updated_at,
           u.username AS author_username,
           u.avatar AS author_avatar
         FROM look_comments c
@@ -1397,6 +1438,14 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       return { ok: false, error: 'Failed to create comment' };
     }
 
+    // Update parent's reply count if this is a reply
+    if (resolvedParentId) {
+      await db.query(
+        `UPDATE look_comments SET updated_at = NOW() WHERE id = $1`,
+        [resolvedParentId]
+      );
+    }
+
     reply.code(201);
     return {
       ok: true,
@@ -1404,12 +1453,16 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
         id: row.id,
         lookId,
         authorId: row.author_id,
+        parentId: row.parent_id,
         author: {
           id: row.author_id,
           username: row.author_username,
           avatar: row.author_avatar,
         },
         body: row.body,
+        likeCount: 0,
+        likedByViewer: false,
+        replyCount: 0,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       },
@@ -1444,5 +1497,62 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
 
     await db.query(`DELETE FROM look_comments WHERE id = $1`, [commentId]);
     return { ok: true };
+  });
+
+  // ── Comment likes ───────────────────────────────────────────────────
+
+  app.post('/looks/:lookId/comments/:commentId/like', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { lookId, commentId } = commentParamsSchema.parse(request.params);
+
+    const accessRow = await getAccessibleLook(db, lookId, actorUserId);
+    if (!accessRow) {
+      reply.code(404);
+      return { ok: false, error: 'Look not found' };
+    }
+
+    const commentResult = await db.query<{ id: string }>(
+      `SELECT id FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
+      [commentId, lookId]
+    );
+    if (!commentResult.rows[0]) {
+      reply.code(404);
+      return { ok: false, error: 'Comment not found' };
+    }
+
+    await db.query(
+      `INSERT INTO look_comment_likes (comment_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [commentId, actorUserId]
+    );
+
+    const countResult = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM look_comment_likes WHERE comment_id = $1`,
+      [commentId]
+    );
+
+    return { ok: true, likeCount: Number(countResult.rows[0]?.count ?? 0), likedByViewer: true };
+  });
+
+  app.delete('/looks/:lookId/comments/:commentId/like', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { lookId, commentId } = commentParamsSchema.parse(request.params);
+
+    const accessRow = await getAccessibleLook(db, lookId, actorUserId);
+    if (!accessRow) {
+      reply.code(404);
+      return { ok: false, error: 'Look not found' };
+    }
+
+    await db.query(
+      `DELETE FROM look_comment_likes WHERE comment_id = $1 AND user_id = $2`,
+      [commentId, actorUserId]
+    );
+
+    const countResult = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM look_comment_likes WHERE comment_id = $1`,
+      [commentId]
+    );
+
+    return { ok: true, likeCount: Number(countResult.rows[0]?.count ?? 0), likedByViewer: false };
   });
 };

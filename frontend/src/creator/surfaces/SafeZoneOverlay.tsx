@@ -35,13 +35,22 @@ export function SafeZoneOverlay({ visible, topHeight, bottomHeight, style }: Saf
   return (
     <View style={[styles.overlay, style]} pointerEvents="none">
       {topHeight > 0 && (
-        <View style={[styles.topBand, { top: 0, height: topHeight, backgroundColor: colors.brandSubtle, borderBottomColor: colors.brand }]} />
+        <View
+          style={[styles.topBand, { top: 0, height: topHeight, backgroundColor: colors.brandSubtle, borderBottomColor: colors.brand }]}
+          accessibilityLabel="Top safe area"
+        />
       )}
       {bottomHeight > 0 && (
-        <View style={[styles.bottomBand, { bottom: 0, height: bottomHeight, backgroundColor: colors.brandSubtle, borderTopColor: colors.brand }]} />
+        <View
+          style={[styles.bottomBand, { bottom: 0, height: bottomHeight, backgroundColor: colors.brandSubtle, borderTopColor: colors.brand }]}
+          accessibilityLabel="Bottom safe area"
+        />
       )}
       {topHeight > 0 && bottomHeight > 0 && (
-        <View style={[styles.contentBoundary, { top: topHeight, bottom: bottomHeight, borderColor: colors.brand }]} />
+        <View
+          style={[styles.contentBoundary, { top: topHeight, bottom: bottomHeight, borderColor: colors.brand }]}
+          accessibilityElementsHidden
+        />
       )}
     </View>
   );

@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedStyle,
   withTiming,
-  Easing,
   type SharedValue,
 } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -38,7 +37,7 @@ export function TrashZone({ manipulationActiveSV, isInTrashZoneSV }: TrashZonePr
     return {
       opacity: withTiming(active ? 1 : 0, {
         duration: reducedMotion ? 0 : Motion.duration.fast,
-        easing: Easing.out(Easing.cubic),
+        easing: Motion.easing.entrance,
       }),
       pointerEvents: 'none' as const,
     };
@@ -49,7 +48,7 @@ export function TrashZone({ manipulationActiveSV, isInTrashZoneSV }: TrashZonePr
     return {
       opacity: withTiming(inside ? 1 : 0.6, {
         duration: reducedMotion ? 0 : Motion.duration.touch,
-        easing: Easing.out(Easing.cubic),
+        easing: Motion.easing.entrance,
       }),
     };
   });
@@ -60,7 +59,7 @@ export function TrashZone({ manipulationActiveSV, isInTrashZoneSV }: TrashZonePr
       transform: [
         { scale: withTiming(inside ? 1.18 : 1, {
           duration: reducedMotion ? 0 : Motion.duration.normal,
-          easing: Easing.out(Easing.cubic),
+          easing: Motion.easing.entrance,
         }) },
       ],
     };
@@ -68,7 +67,11 @@ export function TrashZone({ manipulationActiveSV, isInTrashZoneSV }: TrashZonePr
 
   return (
     <Reanimated.View style={[styles.overlay, containerStyle]} pointerEvents="none">
-      <Reanimated.View style={[styles.band, bandStyle, { backgroundColor: colors.dangerSubtle }]}>
+      <Reanimated.View
+        style={[styles.band, bandStyle, { backgroundColor: colors.dangerSubtle }]}
+        accessibilityLabel="Drag here to delete"
+        accessibilityLiveRegion="polite"
+      >
         <Reanimated.View style={iconWrapStyle}>
           <Ionicons
             name="trash"

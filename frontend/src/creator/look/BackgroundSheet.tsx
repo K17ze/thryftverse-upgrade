@@ -26,16 +26,12 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
-  LayoutChangeEvent,
-  GestureResponderEvent,
-  PanResponder,
-  PanResponderGestureState } from 'react-native';
+  ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Typography, FontFamily, Control, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, FontFamily, Stroke, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -383,7 +379,7 @@ export function BackgroundSheet({
           accessibilityLabel="Close background picker"
           accessibilityHint="Discards changes and closes the background picker"
         >
-          <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.textPrimary} />
         </PressScale>
       </View>
 
@@ -559,14 +555,14 @@ export function BackgroundSheet({
                   {blurRadius}
                 </Text>
               </View>
-              <BlurSlider
+              <CreatorSlider
                 value={blurRadius}
                 min={0}
                 max={50}
-                trackColor={colors.border}
-                fillColor={colors.brand}
-                thumbColor={colors.textInverse}
-                onChange={handleBlurRadiusChange}
+                step={1}
+                onValueChange={handleBlurRadiusChange}
+                onCommit={handleBlurRadiusChange}
+                accessibilityLabel="Background blur intensity"
               />
             </View>
           </View>
@@ -667,91 +663,6 @@ export function BackgroundSheet({
   );
 }
 
-// ── Blur slider (PanResponder-based, no external dependency) ──────────
-
-interface BlurSliderProps {
-  value: number;
-  min: number;
-  max: number;
-  trackColor: string;
-  fillColor: string;
-  thumbColor: string;
-  onChange: (value: number) => void;
-}
-
-function BlurSlider({ value, min, max, trackColor, fillColor, thumbColor, onChange }: BlurSliderProps) {
-  const trackWidthRef = useRef(0);
-  const [trackWidth, setTrackWidth] = useState(0);
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    trackWidthRef.current = e.nativeEvent.layout.width;
-    setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const range = max - min;
-  const clamped = Math.min(max, Math.max(min, value));
-  const ratio = range === 0 ? 0 : (clamped - min) / range;
-  const trackLayoutWidth = trackWidth > 0 ? trackWidth : 1;
-  const thumbPosition = ratio * trackLayoutWidth;
-
-  const valueToPosition = useCallback(
-    (x: number) => {
-      const r = Math.min(1, Math.max(0, x / trackLayoutWidth));
-      return min + r * range;
-    },
-    [trackLayoutWidth, min, range],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (_e: GestureResponderEvent) => {},
-        onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-          const next = valueToPosition(thumbPosition + g.dx);
-          onChange(Math.round(next));
-        },
-        onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thumbPosition, valueToPosition, onChange],
-  );
-
-  return (
-    <View style={sliderStyles.trackWrap} onLayout={handleLayout} {...panResponder.panHandlers}>
-      <View style={[sliderStyles.track, { backgroundColor: trackColor }]} />
-      <View style={[sliderStyles.fill, { width: thumbPosition, backgroundColor: fillColor }]} />
-      <View style={[sliderStyles.thumb, { left: thumbPosition, backgroundColor: thumbColor }]} />
-    </View>
-  );
-}
-
-const sliderStyles = StyleSheet.create({
-  trackWrap: {
-    height: Control.hit,
-    justifyContent: 'center',
-    position: 'relative' },
-  track: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 3,
-    borderRadius: Radius.full },
-  fill: {
-    position: 'absolute',
-    left: 0,
-    height: 3,
-    borderRadius: Radius.full },
-  thumb: {
-    position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: Radius.full,
-    marginLeft: -8,
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(0,0,0,0)' } });
-
 // ── Styles ────────────────────────────────────────────────────────────
 
 function createStyles(colors: ThemeColors) {
@@ -763,11 +674,11 @@ function createStyles(colors: ThemeColors) {
       height: 44,
       paddingHorizontal: Space.md },
     title: {
-      fontFamily: Typography.family.regular,
-      fontSize: 14 },
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size },
     closeBtn: {
-      width: 36,
-      height: 36,
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: Radius.sm },

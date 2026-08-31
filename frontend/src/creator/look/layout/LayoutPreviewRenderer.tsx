@@ -10,6 +10,7 @@ import type { LayoutPreview } from './layoutTypes';
 
 export interface LayoutPreviewRendererProps {
   assetUris: string[];
+  assetFocalPoints?: ({ x: number; y: number } | undefined)[];
   layout: LayoutPreview;
   /** Thumbnail width in pt. Default 80. */
   width?: number;
@@ -24,6 +25,7 @@ export interface LayoutPreviewRendererProps {
  */
 export function LayoutPreviewRenderer({
   assetUris,
+  assetFocalPoints,
   layout,
   width = 48,
   height = 60,
@@ -51,6 +53,10 @@ export function LayoutPreviewRenderer({
         const top = transform.y * height;
         const w = transform.width * width;
         const h = transform.height * height;
+        const focalPoint = assetFocalPoints?.[index];
+        const contentPosition = focalPoint
+          ? { top: `${Math.round(focalPoint.y * 100)}%`, left: `${Math.round(focalPoint.x * 100)}%` }
+          : undefined;
         return (
           <View
             key={`${layout.id}-${index}`}
@@ -70,6 +76,7 @@ export function LayoutPreviewRenderer({
               source={{ uri }}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
+              contentPosition={contentPosition}
               recyclingKey={uri}
               transition={0}
             />

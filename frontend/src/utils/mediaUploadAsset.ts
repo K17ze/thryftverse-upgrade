@@ -90,8 +90,22 @@ function resolveMimeType(asset: ImagePicker.ImagePickerAsset): string {
   return 'image/jpeg';
 }
 
-function resolveKind(mimeType: string): 'image' | 'video' {
+export function resolveKind(mimeType: string): 'image' | 'video' {
   return SUPPORTED_VIDEO_TYPES.has(mimeType) ? 'video' : 'image';
+}
+
+/**
+ * Infer a MIME type from a URI's file extension. Falls back to `image/jpeg`
+ * when no recognised extension is found — this is the same controlled
+ * fallback used by `resolveMimeType` for picker assets.
+ *
+ * Used by the upload pipeline for URIs that lack picker metadata (e.g. URIs
+ * scanned directly from the creator document).
+ */
+export function inferMimeTypeFromUri(uri: string): string {
+  const uriExt = uri.split('.').pop()?.toLowerCase();
+  if (uriExt && EXT_TO_MIME[uriExt]) return EXT_TO_MIME[uriExt];
+  return 'image/jpeg';
 }
 
 /* ── conversion ── */

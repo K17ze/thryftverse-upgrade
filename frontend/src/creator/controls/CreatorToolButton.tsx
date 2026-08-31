@@ -26,7 +26,6 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
@@ -149,7 +148,7 @@ export function CreatorToolButton({
     return {
       opacity: withTiming(target, {
         duration: Motion.duration.fast,
-        easing: Easing.out(Easing.cubic),
+        easing: Motion.easing.entrance,
       }),
     };
   });
@@ -163,7 +162,7 @@ export function CreatorToolButton({
     return {
       opacity: withTiming(target, {
         duration: Motion.duration.fast,
-        easing: Easing.out(Easing.cubic),
+        easing: Motion.easing.entrance,
       }),
     };
   });
@@ -204,6 +203,7 @@ export function CreatorToolButton({
           {
             width: BACKPLATE_SIZE,
             height: BACKPLATE_SIZE,
+            top: (targetSize - BACKPLATE_SIZE) / 2,
             borderRadius: EditorRadius.plate,
             backgroundColor: colors.brand,
           },
@@ -230,7 +230,7 @@ export function CreatorToolButton({
             name={glyph}
             size={GLYPH_SIZE}
             color={glyphColor}
-            selected={active && selectedStyle === 'fill'}
+            selected={active}
           />
         ) : icon ? (
           <Ionicons
@@ -271,7 +271,6 @@ export function CreatorToolButton({
 const styles = StyleSheet.create({
   backplate: {
     position: 'absolute',
-    top: 0,
     alignSelf: 'center',
   },
   pin: {

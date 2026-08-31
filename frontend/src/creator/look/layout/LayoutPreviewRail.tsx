@@ -12,6 +12,7 @@ import type { LayoutId, LayoutPreview } from './layoutTypes';
 
 export interface LayoutPreviewRailProps {
   assetUris: string[];
+  assetFocalPoints?: ({ x: number; y: number } | undefined)[];
   layouts: LayoutPreview[];
   selectedId: LayoutId | null;
   onSelect: (id: LayoutId) => void;
@@ -26,6 +27,7 @@ export interface LayoutPreviewRailProps {
  */
 export function LayoutPreviewRail({
   assetUris,
+  assetFocalPoints,
   layouts,
   selectedId,
   onSelect,
@@ -76,6 +78,7 @@ export function LayoutPreviewRail({
           >
             <LayoutPreviewRenderer
               assetUris={assetUris}
+              assetFocalPoints={assetFocalPoints}
               layout={layout}
               selected={isSelected}
             />

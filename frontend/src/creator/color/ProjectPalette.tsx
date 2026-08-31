@@ -11,7 +11,7 @@
 
 import React from 'react';
 import { StyleSheet, ScrollView, Pressable, View, ViewStyle } from 'react-native';
-import { Space, Radius, Stroke, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Stroke, Typography } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { toHexString } from './ColorMath';
@@ -59,7 +59,7 @@ export function ProjectPalette({
             ]}
             accessibilityLabel={`${entry.source} color ${hex}`}
             accessibilityRole="button"
-            hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           />
         );
       })}
@@ -83,7 +83,7 @@ function useProjectPaletteStyles(colors: ThemeColors) {
           height: 36,
           borderRadius: Radius.md,
           borderWidth: Stroke.hairline,
-          borderColor: 'rgba(0,0,0,0.1)',
+          borderColor: colors.borderSubtle,
         },
       }),
     [colors],

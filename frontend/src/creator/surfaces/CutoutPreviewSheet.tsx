@@ -1,32 +1,10 @@
 /**
  * CutoutPreviewSheet — brush-based cutout mask editor with real-time
- * Skia preview.
- *
- * Per §8.3, the cutout workflow is:
- *   1. Create a brush mask (fully opaque — everything kept)
- *   2. Real-time Skia preview over a checkerboard  ← this sheet
- *   3. Brush refinement (Erase background / Keep subject / Restore)
- *   4. Edge feather + optional invert
- *   5. Export mask as PNG, build MaskRef with dimensions + checksum
- *   6. The original image is NEVER replaced — the mask is applied
- *      non-destructively at render time.
- *
- * This sheet uses the CutoutService brush API (Skia-based) for real
- * pixel-level mask rasterization, and the MaskedPreview component for
- * 60fps GPU compositing preview. The cutout never blocks the whole
- * canvas — it's a sheet that leaves the top of the canvas visible.
- *
- * Per AGENTS.md §11: brush refinement is honestly represented — the
- * Skia MaskedPreview shows the actual alpha-masked result, not a fake
- * overlay. When Skia is unavailable, an honest message is shown.
- *
- * Per §8.3: mask dimensions, source checksum, model/version, and
- * manual refinements are persisted in the MaskRef.
- *
- * Uses the shared SheetContainer from CreatorAnimations for consistent
- * motion and chrome.
+ * Skia preview. Uses the CutoutService brush API for pixel-level mask
+ * rasterization and MaskedPreview for GPU compositing. The cutout is
+ * a sheet that leaves the top of the canvas visible.
  */
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -34,10 +12,6 @@ import {
   useWindowDimensions,
   Image as RNImage,
   Pressable,
-  PanResponder,
-  type LayoutChangeEvent,
-  type GestureResponderEvent,
-  type PanResponderGestureState,
   type DimensionValue } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,12 +24,13 @@ import Reanimated, {
   withTiming,
   runOnJS,
   useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Typography, FontFamily, Stroke, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, Typography, FontFamily, Stroke, IconGrammar, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
+import { CreatorSlider } from '../controls/CreatorSlider';
 import {
   cutoutService,
   sourceChecksum,
@@ -84,7 +59,7 @@ const CHECKER_SIZE = 16;
 const CHECKER_LIGHT = '#E8E8E8';
 const CHECKER_DARK = '#C8C8C8';
 
-// ── SkeletonBlock — one-time shimmer sweep (AGENTS.md §14, §17) ──────
+// ── SkeletonBlock — one-time shimmer sweep ──────
 function SkeletonBlock({ width, height, radius }: { width: DimensionValue; height: number; radius?: number }) {
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
@@ -522,7 +497,7 @@ export function CutoutPreviewSheet({
             accessibilityLabel="Close cutout"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textPrimary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textPrimary} />
           </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             Cutout
@@ -763,14 +738,14 @@ export function CutoutPreviewSheet({
                   {featherPx}px
                 </Text>
               </View>
-              <FeatherSlider
+              <CreatorSlider
                 value={featherPx}
                 min={0}
                 max={10}
-                onChange={setFeatherPx}
-                trackColor={colors.border}
-                fillColor={colors.brand}
-                thumbColor={colors.textPrimary}
+                step={1}
+                onValueChange={setFeatherPx}
+                onCommit={setFeatherPx}
+                accessibilityLabel="Edge softness"
               />
             </View>
 
@@ -828,78 +803,6 @@ export function CutoutPreviewSheet({
   );
 }
 
-// ── Edge Softness slider ─────────────────────────────────────────────
-// A minimal PanResponder-based slider (no new dependencies — the
-// codebase has no slider library). Follows the AdjustPanel pattern.
-interface FeatherSliderProps {
-  value: number;
-  min: number;
-  max: number;
-  onChange: (v: number) => void;
-  trackColor: string;
-  fillColor: string;
-  thumbColor: string;
-}
-
-function FeatherSlider({
-  value,
-  min,
-  max,
-  onChange,
-  trackColor,
-  fillColor,
-  thumbColor }: FeatherSliderProps) {
-  const [width, setWidth] = useState(0);
-  const range = max - min;
-  const clamped = Math.min(max, Math.max(min, value));
-  const ratio = range === 0 ? 0 : (clamped - min) / range;
-  const trackWidth = width > 0 ? width : 1;
-  const thumbPosition = ratio * trackWidth;
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    setWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const valueFromX = useCallback(
-    (x: number) => {
-      const r = Math.min(1, Math.max(0, x / trackWidth));
-      return Math.round(min + r * range);
-    },
-    [trackWidth, min, range],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (e: GestureResponderEvent) => {
-          onChange(valueFromX(e.nativeEvent.locationX));
-        },
-        onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-          // Use dx relative to grant point combined with current thumb pos.
-          onChange(valueFromX(thumbPosition + g.dx));
-        },
-        onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thumbPosition, valueFromX, onChange],
-  );
-
-  return (
-    <View style={styles.sliderTrackWrap} onLayout={handleLayout} {...panResponder.panHandlers}>
-      <View style={[styles.sliderTrack, { backgroundColor: trackColor }]} />
-      <View style={[styles.sliderFill, { width: thumbPosition, backgroundColor: fillColor }]} />
-      <View
-        style={[
-          styles.sliderThumb,
-          { left: thumbPosition, backgroundColor: thumbColor },
-        ]}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
@@ -909,11 +812,11 @@ const styles = StyleSheet.create({
     height: 44 },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: 17,
+    fontSize: TypographyV2.bodyStrong.size,
     textAlign: 'center' },
   closeBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center' },
   // ── Message / state container ──
@@ -1023,28 +926,6 @@ const styles = StyleSheet.create({
   sliderValue: {
     fontFamily: Typography.family.medium,
     fontSize: TypographyV2.meta.size },
-  sliderTrackWrap: {
-    height: 28,
-    justifyContent: 'center',
-    position: 'relative' },
-  sliderTrack: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 3,
-    borderRadius: Radius.none },
-  sliderFill: {
-    position: 'absolute',
-    left: 0,
-    height: 3,
-    borderRadius: Radius.none },
-  sliderThumb: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    marginLeft: -10,
-    borderRadius: Radius.full,
-    top: 4 },
   // ── Footer — premium Cancel / Apply buttons ──
   footer: {
     flexDirection: 'row',

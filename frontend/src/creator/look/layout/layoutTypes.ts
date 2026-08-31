@@ -16,7 +16,11 @@ export type LayoutId =
   | 'scatter'
   | 'stack'
   | 'magazine'
-  | 'minimal';
+  | 'minimal'
+  | 'split-screen'
+  | 'polaroid'
+  | 'vertical-strip'
+  | 'mosaic';
 
 /**
  * A single asset placement in normalized canvas space.
@@ -32,6 +36,7 @@ export interface AssetTransform {
   height: number;
   rotation: number;
   zIndex: number;
+  overflowCount?: number;
 }
 
 export interface LayoutDefinition {

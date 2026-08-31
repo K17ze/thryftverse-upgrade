@@ -1,34 +1,8 @@
 /**
- * ContextToolRail — a horizontal, context-sensitive tool rail for the
- * creator department (Poster/Look composers).
- *
- * Replaces the static tool dock pattern with a rail that adapts its visible
- * tool set based on the active {@link ToolContext} (editor mode + selection
- * state). Up to 4 primary actions are always visible; additional tools are
- * revealed under a trailing "More" button.
- *
- * Design requirements (2026 flagship creator UX research, AGENTS.md §4):
- *   - Maximum 4 primary actions visible — the Meta Edits / Instagram / CapCut
- *     pattern. The primary layer (canvas + preview) is ruthlessly guarded
- *     against feature creep. More tools ≠ better; ≤4 immediately relevant
- *     actions is the cognitive-fluency sweet spot.
- *   - Overflow under "More" with specific grouping labels (not a flat list)
- *   - 44pt minimum touch targets (48pt preferred for high-frequency tools)
- *   - Transparent background — no card, no border, no glass container
- *   - Horizontal scroll with hidden scroll indicator
- *   - Tool buttons: 24pt icon + 11pt label (textMuted) below
- *   - Selected/active state: icon turns brand color
- *   - Disabled state: icon at 40% opacity, no press feedback
- *   - Badge: small circle on top-right of icon for counts
- *   - "More" button: always last, ellipsis-horizontal icon
- *   - 4pt spacing between tools, 16pt horizontal padding on rail
- *   - Haptic feedback has one owner: CreatorToolButton
- *
- * Anatomy:
- *   ┌────────────────────────────────────────┐
- *   │  [icon]  [icon]  [icon]  [icon]  [⋯]  │
- *   │  Text    Sticker Music  Effects More   │
- *   └────────────────────────────────────────┘
+ * ContextToolRail — horizontal, context-sensitive tool rail for the
+ * creator department (Poster/Look composers). Adapts its visible tool
+ * set based on the active ToolContext. Up to 4 primary actions are
+ * visible; additional tools are revealed under a trailing "More" button.
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -65,12 +39,7 @@ export interface ContextToolRailProps {
 
 // ── Constants ───────────────────────────────────────────────────────
 
-/** Maximum primary tools before overflow — context determines actual count,
- *  not this constant. This is a ceiling, not a target. The 2026 flagship
- *  creator UX research (Meta Edits, Instagram, CapCut) converges on a small
- *  number of immediately relevant actions — the primary layer is ruthlessly
- *  guarded against feature creep. More tools ≠ better; cognitive fluency
- *  peaks with a focused set. */
+/** Maximum primary tools before overflow — context determines actual count. */
 const MAX_PRIMARY = 4;
 /** Badge diameter. */
 const BADGE_SIZE = 16;
@@ -249,10 +218,8 @@ export function ContextToolRail({
     void recordUse(toolId);
   }, [recordUse]);
 
-  // Colors are now resolved inside CreatorToolButton (theme-aware).
-  // The neutral default keeps the rail visually restrained per AGENTS.md §4
-  // (hierarchy over decoration). Active state is driven by `tool.active`
-  // and `tool.selectedStyle` on the ToolDefinition.
+  // Colors are resolved inside CreatorToolButton (theme-aware).
+  // Active state is driven by `tool.active` and `tool.selectedStyle`.
 
   const handleOverflow = useCallback(() => {
     if (onOverflowPress) {
@@ -281,6 +248,8 @@ export function ContextToolRail({
       showsHorizontalScrollIndicator={false}
       style={[styles.rail, style]}
       contentContainerStyle={styles.railContent}
+      accessibilityRole="toolbar"
+      accessibilityLabel="Creator tools"
     >
       {weightedPrimary.map((tool) => (
         <RailToolButton

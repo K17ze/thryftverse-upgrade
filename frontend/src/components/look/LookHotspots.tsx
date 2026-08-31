@@ -27,6 +27,28 @@ export interface LookHotspotsProps {
   currencyCode: string;
 }
 
+const TOOLTIP_WIDTH = 220;
+
+function getTooltipPlacementStyle(x: number, y: number) {
+  const horizontalStyle: { left?: number; right?: number } = {};
+  if (x < 0.3) {
+    horizontalStyle.left = -Space.xs;
+  } else if (x > 0.7) {
+    horizontalStyle.right = -Space.xs;
+  } else {
+    horizontalStyle.left = -(TOOLTIP_WIDTH / 2) + Control.hit / 2;
+  }
+
+  const verticalStyle: { top?: number; bottom?: number } = {};
+  if (y > 0.8) {
+    verticalStyle.bottom = Space.lg + 4;
+  } else {
+    verticalStyle.top = Space.lg + 4;
+  }
+
+  return { ...horizontalStyle, ...verticalStyle };
+}
+
 /**
  * Interactive product hotspots overlaid on the look media.
  * Has its own activeTagId state so tapping a hotspot doesn't
@@ -57,6 +79,7 @@ function LookHotspotsImpl({
         const isActive = activeTagId === tag.id;
         const tagImage = tag.image ?? tag.images?.[0];
         const tagTitle = tag.title ?? tag.label;
+        const placement = getTooltipPlacementStyle(tag.x, tag.y);
         return (
           <Pressable
             key={tag.id}
@@ -70,7 +93,7 @@ function LookHotspotsImpl({
             <View style={styles.hotspotHalo} />
             <View style={[styles.hotspotDot, isActive && styles.hotspotDotActive]} />
             {isActive && tagImage && tagTitle && (
-              <View style={styles.tagTooltip}>
+              <View style={[styles.tagTooltip, placement]}>
                 <ExpoImage
                   source={{ uri: tagImage }}
                   style={styles.tagTooltipImg}
@@ -127,9 +150,7 @@ const useHotspotStyles = (colors: ThemeColors) => {
       borderColor: colors.scrimTextPrimary },
     tagTooltip: {
       position: 'absolute',
-      top: Space.lg + 4,
-      left: -Space.xxl - Space.xxl - Space.xl - 8,
-      width: Space.xxl * 8 + Space.xl + 4,
+      width: TOOLTIP_WIDTH,
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,

@@ -21,10 +21,10 @@ import { TextInput } from 'react-native-gesture-handler';
 import Reanimated, {
   useAnimatedStyle,
   withTiming,
-  Easing,
   useReducedMotion } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { Typography } from '../../../theme/designTokens';
+import { Motion } from '../../../theme/motionTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -150,7 +150,7 @@ export function InlineTextEditor({
         {
           translateY: reducedMotion
             ? -shift
-            : withTiming(-shift, { duration: 200, easing: Easing.out(Easing.cubic) }) },
+            : withTiming(-shift, { duration: Motion.duration.normal, easing: Motion.easing.entrance }) },
       ] };
   });
 

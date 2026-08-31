@@ -62,6 +62,14 @@ export const Motion = {
     slower: 400,
     /** 600ms — Hero/page transitions, elaborate onboarding moments. */
     crawl: 600,
+    /** 120ms — Editor: snap-to-guide settle. */
+    snapToGuide: 120,
+    /** 180ms — Editor: layer selection lift. */
+    layerLift: 180,
+    /** 200ms — Editor: bottom-surface rail swap. */
+    railSwap: 200,
+    /** 150ms — Editor: trash-zone removal. */
+    deleteDismiss: 150,
   },
 
   // ── Motion tiers (2026 Apple HIG) ─────────────────────────────────────
@@ -111,6 +119,14 @@ export const Motion = {
     indicator: { damping: 24, stiffness: 240, mass: 0.9 },
     // Bounce-free content crossfade/slide — used for mode changes and directional slides
     glide: { damping: 28, stiffness: 260, mass: 1.0 },
+    // Editor: snap-to-guide "safe-rack" settle — stiff, minimal overshoot
+    snapTo: { damping: 12, stiffness: 300, mass: 0.9 },
+    // Editor: layer becomes selected — slight lift
+    layerLift: { damping: 16, stiffness: 220, mass: 0.9 },
+    // Editor: bottom-surface rail swap — smooth, not bouncy
+    railSwap: { damping: 20, stiffness: 200, mass: 0.8 },
+    // Editor: trash-zone removal — fast, decisive
+    deleteDismiss: { damping: 10, stiffness: 320, mass: 0.8 },
   },
 
   // Easing curves (for non-spring animations). Reanimated Easing functions.
@@ -238,3 +254,63 @@ export const REDUCED_SPRING = { damping: 100, stiffness: 1000, mass: 1.0 } as co
  * Instant timing config for reduced-motion fallbacks of timing-based animations.
  */
 export const REDUCED_TIMING = { duration: 0 } as const;
+
+/**
+ * Interaction intensity hierarchy (S0–S4). Semantic layer tying motion + haptics
+ * to interaction significance so the two are choreographed from one source.
+ */
+export const InteractionIntensity = {
+  S0: 0, // invisible — filter chip toggle, sort — no haptic, silent state change
+  S1: 1, // visual only — like/save/favorite — icon swap, no haptic
+  S2: 2, // visual + subtle haptic — add-to-cart, send, confirm selection — light impact
+  S3: 3, // dedicated success — publish listing, publish look — success surface + haptic
+  S4: 4, // celebratory — rare, first-ever publish, milestone
+} as const;
+
+export type InteractionIntensityLevel =
+  (typeof InteractionIntensity)[keyof typeof InteractionIntensity];
+
+/**
+ * Maps an interaction intensity level to its spring config.
+ * S0 → no animation (instant). S4 reuses `success` but callers should extend
+ * the duration for the celebratory register.
+ */
+export function intensityToSpring(
+  level: InteractionIntensityLevel,
+): Readonly<{ damping: number; stiffness: number; mass: number }> | null {
+  switch (level) {
+    case InteractionIntensity.S0:
+      return null;
+    case InteractionIntensity.S1:
+      return Motion.spring.tap;
+    case InteractionIntensity.S2:
+      return Motion.spring.press;
+    case InteractionIntensity.S3:
+      return Motion.spring.success;
+    case InteractionIntensity.S4:
+      return Motion.spring.success;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Editor interaction → intensity mapping. Ties editor gestures to the S0–S4
+ * hierarchy so motion and haptics are selected from one contract.
+ */
+export const editorInteractionIntensity = {
+  filterChipToggle: InteractionIntensity.S0,
+  sortChange: InteractionIntensity.S0,
+  likeSave: InteractionIntensity.S1,
+  addToCollection: InteractionIntensity.S1,
+  confirmSelection: InteractionIntensity.S2,
+  send: InteractionIntensity.S2,
+  layerAdd: InteractionIntensity.S2,
+  layerSelect: InteractionIntensity.S2,
+  snapToGuide: InteractionIntensity.S2,
+  zOrderChange: InteractionIntensity.S2,
+  deleteLayer: InteractionIntensity.S3,
+  publishLook: InteractionIntensity.S3,
+  publishPoster: InteractionIntensity.S3,
+  firstPublish: InteractionIntensity.S4,
+} as const;

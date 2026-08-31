@@ -66,24 +66,8 @@ import { isCapabilitySupported } from './capabilities/registry';
 import { POSTER_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_ASPECT_RATIO } from './composition';
 
 // ── CreatorCamera ────────────────────────────────────────────────────
-// Camera component with:
-//   - real tap-to-focus via VisionCamera focusTo() (AE/AF/AWB metering)
-//   - microphone permission ownership with muted-video fallback
-//   - corner brackets (mode-specific aspect ratio guide, refined 2pt)
-//   - center crosshair
-//   - large shutter button with tap=photo / press-and-hold=video
-//   - top bar: close (left), flash + tools (right)
-//   - bottom bar: gallery (left), shutter (center), flip (right)
-//   - gallery thumbnail (64x64, recent photos carousel)
-//   - quick-review overlay (post-capture preview with retake/edit/save)
-//   - multi-capture with frame-review tray (all captures retained)
-//   - grid overlay (rule-of-thirds, behind Tools)
-//   - self-timer with countdown overlay (behind Tools)
-//   - refined gradient overlays (0.25 top, 0.35 bottom)
-//   - proper permission states with art-directed empty states
-//
-// This is a dedicated component — not inline in a screen.
-// The entry screen renders <CreatorCamera /> and receives captures.
+// Camera component with tap-to-focus, tap=photo / press-and-hold=video,
+// multi-capture staging tray, grid overlay, self-timer, and quick-review.
 
 // Shutter constants kept in sync with ShutterButton.tsx (78pt outer, 60pt inner).
 const CORNER_SIZE = 32;
@@ -108,11 +92,9 @@ const RECORDING_MAX_DURATION = 15000; // 15s max for video
 // ShutterButton.tsx via delayLongPress. A quick tap lands as a photo;
 // a hold beyond that threshold starts video recording.
 
-// ── Hands-free capture (Snapchat hands-free pattern) ──
-// When enabled, a 3-second countdown runs, then recording begins
-// automatically and stops at HANDS_FREE_DEFAULT_DURATION. The user
-// can tap to stop early. This lets the user prop the phone and capture
-// without holding the shutter.
+// ── Hands-free capture ──
+// 3-second countdown, then recording begins automatically and stops at
+// HANDS_FREE_DEFAULT_DURATION. The user can tap to stop early.
 const HANDS_FREE_COUNTDOWN = 3; // seconds
 const HANDS_FREE_DEFAULT_DURATION = 10000; // 10s default
 const HANDS_FREE_MAX_DURATION = 30000; // 30s max
@@ -214,6 +196,7 @@ export default function CreatorCamera({
   // VisionCamera v5: "Enabling Audio requires microphone permission."
   const videoOutput = useVideoOutput({ enableAudio: capturePermissions.shouldRecordAudio });
   const [cameraReady, setCameraReady] = useState(false);
+  const [cameraInitError, setCameraInitError] = useState(false);
   // "Starting camera" label is delayed so a fast init never flashes text.
   // Only surfaces if the camera takes more than 800ms to report ready.
   const [showInitLabel, setShowInitLabel] = useState(false);
@@ -255,10 +238,8 @@ export default function CreatorCamera({
   const [timerOption, setTimerOption] = useState<TimerOption>(0);
   const [showGrid, setShowGrid] = useState(false);
   // ── Explicit framing mode ──
-  // Per AGENTS.md §4: brackets and crosshair are NOT shown for ordinary
-  // capture — only for Visual Search or when the user explicitly enables
-  // framing mode via Tools. This keeps the preview as the dominant object
-  // without decorative chrome for everyday Poster/Look capture.
+  // Brackets and crosshair are NOT shown for ordinary capture — only for
+  // Visual Search or when the user explicitly enables framing mode via Tools.
   const [framingMode, setFramingMode] = useState(false);
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
   const [lastImageUri, setLastImageUri] = useState<string | null>(null);
@@ -274,13 +255,11 @@ export default function CreatorCamera({
   const [countdown, setCountdown] = useState<number | null>(null);
   const reviewOpacity = useSharedValue(0);
   const captureFlash = useSharedValue(0);
-  // ── Multi-capture mode (Snapchat Multi Snap pattern) ──
+  // ── Multi-capture mode ──
   // Every capture is retained as a CreatorInitialMedia entry. Poster maps
-  // captures to frames; Look maps captures to layers.
-  // Single capture is the default creation gesture: one shutter tap lands in
-  // the editor immediately. Multi-capture is an explicit mode in Tools and
-  // accumulates into the staging tray. Defaulting multi-capture on adds an
-  // avoidable Done step to every ordinary Poster/Look capture.
+  // captures to frames; Look maps captures to layers. Single capture is the
+  // default; multi-capture is an explicit mode in Tools that accumulates
+  // into the staging tray.
   const [multiCaptureMode, setMultiCaptureMode] = useState(false);
   const [multiCaptures, setMultiCaptures] = useState<CreatorInitialMedia[]>([]);
 
@@ -297,10 +276,8 @@ export default function CreatorCamera({
   const [speedMode, setSpeedMode] = useState<string>(DEFAULT_SPEED);
 
   // ── Green screen (post-capture) ──
-  // vision-camera supports real-time chroma keying via Skia frame processors.
-  // The user selects a background image and key parameters; the settings are
-  // preserved in CreatorInitialMedia.greenScreen so the timeline can
-  // re-render the composite.
+  // Settings are preserved in CreatorInitialMedia.greenScreen so the
+  // timeline can re-render the composite.
   const [showGreenScreenSheet, setShowGreenScreenSheet] = useState(false);
   const [greenScreenSettings, setGreenScreenSettings] = useState<GreenScreenSettings | null>(null);
 
@@ -342,9 +319,8 @@ export default function CreatorCamera({
   // ── Measured capture viewport ──────────────────────────────────────
   // The guide frame adapts to real device dimensions via onLayout instead
   // of hardcoded offsets. Brackets/crosshair are shown ONLY for Visual
-  // Search or explicit framing mode (AGENTS.md §4 — no decorative chrome
-  // for ordinary capture). The authored aspect ratio insets the guide
-  // frame within the available area so brackets describe the actual
+  // Search or explicit framing mode. The authored aspect ratio insets the
+  // guide frame within the available area so brackets describe the actual
   // capture crop.
   const showFramingGuides = isVisualSearch || framingMode;
   const authoredAspectRatio = isPoster ? POSTER_DEFAULT_ASPECT_RATIO : isVisualSearch ? undefined : LOOK_DEFAULT_ASPECT_RATIO;
@@ -398,7 +374,7 @@ export default function CreatorCamera({
       if (!reducedMotion) {
         permissionEntrance.value = withDelay(
           100,
-          withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }),
+          withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance }),
         );
       } else {
         permissionEntrance.value = 1;
@@ -442,14 +418,15 @@ export default function CreatorCamera({
   }, [haptic]);
 
   const toggleFacing = useCallback(() => {
-    haptic.medium();
+    haptic.selection();
     setCameraReady(false);
+    setCameraInitError(false);
     // Quick fade out → swap → fade in. No full rotation; a flip is a
     // device swap, not a spectacle.
     if (!reducedMotion) {
       flipOpacity.value = withSequence(
-        withTiming(0, { duration: Motion.duration.fast, easing: Easing.in(Easing.cubic) }),
-        withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) }),
+        withTiming(0, { duration: Motion.duration.fast, easing: Motion.easing.exit }),
+        withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance }),
       );
     }
     setFacing((p) => (p === 'back' ? 'front' : 'back'));
@@ -466,7 +443,7 @@ export default function CreatorCamera({
       });
   }, [toggleFacing]);
 
-  // ── Swipe-down to dismiss (Snapchat/Instagram pattern) ──
+  // ── Swipe-down to dismiss ──
   // A fast downward swipe from the top area closes the camera. Only
   // activates when the swipe starts in the top 120pt region and moves
   // predominantly downward, so it doesn't conflict with tap-to-focus
@@ -507,6 +484,7 @@ export default function CreatorCamera({
     // session. Block the shutter until the replacement preview reports ready.
     if ((cameraEffect === 'none') !== (nextEffect === 'none')) {
       setCameraReady(false);
+      setCameraInitError(false);
     }
     setCameraEffect(nextEffect);
     CreatorAnalytics.cameraEffectSelected(nextEffect);
@@ -636,8 +614,8 @@ export default function CreatorCamera({
           // Capture flash — white overlay
           if (!reducedMotion) {
             captureFlash.value = withSequence(
-              withTiming(0.8, { duration: Motion.duration.touch, easing: Easing.out(Easing.cubic) }),
-              withTiming(0, { duration: Motion.duration.fast, easing: Easing.in(Easing.cubic) }),
+              withTiming(0.8, { duration: Motion.duration.touch, easing: Motion.easing.entrance }),
+              withTiming(0, { duration: Motion.duration.fast, easing: Motion.easing.exit }),
             );
           }
           // ── Multi-capture: accumulate directly to the staging tray ──
@@ -744,7 +722,7 @@ export default function CreatorCamera({
   // ── Framing mode toggle ──
   // Explicit framing shows brackets + crosshair for ordinary Poster/Look
   // capture. Visual Search always shows framing guides regardless of this
-  // toggle. Per AGENTS.md §4, framing chrome is opt-in, not default.
+  // toggle. Framing chrome is opt-in, not default.
   const toggleFramingMode = useCallback(() => {
     haptic.selection();
     setFramingMode((p) => !p);
@@ -773,7 +751,7 @@ export default function CreatorCamera({
       zoomIndicatorScale.value = withSpring(1, spring.lift);
       zoomIndicatorOpacity.value = withDelay(1200, withTiming(0, { duration: Motion.duration.normal }));
       // Per §5.14: auto-dismiss exit uses timing, not spring.
-      zoomIndicatorScale.value = withDelay(1200, withTiming(0.8, { duration: Motion.duration.normal, easing: Easing.in(Easing.cubic) }));
+      zoomIndicatorScale.value = withDelay(1200, withTiming(0.8, { duration: Motion.duration.normal, easing: Motion.easing.exit }));
     }
   }, [reducedMotion, zoomIndicatorOpacity, zoomIndicatorScale, spring]);
 
@@ -849,8 +827,7 @@ export default function CreatorCamera({
 
     try {
       // Immediate haptic the instant the shutter fires — before the async
-      // capture completes — so the user feels instant response (flagship
-      // camera pattern: iOS Camera, Snapchat).
+      // capture completes — so the user feels instant response.
       haptic.medium();
       const captureStart = Date.now();
       // vision-camera V5: capturePhoto returns an in-memory Photo object.
@@ -874,17 +851,16 @@ export default function CreatorCamera({
         // direct-to-editor or through the review overlay.
         if (!reducedMotion) {
           captureFlash.value = withSequence(
-            withTiming(0.8, { duration: Motion.duration.touch, easing: Easing.out(Easing.cubic) }),
-            withTiming(0, { duration: Motion.duration.fast, easing: Easing.in(Easing.cubic) })
+            withTiming(0.8, { duration: Motion.duration.touch, easing: Motion.easing.entrance }),
+            withTiming(0, { duration: Motion.duration.fast, easing: Motion.easing.exit })
           );
         }
         setCapturedKind('image');
         setCapturedMetadata(photoMetadata);
         // ── Multi-capture: accumulate directly to the staging tray ──
-        // When multi-capture is explicitly enabled (single capture is the
-        // default), photo captures pile up silently like Snapchat Multi
-        // Snap — no per-capture review overlay. The user finishes via the
-        // Done button in the staging tray. Visual search is excluded
+        // When multi-capture is explicitly enabled, photo captures pile up
+        // silently — no per-capture review overlay. The user finishes via
+        // the Done button in the staging tray. Visual search is excluded
         // (different intent — single capture with a confirm step).
         if (multiCaptureMode && !isVisualSearch) {
           // Photo media is constructed inline because buildCaptureMedia is
@@ -977,11 +953,11 @@ export default function CreatorCamera({
     return () => subscription.remove();
   }, []);
 
-  // ── Shutter: tap=photo, press-and-hold=video (Snapchat 2026 pattern) ──
+  // ── Shutter: tap=photo, press-and-hold=video ──
   // Quick tap takes a photo. Press-and-hold (beyond 250ms — see
   // ShutterButton.tsx delayLongPress) starts video recording; releasing
-  // stops it. This eliminates the need for
-  // permanent Photo/Video/Boomerang mode tabs.
+  // stops it. This eliminates the need for permanent Photo/Video/Boomerang
+  // mode tabs.
   //
   // In hands-free mode, a tap starts the 3-second countdown then auto-records.
   // A tap during recording stops it early. Long-press is disabled in
@@ -1105,8 +1081,7 @@ export default function CreatorCamera({
   // Poster maps captures to frames; Look maps captures to layers.
   // Speed and greenScreen metadata are preserved on each clip so the
   // timeline/export engine can apply them at playback.
-  // Triggered from the Done button in the staging tray (Snapchat Multi
-  // Snap "Edit & Send" pattern).
+  // Triggered from the Done button in the staging tray.
   const handleFinishMultiCapture = useCallback(() => {
     if (multiCaptures.length === 0) return;
     haptic.medium();
@@ -1182,6 +1157,14 @@ export default function CreatorCamera({
 
   const handleOpenSettings = useCallback(() => Linking.openSettings(), []);
 
+  const handleRetryCameraInit = useCallback(() => {
+    haptic.light();
+    setCameraInitError(false);
+    setCameraReady(false);
+    setCameraActive(false);
+    setTimeout(() => setCameraActive(true), 100);
+  }, [haptic]);
+
   const handleGalleryLongPress = useCallback(() => {
     // When the parent provides a custom long-press handler (e.g. to open
     // the full library browser), it takes precedence over the default
@@ -1216,6 +1199,40 @@ export default function CreatorCamera({
     return <PermissionState status="unavailable" isPoster={isPoster} entrance={permissionEntrance} onEnable={handleOpenSettings} onGallery={onGallery} />;
   }
 
+  // ── Camera init failure — dedicated error overlay with retry ──
+  if (cameraInitError) {
+    return (
+      <View style={StyleSheet.absoluteFill}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.textSecondary} style={{ marginBottom: Space.xs }} />
+          <Text style={{ fontFamily: Typography.family.semibold, fontSize: TypographyV2.sectionTitle.size, color: colors.textPrimary, marginTop: Space.xs }}>
+            Camera couldn't start
+          </Text>
+          <Text style={{ fontFamily: Typography.family.regular, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight, color: colors.textSecondary, textAlign: 'center', paddingHorizontal: 40 }}>
+            {`Something went wrong initializing the camera. Try again or use your gallery to create your ${isPoster ? 'story' : 'look'}.`}
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.cameraInitErrorBtn, { backgroundColor: colors.brand }, pressed && styles.btnPressed]}
+            onPress={handleRetryCameraInit}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            accessibilityHint="Re-initializes the camera"
+          >
+            <Text style={[styles.cameraInitErrorBtnText, { color: colors.textInverse }]}>Try again</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.cameraInitErrorGalleryBtn, pressed && styles.btnPressed]}
+            onPress={onGallery}
+            accessibilityRole="button"
+            accessibilityLabel="Use gallery instead"
+          >
+            <Text style={[styles.cameraInitErrorGalleryText, { color: colors.textSecondary }]}>Use gallery instead</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   // ── Camera viewfinder ──
   return (
     <GestureDetector gesture={Gesture.Race(pinchGesture, swipeDownDismiss)}>
@@ -1243,9 +1260,10 @@ export default function CreatorCamera({
                     zoom={effectiveZoom}
                     orientationSource="interface"
                     onFrame={effectFrameProcessor}
-                    onStarted={() => setCameraReady(true)}
+                    onStarted={() => { setCameraReady(true); setCameraInitError(false); }}
                     onError={() => {
                       setCameraReady(false);
+                      setCameraInitError(true);
                       show('Camera could not start. Try again or use your gallery.', 'error');
                     }}
                   />
@@ -1259,9 +1277,10 @@ export default function CreatorCamera({
                     torchMode={flash === 'on' ? 'on' : 'off'}
                     zoom={effectiveZoom}
                     orientationSource="interface"
-                    onStarted={() => setCameraReady(true)}
+                    onStarted={() => { setCameraReady(true); setCameraInitError(false); }}
                     onError={() => {
                       setCameraReady(false);
+                      setCameraInitError(true);
                       show('Camera could not start. Try again or use your gallery.', 'error');
                     }}
                   />
@@ -1307,8 +1326,7 @@ export default function CreatorCamera({
       {/* One unobscured capture viewport owns every composition guide. The
           guide frame is measured via onLayout so it adapts to real device
           dimensions instead of hardcoded offsets. Brackets and crosshair
-          are shown ONLY for Visual Search or explicit framing mode
-          (AGENTS.md §4 — no decorative chrome for ordinary capture). For
+          are shown ONLY for Visual Search or explicit framing mode. For
           ordinary Poster/Look capture, only an optional rule-of-thirds
           grid is shown. */}
       <View
@@ -1424,15 +1442,14 @@ export default function CreatorCamera({
         </View>
       </View>
 
-      {/* ── Multi-snap staging tray (Snapchat staging area pattern) ──
+      {/* ── Multi-snap staging tray ──
           Whenever captures exist, a persistent horizontal row of captured
           thumbnails is visible on the camera surface so the user sees their
-          sequence accumulate while shooting (see the creator-poster surface
-          contract). Each thumbnail is tappable to drop that frame. A Done
-          button at the end lets the user finish and enter the editor — the
-          Snapchat Multi Snap "Edit & Send" pattern. The tray is visible
-          whenever captures exist, regardless of the multi-capture toggle,
-          so accumulated captures are never hidden. */}
+          sequence accumulate while shooting. Each thumbnail is tappable to
+          drop that frame. A Done button at the end lets the user finish and
+          enter the editor. The tray is visible whenever captures exist,
+          regardless of the multi-capture toggle, so accumulated captures
+          are never hidden. */}
       {multiCaptures.length > 0 && (
         <View
           style={[styles.stagingTray, { top: Math.max(insets.top, 16) + 56 }]}
@@ -1459,9 +1476,7 @@ export default function CreatorCamera({
                 </View>
               </Pressable>
             ))}
-            {/* Done button — finish multi-capture and enter the editor.
-                Snapchat Multi Snap "Edit & Send" pattern: the user
-                accumulates captures, then taps Done to enter the editor
+            {/* Done button — finish multi-capture and enter the editor
                 with the full batch. */}
             <Pressable
               style={({ pressed }) => [styles.stagingDoneBtn, { backgroundColor: colors.scrimTextTertiary }, pressed && styles.btnPressed]}
@@ -1504,8 +1519,7 @@ export default function CreatorCamera({
           videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none'}
         />
 
-        {/* Flip camera — transparent 44pt target (AGENTS.md §4: ordinary
-            controls default to transparent). The bottom scrim provides
+        {/* Flip camera — transparent 44pt target. The bottom scrim provides
             legibility; no persistent dark plate. */}
         <Pressable
           style={({ pressed }) => [styles.flipBtn, pressed && { backgroundColor: colors.scrimTextTertiary, transform: [{ scale: 0.97 }] }]}
@@ -1691,9 +1705,28 @@ const styles = StyleSheet.create({
   },
   cameraInitLabel: {
     marginTop: Space.sm,
-    fontSize: 12,
+    fontSize: TypographyV2.caption.size,
     // color applied inline via colors.scrimTextSecondary
     fontFamily: Typography.family.regular },
+  cameraInitErrorBtn: {
+    marginTop: Space.md,
+    height: 50,
+    paddingHorizontal: Space.xl,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  cameraInitErrorBtnText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size },
+  cameraInitErrorGalleryBtn: {
+    marginTop: Space.sm,
+    height: 44,
+    paddingHorizontal: Space.md,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  cameraInitErrorGalleryText: {
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size },
   // ── Camera-overlay text colours ────────────────────────────────────
   // The camera preview is always dark regardless of app theme, so overlay
   // controls (brackets, crosshair, grid, labels, shutter ring, review
@@ -1859,7 +1892,7 @@ const styles = StyleSheet.create({
   topRightControls: {
     flexDirection: 'row',
     gap: 8 },
-  // Top bar buttons — transparent (AGENTS.md §4: ordinary controls default to transparent)
+  // Top bar buttons — transparent 44pt targets
   topIconBtn: {
     width: 44,
     height: 44,
@@ -1873,9 +1906,7 @@ const styles = StyleSheet.create({
   },
   // ── Multi-snap staging tray ──
   // A persistent horizontal row of captured thumbnails below the top bar.
-  // Reads as a staging area (Snapchat pattern), not a chrome panel: flat
-  // canvas, hairline-edged thumbs, no enclosing card. The tray recedes in
-  // the squint test — the viewfinder still dominates.
+  // Flat canvas, hairline-edged thumbs, no enclosing card.
   stagingTray: {
     position: 'absolute',
     left: 12,
@@ -1907,11 +1938,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center' },
   stagingOrderText: {
     // color applied inline via colors.scrimTextPrimary
-    fontSize: 9,
+    fontSize: Typography.size.micro,
     fontFamily: Typography.family.medium },
   // Done button — finishes multi-capture and enters the editor.
-  // Snapchat Multi Snap "Edit & Send" pattern: a compact pill with a
-  // checkmark that commits the accumulated batch. Translucent fill.
+  // Compact pill with a checkmark that commits the accumulated batch.
   stagingDoneBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1938,9 +1968,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     paddingTop: 10,
     minHeight: 100 },
-  // Flip camera — transparent 44pt target (AGENTS.md §4: ordinary controls
-  // default to transparent). No persistent dark plate; the bottom scrim
-  // provides legibility over bright previews.
+  // Flip camera — transparent 44pt target. No persistent dark plate; the
+  // bottom scrim provides legibility over bright previews.
   flipBtn: {
     width: 44,
     height: 44,

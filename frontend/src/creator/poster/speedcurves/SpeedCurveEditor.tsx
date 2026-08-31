@@ -537,6 +537,7 @@ const DraggablePoint = React.memo(function DraggablePoint({
     () =>
       Gesture.Pan()
         .minDistance(3)
+        .hitSlop((Control.hit - POINT_HIT) / 2)
         .onBegin(() => {
           'worklet';
           dragXSV.value = 0;
@@ -569,25 +570,30 @@ const DraggablePoint = React.memo(function DraggablePoint({
     <GestureDetector gesture={gesture}>
       <Reanimated.View
         style={[
+          styles.pointHit,
           {
-            position: 'absolute',
-            left: baseX - POINT_RADIUS,
-            top: baseY - POINT_RADIUS,
-            width: POINT_RADIUS * 2,
-            height: POINT_RADIUS * 2,
-            borderRadius: POINT_RADIUS,
-            borderWidth: Stroke.emphasis,
-            borderColor: isSelected ? brandColor : pointBorderColor,
-            backgroundColor: pointFillColor,
+            left: baseX - POINT_HIT / 2,
+            top: baseY - POINT_HIT / 2,
             zIndex: isSelected ? 20 : 10,
           },
           animStyle,
         ]}
+        hitSlop={(Control.hit - POINT_HIT) / 2}
         onStartShouldSetResponder={() => true}
         onResponderGrant={onSelect}
         accessibilityRole="adjustable"
         accessibilityLabel={`Speed ${point.speed}x at position ${Math.round(point.position * 100)}%`}
-      />
+      >
+        <Reanimated.View
+          style={[
+            styles.pointDot,
+            {
+              borderColor: isSelected ? brandColor : pointBorderColor,
+              backgroundColor: pointFillColor,
+            },
+          ]}
+        />
+      </Reanimated.View>
     </GestureDetector>
   );
 });

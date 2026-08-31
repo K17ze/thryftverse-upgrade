@@ -33,8 +33,7 @@ import Reanimated, {
   useSharedValue,
   runOnJS,
   withTiming,
-  withSpring,
-  Easing } from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -150,8 +149,9 @@ const EMOJI_MAX_SPACING = 80;
 const MIN_SIZE = 1;
 const MAX_SIZE = 50;
 const MAX_UNDO_LEVELS = 50;
+let strokeIdCounter = 0;
 
-const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
+const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Catmull-Rom spline → Skia Path (GPU-smoothed strokes)
@@ -404,6 +404,18 @@ export function DrawingWorkspace({
   const reduceMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const [skiaReady, setSkiaReady] = useState(skiaAvailable);
+  const handleRetrySkia = useCallback(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const SkiaModule = require('@shopify/react-native-skia');
+      skiaAvailable = !!(SkiaModule && SkiaModule.Canvas && SkiaModule.Skia);
+    } catch {
+      skiaAvailable = false;
+    }
+    setSkiaReady(skiaAvailable);
+  }, []);
+
   // ── Tool state ──
   const [brushType, setBrushType] = useState<BrushType>('pen');
   const lastDrawBrushRef = useRef<BrushType>('pen');
@@ -546,7 +558,7 @@ export function DrawingWorkspace({
     (x: number, y: number) => {
       currentPointsRef.current = [{ x, y }];
       currentMetaRef.current = {
-        id: `stroke_${Date.now()}`,
+        id: `stroke_${Date.now()}_${++strokeIdCounter}`,
         brushType,
         color: brushType === 'eraser' ? '#000000' : brushColor,
         size: brushSize,
@@ -727,7 +739,7 @@ export function DrawingWorkspace({
           ) : null}
 
           <View style={styles.canvasCenter}>
-            {skiaAvailable ? (
+            {skiaReady ? (
               <Canvas style={{ width: canvasWidth, height: canvasHeight }}>
                 {committedPaths}
                 {livePath}
@@ -737,6 +749,17 @@ export function DrawingWorkspace({
                 <Text style={styles.fallbackText}>
                   Drawing unavailable
                 </Text>
+                <PressScale
+                  onPress={handleRetrySkia}
+                  style={[styles.fallbackRetryBtn, { backgroundColor: colors.brand }]}
+                  accessibilityLabel="Try again"
+                  accessibilityHint="Re-attempts loading the drawing engine"
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.fallbackRetryText, { color: colors.textInverse }]}>
+                    Try again
+                  </Text>
+                </PressScale>
               </View>
             )}
 
@@ -934,7 +957,7 @@ export function DrawingWorkspace({
                         onPress={() => setEmojiBrush((prev) => ({ ...prev, emoji: em }))}
                         accessibilityLabel={`Select ${em} emoji`}
                         accessibilityRole="button"
-                        hitSlop={2}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                         style={[
                           styles.emojiCell,
                           { borderColor: selected ? colors.brand : 'transparent' },
@@ -1093,6 +1116,16 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
       fontFamily: FontFamily.regular },
+    fallbackRetryBtn: {
+      marginTop: Space.md,
+      height: 44,
+      paddingHorizontal: Space.lg,
+      borderRadius: Radius.md,
+      alignItems: 'center',
+      justifyContent: 'center' },
+    fallbackRetryText: {
+      fontFamily: FontFamily.semibold,
+      fontSize: TypographyV2.body.size },
     topBar: {
       position: 'absolute',
       top: 0,
@@ -1144,7 +1177,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       justifyContent: 'center' },
     brushPillText: {
       fontFamily: FontFamily.medium,
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       lineHeight: 18 },
     // ── Sliders ──
     sliderRow: {
@@ -1155,7 +1188,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       justifyContent: 'space-between' },
     sliderLabel: {
       fontFamily: FontFamily.regular,
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       lineHeight: 18,
       color: colors.textSecondary },
     sliderValue: {
