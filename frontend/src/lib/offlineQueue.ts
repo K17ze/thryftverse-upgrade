@@ -36,7 +36,7 @@ interface OfflineQueueState {
   queue: QueuedRequest[];
   deadLetterQueue: QueuedRequest[];
   isProcessing: boolean;
-  pushToQueue: (url: string, options: RequestInit) => void;
+  pushToQueue: (url: string, options: RequestInit) => string;
   removeFromQueue: (id: string) => void;
   flushQueue: (fetchImplementation: (url: RequestInfo | URL, init?: RequestInit) => Promise<Response>) => Promise<void>;
   clearQueue: () => void;
@@ -64,10 +64,14 @@ function requestSignature(url: string, options: RequestInit): string {
   return `${method}:${url}:${body}`;
 }
 
-/** Computes the exponential backoff delay (ms) for a given retry count. */
+/** Computes the exponential backoff delay (ms) for a given retry count.
+ *  Uses full jitter: the actual delay is a random value between 50% and
+ *  100% of the capped exponential, preventing thundering-herd retry
+ *  storms when many queued mutations fail simultaneously. */
 function backoffDelay(retryCount: number): number {
   const delay = BASE_DELAY * Math.pow(2, retryCount);
-  return Math.min(delay, MAX_DELAY);
+  const capped = Math.min(delay, MAX_DELAY);
+  return Math.round(capped * 0.5 + Math.random() * capped * 0.5);
 }
 
 export const useOfflineQueue = create<OfflineQueueState>()(
@@ -124,6 +128,8 @@ export const useOfflineQueue = create<OfflineQueueState>()(
 
           return { queue: [...queue, newRequest] };
         });
+
+        return newRequest.id;
       },
 
       removeFromQueue: (id) => {
@@ -170,10 +176,39 @@ export const useOfflineQueue = create<OfflineQueueState>()(
             // Attempt to fire the stored request
             const response = await fetchImplementation(req.url, req.options);
 
-            if (response.ok || (response.status >= 400 && response.status < 500)) {
-              // If it succeeded or failed with a 4xx client error (unrecoverable),
+            // Remove from queue on success or permanent client errors — but
+            // NOT on 401 (the auth token may have expired and can be refreshed
+            // on a subsequent flush) or 429 (rate limited; honour Retry-After
+            // and keep the item for the next flush cycle). Dropping these would
+            // silently lose the user's write mutation.
+            if (
+              response.ok ||
+              (response.status >= 400 &&
+                response.status < 500 &&
+                response.status !== 401 &&
+                response.status !== 429)
+            ) {
+              // If it succeeded or failed with a permanent 4xx client error,
               // we don't need to try it again.
               removeFromQueue(req.id);
+            } else if (response.status === 429) {
+              // Rate limited — honour the server's Retry-After hint and keep
+              // the item in the queue. Push the effective lastAttemptAt into
+              // the future by (waitMs - backoff) so the existing backoff gate
+              // skips this item until the cooldown has elapsed, without adding
+              // an extra backoff on top.
+              const retryAfterRaw = parseInt(response.headers.get('Retry-After') ?? '60', 10);
+              const waitMs = (Number.isFinite(retryAfterRaw) ? retryAfterRaw : 60) * 1000;
+              set((state) => ({
+                queue: state.queue.map((qReq) =>
+                  qReq.id === req.id
+                    ? {
+                        ...qReq,
+                        lastAttemptAt: Date.now() + waitMs - backoffDelay(qReq.retryCount),
+                      }
+                    : qReq
+                ),
+              }));
             } else {
               // 5xx Server Error or network drop mid-flight: increment retry and keep in queue
               const nextRetryCount = req.retryCount + 1;

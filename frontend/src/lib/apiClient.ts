@@ -356,8 +356,11 @@ function delay(ms: number, signal?: AbortSignal | null): Promise<void> {
 }
 
 function computeBackoffDelay(attempt: number): number {
-  const delayMs = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
-  return Math.min(delayMs, RETRY_MAX_DELAY_MS);
+  const base = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+  // Full jitter: add up to 50% of the base delay as random spread so that
+  // concurrent retry storms don't synchronise on the same backoff slot.
+  const jitter = base * 0.5 * Math.random();
+  return Math.min(base + jitter, RETRY_MAX_DELAY_MS);
 }
 
 /**
@@ -419,6 +422,27 @@ async function fetchWithRetry(
 
     try {
       const response = await fetchWithTimeout(url, options, timeoutMs);
+
+      // Retry 429 (Too Many Requests) by honouring the server's
+      // Retry-After header (or a default backoff) before retrying. This
+      // applies to live requests that aren't routed through the offline
+      // queue — the queue handles 429 separately for persisted mutations.
+      if (response.status === 429 && attempt < maxRetries) {
+        const retryAfterRaw = response.headers.get('Retry-After');
+        let waitMs: number;
+        if (retryAfterRaw) {
+          const parsed = parseInt(retryAfterRaw, 10);
+          // Retry-After can be seconds or an HTTP-date; treat numeric as
+          // seconds, otherwise fall back to the computed backoff.
+          waitMs = Number.isFinite(parsed) && parsed > 0
+            ? parsed * 1000
+            : computeBackoffDelay(attempt);
+        } else {
+          waitMs = computeBackoffDelay(attempt);
+        }
+        await delay(waitMs, options.signal);
+        continue;
+      }
 
       // Retry transient server errors (5xx) but return immediately on 4xx.
       if (isTransientStatus(response.status) && attempt < maxRetries) {
@@ -585,7 +609,7 @@ export interface FetchJsonOptions {
   signal?: AbortSignal;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -884,16 +908,20 @@ export async function fetchJson<T>(
     if (networkState.isInternetReachable === false) {
       // Offline before the request even leaves the device: enqueue the write
       // mutation for later replay via the offline queue (WS33) so the user's
-      // intent is preserved across connectivity gaps.
+      // intent is preserved across connectivity gaps. The thrown error carries
+      // `queuedId` and `status: 'queued'` so callers can distinguish a queued
+      // write (NOT completed) from a real failure — this prevents the UI from
+      // mistaking an offline-queued mutation for a successful submission.
+      let queuedId: string | undefined;
       try {
-        useOfflineQueue.getState().pushToQueue(url, buildQueuedRequestInit(mergedInit));
+        queuedId = useOfflineQueue.getState().pushToQueue(url, buildQueuedRequestInit(mergedInit));
       } catch {
         // Queue persistence is best-effort — never block the offline signal.
       }
       throw new ApiRequestError(
         'You are offline. This action was saved and will be submitted automatically when you reconnect.',
         undefined,
-        { code: OFFLINE_WRITE_QUEUED_CODE }
+        { code: OFFLINE_WRITE_QUEUED_CODE, queuedId, status: 'queued' }
       );
     }
   }
@@ -942,16 +970,19 @@ export async function fetchJson<T>(
         // The connection dropped mid-flight before the server confirmed the
         // result. Enqueue the mutation for replay so the user does not lose
         // the action — the offline queue (WS33) will retry with its own
-        // exponential backoff once connectivity returns.
+        // exponential backoff once connectivity returns. The thrown error
+        // carries `queuedId` and `status: 'queued'` so callers can distinguish
+        // a queued write (result unknown, NOT confirmed) from a real failure.
+        let queuedId: string | undefined;
         try {
-          useOfflineQueue.getState().pushToQueue(url, buildQueuedRequestInit(mergedInit));
+          queuedId = useOfflineQueue.getState().pushToQueue(url, buildQueuedRequestInit(mergedInit));
         } catch {
           // Queue persistence is best-effort.
         }
         throw new ApiRequestError(
           'The connection dropped before the server result was confirmed. Your action was saved offline and will be retried automatically.',
           undefined,
-          { code: OFFLINE_WRITE_QUEUED_CODE }
+          { code: OFFLINE_WRITE_QUEUED_CODE, queuedId, status: 'queued' }
         );
       }
       const errorType = classifyNetworkError(error);

@@ -27,7 +27,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Stroke, Elevation } from '../../theme/designTokens';
+import { Radius } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { hsvToRgb, toHexString } from './ColorMath';
 import type { HSV } from './ColorTypes';
@@ -144,7 +144,7 @@ export function SVPlane({
 
   // Whether the indicator should have a light or dark border
   const indicatorBorderColor =
-    hsv.v > 0.5 && hsv.s < 0.5 ? '#000000' : '#FFFFFF';
+    hsv.v > 0.5 && hsv.s < 0.5 ? '#000000' : colors.scrimTextPrimary;
 
   return (
     <GestureDetector gesture={panGesture}>
@@ -165,7 +165,7 @@ export function SVPlane({
 
         {/* Saturation gradient (white → transparent, left to right) */}
         <LinearGradient
-          colors={['#ffffff', 'rgba(255,255,255,0)']}
+          colors={[colors.scrimTextPrimary, 'rgba(255,255,255,0)']}
           style={[StyleSheet.absoluteFill]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
@@ -199,8 +199,6 @@ export function SVPlane({
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
-    borderWidth: Stroke.hairline,
-    borderColor: 'rgba(0,0,0,0.1)',
   },
   indicator: {
     position: 'absolute',
@@ -208,6 +206,5 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: Radius.full,
     borderWidth: 2,
-    ...Elevation.modal,
   },
 });

@@ -24,7 +24,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import type { CreatorLayer } from './composition';
-import { getLayerAccentColor, getLayerCategoryLabel } from '../components/poster/shared/layerAccents';
+import { getLayerAccentColor } from '../components/poster/shared/layerAccents';
 
 export interface CreatorLayersSheetProps {
   visible: boolean;
@@ -53,8 +53,8 @@ const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ioni
   time: 'time-outline',
   weather: 'partly-sunny-outline' };
 
-const THUMB = 40;
-const ROW_HEIGHT = 56;
+const THUMB = 48;
+const ROW_HEIGHT = 64;
 const ROW_GAP = Space.sm;
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -200,6 +200,34 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
     [overflowLayer, haptic, reorderLayer, duplicateLayer, removeLayer, reduceMotion],
   );
 
+  const handleReorderFromDrag = useCallback(
+    (startIdx: number, deltaRows: number) => {
+      const count = layers.length;
+      const targetIdx = Math.max(0, Math.min(count - 1, startIdx + deltaRows));
+      if (targetIdx === startIdx) return;
+      const dir: 'forward' | 'backward' = targetIdx > startIdx ? 'forward' : 'backward';
+      const steps = Math.abs(targetIdx - startIdx);
+      const layerId = layers[startIdx]?.id;
+      if (!layerId) return;
+      let stepCount = 0;
+      const doStep = () => {
+        if (stepCount >= steps) return;
+        stepCount += 1;
+        if (!reduceMotion) {
+          LayoutAnimation.configureNext({
+            duration: 200,
+            update: { type: LayoutAnimation.Types.easeInEaseOut } });
+        }
+        reorderLayer(layerId, dir);
+        if (stepCount < steps) {
+          setTimeout(doStep, 16);
+        }
+      };
+      doStep();
+    },
+    [layers, reduceMotion, reorderLayer],
+  );
+
   const panGesture = useRef(
     Gesture.Pan()
       .activateAfterLongPress(300)
@@ -215,34 +243,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
         runOnJS(setReorderMode)(false);
         if (deltaRows !== 0 && dragStartIndex.value >= 0) {
           const startIdx = dragStartIndex.value;
-          const targetIdx = Math.max(0, Math.min(layers.length - 1, startIdx + deltaRows));
-          let dir: 'forward' | 'backward' | null = null;
-          if (targetIdx > startIdx) {
-            dir = 'forward';
-          } else if (targetIdx < startIdx) {
-            dir = 'backward';
-          }
-          if (dir) {
-            const steps = Math.abs(targetIdx - startIdx);
-            const layerId = layers[startIdx].id;
-            runOnJS((() => {
-              let count = 0;
-              const doStep = () => {
-                if (count >= steps) return;
-                count += 1;
-                if (!reduceMotion) {
-                  LayoutAnimation.configureNext({
-                    duration: 200,
-                    update: { type: LayoutAnimation.Types.easeInEaseOut } });
-                }
-                reorderLayer(layerId, dir as 'forward' | 'backward');
-                if (count < steps) {
-                  setTimeout(doStep, 16);
-                }
-              };
-              doStep();
-            }))();
-          }
+          runOnJS(handleReorderFromDrag)(startIdx, deltaRows);
         }
         dragStartIndex.value = -1;
       })
@@ -251,29 +252,25 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
   return (
     <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.7}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>{reorderMode ? 'Reorder Layers' : 'Layers'}</Text>
-        {reorderMode ? (
-          <PressScale onPress={handleExitReorder} style={styles.doneBtn} accessibilityLabel="Done reordering" accessibilityHint="Exits reorder mode" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
-          </PressScale>
-        ) : (
-          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers" accessibilityHint="Closes the layers panel" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
-          </PressScale>
-        )}
+        <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers" accessibilityHint="Closes the layers panel" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+        </PressScale>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{reorderMode ? 'Reorder' : 'Layers'}</Text>
+        <PressScale onPress={reorderMode ? handleExitReorder : handleClose} style={styles.doneBtn} accessibilityLabel={reorderMode ? 'Done reordering' : 'Done'} accessibilityHint={reorderMode ? 'Exits reorder mode' : 'Closes the layers panel'} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
+        </PressScale>
       </View>
 
       <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
         {layers.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No layers yet</Text>
-            <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>Add content from the dock below</Text>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No layers yet</Text>
           </View>
         ) : (
           <>
             {reorderMode && (
               <Text style={[styles.reorderHint, { color: colors.textMuted }]}>
-                Long-press a layer to drag, or use the arrows to reorder
+                Drag to reorder
               </Text>
             )}
             {layers.map((layer, index) => {
@@ -356,7 +353,6 @@ function LayerRow({
   onSelect,
   onReorder,
   onVisibility,
-  onLock,
   onQuickDelete,
   onQuickLock,
   onOverflow,
@@ -391,27 +387,10 @@ function LayerRow({
         {
           borderBottomColor: colors.borderSubtle,
           opacity: layer.locked ? 0.5 : (layer.hidden ? 0.3 : 1) },
+        isSelected && !reorderMode && { backgroundColor: colors.brandSubtle },
         isDragging && styles.layerRowDragging,
       ]}
     >
-      {isSelected && !reorderMode && <View style={[styles.selectionAccent, { backgroundColor: colors.brand }]} />}
-
-      {/* Drag handle */}
-      <PressScale
-        onLongPress={() => onLongPressRow(layer.id)}
-        style={styles.dragHandle}
-        accessibilityLabel="Drag handle, long press to reorder"
-        accessibilityHint="Long press then use arrows to move this layer"
-        accessibilityRole="button"
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <Ionicons
-          name="menu-outline"
-          size={IconGrammar.standard}
-          color={reorderMode ? colors.brand : colors.textMuted}
-        />
-      </PressScale>
-
       <PressScale
         onPress={() => { if (!reorderMode) onSelect(layer.id); }}
         onLongPress={() => onLongPressRow(layer.id)}
@@ -421,7 +400,7 @@ function LayerRow({
         accessibilityRole="button"
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
-        <Reanimated.View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type, colors)}20` /* TODO: replace with subtle token once getLayerColor is resolved */ }, layer.hidden && styles.thumbnailHidden, thumbAnimatedStyle]}>
+        <Reanimated.View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type, colors)}20` }, layer.hidden && styles.thumbnailHidden, thumbAnimatedStyle]}>
           {thumbSource ? (
             <ExpoImage source={thumbSource} style={styles.thumbnailImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={thumbSource.uri} enforceEarlyResizing />
           ) : (
@@ -438,21 +417,12 @@ function LayerRow({
             </View>
           )}
         </Reanimated.View>
-        <View style={styles.layerInfo}>
-          <View style={styles.layerNameRow}>
-            <Ionicons
-              name={LAYER_ICONS[layer.type]}
-              size={IconGrammar.metadata}
-              color={layer.hidden ? colors.textMuted : getLayerAccentColor(layer.type)}
-            />
-            <Text
-              style={[styles.layerName, { color: isSelected && !reorderMode ? colors.brand : colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]}
-              numberOfLines={1}
-            >
-              {getLayerDisplayName(layer)}
-            </Text>
-          </View>
-        </View>
+        <Text
+          style={[styles.layerName, { color: colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]}
+          numberOfLines={1}
+        >
+          {getLayerDisplayName(layer)}
+        </Text>
       </PressScale>
 
       <View style={styles.rowActions}>
@@ -480,44 +450,13 @@ function LayerRow({
         ) : (
           <>
             <PressScale
-              onPress={() => onReorder(layer.id, 'forward')}
-              style={styles.actionBtn}
-              accessibilityLabel="Move layer up"
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons name="chevron-up" size={IconGrammar.standard} color={colors.textSecondary} />
-            </PressScale>
-            <PressScale
-              onPress={() => onReorder(layer.id, 'backward')}
-              style={styles.actionBtn}
-              accessibilityLabel="Move layer down"
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons name="chevron-down" size={IconGrammar.standard} color={colors.textSecondary} />
-            </PressScale>
-            <PressScale
               onPress={() => onVisibility(layer.id)}
               style={styles.actionBtn}
               accessibilityLabel={layer.hidden ? 'Show layer' : 'Hide layer'}
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={IconGrammar.standard} color={colors.textSecondary} />
-            </PressScale>
-            <PressScale
-              onPress={() => onLock(layer.id)}
-              style={styles.actionBtn}
-              accessibilityLabel={layer.locked ? 'Unlock layer' : 'Lock layer'}
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons
-                name={layer.locked ? 'lock-closed' : 'lock-open-outline'}
-                size={IconGrammar.standard}
-                color={layer.locked ? colors.warning : colors.textSecondary}
-              />
+              <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={24} color={colors.textSecondary} />
             </PressScale>
             <PressScale
               onPress={() => onOverflow(layer)}
@@ -527,7 +466,17 @@ function LayerRow({
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="ellipsis-horizontal" size={IconGrammar.standard} color={colors.textSecondary} />
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.textMuted} />
+            </PressScale>
+            <PressScale
+              onLongPress={() => onLongPressRow(layer.id)}
+              style={styles.actionBtn}
+              accessibilityLabel="Drag handle, long press to reorder"
+              accessibilityHint="Long press then use arrows to move this layer"
+              accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="reorder-three-outline" size={24} color={colors.textMuted} />
             </PressScale>
           </>
         )}
@@ -652,11 +601,6 @@ function LayerOverflowActionSheet({
         <Text style={[overflowStyles.title, { color: colors.textPrimary }]} numberOfLines={1}>
           {layer ? getLayerDisplayName(layer) : ''}
         </Text>
-        {layer && (
-          <Text style={[overflowStyles.subtitle, { color: colors.textMuted }]}>
-            {capitalizeFirst(getLayerCategoryLabel(layer.type))}
-          </Text>
-        )}
         {options.map((opt) => (
           <Pressable
             key={opt.key}
@@ -709,16 +653,11 @@ const overflowStyles = StyleSheet.create({
   handle: {
     width: 32,
     height: 4,
-    borderRadius: Radius.sm },
+    borderRadius: Radius.md },
   title: {
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.sectionTitle.size,
     marginTop: Space.sm },
-  subtitle: {
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.meta.size,
-    marginTop: Space.xxs,
-    marginBottom: Space.sm },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -739,10 +678,6 @@ const overflowStyles = StyleSheet.create({
   cancelText: {
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.body.size } });
-
-function capitalizeFirst(s: string): string {
-  return s.length > 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-}
 
 function getLayerDisplayName(layer: CreatorLayer): string {
   switch (layer.type) {
@@ -811,19 +746,19 @@ function getLayerThumbnailSource(layer: CreatorLayer): { uri: string } | null {
 function getLayerColor(type: CreatorLayer['type'], colors: ThemeColors): string {
   switch (type) {
     case 'media': return colors.commerceTrust;
-    case 'text': return colors.antiqueGold;
+    case 'text': return colors.brand;
     case 'product': return colors.bronze;
     case 'mention': return colors.social;
     case 'look': return colors.discovery;
     case 'vote': return colors.success;
     case 'quiz': return colors.brand;
     case 'question': return colors.social;
-    case 'emojiSlider': return colors.antiqueGold;
+    case 'emojiSlider': return colors.brand;
     case 'countdown': return colors.bronze;
     case 'decorative': return colors.coownUp;
     case 'draw': return colors.brand;
     case 'gif': return colors.social;
-    case 'music': return colors.antiqueGold;
+    case 'music': return colors.brand;
     case 'link': return colors.brand;
     case 'location': return colors.discovery;
     case 'hashtag': return colors.social;
@@ -841,23 +776,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm },
   title: {
+    flex: 1,
+    textAlign: 'center',
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.sectionTitle.size },
   closeBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm },
+    alignItems: 'center' },
   doneBtn: {
+    width: Control.hit,
     height: Control.hit,
-    paddingHorizontal: Space.sm,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm },
+    alignItems: 'center' },
   doneBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.body.size },
+    fontSize: TypographyV2.bodyStrong.size },
   reorderHint: {
     fontFamily: Typography.family.regular,
     fontSize: TypographyV2.meta.size,
@@ -870,39 +805,21 @@ const styles = StyleSheet.create({
     paddingBottom: Space.lg },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: Space.xl,
-    gap: Space.sm },
+    paddingVertical: Space.xl },
   emptyText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size },
-  emptySubtext: {
     fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.meta.size },
+    fontSize: TypographyV2.bodyStrong.size },
   layerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: Space.sm,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.smMd,
     borderBottomWidth: Stroke.hairline,
     minHeight: ROW_HEIGHT },
   layerRowDragging: {
     opacity: 0.7,
-    borderRadius: Radius.lg,
     ...Elevation.modal },
-  dragHandle: {
-    width: Control.hit,
-    height: Control.hit,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm },
-  selectionAccent: {
-    position: 'absolute',
-    left: 0,
-    top: Space.xs,
-    bottom: Space.xs,
-    width: Stroke.emphasis,
-    borderRadius: Radius.sm },
   rowMain: {
     flex: 1,
     flexDirection: 'row',
@@ -912,7 +829,7 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: THUMB,
     height: THUMB,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden' },
@@ -939,17 +856,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center' },
-  layerInfo: {
-    flex: 1,
-    justifyContent: 'center' },
-  layerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs },
   layerName: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.body.size,
-    flex: 1 },
+    flex: 1,
+    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size },
   rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -958,8 +868,7 @@ const styles = StyleSheet.create({
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm },
+    alignItems: 'center' },
   actionBtnLarge: {
     width: 48,
     height: 48,

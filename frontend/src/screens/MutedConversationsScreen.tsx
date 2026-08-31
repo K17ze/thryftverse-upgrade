@@ -13,6 +13,7 @@ import { ConversationListSkeleton } from '../components/SkeletonLoader';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
 import type { Conversation } from '../domain';
 import { useToast } from '../context/ToastContext';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -20,6 +21,7 @@ export default function MutedConversationsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const conversations = useStore((s) => s.conversations);
   const conversationsLoaded = useStore((s) => s.conversationsLoaded);
   const mutedIds = useStore((s) => s.mutedConversationIds);
@@ -34,7 +36,7 @@ export default function MutedConversationsScreen() {
 
   const handleUnmute = (id: string) => {
     toggleMuted(id).catch(() => {
-      show('Could not unmute this conversation. Check your connection and try again.', 'error');
+      show(t('muted.unmuteError'), 'error');
     });
   };
 
@@ -45,7 +47,7 @@ export default function MutedConversationsScreen() {
         currentUserId={currentUser?.id}
         onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
         actionIcon="notifications-outline"
-        actionLabel="Unmute"
+        actionLabel={t('muted.unmute')}
         onAction={() => handleUnmute(convo.id)}
         isLast={index === mutedConversations.length - 1}
       />
@@ -57,8 +59,8 @@ export default function MutedConversationsScreen() {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Muted conversations"
-          subtitle="Notifications are paused for these chats"
+          title={t('muted.title')}
+          subtitle={t('muted.subtitle')}
           onBack={() => navigation.goBack()}
         />
       }
@@ -70,8 +72,8 @@ export default function MutedConversationsScreen() {
       ) : mutedConversations.length === 0 ? (
         <EmptyState
           icon="notifications-off-outline"
-          title="No muted conversations"
-          subtitle="You haven't muted any chats. Muted conversations will appear here."
+          title={t('muted.noMuted')}
+          subtitle={t('muted.noMutedSubtitle')}
         />
       ) : (
         <FlashList

@@ -8,6 +8,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { formatActivityTimestamp } from '../../utils/dateFormat';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 function resolveIdentity(conversation: Conversation, currentUserId?: string) {
   if (conversation.type === 'group') {
@@ -58,6 +59,7 @@ export function ConversationManagementRow({
   isLast?: boolean;
 }) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const identity = resolveIdentity(conversation, currentUserId);
   const actionColor = destructive ? colors.danger : colors.textPrimary;
 
@@ -69,7 +71,7 @@ export function ConversationManagementRow({
         activeOpacity={0.7}
         scaleValue={0.99}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${identity.title}`}
+        accessibilityLabel={t('inbox.openConversation', { title: identity.title })}
       >
         {identity.avatar ? (
           <CachedImage
@@ -110,7 +112,7 @@ export function ConversationManagementRow({
         scaleValue={0.94}
         hapticFeedback={destructive ? 'medium' : 'light'}
         accessibilityRole="button"
-        accessibilityLabel={`${actionLabel} ${identity.title}`}
+        accessibilityLabel={t('inbox.performAction', { action: actionLabel, title: identity.title })}
       >
         <Ionicons name={actionIcon} size={20} color={actionColor} />
       </AnimatedPressable>

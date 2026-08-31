@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { AppState } from 'react-native';
 import type { CreatorDocument, CreatorLayer, CreatorPage } from './composition';
 import {
   createEmptyDocument,
@@ -32,6 +33,10 @@ export interface CreatorContextValue {
   isDirty: boolean;
   autosaveStatus: 'idle' | 'saving' | 'saved' | 'failed';
   isLoadingDraft: boolean;
+  /** Set when a draft load failed on mount (corrupt/missing). null otherwise. */
+  draftError: string | null;
+  /** Clear the draft error and retry loading the given draft id. */
+  retryDraftLoad: (id: string) => void;
 
   setDocument: (doc: CreatorDocument) => void;
   /** Commit a document update through the history stack (undo/redo). */
@@ -302,10 +307,15 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
   const [isDirty, setIsDirty] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   const historyRef = useRef(new HistoryStack(initialDoc));
   const lastSavedDocRef = useRef(JSON.stringify(initialDoc));
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Always-current reference to the flush-save handler so the AppState
+  // listener and unmount cleanup can invoke the latest implementation
+  // without re-subscribing on every render.
+  const flushSaveRef = useRef<(() => Promise<void>) | null>(null);
 
   // ── Durable project store refs ─────────────────────────────────────
   // Lazy-initialized singletons. The ProjectStore persists project packages
@@ -419,12 +429,14 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     if (!draftId) return;
     let cancelled = false;
     setIsLoadingDraft(true);
+    setDraftError(null);
     CreatorDraftService.loadDraft(draftId).then((doc) => {
       if (cancelled || !doc) return;
       setDocument(doc);
       CreatorAnalytics.draftLoad(doc.type);
     }).catch(() => {
       // Corrupt or missing draft — stay with empty document
+      if (!cancelled) setDraftError('Failed to load draft');
     }).finally(() => {
       if (!cancelled) setIsLoadingDraft(false);
     });
@@ -446,6 +458,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     if (!sourceDocumentId || draftId || templateId) return;
     let cancelled = false;
     setIsLoadingDraft(true);
+    setDraftError(null);
     CreatorDraftService.loadDraft(sourceDocumentId).then((sourceDoc) => {
       if (cancelled || !sourceDoc) return;
       if (!sourceDoc.metadata.allowRemix) return;
@@ -457,13 +470,14 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
           sourceDocumentId: sourceDoc.id,
           sourceCreatorId: sourceDoc.metadata.sourceCreatorId,
           allowRemix: false,
-          title: `Remix of ${sourceDoc.metadata.title || 'Untitled'}`,
+          title: `Recreated from ${sourceDoc.metadata.title || 'Untitled'}`,
         },
         updatedAt: new Date().toISOString(),
       };
       setDocument(remixedDoc);
     }).catch(() => {
       // Source not found — stay with empty document
+      if (!cancelled) setDraftError('Failed to load draft');
     }).finally(() => {
       if (!cancelled) setIsLoadingDraft(false);
     });
@@ -861,6 +875,22 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       return true;
     }
     return false;
+  }, [setDocument]);
+
+  // Retry a failed draft load: clears the error, sets loading, and re-attempts.
+  const retryDraftLoad = useCallback((id: string) => {
+    setDraftError(null);
+    setIsLoadingDraft(true);
+    CreatorDraftService.loadDraft(id).then((doc) => {
+      if (doc) {
+        setDocument(doc);
+        CreatorAnalytics.draftLoad(doc.type);
+      }
+    }).catch(() => {
+      setDraftError('Failed to load draft');
+    }).finally(() => {
+      setIsLoadingDraft(false);
+    });
   }, [setDocument]);
 
   // ─── Copy / Paste ────────────────────────────────────────────────────────
@@ -1501,6 +1531,43 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     };
   }, [document, isDirty]);
 
+  // Keep flushSaveRef pointed at the latest retryAutosave (which reads from
+  // the history stack and guards on isDirty, mirroring the debounce path).
+  useEffect(() => {
+    flushSaveRef.current = retryAutosave;
+  }, [retryAutosave]);
+
+  // Flush pending edits when the app is backgrounded or becomes inactive.
+  // The 5s debounce timer may fire after the OS suspends the app (where the
+  // save may not complete) or be killed before it fires, losing edits. Clear
+  // the pending timer and save immediately on these transitions.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        if (autosaveTimerRef.current) {
+          clearTimeout(autosaveTimerRef.current);
+          autosaveTimerRef.current = null;
+        }
+        flushSaveRef.current?.();
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  // Flush any remaining dirty state on unmount so edits aren't lost when the
+  // provider tears down before the debounce timer fires.
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      flushSaveRef.current?.();
+    };
+  }, []);
+
   const value = useMemo<CreatorContextValue>(
     () => ({
       document,
@@ -1513,6 +1580,8 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       isDirty,
       autosaveStatus,
       isLoadingDraft,
+      draftError,
+      retryDraftLoad,
       setDocument,
       commitDocument: commit,
       setActivePageIndex,
@@ -1582,6 +1651,8 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       isDirty,
       autosaveStatus,
       isLoadingDraft,
+      draftError,
+      retryDraftLoad,
       setDocument,
       commit,
       setActivePageIndex,

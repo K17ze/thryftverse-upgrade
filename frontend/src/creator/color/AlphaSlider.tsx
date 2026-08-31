@@ -23,7 +23,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Radius, Stroke, Elevation } from '../../theme/designTokens';
+import { Radius, Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { toRgbaString } from './ColorMath';
 import type { CreatorColor } from './ColorTypes';
@@ -53,6 +53,7 @@ interface AlphaSliderProps {
  * This is lightweight and works without Skia or SVG.
  */
 function CheckerboardPattern({ size }: { size: number }) {
+  const { colors } = useAppTheme();
   const cellSize = 6;
   const cols = Math.ceil(size / cellSize);
   const rows = 2;
@@ -70,7 +71,7 @@ function CheckerboardPattern({ size }: { size: number }) {
             top: row * cellSize,
             width: cellSize,
             height: cellSize,
-            backgroundColor: isLight ? '#ffffff' : '#cccccc',
+            backgroundColor: isLight ? colors.scrimTextPrimary : '#cccccc',
           }}
         />,
       );
@@ -260,14 +261,11 @@ const styles = StyleSheet.create({
   container: {
     justifyContent: 'center',
     overflow: 'visible',
-    borderWidth: Stroke.hairline,
-    borderColor: 'rgba(0,0,0,0.1)',
     borderRadius: Radius.sm,
   },
   thumb: {
     position: 'absolute',
     top: 2,
     borderWidth: Stroke.emphasis,
-    ...Elevation.modal,
   },
 });

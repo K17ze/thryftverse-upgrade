@@ -33,7 +33,7 @@
  * Per AGENTS.md §14: complete state coverage (empty, populated, error,
  *   unsupported, transcribing).
  */
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -42,12 +42,7 @@ import {
   ScrollView,
   TextInput,
   FlatList,
-  ActivityIndicator,
-  Animated,
-  type LayoutChangeEvent,
-  type GestureResponderEvent,
-  type PanResponderGestureState,
-  PanResponder } from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
@@ -60,9 +55,9 @@ import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
+import { CreatorSlider } from '../../controls';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
-import { Motion } from '../../../theme/motionTokens';
 import {
   captionService,
   CaptionUnsupportedError,
@@ -92,6 +87,17 @@ export interface CaptionEditorSheetProps {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+const CAPTION_COLORS = [
+  '#ffffff',
+  '#000000',
+  '#C9A46A',
+  '#F4F0E8',
+  '#9b0202',
+  '#215634',
+  '#4A7AC4',
+  '#B85566',
+];
+
 function formatTime(ms: number): string {
   const totalSeconds = ms / 1000;
   const seconds = Math.floor(totalSeconds);
@@ -99,10 +105,6 @@ function formatTime(ms: number): string {
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${minutes}:${String(secs).padStart(2, '0')}.${tenths}`;
-}
-
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, v));
 }
 
 // ── Component ────────────────────────────────────────────────────────
@@ -130,47 +132,13 @@ export function CaptionEditorSheet({
   const [entryText, setEntryText] = useState('');
   const [entryStart, setEntryStart] = useState('');
   const [entryEnd, setEntryEnd] = useState('');
+  const [entryFocused, setEntryFocused] = useState(false);
 
   // Editing state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [editStart, setEditStart] = useState('');
   const [editEnd, setEditEnd] = useState('');
-
-  // ── Font rail underline animation ──────────────────────────────────
-  const fontLayouts = useRef<Array<{ x: number; width: number }>>([]);
-  const fontUnderlineLeft = useRef(new Animated.Value(0)).current;
-  const fontUnderlineWidth = useRef(new Animated.Value(0)).current;
-
-  const animateFontUnderline = useCallback(
-    (index: number) => {
-      const layout = fontLayouts.current[index];
-      if (!layout) return;
-      if (reducedMotion) {
-        fontUnderlineLeft.setValue(layout.x);
-        fontUnderlineWidth.setValue(layout.width);
-      } else {
-        Animated.parallel([
-          Animated.spring(fontUnderlineLeft, {
-            toValue: layout.x,
-            useNativeDriver: false, // left/width are not native-driver supported
-            stiffness: Motion.spring.indicator.stiffness,
-            damping: Motion.spring.indicator.damping }),
-          Animated.spring(fontUnderlineWidth, {
-            toValue: layout.width,
-            useNativeDriver: false, // left/width are not native-driver supported
-            stiffness: Motion.spring.indicator.stiffness,
-            damping: Motion.spring.indicator.damping }),
-        ]).start();
-      }
-    },
-    [fontUnderlineLeft, fontUnderlineWidth, reducedMotion],
-  );
-
-  useEffect(() => {
-    const idx = TEXT_STYLE_PRESETS.findIndex((p) => p.id === style.textStyle);
-    if (idx >= 0) animateFontUnderline(idx);
-  }, [style.textStyle, animateFontUnderline]);
 
   const sttAvailable = captionService.isAvailable();
 
@@ -230,6 +198,7 @@ export function CaptionEditorSheet({
 
     if (!Number.isFinite(startMs) || startMs < 0) return;
     if (!Number.isFinite(endMs) || endMs <= startMs) return;
+    if (totalDurationMs && endMs > totalDurationMs) return;
 
     const segment = captionService.createManualCaption(text, startMs, endMs);
     const currentTrack = track ?? captionService.createTrack([], 'en', 'manual');
@@ -241,7 +210,7 @@ export function CaptionEditorSheet({
     setEntryStart('');
     setEntryEnd('');
     if (!reducedMotion) haptic.light();
-  }, [entryText, entryStart, entryEnd, track, haptic, reducedMotion]);
+  }, [entryText, entryStart, entryEnd, track, haptic, reducedMotion, totalDurationMs]);
 
   // ── Edit caption ──
   const handleStartEdit = useCallback(
@@ -269,13 +238,14 @@ export function CaptionEditorSheet({
     const endMs = parseFloat(editEnd) * 1000;
     if (!Number.isFinite(startMs) || startMs < 0) return;
     if (!Number.isFinite(endMs) || endMs <= startMs) return;
+    if (totalDurationMs && endMs > totalDurationMs) return;
 
     let updated = captionService.editCaption(track, editingId, text);
     updated = captionService.adjustTiming(updated, editingId, startMs, endMs);
     setTrack(updated);
     setEditingId(null);
     if (!reducedMotion) haptic.light();
-  }, [editingId, track, editText, editStart, editEnd, haptic, reducedMotion]);
+  }, [editingId, track, editText, editStart, editEnd, haptic, reducedMotion, totalDurationMs]);
 
   // ── Delete caption ──
   const handleDeleteCaption = useCallback(
@@ -321,7 +291,6 @@ export function CaptionEditorSheet({
       >
         {/* ── Header ──────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Captions</Text>
           <PressScale
             onPress={handleClose}
             style={styles.closeBtn}
@@ -331,21 +300,27 @@ export function CaptionEditorSheet({
           >
             <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Captions</Text>
+          <PressScale
+            onPress={handleConfirm}
+            style={styles.doneBtn}
+            accessibilityLabel="Done"
+            accessibilityRole="button"
+            accessibilityHint="Apply captions and close"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
+          </PressScale>
         </View>
 
         {/* ── Auto-generate section ───────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Auto-Generate
-          </Text>
-
           <Pressable
             onPress={handleAutoGenerate}
             disabled={!sttAvailable || autoStatus === 'transcribing'}
             style={[
               styles.autoBtn,
-              {
-                backgroundColor: sttAvailable ? colors.brand : colors.surfaceAlt },
+              { backgroundColor: colors.surfaceAlt },
             ]}
             accessibilityLabel="Auto-generate captions"
             accessibilityRole="button"
@@ -354,34 +329,31 @@ export function CaptionEditorSheet({
               busy: autoStatus === 'transcribing' }}
             accessibilityHint={
               sttAvailable
-                ? 'Transcribes the video audio into captions'
-                : 'Auto captions require a speech recognition module'
+                ? 'Transcribe video audio to captions'
+                : 'Auto captions need speech recognition'
             }
           >
             {autoStatus === 'transcribing' ? (
-              <ActivityIndicator size="small" color={colors.textInverse} />
+              <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
               <Ionicons
-                name="bulb-outline"
-                size={IconGrammar.metadata}
-                color={sttAvailable ? colors.textInverse : colors.textMuted}
+                name="sparkles-outline"
+                size={16}
+                color={sttAvailable ? colors.textPrimary : colors.textMuted}
               />
             )}
             <Text
               style={[
                 styles.autoBtnText,
-                { color: sttAvailable ? colors.textInverse : colors.textMuted },
+                { color: sttAvailable ? colors.textPrimary : colors.textMuted },
               ]}
             >
               {autoStatus === 'transcribing'
                 ? 'Transcribing…'
                 : sttAvailable
-                  ? 'Auto-Generate Captions'
-                  : 'Auto-Generate Unavailable'}
+                  ? 'Auto-Generate'
+                  : 'Unavailable'}
             </Text>
-            {sttAvailable && autoStatus !== 'transcribing' && (
-              <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textInverse} />
-            )}
           </Pressable>
 
           {/* Truthful status messaging */}
@@ -389,8 +361,7 @@ export function CaptionEditorSheet({
             <View style={styles.noticeBox}>
               <Ionicons name="information-circle-outline" size={IconGrammar.metadata} color={colors.textMuted} />
               <Text style={[styles.noticeText, { color: colors.textMuted }]}>
-                Auto captions require a speech recognition module. You can add
-                captions manually below.
+                Auto captions need speech recognition. Add manually below.
               </Text>
             </View>
           )}
@@ -398,7 +369,7 @@ export function CaptionEditorSheet({
             <View style={styles.noticeBox}>
               <Ionicons name="alert-circle-outline" size={IconGrammar.metadata} color={colors.danger} />
               <Text style={[styles.noticeText, { color: colors.danger }]}>
-                {autoError || 'Transcription failed. Please try again.'}
+                {autoError || 'Transcription failed. Try again.'}
               </Text>
             </View>
           )}
@@ -406,7 +377,7 @@ export function CaptionEditorSheet({
             <View style={styles.noticeBox}>
               <Ionicons name="checkmark-circle-outline" size={IconGrammar.metadata} color={colors.success} />
               <Text style={[styles.noticeText, { color: colors.success }]}>
-                Captions generated. Edit them below.
+                Captions generated. Edit below.
               </Text>
             </View>
           )}
@@ -416,16 +387,14 @@ export function CaptionEditorSheet({
 
         {/* ── Manual caption entry ────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Add Caption
-          </Text>
-
           <TextInput
-            style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
-            placeholder="Type caption text…"
+            style={[styles.input, { color: colors.textPrimary, borderColor: entryFocused ? colors.brand : colors.border, borderWidth: entryFocused ? Stroke.emphasis : Stroke.standard }]}
+            placeholder="Type caption..."
             placeholderTextColor={colors.textMuted}
             value={entryText}
             onChangeText={setEntryText}
+            onFocus={() => setEntryFocused(true)}
+            onBlur={() => setEntryFocused(false)}
             multiline
             maxLength={200}
             accessibilityLabel="Caption text input"
@@ -498,20 +467,9 @@ export function CaptionEditorSheet({
 
         {/* ── Caption list ────────────────────────────────────────── */}
         <View style={styles.section}>
-          <View style={styles.listHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-              Captions
-            </Text>
-            {segmentCount > 0 && (
-              <Text style={[styles.countBadge, { color: colors.textMuted }]}>
-                {segmentCount}
-              </Text>
-            )}
-          </View>
-
           {segmentCount === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                 No captions yet
               </Text>
             </View>
@@ -546,98 +504,115 @@ export function CaptionEditorSheet({
 
         {/* ── Style controls ──────────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Style
-          </Text>
-
           {/* Font preset rail */}
-          <Text style={[styles.subLabel, { color: colors.textSecondary }]}>Font</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.fontRail}
           >
-            {TEXT_STYLE_PRESETS.map((preset, i) => {
+            {TEXT_STYLE_PRESETS.map((preset) => {
               const isSelected = style.textStyle === preset.id;
               return (
-                <View
+                <Pressable
                   key={preset.id}
-                  onLayout={(e) => {
-                    fontLayouts.current[i] = {
-                      x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width };
-                    if (isSelected) animateFontUnderline(i);
-                  }}
+                  onPress={() => handleStyleChange({ textStyle: preset.id })}
+                  style={[
+                    styles.fontPill,
+                    {
+                      backgroundColor: 'transparent',
+                      borderColor: isSelected ? colors.brand : colors.border,
+                      borderWidth: isSelected ? Stroke.emphasis : Stroke.standard },
+                  ]}
+                  accessibilityLabel={`Font: ${preset.name}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
                 >
-                  <Pressable
-                    onPress={() => handleStyleChange({ textStyle: preset.id })}
-                    style={styles.fontTab}
-                    accessibilityLabel={`Font: ${preset.name}`}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
+                  <Text
+                    style={[
+                      styles.fontPillText,
+                      {
+                        color: isSelected ? colors.textPrimary : colors.textSecondary,
+                        fontFamily: preset.fontFamily },
+                    ]}
                   >
-                    <Text
-                      style={[
-                        styles.fontTabText,
-                        {
-                          color: isSelected ? colors.brand : colors.textSecondary,
-                          fontFamily: preset.fontFamily },
-                      ]}
-                    >
-                      {preset.name}
-                    </Text>
-                  </Pressable>
-                </View>
+                    {preset.name}
+                  </Text>
+                </Pressable>
               );
             })}
-            <Animated.View
-              style={[
-                styles.tabUnderline,
-                { left: fontUnderlineLeft, width: fontUnderlineWidth },
-              ]}
-            />
           </ScrollView>
 
           {/* Font size slider */}
-          <SliderRow
-            label="Font Size"
-            valueText={`${Math.round(style.fontSize)}pt`}
-            min={10}
-            max={36}
-            value={style.fontSize}
-            trackColor={colors.border}
-            fillColor={colors.brand}
-            thumbColor={colors.textPrimary}
-            labelColor={colors.textPrimary}
-            valueColor={colors.textMuted}
-            onChange={(v) => handleStyleChange({ fontSize: Math.round(v) })}
-          />
+          <View style={styles.sliderRow}>
+            <View style={styles.sliderHeader}>
+              <Text style={[styles.sliderLabel, { color: colors.textSecondary }]}>Size</Text>
+              <Text style={[styles.sliderValue, { color: colors.textMuted }]}>{Math.round(style.fontSize)}pt</Text>
+            </View>
+            <CreatorSlider
+              value={style.fontSize}
+              min={10}
+              max={36}
+              step={1}
+              onValueChange={(v) => handleStyleChange({ fontSize: Math.round(v) })}
+              accessibilityLabel="Font size"
+            />
+          </View>
 
           {/* Text color */}
-          <Text style={[styles.subLabel, { color: colors.textSecondary }]}>
-            Text Color
-          </Text>
-          <ColorSwatchRow
-            colors={colors}
-            currentColor={style.textColor}
-            onColorChange={(c) => handleStyleChange({ textColor: c })}
-          />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.swatchRow}
+          >
+            {CAPTION_COLORS.map((c) => {
+              const isSelected = style.textColor.toLowerCase() === c.toLowerCase();
+              return (
+                <Pressable
+                  key={c}
+                  onPress={() => handleStyleChange({ textColor: c })}
+                  style={[
+                    styles.swatch,
+                    { backgroundColor: c },
+                    isSelected && { borderColor: colors.brand, borderWidth: Stroke.emphasis },
+                  ]}
+                  accessibilityLabel={`Text color ${c}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                />
+              );
+            })}
+          </ScrollView>
 
           {/* Highlight color */}
-          <Text style={[styles.subLabel, { color: colors.textSecondary }]}>
-            Highlight Color
-          </Text>
-          <ColorSwatchRow
-            colors={colors}
-            currentColor={style.highlightColor}
-            onColorChange={(c) => handleStyleChange({ highlightColor: c })}
-          />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.swatchRow}
+          >
+            {CAPTION_COLORS.map((c) => {
+              const isSelected = style.highlightColor.toLowerCase() === c.toLowerCase();
+              return (
+                <Pressable
+                  key={c}
+                  onPress={() => handleStyleChange({ highlightColor: c })}
+                  style={[
+                    styles.swatch,
+                    { backgroundColor: c },
+                    isSelected && { borderColor: colors.brand, borderWidth: Stroke.emphasis },
+                  ]}
+                  accessibilityLabel={`Highlight color ${c}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                />
+              );
+            })}
+          </ScrollView>
 
           {/* Background toggle */}
           <Pressable
             onPress={() =>
               handleStyleChange({
-                backgroundColor: style.backgroundColor ? undefined : 'rgba(0,0,0,0.5)' })
+                backgroundColor: style.backgroundColor ? undefined : colors.mediaOverlayScrim })
             }
             style={styles.toggleRow}
             accessibilityLabel="Caption background"
@@ -645,14 +620,9 @@ export function CaptionEditorSheet({
             accessibilityState={{ checked: !!style.backgroundColor }}
             hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
           >
-            <View style={styles.toggleTextWrap}>
-              <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>
-                Background
-              </Text>
-              <Text style={[styles.toggleHint, { color: colors.textMuted }]}>
-                Show a semi-transparent background behind captions.
-              </Text>
-            </View>
+            <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>
+              Background
+            </Text>
             <View
               style={[
                 styles.switchTrack,
@@ -673,19 +643,6 @@ export function CaptionEditorSheet({
           </Pressable>
         </View>
 
-        {/* ── Done ────────────────────────────────────────────────── */}
-        <View style={styles.footer}>
-          <Pressable
-            onPress={handleConfirm}
-            style={[styles.doneBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Done"
-            accessibilityRole="button"
-            accessibilityHint="Applies the captions and closes the sheet"
-          >
-            <Text style={[styles.doneBtnText, { color: colors.textInverse }]}>Done</Text>
-            <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.textInverse} />
-          </Pressable>
-        </View>
       </ScrollView>
     </SheetContainer>
   );
@@ -723,8 +680,6 @@ const CaptionRow = React.memo(function CaptionRow({
   onDelete,
   colors,
   styles }: CaptionRowProps) {
-  const hasWords = Boolean(segment.words && segment.words.length > 0);
-
   if (isEditing) {
     return (
       <View style={[styles.editRow, { borderColor: colors.brand }]}>
@@ -780,193 +735,40 @@ const CaptionRow = React.memo(function CaptionRow({
           >
             <Text style={[styles.editActionText, { color: colors.textSecondary }]}>Cancel</Text>
           </Pressable>
+          <Pressable
+            onPress={() => onDelete(segment.id)}
+            style={[styles.editActionBtn, { borderColor: colors.danger, borderWidth: Stroke.standard }]}
+            accessibilityLabel="Delete caption"
+            accessibilityRole="button"
+          >
+            <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
+            <Text style={[styles.editActionText, { color: colors.danger }]}>Delete</Text>
+          </Pressable>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.captionRow}>
-      <Pressable
-        onPress={() => onStartEdit(segment)}
-        style={styles.captionContent}
-        accessibilityLabel={`Caption: ${segment.text}, ${formatTime(segment.startMs)} to ${formatTime(segment.endMs)}`}
-        accessibilityRole="button"
+    <Pressable
+      onPress={() => onStartEdit(segment)}
+      style={styles.captionRow}
+      accessibilityLabel={`Caption: ${segment.text}, ${formatTime(segment.startMs)}`}
+      accessibilityRole="button"
+    >
+      <Text style={[styles.captionTime, { color: colors.textMuted }]}>
+        {formatTime(segment.startMs)}
+      </Text>
+      <Text
+        style={[styles.captionText, { color: colors.textPrimary }]}
+        numberOfLines={1}
       >
-        <Text
-          style={[styles.captionText, { color: colors.textPrimary }]}
-          numberOfLines={2}
-        >
-          {segment.text}
-        </Text>
-        <View style={styles.captionMeta}>
-          <Text style={[styles.captionTime, { color: colors.textMuted }]}>
-            {formatTime(segment.startMs)} – {formatTime(segment.endMs)}
-          </Text>
-          {hasWords && (
-            <View style={[styles.wordBadge, { backgroundColor: colors.brandSubtle }]}>
-              <Text style={[styles.wordBadgeText, { color: colors.brand }]}>word-by-word</Text>
-            </View>
-          )}
-          {segment.confidence !== undefined && (
-            <View style={[styles.wordBadge, { backgroundColor: colors.brandSubtle }]}>
-              <Text style={[styles.wordBadgeText, { color: colors.brand }]}>auto</Text>
-            </View>
-          )}
-        </View>
-      </Pressable>
-      <Pressable
-        onPress={() => onDelete(segment.id)}
-        style={styles.deleteBtn}
-        accessibilityLabel="Delete caption"
-        accessibilityRole="button"
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
-      </Pressable>
-    </View>
+        {segment.text}
+      </Text>
+      <Ionicons name="create-outline" size={20} color={colors.textMuted} />
+    </Pressable>
   );
 });
-
-// ── Color swatch row ─────────────────────────────────────────────────
-
-const CAPTION_COLORS = [
-  '#ffffff',
-  '#000000',
-  '#C9A46A',
-  '#F4F0E8',
-  '#9b0202',
-  '#215634',
-  '#4A7AC4',
-  '#B85566',
-];
-
-interface ColorSwatchRowProps {
-  colors: ThemeColors;
-  currentColor: string;
-  onColorChange: (color: string) => void;
-}
-
-function ColorSwatchRow({ colors, currentColor, onColorChange }: ColorSwatchRowProps) {
-  const haptic = useHaptic();
-  const reducedMotion = useReducedMotion();
-  const styles = useSheetStyles(colors);
-
-  return (
-    <View style={styles.swatchRow}>
-      {CAPTION_COLORS.map((c) => {
-        const isSelected = currentColor.toLowerCase() === c.toLowerCase();
-        return (
-          <Pressable
-            key={c}
-            onPress={() => {
-              if (!reducedMotion) haptic.selection();
-              onColorChange(c);
-            }}
-            style={[
-              styles.swatch,
-              { backgroundColor: c },
-              isSelected && { borderColor: colors.brand, borderWidth: Stroke.emphasis },
-            ]}
-            accessibilityLabel={`Color ${c}`}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isSelected }}
-          />
-        );
-      })}
-    </View>
-  );
-}
-
-// ── Slider row (reused pattern from AudioBrowserSheet) ───────────────
-
-interface SliderRowProps {
-  label: string;
-  valueText: string;
-  min: number;
-  max: number;
-  value: number;
-  trackColor: string;
-  fillColor: string;
-  thumbColor: string;
-  labelColor: string;
-  valueColor: string;
-  onChange: (value: number) => void;
-  disabled?: boolean;
-}
-
-function SliderRow({
-  label,
-  valueText,
-  min,
-  max,
-  value,
-  trackColor,
-  fillColor,
-  thumbColor,
-  labelColor,
-  valueColor,
-  onChange,
-  disabled = false }: SliderRowProps) {
-  const { colors } = useAppTheme();
-  const styles = useSheetStyles(colors);
-  const trackWidthRef = useRef(0);
-  const [trackWidth, setTrackWidth] = useState(0);
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    trackWidthRef.current = e.nativeEvent.layout.width;
-    setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const range = max - min;
-  const clamped = clamp(value, min, max);
-  const ratio = range === 0 ? 0 : (clamped - min) / range;
-  const trackLayoutWidth = trackWidth > 0 ? trackWidth : 1;
-  const thumbPosition = ratio * trackLayoutWidth;
-
-  const valueToPosition = useCallback(
-    (x: number) => {
-      const r = Math.min(1, Math.max(0, x / trackLayoutWidth));
-      return min + r * range;
-    },
-    [trackLayoutWidth, min, range],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => !disabled,
-        onMoveShouldSetPanResponder: () => !disabled,
-        onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-          const next = valueToPosition(thumbPosition + g.dx);
-          onChange(Math.round(next * 10) / 10);
-        },
-        onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thumbPosition, valueToPosition, onChange, disabled],
-  );
-
-  const opacity = disabled ? 0.4 : 1;
-
-  return (
-    <View style={[styles.sliderRow, { opacity }]}>
-      <View style={styles.sliderHeader}>
-        <Text style={[styles.sliderLabel, { color: labelColor, fontFamily: FontFamily.regular }]}>
-          {label}
-        </Text>
-        <Text style={[styles.sliderValue, { color: valueColor, fontFamily: FontFamily.medium }]}>
-          {valueText}
-        </Text>
-      </View>
-      <View style={styles.trackWrap} onLayout={handleLayout} {...panResponder.panHandlers}>
-        <View style={[styles.track, { backgroundColor: trackColor }]} />
-        <View style={[styles.fill, { width: thumbPosition, backgroundColor: fillColor }]} />
-        <View style={[styles.thumb, { left: thumbPosition, backgroundColor: thumbColor }]} />
-      </View>
-    </View>
-  );
-}
 
 // ── Styles ───────────────────────────────────────────────────────────
 
@@ -981,39 +783,43 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       paddingVertical: Space.sm },
     title: {
+      flex: 1,
+      textAlign: 'center',
       fontFamily: Typography.family.semibold,
       fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-      borderRadius: Radius.sm },
+      alignItems: 'center' },
+    doneBtn: {
+      width: Control.hit,
+      height: Control.hit,
+      justifyContent: 'center',
+      alignItems: 'center' },
+    doneBtnText: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size },
     // ── Sections ──
     section: {
       gap: Space.sm,
       paddingVertical: Space.xs },
-    sectionTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.bodyStrong.size },
     sectionDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
       marginVertical: Space.md },
-    subLabel: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.meta.size },
     // ── Auto-generate ──
     autoBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
       gap: Space.xs,
-      height: 50,
-      borderRadius: Radius.lg },
+      height: 36,
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.full,
+      alignSelf: 'flex-end' },
     autoBtnText: {
-      fontFamily: FontFamily.semibold,
-      fontSize: TypographyV2.bodyStrong.size },
+      fontFamily: Typography.family.medium,
+      fontSize: 13 },
     noticeBox: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -1027,12 +833,12 @@ function createStyles(colors: ThemeColors) {
     // ── Input ──
     input: {
       fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.body.size,
+      fontSize: TypographyV2.bodyStrong.size,
       borderWidth: Stroke.standard,
-      borderRadius: Radius.md,
+      borderRadius: Radius.lg,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      minHeight: Control.hit },
+      minHeight: 80 },
     timeRow: {
       flexDirection: 'row',
       gap: Space.md },
@@ -1062,14 +868,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.semibold,
       fontSize: TypographyV2.bodyStrong.size },
     // ── List ──
-    listHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm },
-    countBadge: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.meta.size,
-      fontVariant: ['tabular-nums'] },
     emptyState: {
       paddingVertical: Space.lg,
       alignItems: 'center',
@@ -1083,34 +881,15 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.sm,
-      minHeight: Control.hit },
-    captionContent: {
-      flex: 1,
-      gap: Space.xxs },
+      minHeight: 48 },
     captionText: {
+      flex: 1,
       fontFamily: Typography.family.regular,
       fontSize: TypographyV2.body.size },
-    captionMeta: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs },
     captionTime: {
       fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.meta.size,
+      fontSize: 12,
       fontVariant: ['tabular-nums'] },
-    wordBadge: {
-      paddingHorizontal: Space.xs,
-      paddingVertical: Space.xxs,
-      borderRadius: Radius.full },
-    wordBadgeText: {
-      fontFamily: FontFamily.medium,
-      fontSize: TypographyV2.meta.size },
-    deleteBtn: {
-      width: Control.hit,
-      height: Control.hit,
-      justifyContent: 'center',
-      alignItems: 'center' },
     // ── Edit row ──
     editRow: {
       gap: Space.sm,
@@ -1144,21 +923,16 @@ function createStyles(colors: ThemeColors) {
     // ── Font rail ──
     fontRail: {
       gap: Space.sm,
-      paddingVertical: Space.xxs,
-      position: 'relative' },
-    fontTab: {
-      height: Control.hit,
+      paddingVertical: Space.xs },
+    fontPill: {
+      height: 36,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.smMd },
-    fontTabText: {
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.full,
+      borderWidth: Stroke.standard },
+    fontPillText: {
       fontSize: TypographyV2.meta.size },
-    tabUnderline: {
-      position: 'absolute',
-      bottom: 0,
-      height: Stroke.emphasis,
-      backgroundColor: colors.brand,
-      borderRadius: Stroke.emphasis },
     rowSeparator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border },
@@ -1169,16 +943,9 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
       minHeight: Control.hit },
-    toggleTextWrap: {
-      flex: 1,
-      paddingRight: Space.md,
-      gap: Space.xxs },
     toggleTitle: {
       fontFamily: Typography.family.semibold,
       fontSize: TypographyV2.body.size },
-    toggleHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.meta.size },
     switchTrack: {
       width: 46,
       height: 28,
@@ -1192,13 +959,11 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full },
     // ── Swatches ──
     swatchRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
       gap: Space.sm,
       paddingVertical: Space.xs },
     swatch: {
-      width: 36,
-      height: 36,
+      width: 24,
+      height: 24,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
       borderColor: colors.border },
@@ -1211,46 +976,12 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       marginBottom: Space.xs },
     sliderLabel: {
+      fontFamily: Typography.family.medium,
       fontSize: TypographyV2.meta.size },
     sliderValue: {
+      fontFamily: Typography.family.medium,
       fontSize: TypographyV2.meta.size,
-      fontVariant: ['tabular-nums'] },
-    trackWrap: {
-      height: Control.hit,
-      justifyContent: 'center',
-      position: 'relative' },
-    track: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      height: 3,
-      borderRadius: Radius.full },
-    fill: {
-      position: 'absolute',
-      left: 0,
-      height: 3,
-      borderRadius: Radius.full },
-    thumb: {
-      position: 'absolute',
-      width: 16,
-      height: 16,
-      borderRadius: Radius.full,
-      marginLeft: -8,
-      borderWidth: Stroke.standard,
-      borderColor: 'rgba(0,0,0,0)' },
-    // ── Footer ──
-    footer: {
-      paddingTop: Space.lg },
-    doneBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.xs,
-      height: 50,
-      borderRadius: Radius.lg },
-    doneBtnText: {
-      fontFamily: FontFamily.semibold,
-      fontSize: TypographyV2.bodyStrong.size } });
+      fontVariant: ['tabular-nums'] } });
 }
 
 // Memoised style factory keyed to colors.

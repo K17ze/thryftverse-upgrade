@@ -60,6 +60,9 @@ export type CreatorGlyphName =
   | 'align-left'
   | 'align-center'
   | 'align-right'
+  | 'bold'
+  | 'italic'
+  | 'underline'
   // Composition
   | 'safe-zone'
   | 'product-tag'
@@ -853,6 +856,35 @@ function RedoGlyph({ selected }: GlyphRenderProps) {
 
 // ── Glyph registry ───────────────────────────────────────────────────
 
+function BoldGlyph(_props: GlyphRenderProps) {
+  return (
+    <>
+      <Path d="M8 5v14" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+      <Path d="M8 5h6c3 0 3 6 0 6H8" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+      <Path d="M8 11h7c3 0 3 8 0 8H8" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+    </>
+  );
+}
+
+function ItalicGlyph(_props: GlyphRenderProps) {
+  return (
+    <>
+      <Path d="M10 6h6" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+      <Path d="M14 6l-4 12" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+      <Path d="M8 18h6" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+    </>
+  );
+}
+
+function UnderlineGlyph(_props: GlyphRenderProps) {
+  return (
+    <>
+      <Path d="M7 5v10c0 3 10 3 10 0V5" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+      <Path d="M5 21h14" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+    </>
+  );
+}
+
 const GLYPH_REGISTRY: Record<CreatorGlyphName, (props: GlyphRenderProps) => React.ReactElement> = {
   trim: TrimGlyph,
   split: SplitGlyph,
@@ -881,6 +913,9 @@ const GLYPH_REGISTRY: Record<CreatorGlyphName, (props: GlyphRenderProps) => Reac
   'align-left': AlignLeftGlyph,
   'align-center': AlignCenterGlyph,
   'align-right': AlignRightGlyph,
+  bold: BoldGlyph,
+  italic: ItalicGlyph,
+  underline: UnderlineGlyph,
   'safe-zone': SafeZoneGlyph,
   'product-tag': ProductTagGlyph,
   'multi-select': MultiSelectGlyph,

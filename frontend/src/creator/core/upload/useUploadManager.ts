@@ -36,7 +36,7 @@ export interface UseUploadManagerResult {
   queueUpload: (params: QueueParams) => Promise<string>;
   pauseJob: (jobId: string) => void;
   resumeJob: (jobId: string) => Promise<void>;
-  cancelJob: (jobId: string) => void;
+  cancelJob: (jobId: string) => Promise<void>;
   retryJob: (jobId: string) => Promise<void>;
   isProjectComplete: boolean;
   /**
@@ -47,6 +47,8 @@ export interface UseUploadManagerResult {
   waitForCompletion: () => Promise<UploadJob[]>;
   /** Aggregate progress snapshot for the active project. */
   projectProgress: ProjectProgress;
+  /** Remove all completed/failed jobs for the active project from storage. */
+  clearProjectJobs: () => Promise<void>;
 }
 
 /**
@@ -64,12 +66,22 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
   const [jobs, setJobs] = useState<UploadJob[]>([]);
   const [tick, setTick] = useState(0);
   const tickRef = useRef(0);
+  const lastUpdateRef = useRef(0);
 
   // Re-render on any event. We bump a counter rather than threading
   // per-event updates so the hook stays simple and resilient.
+  //
+  // Progress events fire on every XHR byte tick — dozens of times per
+  // second for a fast connection. Re-rendering on each one swamps the
+  // React reconciler and the UI thread. Throttle to ~10 fps (100ms) so
+  // the progress bar still feels smooth without burning the JS thread.
   const forceUpdate = useCallback(() => {
-    tickRef.current += 1;
-    setTick(tickRef.current);
+    const now = Date.now();
+    if (now - lastUpdateRef.current >= 100) {
+      lastUpdateRef.current = now;
+      tickRef.current += 1;
+      setTick(tickRef.current);
+    }
   }, []);
 
   useEffect(() => {
@@ -169,6 +181,11 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
     [manager, projectId],
   );
 
+  const clearProjectJobs = useCallback(
+    () => manager.clearProjectJobs(projectId ?? ''),
+    [manager, projectId],
+  );
+
   // Memoize the return value so the object reference is stable across
   // re-renders when no underlying values have changed. Without this,
   // consumers that include `uploadManager` in useCallback/useEffect
@@ -190,6 +207,7 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
       isProjectComplete,
       waitForCompletion,
       projectProgress,
+      clearProjectJobs,
     }),
     [
       filteredJobs,
@@ -205,6 +223,7 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
       isProjectComplete,
       waitForCompletion,
       projectProgress,
+      clearProjectJobs,
     ],
   );
 }

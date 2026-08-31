@@ -468,7 +468,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xxs,
-    backgroundColor: withAlpha(colors.antiqueGold, 0.95),
+    backgroundColor: withAlpha(colors.brand, 0.95),
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xxs,
     borderRadius: Radius.full },

@@ -1,7 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Platform, ActivityIndicator } from 'react-native';
-import { Space, FontFamily, Radius } from '../../../theme/designTokens';
-import { TypographyV2 } from '../../../theme/typography.v2';
+import { Space } from '../../../theme/designTokens';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { extractWaveform } from '../../core/audio';
@@ -11,8 +10,11 @@ import { extractWaveform } from '../../core/audio';
 // On web, @shopify/react-native-skia requires WithSkiaWeb setup which
 // this project does not configure. The try/catch prevents a hard crash;
 // we render a lightweight View-based bar fallback instead.
+//
+// The dynamically-required module is typed via `typeof import(...)`, so
+// the Canvas and RoundedRect components are properly typed — no casts.
 let skiaAvailable = false;
-let SkiaImports: any = null;
+let SkiaImports: typeof import('@shopify/react-native-skia') | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mod = require('@shopify/react-native-skia');
@@ -66,7 +68,7 @@ export const WaveformTrack = React.memo(function WaveformTrack({
   height = DEFAULT_HEIGHT,
 }: WaveformTrackProps) {
   const { colors } = useAppTheme();
-  const barColor = color ?? colors.antiqueGold;
+  const barColor = color ?? colors.textMuted;
 
   // ── Async waveform extraction state ──
   const [extractedSamples, setExtractedSamples] = useState<number[] | undefined>(undefined);
@@ -127,7 +129,7 @@ export const WaveformTrack = React.memo(function WaveformTrack({
         waveStyles.container,
         {
           height,
-          backgroundColor: colors.surfaceAlt,
+          backgroundColor: 'transparent',
         },
       ]}
       accessibilityLabel={
@@ -165,12 +167,9 @@ export const WaveformTrack = React.memo(function WaveformTrack({
           />
         )
       ) : (
-        // ── Honest empty state: flat line + subtle label ──
+        // ── Honest empty state: flat line, no label needed ──
         <View style={waveStyles.empty}>
           <View style={[waveStyles.flatLine, { backgroundColor: colors.textMuted }]} />
-          <Text style={[waveStyles.emptyLabel, { color: colors.textMuted }]} numberOfLines={1}>
-            No audio waveform
-          </Text>
         </View>
       )}
     </View>
@@ -197,7 +196,8 @@ function SkiaWaveform({
   barGap,
   color,
 }: SkiaWaveformProps) {
-  const { Canvas, Rect } = SkiaImports;
+  const Canvas = SkiaImports!.Canvas;
+  const RoundedRect = SkiaImports!.RoundedRect;
   const cy = trackHeight / 2;
   const step = barWidth + barGap;
 
@@ -218,14 +218,14 @@ function SkiaWaveform({
   return (
     <Canvas style={{ width: trackWidth, height: trackHeight }}>
       {bars.map((b, i) => (
-        <Rect
+        <RoundedRect
           key={i}
           x={b.x}
           y={b.y}
           width={b.w}
           height={b.h}
+          r={1}
           color={color}
-          rx={1}
         />
       ))}
     </Canvas>
@@ -264,7 +264,7 @@ const ViewWaveform = React.memo(function ViewWaveform({
               marginTop: cy - h / 2,
               marginRight: barGap,
               backgroundColor: color,
-              borderRadius: Radius.none,
+              borderRadius: 1,
             }}
           />
         );
@@ -301,11 +301,5 @@ const waveStyles = StyleSheet.create({
     left: Space.xs,
     right: Space.xs,
     height: FLAT_LINE_HEIGHT,
-  },
-  emptyLabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    opacity: 0.7,
   },
 });

@@ -13,6 +13,10 @@ import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { CachedImage } from '../CachedImage';
 import { VoiceMessageBubble } from './VoiceMessageBubble';
 import { VoiceTranscriptionPanel } from './VoiceTranscriptionPanel';
+import { useMessageTranslation } from '../../hooks/useMessageTranslation';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
+import { getI18nLocale } from '../../i18n/i18n';
+import { useSettingsPreferences } from '../../context/SettingsPreferencesContext';
 
 interface Reaction {
   emoji: string;
@@ -105,6 +109,28 @@ function MessageBubbleBase({
   const { colors, isDark } = useAppTheme();
   const { isEnabled: motionEnabled, spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { t } = useAppTranslation('messaging');
+  const { autoTranslateMessages } = useSettingsPreferences();
+
+  // AI-powered message translation (WhatsApp/Instagram pattern)
+  // Shows a "Translate" link for messages in a foreign language
+  const userLocale = getI18nLocale();
+  const {
+    translatedText,
+    isLoading: isTranslating,
+    isTranslated,
+    isForeignLanguage,
+    sourceLanguageName,
+    error: translationError,
+    translate,
+    revert,
+    retry,
+  } = useMessageTranslation({
+    messageId: id,
+    text,
+    userLocale,
+    autoTranslate: autoTranslateMessages,
+  });
 
   // Bubble enter animation — fade in + scale-up (spring, 250ms).
   // Only applied to genuinely new messages; historical messages pass
@@ -287,6 +313,64 @@ function MessageBubbleBase({
                 </View>
               ) : null}
               <Text style={[styles.messageText, { color: bubbleText }]}>{text}</Text>
+
+              {/* AI translation — WhatsApp/Instagram/Telegram inline pattern */}
+              {isForeignLanguage && !isMe && !isDraft ? (
+                <View style={styles.translationRow}>
+                  {isTranslated && translatedText ? (
+                    <>
+                      <Text style={[styles.translatedText, { color: bubbleText }]}>
+                        {translatedText}
+                      </Text>
+                      <View style={styles.translationMetaRow}>
+                        <Text style={[styles.translationSourceLabel, { color: metaColor }]}>
+                          {t('messaging.translation.translatedFrom', { language: sourceLanguageName })}
+                        </Text>
+                        <Text style={[styles.translationDot, { color: metaColor }]}>·</Text>
+                        <Pressable
+                          onPress={revert}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('messaging.translation.showOriginal')}
+                        >
+                          <Text style={[styles.translationLink, { color: metaColor }]}>
+                            {t('messaging.translation.showOriginal')}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : isTranslating ? (
+                    <View style={styles.translationLoadingRow}>
+                      <ActivityIndicator size={10} color={metaColor} />
+                      <Text style={[styles.translationLink, { color: metaColor }]}>
+                        {t('messaging.translation.translating')}
+                      </Text>
+                    </View>
+                  ) : translationError ? (
+                    <Pressable
+                      onPress={retry}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('messaging.translation.translate')}
+                    >
+                      <Text style={[styles.translationLink, { color: metaColor }]}>
+                        {t('messaging.translation.translationFailed')} · {t('messaging.translation.translate')}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      onPress={translate}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('messaging.translation.translate')}
+                    >
+                      <Text style={[styles.translationLink, { color: metaColor }]}>
+                        {t('messaging.translation.translate')}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              ) : null}
             </>
           ) : null}
 
@@ -585,4 +669,43 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   reactionCount: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary } });
+    color: colors.textSecondary },
+  // ── AI translation UI ────────────────────────────────────────────
+  translationRow: {
+    marginTop: Space.xs,
+    gap: 3,
+  },
+  translationLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  translationMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
+  translatedText: {
+    fontSize: TypographyV2.body.size - 1,
+    fontFamily: TypeStyles.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight + 1,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    fontStyle: 'italic',
+  },
+  translationSourceLabel: {
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    opacity: 0.8,
+  },
+  translationDot: {
+    fontSize: TypographyV2.meta.size - 2,
+    opacity: 0.5,
+  },
+  translationLink: {
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textDecorationLine: 'underline',
+  } });

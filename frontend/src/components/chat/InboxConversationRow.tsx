@@ -15,6 +15,7 @@ import { Space, Radius, TypeStyles, Typography, Stroke } from '../../theme/desig
 import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 export interface InboxConversationRowProps {
   displayTitle: string;
@@ -107,6 +108,7 @@ function InboxConversationRowBase({
   accessibilityHint,
   testID }: InboxConversationRowProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const { isEnabled } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -143,7 +145,7 @@ function InboxConversationRowBase({
   if (unread) accessibilityParts.push('unread');
   if (isMuted) accessibilityParts.push('muted');
   if (isPinned) accessibilityParts.push('pinned');
-  if (isGroup && memberCount) accessibilityParts.push(`${memberCount} members`);
+  if (isGroup && memberCount) accessibilityParts.push(t('conversation.memberCount', { count: memberCount }));
 
   return (
     <AnimatedPressable
@@ -185,7 +187,7 @@ function InboxConversationRowBase({
           <View style={styles.bottomLine}>
             {isGroup && memberCount != null && (
               <Text style={styles.memberCount} numberOfLines={1}>
-                {memberCount} members
+                {t('conversation.memberCount', { count: memberCount })}
               </Text>
             )}
             {draftText ? (

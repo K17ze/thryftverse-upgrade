@@ -14,7 +14,7 @@ import {
   setStoredSettingsPreferences,
   SupportedLanguageOption,
 } from '../preferences/settingsPreferences';
-import { mapLanguageOptionToLocale, setI18nLocale } from '../i18n';
+import { mapLanguageOptionToLocale, mapLocaleToLanguageOption, setI18nLocale, hydratePersistedLocale } from '../i18n';
 import { setAnalyticsOptOut } from '../lib/telemetry';
 import { makeStableId } from '../utils/createStableId';
 
@@ -34,6 +34,7 @@ interface SettingsPreferencesContextValue {
   personalizedAds: boolean;
   recommendationPersonalization: boolean;
   thirdPartySharing: boolean;
+  autoTranslateMessages: boolean;
   setLanguage: (language: SupportedLanguageOption) => void;
   setEmailNotificationsEnabled: (enabled: boolean) => void;
   toggleEmailNotifications: () => void;
@@ -54,6 +55,7 @@ interface SettingsPreferencesContextValue {
   setPersonalizedAds: (enabled: boolean) => void;
   setRecommendationPersonalization: (enabled: boolean) => void;
   setThirdPartySharing: (enabled: boolean) => void;
+  setAutoTranslateMessages: (enabled: boolean) => void;
 }
 
 const DEFAULT_LANGUAGE = LANGUAGE_OPTIONS[0];
@@ -79,6 +81,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
   const [personalizedAds, setPersonalizedAdsState] = React.useState(false);
   const [recommendationPersonalization, setRecommendationPersonalizationState] = React.useState(true);
   const [thirdPartySharing, setThirdPartySharingState] = React.useState(false);
+  const [autoTranslateMessages, setAutoTranslateMessagesState] = React.useState(false);
   const [isHydrated, setIsHydrated] = React.useState(false);
 
   React.useEffect(() => {
@@ -87,13 +90,20 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
     Promise.all([
       getStoredSettingsPreferences(),
       getStoredPushNotificationToggles(DEFAULT_PUSH_NOTIFICATION_TOGGLES),
+      hydratePersistedLocale(),
     ])
-      .then(([settingsPreferences, storedPushToggles]) => {
+      .then(([settingsPreferences, storedPushToggles, persistedLocale]) => {
         if (!isMounted) {
           return;
         }
 
-        setLanguage(settingsPreferences.language);
+        // The dedicated locale key takes precedence — it may have been
+        // set on a previous launch and is hydrated early in app startup.
+        // If the settings preferences have a different language (older
+        // persistence format), the dedicated key wins.
+        const localeToLanguage = mapLocaleToLanguageOption(persistedLocale) as SupportedLanguageOption;
+        const isSupportedLanguageOption = LANGUAGE_OPTIONS.includes(localeToLanguage);
+        setLanguage(isSupportedLanguageOption ? localeToLanguage : settingsPreferences.language);
         setEmailNotificationsEnabled(settingsPreferences.emailNotificationsEnabled);
         setQuietHoursState(settingsPreferences.quietHours);
         setMySizesState(settingsPreferences.mySizes);
@@ -106,6 +116,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
         setPersonalizedAdsState(settingsPreferences.personalizedAds);
         setRecommendationPersonalizationState(settingsPreferences.recommendationPersonalization);
         setThirdPartySharingState(settingsPreferences.thirdPartySharing);
+        setAutoTranslateMessagesState(settingsPreferences.autoTranslateMessages);
         // Sync the telemetry module so opt-out is respected before the
         // first React re-render commits.
         setAnalyticsOptOut(settingsPreferences.analyticsOptOut);
@@ -146,10 +157,11 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       personalizedAds,
       recommendationPersonalization,
       thirdPartySharing,
+      autoTranslateMessages,
     }).catch(() => {
       // Best-effort persistence should not block preferences updates.
     });
-  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, analyticsOptOut, developerMode, biometricEnabled, biometricLoginEnabled, personalizedAds, recommendationPersonalization, thirdPartySharing, isHydrated]);
+  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, analyticsOptOut, developerMode, biometricEnabled, biometricLoginEnabled, personalizedAds, recommendationPersonalization, thirdPartySharing, autoTranslateMessages, isHydrated]);
 
   React.useEffect(() => {
     if (!isHydrated) {
@@ -272,6 +284,10 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
     setThirdPartySharingState(enabled);
   }, []);
 
+  const setAutoTranslateMessages = React.useCallback((enabled: boolean) => {
+    setAutoTranslateMessagesState(enabled);
+  }, []);
+
   const pushEnabledCount = React.useMemo(
     () => countEnabledPushNotificationToggles(pushNotificationToggles),
     [pushNotificationToggles]
@@ -295,6 +311,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       personalizedAds,
       recommendationPersonalization,
       thirdPartySharing,
+      autoTranslateMessages,
       setLanguage,
       setEmailNotificationsEnabled,
       toggleEmailNotifications,
@@ -314,6 +331,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       setPersonalizedAds,
       setRecommendationPersonalization,
       setThirdPartySharing,
+      setAutoTranslateMessages,
     }),
     [
       analyticsOptOut,
@@ -323,6 +341,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       personalizedAds,
       recommendationPersonalization,
       thirdPartySharing,
+      autoTranslateMessages,
       emailNotificationsEnabled,
       filterPresets,
       isHydrated,
@@ -341,6 +360,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       setPersonalizedAds,
       setRecommendationPersonalization,
       setThirdPartySharing,
+      setAutoTranslateMessages,
       setMySizes,
       setPushNotificationToggle,
       setQuietHours,

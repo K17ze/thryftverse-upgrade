@@ -1,0 +1,1683 @@
+{
+  "common": {
+    "buttons": {
+      "save": "حفظ",
+      "cancel": "إلغاء",
+      "delete": "حذف",
+      "edit": "تعديل",
+      "share": "مشاركة",
+      "retry": "إعادة المحاولة",
+      "close": "إغلاق",
+      "done": "تم",
+      "continue": "متابعة",
+      "clearAll": "مسح الكل",
+      "clearFilters": "مسح عوامل التصفية",
+      "browseAll": "تصفح الكل",
+      "refresh": "تحديث",
+      "follow": "متابعة",
+      "unfollow": "إلغاء المتابعة",
+      "message": "رسالة",
+      "buy": "شراء",
+      "bid": "مزايدة",
+      "sell": "بيع",
+      "ok": "حسناً",
+      "confirm": "تأكيد"
+    },
+    "states": {
+      "loading": "جارٍ التحميل...",
+      "loadingMore": "جارٍ تحميل المزيد...",
+      "noResults": "لا توجد نتائج",
+      "somethingWentWrong": "حدث خطأ ما",
+      "youAreOffline": "أنت غير متصل",
+      "retry": "إعادة المحاولة",
+      "searching": "جارٍ البحث..."
+    },
+    "navigation": {
+      "back": "رجوع",
+      "home": "الرئيسية",
+      "search": "بحث",
+      "profile": "الملف الشخصي",
+      "settings": "الإعدادات"
+    },
+    "actions": {
+      "follow": "متابعة",
+      "unfollow": "إلغاء المتابعة",
+      "message": "رسالة",
+      "buy": "شراء",
+      "bid": "مزايدة",
+      "sell": "بيع"
+    },
+    "trust": {
+      "verified": "موثّق",
+      "responseTime": "وقت الاستجابة",
+      "reviews": "التقييمات",
+      "followers": "المتابعون",
+      "following": "يتابع"
+    },
+    "misc": {
+      "items": "عناصر",
+      "on": "تشغيل",
+      "off": "إيقاف",
+      "none": "لا شيء",
+      "notSignedIn": "غير مسجّل الدخول"
+    }
+  },
+  "home": {
+    "brandTitle": "Thryftverse",
+    "tabs": {
+      "foryou": "من أجلك",
+      "following": "يتابع"
+    },
+    "looks": {
+      "shopLabel": "إطلالات للتسوق",
+      "itemsCount": "{count} عناصر"
+    },
+    "poster": {
+      "fallback": "الملصق"
+    },
+    "newListings": {
+      "bannerSingular": "{count} إصدار جديد جاهز",
+      "bannerPlural": "{count} إصدارات جديدة جاهزة",
+      "badgeNew": "{count} جديد"
+    },
+    "sync": {
+      "unavailableCached": "المزامنة غير متاحة. جارٍ عرض العناصر المخزّنة مؤقتاً."
+    },
+    "empty": {
+      "followingNoNewTitle": "لا إصدارات جديدة بعد",
+      "followingNoNewSubtitle": "اسحب للتحديث.",
+      "followingNoSellersTitle": "تابع البائعين لرؤية إصداراتهم",
+      "followingNoSellersSubtitle": "اضغط متابعة على ملفات البائعين لبناء خلاصتك.",
+      "followingDiscoverSellers": "اكتشف البائعين",
+      "followingBrowseAll": "تصفح الكل",
+      "forYouNoDropsTitle": "لا إصدارات مباشرة بعد",
+      "forYouNoDropsSubtitle": "اسحب للتحديث أو تصفح الفئات."
+    },
+    "footer": {
+      "reachedEnd": "لقد وصلت إلى النهاية"
+    },
+    "peek": {
+      "closeButton": "إغلاق",
+      "viewListing": "عرض الإدراج"
+    }
+  },
+  "search": {
+    "placeholder": "ابحث عن عناصر، بائعين، أنماط",
+    "scope": {
+      "items": "العناصر",
+      "people": "الأشخاص"
+    },
+    "resultCount": {
+      "singular": "{count} نتيجة",
+      "plural": "{count} نتائج"
+    },
+    "sort": {
+      "title": "الترتيب حسب",
+      "recommended": "موصى به",
+      "newest": "الأحدث",
+      "priceLowToHigh": "السعر: من الأقل إلى الأعلى",
+      "priceHighToLow": "السعر: من الأعلى إلى الأقل",
+      "mostLiked": "الأكثر إعجاباً"
+    },
+    "sections": {
+      "discover": "اكتشف",
+      "recent": "الأخيرة",
+      "recentSearches": "عمليات البحث الأخيرة",
+      "savedSearches": "عمليات البحث المحفوظة",
+      "browseCategories": "تصفح الفئات",
+      "categories": "الفئات",
+      "trending": "عمليات البحث الرائجة"
+    },
+    "suggestion": {
+      "brand": "العلامة التجارية",
+      "category": "الفئة",
+      "item": "العنصر",
+      "search": "بحث"
+    },
+    "typeahead": {
+      "searchFor": "ابحث عن «{query}»",
+      "viewAllResults": "عرض جميع النتائج لـ {query}",
+      "suggestionsUnavailable": "الاقتراحات غير متاحة. اضغط بحث للمتابعة.",
+      "noCloseSuggestions": "لا توجد اقتراحات قريبة. اضغط بحث لرؤية جميع التطابقات.",
+      "showingLocalMatches": "جارٍ عرض التطابقات المتاحة على هذا الجهاز"
+    },
+    "savedSearch": {
+      "alertsOn": "التنبيهات مفعّلة",
+      "alertsOff": "التنبيهات معطّلة",
+      "newMatches": "· {count} جديد"
+    },
+    "status": {
+      "refreshingIndex": "جارٍ تحديث الفهرس",
+      "liveIndex": "فهرس مباشر",
+      "offlineIndex": "فهرس غير متصل",
+      "cachedIndex": "فهرس مخزّن مؤقتاً"
+    },
+    "errors": {
+      "searchUnavailable": "البحث غير متاح",
+      "retrySearch": "إعادة محاولة البحث",
+      "peopleSearchUnavailable": "بحث الأشخاص غير متاح",
+      "searchIndexDelayed": "فهرس البحث متأخر. جارٍ عرض النتائج المخزّنة مؤقتاً.",
+      "noPeopleFound": "لم يتم العثور على أشخاص لـ «{query}»",
+      "tryDifferentName": "جرّب اسماً أو اسم مستخدم مختلفاً.",
+      "noMatches": "لا تطابقات لـ «{query}»",
+      "noMatchesWithFilters": "لا تطابقات لـ «{query}» مع عوامل التصفية هذه",
+      "searchingIndex": "جارٍ البحث في الفهرس…",
+      "tryClearingFilters": "جرّب مسح عوامل التصفية أو توسيع نطاق البحث.",
+      "tryBroadened": "جرّب {suggestions} — أو تصفح جميع الفئات.",
+      "noPicksWithFilters": "لا اختيارات تطابق عوامل التصفية الحالية. عدّلها أو امسحها.",
+      "noPicksNoResults": "لا نتائج مرتّبة بعد. جرّب كلمة مفتاحية أقصر."
+    },
+    "noResults": {
+      "browseByCategory": "تصفح حسب الفئة"
+    },
+    "follow": {
+      "following": "يتابع",
+      "follow": "متابعة"
+    }
+  },
+  "settings": {
+    "header": {
+      "title": "الإعدادات"
+    },
+    "search": {
+      "placeholder": "ابحث في الإعدادات",
+      "results": "النتائج",
+      "allSettings": "جميع الإعدادات",
+      "noMatching": "لا توجد إعدادات مطابقة"
+    },
+    "verification": {
+      "promptTitle": "تحقّق من هويتك",
+      "promptSubtitle": "احصل على شارة التوثيق وافتح ميزة البيع",
+      "verified": "موثّق",
+      "getBadge": "احصل على شارة التوثيق",
+      "trustedSeller": "بائع موثوق",
+      "idVerified": "الهوية موثّقة"
+    },
+    "health": {
+      "verified": "موثّق",
+      "twoFA": "المصادقة الثنائية",
+      "biometric": "القياس الحيوي",
+      "payment": "الدفع",
+      "address": "العنوان",
+      "emailConfirmed": "تم تأكيد البريد الإلكتروني"
+    },
+    "sections": {
+      "yourAccount": "حسابك",
+      "buyingSelling": "الشراء والبيع",
+      "notifications": "الإشعارات",
+      "experience": "التجربة",
+      "connectedServices": "الخدمات المتصلة",
+      "helpLegal": "المساعدة والقانون",
+      "advanced": "متقدّم",
+      "account": "الحساب"
+    },
+    "rows": {
+      "verification": "التوثيق",
+      "changePassword": "تغيير كلمة المرور",
+      "twoFAEnabled": "المصادقة الثنائية مفعّلة",
+      "passwordOnly": "كلمة المرور فقط",
+      "biometricLock": "قفل القياس الحيوي",
+      "biometricNotAvailable": "غير متاح على هذا الجهاز",
+      "biometricEnabled": "التعرف على الوجه والبصمة والقياس الحيوي للإجراءات الحساسة",
+      "biometricDisabled": "معطّل — الشاشات الحساسة تستخدم كلمة المرور فقط",
+      "connectedAccounts": "الحسابات المتصلة",
+      "connectedAccountsSubtitle": "تسجيل الدخول عبر Google و Apple",
+      "devicesSessions": "الأجهزة والجلسات",
+      "accountControl": "التحكم بالحساب",
+      "accountControlSubtitle": "الأمان، الجلسات، كلمة المرور",
+      "downloadData": "تنزيل بياناتي",
+      "downloadDataSubtitle": "تصدير بيانات حسابك",
+      "privacySafety": "الخصوصية والأمان",
+      "privacySafetySubtitle": "الظهور، المستخدمون المحظورون",
+      "chatPrivacy": "خصوصية الدردشة",
+      "chatPrivacySubtitle": "من يمكنه مراسلتك",
+      "dataPrivacy": "البيانات والخصوصية",
+      "dataPrivacySubtitle": "ضوابط الخصوصية والاحتفاظ بالبيانات",
+      "blockedUsers": "المستخدمون المحظورون",
+      "blockedCount": "{{count}} محظور",
+      "savedAddresses": "العناوين المحفوظة",
+      "oneSaved": "1 محفوظ",
+      "noneSaved": "لا شيء محفوظ",
+      "paymentMethods": "طرق الدفع",
+      "savedCollections": "المحفوظات والمجموعات",
+      "payoutAccount": "حساب الدفع",
+      "payoutAccountSubtitle": "الرصيد والمحفظة",
+      "payoutHistory": "سجل المدفوعات",
+      "shippingPreferences": "تفضيلات الشحن",
+      "priceAlerts": "تنبيهات الأسعار",
+      "priceAlertsSubtitle": "الإشعار عند بلوغ حدود السعر",
+      "autoInvestPlans": "خطط الاستثمار التلقائي",
+      "autoInvestPlansSubtitle": "جداول الشراء المتكررة",
+      "taxDocuments": "المستندات الضريبية",
+      "taxDocumentsSubtitle": "الكشوف السنوية والأرباح والخسائر",
+      "resolutionCentre": "مركز حل النزاعات",
+      "resolutionCentreSubtitle": "النزاعات والحلول",
+      "enableNotifications": "تفعيل الإشعارات",
+      "permissionUnknown": "الإذن غير معروف",
+      "permissionAllowed": "مسموح",
+      "permissionNotAllowed": "غير مسموح",
+      "notificationPreferences": "تفضيلات الإشعارات",
+      "emailPreferences": "تفضيلات البريد الإلكتروني",
+      "theme": "السمة",
+      "currencyDisplay": "عرض العملة",
+      "localCurrency": "العملة المحلية",
+      "language": "اللغة",
+      "contentPreferences": "تفضيلات المحتوى",
+      "contentPreferencesSubtitle": "الخلاصة والتوصيات",
+      "recommendations": "التوصيات",
+      "recommendationsSubtitle": "تحسين الصور، اقتراحات العنوان والسعر",
+      "yourFeed": "خلاصتك",
+      "yourFeedSubtitle": "التوصيات والشفافية",
+      "sustainability": "الاستدامة",
+      "sustainabilitySubtitle": "الأهداف، الشحن، الأثر",
+      "accessibility": "إمكانية الوصول",
+      "accessibilitySubtitle": "حجم النص، الحركة، التباين",
+      "searchHistory": "سجل البحث",
+      "searchHistorySubtitle": "مسح عمليات البحث الأخيرة",
+      "dataSharing": "مشاركة البيانات",
+      "dataSharingSubtitle": "التحليلات والتخصيص",
+      "agents": "الوكلاء",
+      "agentsSubtitle": "تصفح وإدارة أذونات الوكلاء",
+      "connections": "الاتصالات",
+      "connectionsSubtitle": "مفاتيح المزوّد ونقاط النهاية",
+      "yourAgents": "وكلاؤك",
+      "yourAgentsSubtitle": "الوكلاء الذين أنشأتهم",
+      "helpCentre": "مركز المساعدة",
+      "termsOfService": "شروط الخدمة",
+      "privacyPolicy": "سياسة الخصوصية",
+      "aboutThryftverse": "حول Thryftverse",
+      "runtimeSmokeTest": "اختبار التشغيل",
+      "runtimeSmokeTestSubtitle": "فحوصات تشخيصية لبيئة التشغيل المحلية",
+      "deleteAccount": "حذف الحساب",
+      "deleteAccountSubtitle": "محو حسابك نهائياً",
+      "editProfileAccount": "تعديل الملف الشخصي والحساب",
+      "biometricLogin": "تسجيل الدخول بالقياس الحيوي",
+      "biometricLoginEnabled": "يتطلب التعرف على الوجه أو البصمة عند فتح التطبيق",
+      "biometricLoginDisabled": "معطّل — يفتح التطبيق مباشرة إلى حسابك",
+      "notificationCategories": "فئات الإشعارات",
+      "notificationPreferencesSubtitle": "ساعات الهدوء، المعاينة",
+      "featureFlags": "أعلام الميزات",
+      "featureFlagsSubtitle": "قيم الأعلام الحالية لضمان الجودة",
+      "autoTranslate": "ترجمة الرسائل تلقائياً",
+      "autoTranslateEnabled": "الرسائل الأجنبية تُترجم تلقائياً",
+      "autoTranslateDisabled": "اضغط لترجمة الرسائل الأجنبية يدوياً"
+    },
+    "toast": {
+      "themeApplying": "جارٍ تطبيق سمة {{theme}}…",
+      "pushEnabled": "تم تفعيل الإشعارات الفورية",
+      "pushDenied": "تم رفض الإشعارات الفورية. فعّلها من إعدادات الجهاز.",
+      "pushUpdateFailed": "تعذّر تحديث إذن الإشعارات الفورية.",
+      "pushManageDeviceSettings": "إدارة الإشعارات الفورية من إعدادات جهازك.",
+      "searchHistoryCleared": "تم مسح سجل البحث",
+      "searchHistoryClearFailed": "تعذّر مسح سجل البحث",
+      "unableOpenLink": "تعذّر فتح الرابط. حاول مرة أخرى بعد لحظات."
+    },
+    "notificationSummary": "{enabled}/{total} فئات",
+    "accessibility": {
+      "editProfileAccount": "تعديل الملف الشخصي والحساب",
+      "editProfileAccountHint": "يفتح محرّر الملف الشخصي والتفاصيل الخاصة والأمان والحساب",
+      "verifyIdentity": "التوثيق",
+      "verifyIdentityHint": "يفتح التوثيق",
+      "deleteAccountHint": "يفتح مسار حذف الحساب"
+    },
+    "picker": {
+      "currencyTitle": "اختر العملة المحلية",
+      "themeTitle": "وضع السمة",
+      "themeSystem": "النظام",
+      "themeLight": "فاتح",
+      "themeDark": "داكن"
+    }
+  },
+  "profile": {
+    "userProfile": "ملف {{name}} الشخصي"
+  },
+  "listing": {
+    "create": {
+      "title": "بيع",
+      "createListing": "إنشاء إدراج",
+      "editTitle": "تعديل الإدراج",
+      "listingTitle": "العنوان",
+      "description": "الوصف",
+      "price": "السعر",
+      "category": "الفئة",
+      "condition": "الحالة",
+      "size": "المقاس",
+      "brand": "العلامة التجارية",
+      "photos": "الصور",
+      "publish": "نشر",
+      "saveDraft": "حفظ المسودة",
+      "saved": "تم الحفظ",
+      "details": "التفاصيل",
+      "priceAndCondition": "السعر والحالة",
+      "required": "مطلوب",
+      "optional": "اختياري",
+      "addPhotosTitle": "أضف صوراً للبدء",
+      "addPhotosSubtitle": "الصور الجيدة الإضاءة من زوايا متعددة تُباع أسرع.",
+      "photoTips": "نصائح للصور",
+      "photoTipsMin": "يُنصح بـ 3 صور على الأقل",
+      "photoTipLighting": "إضاءة جيدة",
+      "photoTipAngles": "اعرض جميع الزوايا",
+      "photoTipBackground": "خلفية طبيعية",
+      "titlePlaceholder": "مثال: سترة Levi's 501 الدنيم الكلاسيكية",
+      "descriptionHelper": "أضف مزيداً من التفاصيل لمساعدة المشترين في العثور على هذا العنصر",
+      "suggestedDetails": "التفاصيل المقترحة",
+      "applyToEmptyFields": "تطبيق على الحقول الفارغة",
+      "startingBid": "مزايدة ابتدائية",
+      "reservePriceOptional": "السعر الاحتياطي (اختياري)",
+      "duration": "المدة",
+      "totalValuation": "إجمالي التقييم",
+      "originalPriceHelper": "أضف السعر الأصلي لإظهار القيمة",
+      "readyToPublish": "جاهز للنشر",
+      "bulkList": "إدراج جماعي",
+      "inventory": "المخزون",
+      "hub": "المركز",
+      "tapToSet": "اضغط للتعيين"
+    },
+    "detail": {
+      "addToCart": "أضف إلى السلة",
+      "buyNow": "اشترِ الآن",
+      "makeOffer": "قدّم عرضاً",
+      "seller": "البائع",
+      "itemCondition": "الحالة",
+      "itemSize": "المقاس",
+      "itemBrand": "العلامة التجارية",
+      "postedOn": "نُشر في {{date}}",
+      "addedToWishlist": "أُضيف إلى قائمة الرغبات",
+      "priceDropAlertsEnabled": "تم تفعيل تنبيهات انخفاض السعر لهذا العنصر",
+      "priceDropAlertsDisabled": "تم تعطيل تنبيهات انخفاض السعر",
+      "couldNotUpdatePriceAlert": "تعذّر تحديث تنبيه السعر. حاول مرة أخرى.",
+      "browseSimilar": "تصفح مشابه",
+      "manageListing": "إدارة الإدراج"
+    }
+  },
+  "messaging": {
+    "compose": {
+      "placeholder": "رسالة...",
+      "send": "إرسال",
+      "attach": "إرفاق",
+      "attachPhoto": "صورة",
+      "attachCamera": "الكاميرا",
+      "inputAccessibility": "حقل إدخال الرسالة",
+      "dismissSafetyWarning": "تجاهل تحذير الأمان",
+      "dismissCautionWarning": "تجاهل تحذير الحذر",
+      "removeAttachment": "إزالة المرفق",
+      "addAttachment": "إضافة مرفق",
+      "openCamera": "فتح الكاميرا",
+      "quickReply": "رد سريع: {{label}}"
+    },
+    "conversation": {
+      "title": "الرسائل",
+      "empty": "لا رسائل بعد",
+      "startChatting": "أرسل رسالة أدناه للبدء.",
+      "startConversation": "ابدأ المحادثة",
+      "typing": "{{name}} يكتب...",
+      "onlineNow": "متصل الآن",
+      "newMessages": "رسائل جديدة",
+      "undo": "تراجع",
+      "message": "رسالة",
+      "mediaPress": "ضغط الوسائط",
+      "messageSent": "تم إرسال الرسالة",
+      "sending": "جارٍ الإرسال…",
+      "draft": "مسودة",
+      "ai": "AI",
+      "retryDraft": "اضغط لإعادة المحاولة",
+      "sendDraft": "إرسال",
+      "memberCount": "{{count}} أعضاء",
+      "loadError": "تعذّر تحميل الرسائل. تحقق من اتصالك وحاول مرة أخرى.",
+      "offlineMessage": "أنت غير متصل. ستُرسل الرسائل عند إعادة الاتصال.",
+      "copied": "تم النسخ",
+      "reportSubmitted": "تم إرسال البلاغ. شكراً لك.",
+      "reportFailed": "فشل إرسال البلاغ. حاول مرة أخرى.",
+      "exitSelectionMode": "إنهاء وضع التحديد",
+      "exitSelectionModeHint": "يغلق شريط أدوات تحديد الرسائل",
+      "deleteSelected": "حذف الرسائل المحددة",
+      "deleteSelectedHint": "يزيل الرسائل المحددة نهائياً من هذه المحادثة",
+      "undoMessageDeletion": "التراجع عن حذف الرسالة",
+      "reactWith": "تفاعل بـ {{emoji}}",
+      "openLink": "فتح رابط {{domain}}",
+      "typingIndicator": "يكتب..."
+    },
+    "inbox": {
+      "primary": "الرئيسية",
+      "buying": "الشراء",
+      "selling": "البيع",
+      "tabBadge": "تبويب {{label}}{{plural}}",
+      "newBadge": "، {{count}} جديد",
+      "openConversation": "فتح {{title}}",
+      "performAction": "{{action}} {{title}}",
+      "performSecondaryAction": "{{action}} {{title}}",
+      "linkedListing": "إدراج مرتبط: {{title}}، {{price}}، {{availability}}",
+      "listingHint": "يفتح صفحة تفاصيل الإدراج",
+      "scrollToBottom": "التمرير إلى الأسفل{{unread}}",
+      "scrollToBottomHint": "يتمرير إلى أحدث رسالة",
+      "unread": "، {{count}} غير مقروء"
+    },
+    "requests": {
+      "title": "طلبات الرسائل",
+      "noRequests": "لا توجد طلبات رسائل",
+      "noRequestsSubtitle": "تظهر رسائل الأشخاص الذين لا تتابعهم هنا.",
+      "acceptMessageRequest": "قبول طلب الرسالة",
+      "deleteMessageRequest": "حذف طلب الرسالة",
+      "deleteConfirmationTitle": "حذف الطلب؟",
+      "deleteConfirmationMessage": "يؤدي هذا إلى إزالة الطلب. يمكنهم إرسال رسالة أخرى لاحقاً.",
+      "blockConfirmationTitle": "حظر {{name}}؟",
+      "blockConfirmationMessage": "لن يتمكنوا من مراسلتك أو رؤية ملفك الشخصي. سيتم حذف الطلب.",
+      "accepted": "تم قبول الطلب",
+      "acceptError": "تعذّر قبول هذا الطلب. تحقق من اتصالك وحاول مرة أخرى.",
+      "deleted": "تم حذف الطلب",
+      "deleteError": "تعذّر حذف هذا الطلب. تحقق من اتصالك وحاول مرة أخرى.",
+      "blockError": "تعذّر حظر هذا الحساب. تحقق من اتصالك وحاول مرة أخرى.",
+      "reportError": "لا يمكن الإبلاغ عن هذا الحساب هنا.",
+      "blocked": "تم حظر {{name}}"
+    },
+    "archived": {
+      "title": "المحادثات المؤرشفة",
+      "subtitle": "تعود المحادثات المستعادة إلى صندوق الوارد",
+      "noArchived": "لا توجد محادثات مؤرشفة",
+      "noArchivedSubtitle": "تبقى المحادثات التي تؤرشفها خارج صندوق الوارد دون حذفها.",
+      "clearAllConversations": "مسح جميع المحادثات المؤرشفة",
+      "removeConfirmationTitle": "إزالة من صندوق الوارد؟",
+      "removeConfirmationMessage": "ستتم إزالة «{{title}}» من محادثاتك المؤرشفة.",
+      "clearAllConfirmationTitle": "مسح جميع المؤرشفة؟",
+      "clearAllConfirmationMessage": "ستُحذف جميع المحادثات المؤرشفة نهائياً.",
+      "restored": "تمت استعادة المحادثة إلى صندوق الوارد",
+      "restoreError": "تعذّر استعادة هذه المحادثة. تحقق من اتصالك وحاول مرة أخرى.",
+      "removed": "تمت إزالة المحادثة",
+      "removeError": "تعذّر حذف هذه المحادثة. تحقق من اتصالك وحاول مرة أخرى.",
+      "cleared": "تم مسح الأرشيف",
+      "clearError": "تم حذف {{deleted}} · فشل {{failed}}"
+    },
+    "muted": {
+      "title": "المحادثات المكتومة",
+      "subtitle": "الإشعارات متوقفة لهذه الدردشات",
+      "noMuted": "لا توجد محادثات مكتومة",
+      "noMutedSubtitle": "لم تكتم أي دردشة. ستظهر المحادثات المكتومة هنا.",
+      "unmute": "إلغاء الكتم",
+      "unmuteError": "تعذّر إلغاء كتم هذه المحادثة. تحقق من اتصالك وحاول مرة أخرى."
+    },
+    "sharedMedia": {
+      "title": "الوسائط المشتركة",
+      "noMedia": "لا توجد وسائط مشتركة بعد",
+      "noMediaSubtitle": "ستظهر الصور ومقاطع الفيديو المشتركة في هذه المحادثة هنا.",
+      "videoThumbnail": "صورة مصغّرة للفيديو",
+      "deleteSelected": "حذف الوسائط المحددة",
+      "summary": "{{photoCount}} صورة{{photoPlural}} · {{videoCount}} فيديو{{videoPlural}}",
+      "selectItem": "{{action}} {{type}}",
+      "select": "تحديد",
+      "deselect": "إلغاء التحديد",
+      "photo": "صورة",
+      "video": "فيديو",
+      "selectedCount": "{{count}} محدد",
+      "removeSelectedHint": "يزيل {{count}} عنصر{{plural}} محدد",
+      "filter": "تصفية {{label}}"
+    },
+    "attachments": {
+      "reviewTitle": "مراجعة المرفق",
+      "cancelAttachment": "إلغاء المرفق",
+      "captionPlaceholder": "أضف تعليقاً...",
+      "captionAccessibility": "تعليق المرفق",
+      "sendAttachment": "إرسال المرفق",
+      "actionSheetTitle": "إرفاق",
+      "actionSheetSubtitle": "مشاركة الصور ومقاطع الفيديو في هذه الدردشة",
+      "photoAndVideo": "صورة وفيديو",
+      "chooseFromLibrary": "اختر من مكتبتك",
+      "camera": "الكاميرا",
+      "takePhotoOrVideo": "التقاط صورة أو فيديو جديد",
+      "makeOffer": "تقديم عرض",
+      "product": "المنتج",
+      "priceQuote": "عرض السعر",
+      "shareListing": "مشاركة الإدراج",
+      "orderStatus": "حالة الطلب",
+      "payment": "الدفع",
+      "agent": "الوكيل"
+    },
+    "offers": {
+      "declineOffer": "رفض العرض",
+      "counterOffer": "عرض مضاد",
+      "acceptOffer": "قبول العرض",
+      "declined": "مرفوض",
+      "accepted": "مقبول",
+      "expired": "منتهٍ",
+      "waitingForResponse": "بانتظار الرد",
+      "pass": "تجاوز",
+      "counter": "عرض مضاد",
+      "accept": "قبول",
+      "verified": "موثّق",
+      "verifiedSystemUpdate": "تحديث النظام الموثّق",
+      "counterRound": "عرض مضاد #{{round}}",
+      "expiresIn": "ينتهي خلال {{time}}"
+    },
+    "agentPicker": {
+      "title": "إضافة وكيل AI",
+      "sheet": "ورقة إضافة وكيل AI",
+      "connect": "اتصل بمساعد للمساعدة في هذه الدردشة",
+      "demoNotice": "المساعدون التجريبيون يقترحون ردوداً وهمية",
+      "noAgents": "لا وكلاء متاحون",
+      "noAgentsBody": "أنشئ وكيلاً من شاشة الوكلاء للبدء.",
+      "loading": "جارٍ تحميل الوكلاء المنشورين…",
+      "loadError": "تعذّر تحميل الوكلاء",
+      "loadErrorBody": "تعذّر الوصول إلى الخادم. اسحب للمحاولة مرة أخرى.",
+      "noAgentsDeployed": "لا وكلاء منشورون",
+      "noAgentsDeployedBody": "ثبّت وكيلاً في هذه المحادثة من شاشة الوكلاء.",
+      "addAssistant": "إضافة مساعد",
+      "addAssistantDescription": "انشر مساعد AI في هذه الدردشة",
+      "addAgent": "إضافة وكيل {{name}}",
+      "alreadyAdded": "تمت إضافة {{name}} بالفعل",
+      "openManagement": "فتح إدارة الوكلاء",
+      "activeOne": "{{name}} نشط. اضغط لإدارة الوكلاء.",
+      "activeMany": "{{count}} وكلاء نشطون. اضغط لإدارة الوكلاء.",
+      "activeShortOne": "{{name}} نشط",
+      "activeShortMany": "{{count}} وكلاء نشطون",
+      "retryDraft": "إعادة إرسال مسودة الوكيل",
+      "sendDraft": "إرسال مسودة الوكيل"
+    },
+    "suggestedReplies": {
+      "title": "الردود المقترحة",
+      "titleFrom": "ردود مقترحة من {{agentName}}",
+      "use": "استخدام الرد المقترح: {{reply}}",
+      "fill": "يملأ حقل إدخال الرسالة بهذا الرد",
+      "dismiss": "تجاهل الردود المقترحة",
+      "dismissHint": "يخفي الردود المقترحة لهذه المحادثة",
+      "manage": "إدارة الردود"
+    },
+    "voice": {
+      "notAvailable": "الرسائل الصوتية غير متاحة",
+      "notSupportedHint": "تسجيل الصوت غير مدعوم في هذا الإصدار",
+      "micPermission": "تم رفض إذن الميكروفون. اضغط لطلب الإذن.",
+      "deleteRecording": "حذف التسجيل والبدء من جديد",
+      "readyToSend": "جاهز للإرسال",
+      "sendVoice": "إرسال رسالة صوتية",
+      "sendVoiceHint": "يرسل التسجيل. لا يمكن التراجع عنه.",
+      "stopRecording": "إيقاف التسجيل والمراجعة",
+      "stopRecordingHint": "اضغط لإنهاء التسجيل. راجع قبل الإرسال.",
+      "cancelRecording": "إلغاء التسجيل وحذفه",
+      "recordVoice": "تسجيل رسالة صوتية",
+      "recordVoiceHint": "اضغط لبدء التسجيل. اضغط إيقاف للمراجعة قبل الإرسال.",
+      "voiceMessage": "رسالة صوتية، المدة {{duration}}{{state}}",
+      "playbackSpeed": "سرعة التشغيل {{rate}} مرات",
+      "playHint": "اضغط مرتين للتشغيل أو الإيقاف المؤقت. استخدم الإجراءات للبحث أو تغيير السرعة أو طلب النص.",
+      "loadError": "تعذّر تحميل الصوت"
+    },
+    "transcription": {
+      "show": "إظهار النص لهذه الرسالة الصوتية",
+      "showHint": "يطلب تفريغاً نصياً تلقائياً. النص مشتق وليس كلمات المرسل الأصلية.",
+      "title": "النص",
+      "notAvailable": "التفريغ النصي غير متاح لصيغة الصوت هذه",
+      "close": "إغلاق النص",
+      "failed": "فشل التفريغ النصي",
+      "temporarilyUnavailable": "غير متاح مؤقتاً",
+      "retryTranscription": "إعادة محاولة التفريغ النصي",
+      "requesting": "جارٍ طلب النص…",
+      "transcribing": "جارٍ تفريغ الصوت نصياً…",
+      "empty": "(نص فارغ)",
+      "derivedLabel": "تم التفريغ النصي تلقائياً",
+      "accurate": "وضع علامة على التفريغ النصي كدقيق",
+      "inaccurate": "وضع علامة على التفريغ النصي كغير دقيق",
+      "loadError": "تعذّر تحميل النص"
+    },
+    "orders": {
+      "placed": "تم تقديم الطلب",
+      "placedBody": "تم إخطار البائع.",
+      "paymentConfirmed": "تم تأكيد الدفع",
+      "paymentConfirmedBody": "تمت معالجة دفعتك.",
+      "shipped": "تم شحن الطلب",
+      "shippedBody": "تم إرسال الطرد.",
+      "inTransit": "قيد النقل",
+      "inTransitBody": "طردك في الطريق.",
+      "delivered": "تم التسليم",
+      "deliveredBody": "تم تأكيد التسليم.",
+      "cancelled": "تم إلغاء الطلب",
+      "cancelledBody": "تم إلغاء هذا الطلب.",
+      "refunded": "تم الاسترداد",
+      "refundedBody": "تم استرداد دفعتك.",
+      "orderPreview": "{{title}}. {{subtitle}}. {{orderId}}. {{timestamp}}. اضغط لعرض تفاصيل الطلب.",
+      "viewDetails": "عرض التفاصيل",
+      "dispatchItem": "إرسال العنصر",
+      "trackParcel": "تتبّع الطرد",
+      "checkItem": "فحص العنصر",
+      "viewOrder": "عرض الطلب",
+      "shipBy": "أرسِل بحلول {{date}}",
+      "eta": "الوصول المتوقع {{window}}",
+      "etaWindow": "{{min}}–{{max}} يوم",
+      "etaDay": "{{count}} يوم",
+      "orderStatusAccessibility": "الطلب {{status}}{{deadline}}{{cta}}"
+    },
+    "safety": {
+      "title": "أبقِ المدفوعات على ThryftVerse",
+      "body": "المدفوعات خارج المنصة غير مشمولة بحماية المشتري. إذا كانت هذه معاملة مشروعة، فأتممها في التطبيق لتبقى محمياً.",
+      "dismiss": "تجاهل التحذير",
+      "reportConversation": "الإبلاغ عن هذه المحادثة"
+    },
+    "search": {
+      "placeholder": "ابحث في الدردشة",
+      "inConversation": "ابحث في المحادثة",
+      "previousResult": "النتيجة السابقة",
+      "nextResult": "النتيجة التالية",
+      "closeSearch": "إغلاق البحث",
+      "browseResults": "عرض النتائج في التصفح",
+      "browseResultsHint": "يفتح شاشة التصفح مع تطبيق عوامل التصفية المطابقة",
+      "refine": "تحسين البحث: {{suggestion}}",
+      "refineHint": "يضيف هذا التحسين إلى بحثك",
+      "searchFor": "ابحث عن {{suggestion}}",
+      "startQueryHint": "يبدأ بحثاً تحادثياً بهذا الاستعلام",
+      "queryInput": "حقل إدخال استعلام البحث",
+      "queryInputHint": "اكتب وصفاً بلغة طبيعية لما تريد العثور عليه",
+      "sendQuery": "إرسال استعلام البحث",
+      "sendQueryHint": "يرسل استعلامك ويبدأ البحث التحادثي",
+      "retry": "إعادة محاولة البحث",
+      "retryHint": "يعيد إرسال آخر استعلام بحث"
+    },
+    "common": {
+      "cancel": "إلغاء",
+      "goBack": "رجوع",
+      "verifiedUser": "مستخدم موثّق",
+      "retry": "إعادة المحاولة",
+      "delete": "حذف",
+      "block": "حظر",
+      "report": "إبلاغ",
+      "remove": "إزالة",
+      "clearAll": "مسح الكل",
+      "restore": "استعادة",
+      "blockWithName": "حظر {{name}}",
+      "reportWithName": "إبلاغ {{name}}"
+    },
+    "messageActions": {
+      "dismissReply": "تجاهل الرد",
+      "scrollToOriginal": "يتمرير إلى الرسالة الأصلية",
+      "quotedReply": "رد مقتبس من {{sender}}"
+    },
+    "translation": {
+      "translate": "ترجمة",
+      "showOriginal": "إظهار النص الأصلي",
+      "translating": "جارٍ الترجمة...",
+      "translationFailed": "الترجمة غير متاحة",
+      "translatedFrom": "مترجم من {{language}}"
+    }
+  },
+  "commerce": {
+    "checkout": {
+      "title": "إتمام الشراء",
+      "subtotal": "المجموع الفرعي",
+      "shipping": "الشحن",
+      "tax": "الضريبة",
+      "total": "الإجمالي",
+      "payNow": "ادفع الآن",
+      "paymentMethod": "طريقة الدفع",
+      "deliveryAddress": "عنوان التوصيل",
+      "orderPlaced": "تم وضع الطلب",
+      "orderFailed": "فشل الطلب",
+      "signInToCheckout": "سجّل الدخول لإتمام الشراء",
+      "signIn": "تسجيل الدخول",
+      "cannotPurchaseOwnListing": "لا يمكنك شراء إدراجك الخاص",
+      "cannotBuyOwnItem": "لا يمكنك شراء عنصر قمت بإدراجه للبيع.",
+      "itemUnavailable": "العنصر غير متوفر",
+      "listingNoLongerPurchasable": "لم يعد هذا الإدراج متاحًا للشراء.",
+      "goBack": "رجوع",
+      "delivery": "التوصيل",
+      "noAddress": "لا يوجد عنوان",
+      "change": "تغيير",
+      "add": "إضافة",
+      "noPaymentMethod": "لا توجد طريقة دفع",
+      "requiredForDelivery": "مطلوب للتوصيل",
+      "needsSavingBeforePayment": "يجب الحفظ قبل الدفع",
+      "shippingNotAvailable": "الشحن غير متاح لمنطقتك",
+      "cardsUnavailableRegion": "البطاقات غير متاحة في منطقتك",
+      "securePayment": "دفع آمن · تفاصيل البطاقة مشفّرة",
+      "useWalletBalance": "استخدم رصيد المحفظة",
+      "available": "متاح",
+      "retryPayment": "إعادة محاولة الدفع",
+      "tryAgain": "حاول مرة أخرى",
+      "addAddress": "إضافة عنوان",
+      "addPayment": "إضافة طريقة دفع",
+      "item": "العنصر",
+      "buyerProtection": "حماية المشتري",
+      "walletApplied": "تم تطبيق المحفظة",
+      "viewFullBreakdown": "عرض التفاصيل الكاملة",
+      "fullBreakdown": "التفاصيل الكاملة",
+      "payWithApplePay": "ادفع باستخدام Apple Pay",
+      "payWithGooglePay": "ادفع باستخدام Google Pay",
+      "payWithCard": "ادفع بالبطاقة",
+      "processing": "قيد المعالجة",
+      "waitingForConfirmation": "في انتظار التأكيد",
+      "savingWithWallet": "توفير {{amount}} باستخدام رصيد المحفظة",
+      "shippingQuoteUnavailable": "عرض سعر الشحن غير متاح — سيتم المتابعة بالشحن القياسي.",
+      "addDeliveryAddressToContinue": "أضف عنوان التوصيل للمتابعة.",
+      "addPaymentMethodToContinue": "أضف طريقة دفع للمتابعة.",
+      "estimated": "تقديري",
+      "tracking": "التتبع",
+      "closeCheckout": "إغلاق إتمام الشراء",
+      "paymentInProgress": "الدفع قيد التنفيذ",
+      "paymentInProgressBody": "قد يكتمل تأكيد الدفع حتى بعد مغادرتك. تحقق من طلباتك قبل المحاولة مرة أخرى.",
+      "stay": "البقاء",
+      "leave": "مغادرة"
+    },
+    "offer": {
+      "makeOffer": "قدّم عرضًا",
+      "offerAmount": "مبلغ العرض",
+      "submitOffer": "إرسال العرض",
+      "offerAccepted": "تم قبول العرض",
+      "offerDeclined": "تم رفض العرض",
+      "offerExpired": "انتهت صلاحية العرض"
+    },
+    "bid": {
+      "placeBid": "قدّم مزايدة",
+      "currentBid": "المزايدة الحالية",
+      "yourBid": "مزايدتك",
+      "bidPlaced": "تم تقديم المزايدة",
+      "outbid": "تم التفوق عليك في المزايدة",
+      "winning": "الفائز"
+    },
+    "wallet": {
+      "title": "المحفظة",
+      "balance": "الرصيد",
+      "spendableNow": "متاح للإنفاق الآن",
+      "withdraw": "سحب",
+      "withdrawAmount": "مبلغ السحب",
+      "withdrawSuccess": "تم طلب السحب",
+      "withdrawFailed": "فشل السحب",
+      "addMoney": "إضافة أموال",
+      "transactionHistory": "سجل المعاملات",
+      "convert": "تحويل",
+      "recentActivity": "النشاط الأخير",
+      "seeAll": "عرض الكل",
+      "noBalanceYet": "لا يوجد 1ZE بعد",
+      "addMoneyToStart": "أضف أموالًا لبدء تداول وحدات الملكية المشتركة.",
+      "authenticateToView": "قم بالمصادقة لعرض محفظتك",
+      "showBalance": "إظهار الرصيد",
+      "hideBalance": "إخفاء الرصيد",
+      "balanceHidden": "الرصيد مخفي",
+      "reservedForOrders": "محجوز للطلبات",
+      "redemptionPending": "استرداد معلّق",
+      "otherHolds": "حجوزات أخرى",
+      "pendingDeposit": "إيداع معلّق",
+      "unsettledSaleProceeds": "عائدات بيع غير مُحوّلة",
+      "withdrawable": "قابل للسحب",
+      "sellerEarnings": "أرباح البائع",
+      "safeguarded": "محمي",
+      "safeguardingPending": "حماية معلّقة",
+      "evidence": "الأدلة",
+      "terms": "الشروط",
+      "activity": "النشاط"
+    },
+    "order": {
+      "title": "الطلب",
+      "orderNumber": "طلب رقم {{number}}",
+      "statusPending": "قيد الانتظار",
+      "statusProcessing": "قيد المعالجة",
+      "statusShipped": "تم الشحن",
+      "statusDelivered": "تم التوصيل",
+      "statusCancelled": "ملغى",
+      "statusRefunded": "تم الاسترداد"
+    }
+  },
+  "myProfile": {
+    "cover": {
+      "uploadFailed": "فشل رفع الغلاف",
+      "retry": "إعادة المحاولة",
+      "cancel": "إلغاء"
+    },
+    "utility": {
+      "orders": "الطلبات",
+      "analytics": "التحليلات",
+      "closet": "الخزانة",
+      "wallet": "المحفظة",
+      "auctions": "المزادات",
+      "coOwn": "الملكية المشتركة",
+      "sellerHub": "مركز البائع",
+      "itemsCount": "{{count}} عناصر",
+      "assetsCount": "{{count}} أصول"
+    },
+    "notSignedIn": {
+      "subtitle": "سجّل الدخول لعرض ملفك الشخصي وإدراجاتك ومحفظتك.",
+      "signIn": "تسجيل الدخول"
+    },
+    "holiday": {
+      "title": "وضع العطلة مفعّل",
+      "subtitle": "متجرك متوقف مؤقتًا. اضغط للإدارة."
+    },
+    "tabs": {
+      "shop": "المتجر",
+      "looks": "الإطلالات",
+      "about": "حول",
+      "reviews": "التقييمات"
+    },
+    "listings": {
+      "emptyTitle": "أدرج عنصرك الأول",
+      "emptyBody": "صوّر عنصرًا وانشره عندما تكون جاهزًا.",
+      "startSelling": "ابدأ البيع",
+      "bringOverListings": "نقل إدراجاتك الحالية",
+      "viewAll": "عرض الكل",
+      "sold": "تم البيع",
+      "listingsCount": "{{count}} إدراجات"
+    },
+    "looks": {
+      "errorTitle": "تعذّر تحميل إطلالاتك",
+      "errorSubtitle": "تحقق من اتصالك وحاول مرة أخرى.",
+      "tryAgain": "حاول مرة أخرى",
+      "emptyTitle": "لا توجد إطلالات بعد",
+      "emptySubtitle": "أنشئ إطلالتك الأولى لإبراز أسلوبك.",
+      "createLook": "إنشاء إطلالة"
+    },
+    "about": {
+      "coOwnPortfolio": "محفظة الملكية المشتركة",
+      "viewAll": "عرض الكل",
+      "unit": "وحدة",
+      "units": "وحدات",
+      "website": "الموقع الإلكتروني",
+      "shopPolicies": "سياسات المتجر",
+      "payments": "المدفوعات",
+      "paymentsValue": "دفع آمن مع حماية المشتري",
+      "shipping": "الشحن",
+      "shippingSeller": "البائع {{label}}. يتم توفير التتبع عند الشحن.",
+      "shippingDefault": "يتم توفير التتبع عند الشحن.",
+      "returns": "الإرجاع",
+      "returnsValue": "يُقبل الإرجاع للعناصر غير المطابقة للوصف.",
+      "responseRate": "معدل الاستجابة",
+      "response": "الاستجابة",
+      "responseSeller": "يرد البائع عادةً خلال {{label}}.",
+      "responseDefault": "يسعى البائع للرد بسرعة.",
+      "noDetails": "لا تتوفر تفاصيل إضافية."
+    },
+    "completion": {
+      "title": "أكمل ملفك الشخصي",
+      "progress": "{{percent}}% · {{done}}/{{total}}"
+    },
+    "growth": {
+      "title": "ازدهر على Thryftverse",
+      "listFirstItemTitle": "أدرج عنصرك الأول",
+      "listFirstItemSub": "صوّر وانشر عنصرًا لبدء البيع.",
+      "growAudienceTitle": "وسّع جمهورك",
+      "growAudienceSub": "شارك ملفك الشخصي وأنشئ محتوى لجذب المتابعين."
+    },
+    "toast": {
+      "coverUpdated": "تم تحديث الغلاف",
+      "coverUploadFailed": "فشل رفع الغلاف",
+      "avatarUpdated": "تم تحديث الصورة الرمزية",
+      "avatarUploadFailed": "فشل رفع الصورة الرمزية",
+      "portfolioLoadFailed": "تعذّر تحميل المحفظة"
+    },
+    "accessibility": {
+      "orders": "الطلبات",
+      "creatorAnalytics": "تحليلات المنشئ",
+      "closet": "الخزانة",
+      "wallet": "المحفظة",
+      "browseAuctions": "تصفّح المزادات",
+      "browseCoOwnMarket": "تصفّح سوق الملكية المشتركة",
+      "sellerHub": "مركز البائع",
+      "openSettings": "فتح الإعدادات",
+      "openSettingsHint": "يفتح الإعدادات",
+      "shareProfile": "مشاركة الملف الشخصي",
+      "shareProfileHint": "يفتح ورقة مشاركة النظام لمشاركة ملفك الشخصي",
+      "retryCoverUpload": "إعادة محاولة رفع الغلاف",
+      "cancelCoverChange": "إلغاء تغيير الغلاف",
+      "uploadingCover": "جارٍ رفع غلاف الملف الشخصي",
+      "changeCover": "تغيير غلاف الملف الشخصي",
+      "holidayMode": "وضع العطلة مفعّل — اضغط للإدارة",
+      "importListingsHint": "ابدأ استيراد كتالوج من eBay أو ملف",
+      "loadingLooks": "جارٍ تحميل إطلالاتك",
+      "viewCoOwnPortfolio": "عرض محفظة الملكية المشتركة",
+      "viewCoOwnPortfolioHint": "يفتح مركز حيازات الملكية المشتركة",
+      "dismissCompletion": "تجاهل مطالبة إكمال الملف الشخصي",
+      "dismissGrowth": "تجاهل مطالبات النمو",
+      "listFirstItemHint": "يفتح تدفق البيع لإنشاء إدراجك الأول",
+      "growAudienceHint": "يفتح تحليلات المنشئ مع أدوات نمو الجمهور"
+    },
+    "completionCta": {
+      "addName": "إضافة اسم",
+      "addBio": "إضافة نبذة",
+      "addPhoto": "إضافة صورة",
+      "addCover": "إضافة غلاف",
+      "editProfile": "تعديل الملف الشخصي"
+    },
+    "share": {
+      "message": "تعرّف على @{{username}} على Thryftverse! https://thryftverse.com/@{{username}}",
+      "title": "{{name}} على Thryftverse"
+    }
+  },
+  "galleria": {
+    "editorial": {
+      "eyebrow": "مقال تحريري"
+    },
+    "collections": {
+      "eyebrow": "مجموعات منتقاة",
+      "curatedBy": "إنتقاء بواسطة {{curator}}"
+    },
+    "assets": {
+      "eyebrow": "أصول مميزة",
+      "title": "أبرز ملامح الملكية المشتركة"
+    },
+    "editorialList": {
+      "eyebrow": "مقال تحريري",
+      "title": "قصص من المعرض"
+    },
+    "creativeTools": {
+      "eyebrow": "أدوات إبداعية",
+      "title": "اجعله ملكك",
+      "posterStudio": "استوديو الملصقات",
+      "posterStudioSub": "أنشئ ملصقات وإطلالات ولوحات إلهام"
+    },
+    "demo": {
+      "content": "محتوى تجريبي"
+    },
+    "offline": {
+      "banner": "غير متصل — يتم عرض محتوى المعرض المخزّن مؤقتًا"
+    },
+    "error": {
+      "title": "المعرض غير متاح",
+      "retry": "إعادة المحاولة",
+      "loadFailed": "تعذّر تحميل المعرض. حاول مرة أخرى."
+    },
+    "empty": {
+      "title": "المعرض قيد الإعداد",
+      "subtitle": "يقوم منسّقونا بإعداد مجموعات ومقالات تحريرية جديدة. تفقّد قريبًا.",
+      "refresh": "تحديث"
+    },
+    "accessibility": {
+      "loadingCollections": "جارٍ تحميل المجموعات المنتقاة",
+      "collectionsRail": "شريط المجموعات المنتقاة",
+      "openPosterStudio": "فتح استوديو الملصقات",
+      "posterStudioHint": "أنشئ ملصقات وإطلالات ولوحات إلهام",
+      "editorial": "مقال تحريري: {{title}}",
+      "collection": "مجموعة: {{title}}",
+      "collectionHint": "يفتح تفاصيل المجموعة",
+      "featuredCollection": "مجموعة مميزة: {{title}}",
+      "asset": "{{title}}، بقيمة {{value}}",
+      "assetHint": "يفتح تفاصيل الأصل"
+    }
+  },
+  "agentLedger": {
+    "header": {
+      "title": "عمليات تشغيل الوكيل",
+      "subtitle": "سجلات التنفيذ المدعومة بالخادم"
+    },
+    "status": {
+      "succeeded": "ناجح",
+      "failed": "فاشل",
+      "running": "قيد التشغيل",
+      "queued": "في قائمة الانتظار",
+      "cancelled": "ملغى",
+      "timedOut": "انتهت المهلة",
+      "unknown": "غير معروف",
+      "awaitingApproval": "بانتظار الموافقة",
+      "awaitingInput": "بانتظار الإدخال"
+    },
+    "error": {
+      "title": "تعذّر تحميل عمليات التشغيل",
+      "retry": "إعادة المحاولة",
+      "loadFailed": "فشل تحميل عمليات التشغيل"
+    },
+    "empty": {
+      "title": "لا توجد عمليات تشغيل للوكيل بعد",
+      "body": "عندما ينفّذ الوكلاء — عبر الإشارات أو الأوامر أو الجداول — تظهر عمليات تشغيلهم هنا مع الحالة واستخدام الرموز والتوقيت."
+    },
+    "footer": {
+      "note": "تم استبدال سجل النشاط المحلي المعروض سابقًا بسجلات تشغيل مدعومة بالخادم."
+    },
+    "approvals": {
+      "title": "الموافقات المعلّقة",
+      "approving": "جارٍ الموافقة…",
+      "approve": "موافقة",
+      "approveAction": "الموافقة على طلب من {{botName}}",
+      "rejecting": "جارٍ الرفض…",
+      "reject": "رفض",
+      "rejectAction": "رفض طلب من {{botName}}",
+      "errorApproveTitle": "تعذّرت الموافقة",
+      "errorApproveMessage": "تعذّر الموافقة على الطلب.",
+      "errorRejectTitle": "تعذّر الرفض",
+      "errorRejectMessage": "تعذّر رفض الطلب."
+    },
+    "cancel": {
+      "cancelling": "جارٍ الإلغاء…",
+      "cancel": "إلغاء",
+      "cancelAction": "إلغاء تشغيل {{botName}}",
+      "confirmTitle": "إلغاء تشغيل الوكيل",
+      "confirmMessage": "إلغاء التشغيل لـ {{botName}}؟",
+      "confirmLabel": "إلغاء التشغيل",
+      "errorTitle": "تعذّر الإلغاء",
+      "errorMessage": "تعذّر إلغاء التشغيل."
+    },
+    "tools": {
+      "search": "بحث: {{searchQuery}}",
+      "listing": "إدراج: {{listingId}}",
+      "priceHistory": "سجل الأسعار: {{searchQuery}}",
+      "readMessages": "قراءة {{count}} رسائل"
+    },
+    "time": {
+      "justNow": "الآن",
+      "minutesAgo": "قبل {{count}} دقيقة",
+      "hoursAgo": "قبل {{count}} ساعة",
+      "daysAgo": "قبل {{count}} يوم"
+    },
+    "tokens": {
+      "usage": "{{input}} دخول · {{output}} خروج"
+    }
+  },
+  "liveStreamViewer": {
+    "lotStatus": {
+      "comingUp": "قريبًا",
+      "openForBidding": "مفتوح للمزايدة",
+      "closingSoon": "يُغلق قريبًا!",
+      "sold": "بيعت بـ £{{price}}",
+      "passed": "مرّ (لم يُحقق السعر الاحتياطي)",
+      "cancelled": "ملغى"
+    },
+    "toast": {
+      "couldNotSend": "تعذّر إرسال الرسالة",
+      "bidFailed": "فشلت المزايدة",
+      "bidNotAccepted": "لم تُقبل المزايدة",
+      "stillChecking": "لا يزال قيد التحقق — قد تكون مزايدتك قد قُدّمت",
+      "purchaseComplete": "اكتمل الشراء — تحقق من بريدك الوارد",
+      "couldNotPurchase": "تعذّر إكمال الشراء",
+      "followDemoUnavailable": "المتابعة غير متاحة في الوضع التجريبي",
+      "followUnavailable": "المتابعة غير متاحة",
+      "unfollowed": "تم إلغاء المتابعة",
+      "following": "تتابعه",
+      "followError": "تعذّر تحديث حالة المتابعة",
+      "checkoutError": "تعذّر بدء إتمام الشراء. يرجى المحاولة مرة أخرى."
+    },
+    "share": {
+      "message": "شاهد البث المباشر لـ {{sellerName}} على ThryftVerse",
+      "defaultSeller": "هذا البائع"
+    },
+    "connecting": {
+      "title": "جارٍ الاتصال بالبث",
+      "subtitle": "جارٍ إعداد اتصال فوري"
+    },
+    "error": {
+      "title": "تعذّر الاتصال بالبث",
+      "subtitle": "قد يكون البث قد انتهى أو انقطع اتصالك.",
+      "reconnect": "إعادة الاتصال",
+      "goBack": "رجوع"
+    },
+    "ended": {
+      "title": "انتهى البث",
+      "subtitle": "شكرًا للمشاهدة",
+      "viewers": "المشاهدون",
+      "lotsSold": "القطع المباعة",
+      "totalSales": "إجمالي المبيعات",
+      "done": "تم"
+    },
+    "demo": {
+      "label": "تجريبي",
+      "stream": "بث تجريبي"
+    },
+    "video": {
+      "connecting": "جارٍ الاتصال بالبث..."
+    },
+    "seller": {
+      "following": "تتابعه",
+      "follow": "متابعة"
+    },
+    "live": {
+      "label": "مباشر"
+    },
+    "chat": {
+      "seller": "البائع",
+      "placeholder": "أرسل رسالة..."
+    },
+    "product": {
+      "bids": "مزايدات"
+    },
+    "bid": {
+      "placeBid": "زايد",
+      "buyNow": "شراء",
+      "buyNowFull": "اشترِ الآن",
+      "completeCheckout": "أكمل إتمام الشراء"
+    },
+    "bidSheet": {
+      "title": "قدّم مزايدة",
+      "currentBid": "المزايدة الحالية",
+      "minNextBid": "الحد الأدنى للمزايدة التالية",
+      "cancel": "إلغاء",
+      "close": "إغلاق"
+    },
+    "unknown": {
+      "title": "حالة المزايدة غير معروفة",
+      "subtitle": "قد تكون مزايدتك قد قُدّمت. تعذّر تأكيد النتيجة.",
+      "checkResult": "تحقق من النتيجة",
+      "dismiss": "تجاهل"
+    }
+  },
+  "liveShopping": {
+    "live": {
+      "label": "مباشر",
+      "demo": "تجريبي"
+    },
+    "header": {
+      "title": "مباشر"
+    },
+    "sections": {
+      "liveNow": "مباشر الآن",
+      "comingUp": "قريبًا",
+      "pastEvents": "الفعاليات السابقة",
+      "streaming": "{{count}} يبث الآن",
+      "scheduled": "{{count}} مجدول",
+      "replays": "{{count}} إعادات",
+      "replay_one": "{{count}} إعادة",
+      "replay_other": "{{count}} إعادات"
+    },
+    "featured": {
+      "currentBid": "المزايدة الحالية"
+    },
+    "replay": {
+      "justEnded": "انتهى للتو",
+      "hoursAgo": "قبل {{count}} ساعة",
+      "daysAgo": "قبل {{count}} يوم"
+    },
+    "upcoming": {
+      "waiting": "بانتظار",
+      "notified": "تم الإشعار",
+      "notifyMe": "أشعرني",
+      "startingSoon": "يبدأ قريبًا"
+    },
+    "scheduled": {
+      "inMinutes": "خلال {{minutes}} دقيقة · {{time}}",
+      "inHours": "خلال {{hours}} س {{minutes}} د · {{time}}",
+      "inDays": "{{day}} · {{time}}"
+    },
+    "noLive": {
+      "text": "لا يوجد بث مباشر الآن"
+    },
+    "error": {
+      "title": "تعذّر تحميل الجلسات المباشرة",
+      "retry": "إعادة المحاولة",
+      "subtitle": "تحقق من اتصالك وحاول مرة أخرى.",
+      "loadFailed": "فشل تحميل الجلسات المباشرة"
+    },
+    "empty": {
+      "title": "لا توجد جلسات مباشرة الآن",
+      "subtitle": "تفقّد قريبًا، أو ابدأ جلستك الخاصة من مركز البائع.",
+      "goToSellerHub": "اذهب إلى مركز البائع"
+    }
+  },
+  "conversationalSearch": {
+    "header": {
+      "title": "اسأل ThryftVerse"
+    },
+    "demo": {
+      "banner": "مطابقة الكلمات المفتاحية — نستخرج عوامل التصفية من وصفك."
+    },
+    "offline": {
+      "banner": "أنت غير متصل. أعد الاتصال للبحث."
+    },
+    "empty": {
+      "greetingTitle": "عمّا تبحث اليوم؟",
+      "greetingSubtitle": "صِفه بكلماتك الخاصة.",
+      "suggestionsLabel": "جرّب أحد هذه الخيارات"
+    },
+    "matched": {
+      "label": "الكلمات المفتاحية المطابقة"
+    },
+    "actions": {
+      "viewResults": "عرض النتائج",
+      "refine": "تحسين"
+    },
+    "error": {
+      "retry": "إعادة المحاولة",
+      "offline": "أنت غير متصل. أعد الاتصال للبحث.",
+      "generic": "حدث خطأ ما. حاول مرة أخرى."
+    },
+    "input": {
+      "placeholder": "صِف ما تبحث عنه…"
+    },
+    "browseTitle": "نتائج البحث",
+    "filters": {
+      "brand": "العلامة التجارية: {{value}}",
+      "category": "الفئة: {{value}}",
+      "size": "المقاس: {{value}}",
+      "condition": "الحالة: {{value}}",
+      "colour": "اللون: {{value}}",
+      "style": "النمط: {{value}}",
+      "priceLabel": "السعر: ",
+      "priceUnder": "أقل من {{value}}",
+      "priceOver": "أكثر من {{value}}",
+      "sustainableOnly": "مستدام فقط"
+    },
+    "trust": {
+      "matchedKeywords": "الكلمات المفتاحية المطابقة: {{keywords}}",
+      "noMatch": "لا توجد كلمات مفتاحية مطابقة — نعرض ردًا عامًا"
+    }
+  },
+  "aiAgent": {
+    "header": {
+      "title": "استوديو الوكلاء",
+      "subtitle": "إدارة الوكلاء والاتصالات والمفاتيح"
+    },
+    "demo": {
+      "banner": "يتم التحقق من المفاتيح بالتنسيق فقط — لا يُرسل أي طلب مباشر إلى أي مزوّد."
+    },
+    "sections": {
+      "yourAgents": "وكلاؤك",
+      "serverConnections": "اتصالات الخادم",
+      "deviceLocalKeys": "مفاتيح الجهاز المحلية"
+    },
+    "status": {
+      "agents": " وكيل/وكلاء",
+      "connections": "اتصالات",
+      "pendingApprovals": "{{count}} موافقة/موافقات معلّقة",
+      "viewPending": "عرض {{count}} موافقة/موافقات معلّقة",
+      "subtitleNone": "أنشئ وكيلًا واتصل بمزوّد للبدء",
+      "subtitleNoAgents": "اتصل بمزوّد، ثم أنشئ وكيلك الأول",
+      "subtitleNoConnections": "اتصل بمزوّد على مستوى الخادم لتشغيل تنفيذ الوكيل",
+      "subtitleReady": "يعمل الوكلاء على مفاتيحك المتصلة على مستوى الخادم"
+    },
+    "agentStatus": {
+      "draft": "مسودة",
+      "disabled": "معطّل",
+      "setupNeeded": "إعداد مطلوب",
+      "published": "منشور"
+    },
+    "serverConnections": {
+      "hint": "تم التحقق من المفاتيح وتخزينها مشفّرة على الخادم. هذه تشغّل تنفيذ الوكيل.",
+      "connectServerSide": "اتصال على مستوى الخادم",
+      "connectServerSideSub": "يتم التحقق من المفاتيح وتخزينها مشفّرة على الخادم.",
+      "empty": "لا توجد اتصالات بالخادم بعد. اتصل بمزوّد لتشغيل وكلائك."
+    },
+    "deviceLocal": {
+      "note": "للاكتشاف فقط — غير مستخدم للتنفيذ",
+      "expandedNote": "تُستخدم مفاتيح الجهاز المحلية لاكتشاف النماذج فقط. اتصالات الخادم تشغّل تنفيذ الوكيل."
+    },
+    "agents": {
+      "empty": "لا يوجد وكلاء بعد. أنشئ واحدًا لمنحه تخصصًا وحدودًا وسياقًا.",
+      "create": "إنشاء وكيل",
+      "pauseAll": "إيقاف جميع الوكلاء مؤقتًا",
+      "noSessionsRunning": "لا توجد جلسات وكيل قيد التشغيل",
+      "sessionsRunning": "{{count}} جلسة/جلسات وكيل قيد التشغيل",
+      "activity": "نشاط الوكيل",
+      "activitySub": "سجل محلي لإجراءات الوكيل والموافقات"
+    },
+    "connect": {
+      "cancel": "إلغاء",
+      "verifySave": "تحقق وحفظ",
+      "verifying": "جارٍ التحقق…",
+      "apiKey": "مفتاح API",
+      "labelOptional": "تسمية (اختياري)",
+      "baseUrl": "عنوان URL الأساسي (اختياري، مزوّدون مخصصون)"
+    },
+    "confirm": {
+      "title": "إزالة هذا الاتصال؟",
+      "body": "لن يتمكن الوكلاء الذين يستخدمون هذا الاتصال من العمل حتى تتصل ببديل.",
+      "cancel": "إلغاء",
+      "remove": "إزالة",
+      "removing": "جارٍ الإزالة…"
+    },
+    "connection": {
+      "reverify": "إعادة التحقق",
+      "verifying": "جارٍ التحقق…",
+      "remove": "إزالة",
+      "removing": "جارٍ الإزالة…",
+      "verified": "تم التحقق {{time}}",
+      "notVerified": "لم يتم التحقق بعد",
+      "modelsCount": "{{count}} نموذج/نماذج",
+      "more": "المزيد"
+    },
+    "health": {
+      "healthy": "سليم",
+      "failed": "فاشل",
+      "revoked": "ملغى",
+      "expired": "منتهي الصلاحية",
+      "degraded": "متدهور",
+      "unverified": "غير موثّق"
+    },
+    "providerStatus": {
+      "comingSoon": "قريبًا",
+      "connected": "متصل",
+      "invalid": "غير صالح",
+      "notConnected": "غير متصل"
+    },
+    "provider": {
+      "soon": "قريبًا",
+      "comingSoon": "قريبًا — غير متاح بعد على هذا النشر.",
+      "modelsAvailable": "{{count}} نموذج/نماذج متاحة",
+      "discoveringModels": "جارٍ اكتشاف النماذج…",
+      "storedLocally": "مخزّن محليًا · {{storage}}",
+      "secureStorage": "تخزين آمن",
+      "deviceStorage": "تخزين الجهاز",
+      "disconnect": "قطع الاتصال",
+      "replaceKey": "استبدال المفتاح",
+      "noKeySaved": "لا يوجد مفتاح محفوظ. اتصل لاستخدام نماذج {{name}}.",
+      "connect": "اتصال",
+      "availableModels": "النماذج المتاحة",
+      "discoveringFrom": "جارٍ اكتشاف النماذج من {{name}}…",
+      "noModelsReturned": "لم يُرجع {{name}} أي نماذج.",
+      "modelsAfterConnect": "تُكتشف النماذج من {{name}} بعد الاتصال.",
+      "testing": "جارٍ الاختبار…",
+      "testSave": "اختبار وحفظ"
+    },
+    "toast": {
+      "connectionSaved": "تم التحقق من الاتصال وحفظه.",
+      "verifyFailed": "تعذّر التحقق من المفتاح. تحقق من المفتاح وحاول مرة أخرى.",
+      "reverified": "تمت إعادة التحقق من الاتصال.",
+      "reverifyFailed": "فشلت إعادة التحقق.",
+      "removedWithAgents": "تمت الإزالة. تم تحديث {{count}} وكيل/وكلاء.",
+      "connectionRemoved": "تمت إزالة الاتصال.",
+      "removeFailed": "تعذّر إزالة الاتصال."
+    },
+    "help": {
+      "title": "ما يمكن للوكلاء فعله وما لا يمكنهم فعله",
+      "body": "يصيغ الوكلاء الردود ويلخّصون المحادثات باستخدام مفاتيح المزوّد التي تتصل بها. لا يمكنهم الوصول إلى محفظتك أو إجراء مدفوعات أو التصرف خارج الأذونات التي تمنحها. تُخزَّن مفاتيح الخادم مشفّرة على الخادم؛ ولا تغادر مفاتيح الجهاز المحلية هذا الجهاز أبدًا. يُسجَّل كل إجراء للوكيل في سجل النشاط من أجل الشفافية."
+    }
+  },
+  "algorithm": {
+    "header": {
+      "title": "خوارزميتك",
+      "subtitle": "الإشارات التي تشكّل خلاصتك"
+    },
+    "demo": {
+      "banner": "بيانات الخوارزمية توضيحية في الوضع التجريبي."
+    },
+    "offline": {
+      "banner": "أنت غير متصل. نعرض الملف الشخصي المحفوظ الأخير."
+    },
+    "summary": {
+      "activeTopics": "المواضيع النشطة",
+      "signals": "الإشارات",
+      "lastUpdated": "آخر تحديث"
+    },
+    "howItWorks": {
+      "title": "كيف يعمل هذا"
+    },
+    "empty": {
+      "title": "لا توجد مواضيع بعد",
+      "subtitle": "خلاصتك مبنية على الشعبية العامة. أضف موضوعًا أدناه لبدء تشكيل توصياتك."
+    },
+    "topics": {
+      "title": "المواضيع التي تؤثر على خلاصتك",
+      "caption": "اضغط على موضوع لضبط وزنه أو إزالته.",
+      "influenceWeight": "وزن التأثير",
+      "removeTopic": "إزالة الموضوع",
+      "lockHint": "محفوظ لأغراض الثقة والمحاسبة. يمكنك إيقاف تأثيره على خلاصتك."
+    },
+    "signals": {
+      "title": "الإشارات الأخيرة",
+      "caption": "أحدث الإجراءات التي شكّلت خلاصتك."
+    },
+    "addTopic": {
+      "title": "إضافة موضوع",
+      "caption": "أخبرنا بما يهمّك.",
+      "placeholder": "مثال: ساعات كلاسيكية",
+      "addBtn": "إضافة موضوع"
+    },
+    "error": {
+      "title": "تعذّر تحميل خوارزميتك",
+      "subtitle": "لم نتمكن من جلب ملفك الشخصي للخوارزمية. تحقق من اتصالك وحاول مرة أخرى.",
+      "retry": "إعادة المحاولة"
+    }
+  },
+  "aiListing": {
+    "header": {
+      "title": "إدراج سريع",
+      "subtitle": "التقط الصور · راجع · انشر"
+    },
+    "fields": {
+      "title": "العنوان",
+      "description": "الوصف",
+      "category": "الفئة",
+      "brand": "العلامة التجارية",
+      "condition": "الحالة",
+      "price": "السعر (جنيه إسترليني)",
+      "tags": "الوسوم",
+      "materialComposition": "تكوين المواد",
+      "weight": "الوزن (كجم)"
+    },
+    "placeholders": {
+      "title": "مثال: سترة دنيم ليفاي 501 كلاسيكية",
+      "description": "صِف عنصرك…",
+      "selectCategory": "اختر الفئة",
+      "brand": "العلامة التجارية",
+      "selectCondition": "اختر الحالة",
+      "price": "0.00",
+      "addTag": "إضافة وسم",
+      "material": "مثال: قطن، بوليستر، صوف...",
+      "weight": "مثال: 0.45"
+    },
+    "impact": {
+      "helper": "يُستخدم لحساب الأثر البيئي الفعلي. اختياري لكنه موصى به."
+    },
+    "preview": {
+      "label": "معاينة",
+      "completeness": "اكتمال"
+    },
+    "photo": {
+      "cover": "غلاف",
+      "enhance": "تحسين",
+      "camera": "الكاميرا",
+      "library": "المكتبة"
+    },
+    "suggestion": {
+      "use": "استخدام",
+      "suggested": "مقترح"
+    },
+    "picker": {
+      "selectCategory": "اختر الفئة",
+      "selectCondition": "اختر الحالة"
+    },
+    "empty": {
+      "title": "التقط للإدراج",
+      "body": "أضف صورًا بالأعلى وسنقترح عنوانًا ووصفًا وفئة ونطاق سعر. راجع وعدّل كل شيء قبل النشر."
+    },
+    "error": {
+      "retry": "إعادة المحاولة"
+    },
+    "toast": {
+      "photoEnhanced": "تم تحسين الصورة",
+      "photoAccessTitle": "الوصول إلى الصور مطلوب",
+      "photoAccessBody": "الوصول إلى الصور مطلوب لإضافة صور الإدراج.",
+      "pickFailedTitle": "فشل الاختيار",
+      "pickFailedBody": "تعذّر اختيار الصور. حاول مرة أخرى.",
+      "cameraAccessTitle": "الوصول إلى الكاميرا مطلوب",
+      "cameraAccessBody": "الوصول إلى الكاميرا مطلوب لالتقاط صور الإدراج.",
+      "captureFailedTitle": "فشل الالتقاط",
+      "captureFailedBody": "تعذّر التقاط صورة. حاول مرة أخرى.",
+      "smartSellSavedPreviewTitle": "تم حفظ البيع الذكي (معاينة)",
+      "smartSellSavedPreviewBody": "سيتم تفعيل إعداداتك عندما يصبح البيع الذكي متاحًا بالكامل."
+    },
+    "publish": {
+      "publishing": "جارٍ النشر…",
+      "reviewPublish": "مراجعة ونشر",
+      "signInToPublish": "سجّل الدخول لنشر إدراج.",
+      "offline": "يبدو أنك غير متصل. تحقق من اتصالك وحاول مرة أخرى.",
+      "missingFields": "أضف صورة واحدة على الأقل وعنوانًا وسعرًا قبل النشر.",
+      "missingCover": "صورة غلاف موثّقة مطلوبة قبل النشر.",
+      "failed": "فشل النشر. حاول مرة أخرى."
+    },
+    "accessibility": {
+      "selectCategory": "اختر الفئة",
+      "opensCategoryPicker": "يفتح منتقي الفئة",
+      "selectCondition": "اختر الحالة",
+      "opensConditionPicker": "يفتح منتقي الحالة",
+      "removeTag": "إزالة الوسم {{tag}}",
+      "removeTagHint": "إزالة الوسم {{tag}} من هذا الإدراج",
+      "addTag": "إضافة وسم",
+      "addTagHint": "إضافة هذا الوسم إلى الإدراج",
+      "publishListing": "نشر الإدراج",
+      "publishListingHint": "إرسال إدراجك للنشر",
+      "acceptSuggestion": "قبول الاقتراح: {{text}}",
+      "acceptSuggestionHint": "تطبيق هذا الاقتراح على الحقل",
+      "dismissSuggestion": "رفض الاقتراح",
+      "dismissSuggestionHint": "إخفاء هذا الاقتراح دون تطبيقه",
+      "removePhoto": "إزالة الصورة",
+      "removePhotoHint": "إزالة هذه الصورة من الإدراج",
+      "enhancePhoto": "تحسين الصورة",
+      "enhancePhotoHint": "يفتح تحسين الصورة لتحسين صورة الإدراج هذه",
+      "takePhotoWithCamera": "التقاط صورة بالكاميرا",
+      "takePhotoWithCameraHint": "فتح الكاميرا لالتقاط صورة",
+      "pickPhotosFromGallery": "اختيار صور من المعرض",
+      "pickPhotosFromGalleryHint": "فتح المعرض لاختيار الصور",
+      "loadingSuggestions": "جارٍ تحميل الاقتراحات",
+      "loadingSuggestionsHint": "يتم إنشاء الاقتراحات",
+      "dismissError": "إغلاق الخطأ",
+      "dismissErrorHint": "إغلاق رسالة الخطأ هذه",
+      "retryHint": "إعادة محاولة الإجراء الفاشل",
+      "closePicker": "إغلاق المنتقي",
+      "closePickerHint": "إغلاق ورقة المنتقي",
+      "selectOption": "اختر {{option}}",
+      "chooseOption": "اختر {{option}} كخيار محدد"
+    }
+  },
+  "report": {
+    "header": {
+      "title": "إبلاغ",
+      "reportAccount": "إبلاغ عن حساب",
+      "reportGroup": "إبلاغ عن مجموعة",
+      "reportListing": "إبلاغ عن إدراج",
+      "subtitle": "البلاغات سرية"
+    },
+    "received": {
+      "title": "تم استلام البلاغ",
+      "body": "سنراجع الأمر ونوافيك بالنتيجة.",
+      "reportId": "بلاغ رقم {{reportId}}",
+      "receivedAt": "تم الاستلام في {{time}}",
+      "referenceNote": "احتفظ بهذا الرقم لاستخدامه في أي تواصل مستقبلي مع الدعم.",
+      "blockUser": "حظر هذا المستخدم",
+      "blockedNote": "هذا الحساب محظور ولا يمكنه التواصل معك.",
+      "done": "تم"
+    },
+    "unavailable": {
+      "title": "هدف البلاغ غير متاح",
+      "body": "تم فتح هذا البلاغ دون مرجع صالح. لم يتم إرسال أي شيء.",
+      "goBack": "رجوع"
+    },
+    "submit": {
+      "label": "إرسال البلاغ"
+    },
+    "intro": {
+      "title": "ماذا حدث؟",
+      "body": "اختر السبب الذي يصف المشكلة بشكل أفضل. لا تُدرج كلمات مرور أو تفاصيل دفع أو أي معلومات حساسة أخرى."
+    },
+    "details": {
+      "label": "تفاصيل إضافية (اختياري)",
+      "placeholder": "صِف ما حدث",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "صور الأدلة (اختياري)",
+      "camera": "الكاميرا",
+      "gallery": "المعرض",
+      "count": "{{count}}/3 صور"
+    },
+    "accessibility": {
+      "blockUser": "حظر هذا المستخدم",
+      "detailsInput": "تفاصيل بلاغ إضافية",
+      "evidencePhoto": "صورة دليل {{index}}",
+      "removeEvidencePhoto": "إزالة صورة الدليل {{index}}",
+      "takeEvidenceCamera": "التقاط صورة دليل بالكاميرا",
+      "chooseEvidenceGallery": "اختيار صور أدلة من المعرض"
+    },
+    "reasons": {
+      "spam": "محتوى مزعج",
+      "spamDesc": "ترويج غير مرغوب أو احتيال أو رسائل متكررة",
+      "harassment": "مضايقة",
+      "harassmentDesc": "تهديد أو إساءة أو تواصل غير مرغوب موجّه",
+      "hateSpeech": "خطاب كراهية",
+      "hateSpeechDesc": "شتائم أو لغة مجرّدة من الإنسانية أو هجمات على مجموعات محمية",
+      "counterfeit": "عنصر مزيف",
+      "counterfeitDesc": "سلع مقلّدة أو ادعاءات مضلّلة بشأن الأصالة",
+      "prohibited": "عنصر محظور",
+      "prohibitedDesc": "أسلحة أو مخدرات أو حياة برية أو فئات محظورة أخرى",
+      "offPlatform": "طلب خارج المنصة",
+      "offPlatformDesc": "طلب إجراء معاملة خارج Thryftverse، بالمخالفة للسياسة",
+      "scam": "احتيال أو غش",
+      "scamDesc": "محاولة احتيال مالي أو تصيّد احتيالي أو انتحال صفة",
+      "misinformation": "محتوى مضلّل",
+      "misinformationDesc": "ادعاءات كاذبة أو مضلّلة بشأن عنصر",
+      "privacy": "انتهاك الخصوصية",
+      "privacyDesc": "مشاركة معلومات خاصة دون موافقة",
+      "impersonation": "انتحال صفة",
+      "impersonationDesc": "التظاهر بأنك شخص آخر",
+      "minorSafety": "سلامة القاصرين",
+      "minorSafetyDesc": "محتوى أو سلوك يعرّض القاصرين للخطر",
+      "other": "شيء آخر",
+      "otherDesc": "أخبر فريق الإشراف بما حدث"
+    },
+    "toast": {
+      "attachUpTo3": "أرفق حتى 3 صور.",
+      "offline": "يبدو أنك غير متصل. تحقق من اتصالك وحاول مرة أخرى.",
+      "allowPhotoAccess": "اسمح بالوصول إلى الصور لرفع الأدلة.",
+      "allowCameraAccess": "اسمح بالوصول إلى الكاميرا لالتقاط صور الأدلة.",
+      "photosAttached": "تم إرفاق {{count}} صورة/صور.",
+      "uploadFailed": "تعذّر رفع الصورة/الصور. حاول مرة أخرى.",
+      "singleUploadFailed": "تعذّر رفع الصورة. حاول مرة أخرى.",
+      "photoAttached": "تم إرفاق الصورة.",
+      "reportFailed": "تعذّر إرسال البلاغ. تحقق من اتصالك وحاول مرة أخرى.",
+      "accountBlocked": "تم حظر الحساب",
+      "blockFailed": "تعذّر حظر هذا الحساب. حاول مرة أخرى."
+    }
+  },
+  "appeal": {
+    "header": {
+      "title": "استئناف القرار"
+    },
+    "loading": {
+      "title": "جارٍ تحميل القرار",
+      "subtitle": "لحظة بينما نسترجع التفاصيل."
+    },
+    "error": {
+      "title": "تعذّر تحميل القرار",
+      "subtitle": "لم نتمكن من استرجاع تفاصيل القرار. اضغط بالأسفل للمحاولة مرة أخرى.",
+      "tryAgain": "حاول مرة أخرى",
+      "goBack": "رجوع"
+    },
+    "windowClosed": {
+      "title": "انتهت مهلة الاستئناف",
+      "body": "يمكن استئناف القرارات خلال 6 أشهر. تم إبلاغك بهذا القرار في {{date}}.",
+      "goBack": "رجوع"
+    },
+    "offline": {
+      "title": "أنت غير متصل",
+      "subtitle": "تحقق من اتصالك وحاول مرة أخرى.",
+      "tryAgain": "حاول مرة أخرى",
+      "goBack": "رجوع"
+    },
+    "submitted": {
+      "title": "تم تقديم الاستئناف",
+      "body": "سنراجع الأمر ونوافيك بالنتيجة.",
+      "appealId": "استئناف رقم {{appealId}}",
+      "submittedAt": "تم التقديم في {{time}}",
+      "referenceNote": "احتفظ بهذا الرقم لاستخدامه في أي تواصل مستقبلي مع الدعم.",
+      "done": "تم"
+    },
+    "duration": {
+      "permanent": "دائم",
+      "until": "حتى {{date}}"
+    },
+    "decision": {
+      "noViolation": "لا مخالفة",
+      "restrict": "تم تقييد المحتوى",
+      "escalate": "تم تصعيد الأمر",
+      "emergencyHold": "تجميد طارئ"
+    },
+    "grounds": {
+      "label": "لماذا تعتقد أن هذا القرار خاطئ؟",
+      "placeholder": "اشرح لماذا ينبغي إعادة النظر في القرار",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "صور الأدلة (اختياري)",
+      "camera": "الكاميرا",
+      "gallery": "المعرض",
+      "count": "{{count}}/3 صور"
+    },
+    "accessibility": {
+      "groundsInput": "أسباب الاستئناف",
+      "evidencePhoto": "صورة دليل {{index}}",
+      "removeEvidencePhoto": "إزالة صورة الدليل {{index}}",
+      "takeEvidenceCamera": "التقاط صورة دليل بالكاميرا",
+      "chooseEvidenceGallery": "اختيار صور أدلة من المعرض"
+    },
+    "submit": {
+      "label": "تقديم الاستئناف"
+    },
+    "toast": {
+      "attachUpTo3": "أرفق حتى 3 صور.",
+      "offline": "يبدو أنك غير متصل. تحقق من اتصالك وحاول مرة أخرى.",
+      "allowPhotoAccess": "اسمح بالوصول إلى الصور لرفع الأدلة.",
+      "allowCameraAccess": "اسمح بالوصول إلى الكاميرا لالتقاط صور الأدلة.",
+      "photosAttached": "تم إرفاق {{count}} صورة/صور.",
+      "uploadFailed": "تعذّر رفع الصورة/الصور. حاول مرة أخرى.",
+      "singleUploadFailed": "تعذّر رفع الصورة. حاول مرة أخرى.",
+      "photoAttached": "تم إرفاق الصورة.",
+      "appealFailed": "تعذّر تقديم الاستئناف. تحقق من اتصالك وحاول مرة أخرى."
+    }
+  }
+}

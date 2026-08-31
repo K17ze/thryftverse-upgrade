@@ -318,7 +318,6 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
         </PressScale>
 
         <View style={styles.topCenter}>
-          <Text style={[styles.topLabel, { color: colors.scrimTextPrimary }]}>Preview</Text>
           {pageCount > 1 && (
             <Text style={[styles.pageIndicator, { color: colors.scrimTextSecondary }]}>
               {pageIndex + 1} / {pageCount}
@@ -397,14 +396,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm },
-  topLabel: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.body.size,
-    color: '#fff' },
   pageIndicator: {
     fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size,
-    color: 'rgba(255,255,255,0.7)' },
+    fontSize: TypographyV2.meta.size },
   // ── Publish floating action button ──
   publishBtnWrap: {
     paddingHorizontal: Space.md + 4,

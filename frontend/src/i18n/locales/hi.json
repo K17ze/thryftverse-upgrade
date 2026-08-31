@@ -1,0 +1,1683 @@
+{
+  "common": {
+    "buttons": {
+      "save": "सहेजें",
+      "cancel": "रद्द करें",
+      "delete": "हटाएँ",
+      "edit": "संपादित करें",
+      "share": "साझा करें",
+      "retry": "पुनः प्रयास करें",
+      "close": "बंद करें",
+      "done": "पूर्ण",
+      "continue": "जारी रखें",
+      "clearAll": "सभी साफ़ करें",
+      "clearFilters": "फ़िल्टर साफ़ करें",
+      "browseAll": "सभी ब्राउज़ करें",
+      "refresh": "रिफ़्रेश करें",
+      "follow": "फ़ॉलो करें",
+      "unfollow": "अनफ़ॉलो करें",
+      "message": "संदेश",
+      "buy": "खरीदें",
+      "bid": "बोली लगाएँ",
+      "sell": "बेचें",
+      "ok": "ठीक है",
+      "confirm": "पुष्टि करें"
+    },
+    "states": {
+      "loading": "लोड हो रहा है...",
+      "loadingMore": "और लोड हो रहा है...",
+      "noResults": "कोई परिणाम नहीं",
+      "somethingWentWrong": "कुछ गलत हुआ",
+      "youAreOffline": "आप ऑफ़लाइन हैं",
+      "retry": "पुनः प्रयास करें",
+      "searching": "खोज रहे हैं..."
+    },
+    "navigation": {
+      "back": "वापस",
+      "home": "होम",
+      "search": "खोज",
+      "profile": "प्रोफ़ाइल",
+      "settings": "सेटिंग्स"
+    },
+    "actions": {
+      "follow": "फ़ॉलो करें",
+      "unfollow": "अनफ़ॉलो करें",
+      "message": "संदेश",
+      "buy": "खरीदें",
+      "bid": "बोली लगाएँ",
+      "sell": "बेचें"
+    },
+    "trust": {
+      "verified": "सत्यापित",
+      "responseTime": "प्रतिक्रिया समय",
+      "reviews": "समीक्षाएँ",
+      "followers": "फ़ॉलोअर",
+      "following": "फ़ॉलोइंग"
+    },
+    "misc": {
+      "items": "आइटम",
+      "on": "चालू",
+      "off": "बंद",
+      "none": "कोई नहीं",
+      "notSignedIn": "साइन इन नहीं है"
+    }
+  },
+  "home": {
+    "brandTitle": "Thryftverse",
+    "tabs": {
+      "foryou": "आपके लिए",
+      "following": "फ़ॉलोइंग"
+    },
+    "looks": {
+      "shopLabel": "खरीदने योग्य लुक",
+      "itemsCount": "{count} आइटम"
+    },
+    "poster": {
+      "fallback": "पोस्टर"
+    },
+    "newListings": {
+      "bannerSingular": "{count} नया ड्रॉप तैयार",
+      "bannerPlural": "{count} नए ड्रॉप तैयार",
+      "badgeNew": "{count} नया"
+    },
+    "sync": {
+      "unavailableCached": "सिंक अनुपलब्ध है। कैश किए गए आइटम दिखाए जा रहे हैं।"
+    },
+    "empty": {
+      "followingNoNewTitle": "अभी कोई नया ड्रॉप नहीं",
+      "followingNoNewSubtitle": "रिफ़्रेश करने के लिए खींचें।",
+      "followingNoSellersTitle": "ड्रॉप देखने के लिए विक्रेताओं को फ़ॉलो करें",
+      "followingNoSellersSubtitle": "अपना फ़ीड बनाने के लिए विक्रेता प्रोफ़ाइल पर फ़ॉलो टैप करें।",
+      "followingDiscoverSellers": "विक्रेता खोजें",
+      "followingBrowseAll": "सभी ब्राउज़ करें",
+      "forYouNoDropsTitle": "अभी कोई ड्रॉप लाइव नहीं",
+      "forYouNoDropsSubtitle": "रिफ़्रेश के लिए खींचें या श्रेणियाँ ब्राउज़ करें।"
+    },
+    "footer": {
+      "reachedEnd": "आप अंत तक पहुँच गए हैं"
+    },
+    "peek": {
+      "closeButton": "बंद करें",
+      "viewListing": "लिस्टिंग देखें"
+    }
+  },
+  "search": {
+    "placeholder": "आइटम, विक्रेता, शैलियाँ खोजें",
+    "scope": {
+      "items": "आइटम",
+      "people": "लोग"
+    },
+    "resultCount": {
+      "singular": "{count} परिणाम",
+      "plural": "{count} परिणाम"
+    },
+    "sort": {
+      "title": "क्रमबद्ध करें",
+      "recommended": "अनुशंसित",
+      "newest": "सबसे नया",
+      "priceLowToHigh": "मूल्य: कम से अधिक",
+      "priceHighToLow": "मूल्य: अधिक से कम",
+      "mostLiked": "सबसे अधिक पसंद किए गए"
+    },
+    "sections": {
+      "discover": "खोजें",
+      "recent": "हाल का",
+      "recentSearches": "हाल की खोजें",
+      "savedSearches": "सहेजी गई खोजें",
+      "browseCategories": "श्रेणियाँ ब्राउज़ करें",
+      "categories": "श्रेणियाँ",
+      "trending": "ट्रेंडिंग खोजें"
+    },
+    "suggestion": {
+      "brand": "ब्रांड",
+      "category": "श्रेणी",
+      "item": "आइटम",
+      "search": "खोज"
+    },
+    "typeahead": {
+      "searchFor": "“{query}” खोजें",
+      "viewAllResults": "{query} के सभी परिणाम देखें",
+      "suggestionsUnavailable": "सुझाव अनुपलब्ध हैं। जारी रखने के लिए खोज दबाएँ।",
+      "noCloseSuggestions": "कोई निकट सुझाव नहीं। सभी मिलान देखने के लिए खोज दबाएँ।",
+      "showingLocalMatches": "इस डिवाइस पर उपलब्ध मिलान दिखाए जा रहे हैं"
+    },
+    "savedSearch": {
+      "alertsOn": "अलर्ट चालू",
+      "alertsOff": "अलर्ट बंद",
+      "newMatches": "· {count} नया"
+    },
+    "status": {
+      "refreshingIndex": "इंडेक्स रिफ़्रेश हो रहा है",
+      "liveIndex": "लाइव इंडेक्स",
+      "offlineIndex": "ऑफ़लाइन इंडेक्स",
+      "cachedIndex": "कैश किया गया इंडेक्स"
+    },
+    "errors": {
+      "searchUnavailable": "खोज अनुपलब्ध",
+      "retrySearch": "खोज पुनः प्रयास करें",
+      "peopleSearchUnavailable": "लोग खोज अनुपलब्ध",
+      "searchIndexDelayed": "खोज इंडेक्स में देरी है। कैश किए गए परिणाम दिखाए जा रहे हैं।",
+      "noPeopleFound": "“{query}” के लिए कोई लोग नहीं मिले",
+      "tryDifferentName": "कोई भिन्न नाम या उपयोगकर्ता नाम आज़माएँ।",
+      "noMatches": "“{query}” के लिए कोई मिलान नहीं",
+      "noMatchesWithFilters": "इन फ़िल्टर के साथ “{query}” के लिए कोई मिलान नहीं",
+      "searchingIndex": "इंडेक्स खोजा जा रहा है…",
+      "tryClearingFilters": "अपने फ़िल्टर साफ़ करने या खोज व्यापक बनाने का प्रयास करें।",
+      "tryBroadened": "{suggestions} आज़माएँ — या सभी श्रेणियाँ ब्राउज़ करें।",
+      "noPicksWithFilters": "आपके वर्तमान फ़िल्टर से कोई चयन मेल नहीं खाता। उन्हें समायोजित या साफ़ करें।",
+      "noPicksNoResults": "अभी कोई क्रमित परिणाम नहीं। कोई छोटा कीवर्ड आज़माएँ।"
+    },
+    "noResults": {
+      "browseByCategory": "श्रेणी अनुसार ब्राउज़ करें"
+    },
+    "follow": {
+      "following": "फ़ॉलोइंग",
+      "follow": "फ़ॉलो करें"
+    }
+  },
+  "settings": {
+    "header": {
+      "title": "सेटिंग्स"
+    },
+    "search": {
+      "placeholder": "सेटिंग्स खोजें",
+      "results": "परिणाम",
+      "allSettings": "सभी सेटिंग्स",
+      "noMatching": "कोई मेल खाती सेटिंग्स नहीं"
+    },
+    "verification": {
+      "promptTitle": "अपनी पहचान सत्यापित करें",
+      "promptSubtitle": "सत्यापित बैज पाएँ और बिक्री अनलॉक करें",
+      "verified": "सत्यापित",
+      "getBadge": "सत्यापित बैज पाएँ",
+      "trustedSeller": "विश्वसनीय विक्रेता",
+      "idVerified": "आईडी सत्यापित"
+    },
+    "health": {
+      "verified": "सत्यापित",
+      "twoFA": "2FA",
+      "biometric": "बायोमेट्रिक",
+      "payment": "भुगतान",
+      "address": "पता",
+      "emailConfirmed": "ईमेल पुष्टि की गई"
+    },
+    "sections": {
+      "yourAccount": "आपका खाता",
+      "buyingSelling": "खरीद और बिक्री",
+      "notifications": "सूचनाएँ",
+      "experience": "अनुभव",
+      "connectedServices": "जुड़े हुए सेवाएँ",
+      "helpLegal": "सहायता और कानूनी",
+      "advanced": "उन्नत",
+      "account": "खाता"
+    },
+    "rows": {
+      "verification": "सत्यापन",
+      "changePassword": "पासवर्ड बदलें",
+      "twoFAEnabled": "2FA सक्षम",
+      "passwordOnly": "केवल पासवर्ड",
+      "biometricLock": "बायोमेट्रिक लॉक",
+      "biometricNotAvailable": "इस डिवाइस पर अनुपलब्ध",
+      "biometricEnabled": "संवेदनशील क्रियाओं के लिए फेस आईडी, टच आईडी और फिंगरप्रिंट",
+      "biometricDisabled": "अक्षम — संवेदनशील स्क्रीन केवल पासवर्ड उपयोग करती हैं",
+      "connectedAccounts": "जुड़े हुए खाते",
+      "connectedAccountsSubtitle": "Google, Apple साइन-इन",
+      "devicesSessions": "डिवाइस और सत्र",
+      "accountControl": "खाता नियंत्रण",
+      "accountControlSubtitle": "सुरक्षा, सत्र, पासवर्ड",
+      "downloadData": "मेरा डेटा डाउनलोड करें",
+      "downloadDataSubtitle": "अपना खाता डेटा निर्यात करें",
+      "privacySafety": "गोपनीयता और सुरक्षा",
+      "privacySafetySubtitle": "दृश्यता, अवरोधित उपयोगकर्ता",
+      "chatPrivacy": "चैट गोपनीयता",
+      "chatPrivacySubtitle": "आपको कौन संदेश भेज सकता है",
+      "dataPrivacy": "डेटा और गोपनीयता",
+      "dataPrivacySubtitle": "गोपनीयता नियंत्रण और प्रतिधारण",
+      "blockedUsers": "अवरोधित उपयोगकर्ता",
+      "blockedCount": "{{count}} अवरोधित",
+      "savedAddresses": "सहेजे गए पते",
+      "oneSaved": "1 सहेजा गया",
+      "noneSaved": "कुछ सहेजा नहीं",
+      "paymentMethods": "भुगतान विधियाँ",
+      "savedCollections": "सहेजे गए और संग्रह",
+      "payoutAccount": "भुगतान खाता",
+      "payoutAccountSubtitle": "शेष और वॉलेट",
+      "payoutHistory": "भुगतान इतिहास",
+      "shippingPreferences": "शिपिंग प्राथमिकताएँ",
+      "priceAlerts": "मूल्य अलर्ट",
+      "priceAlertsSubtitle": "मूल्य सीमा पर सूचित करें",
+      "autoInvestPlans": "ऑटो-निवेश योजनाएँ",
+      "autoInvestPlansSubtitle": "आवर्ती खरीद कार्यक्रम",
+      "taxDocuments": "कर दस्तावेज़",
+      "taxDocumentsSubtitle": "वार्षिक विवरण और लाभ-हानि",
+      "resolutionCentre": "समाधान केंद्र",
+      "resolutionCentreSubtitle": "विवाद और समाधान",
+      "enableNotifications": "सूचनाएँ सक्षम करें",
+      "permissionUnknown": "अनुमति अज्ञात",
+      "permissionAllowed": "अनुमत",
+      "permissionNotAllowed": "अनुमत नहीं",
+      "notificationPreferences": "सूचना प्राथमिकताएँ",
+      "emailPreferences": "ईमेल प्राथमिकताएँ",
+      "theme": "थीम",
+      "currencyDisplay": "मुद्रा प्रदर्शन",
+      "localCurrency": "स्थानीय मुद्रा",
+      "language": "भाषा",
+      "contentPreferences": "सामग्री प्राथमिकताएँ",
+      "contentPreferencesSubtitle": "फ़ीड और अनुशंसाएँ",
+      "recommendations": "अनुशंसाएँ",
+      "recommendationsSubtitle": "फ़ोटो संवर्धन, शीर्षक और मूल्य सुझाव",
+      "yourFeed": "आपका फ़ीड",
+      "yourFeedSubtitle": "अनुशंसाएँ और पारदर्शिता",
+      "sustainability": "स्थिरता",
+      "sustainabilitySubtitle": "लक्ष्य, शिपिंग, प्रभाव",
+      "accessibility": "सुलभता",
+      "accessibilitySubtitle": "टेक्स्ट आकार, गति, कंट्रास्ट",
+      "searchHistory": "खोज इतिहास",
+      "searchHistorySubtitle": "हाल की खोजें साफ़ करें",
+      "dataSharing": "डेटा साझा करना",
+      "dataSharingSubtitle": "एनालिटिक्स और वैयक्तिकरण",
+      "agents": "एजेंट",
+      "agentsSubtitle": "एजेंट अनुमतियाँ ब्राउज़ और प्रबंधित करें",
+      "connections": "कनेक्शन",
+      "connectionsSubtitle": "प्रदाता कुंजी और एंडपॉइंट",
+      "yourAgents": "आपके एजेंट",
+      "yourAgentsSubtitle": "आपके द्वारा बनाए गए एजेंट",
+      "helpCentre": "सहायता केंद्र",
+      "termsOfService": "सेवा की शर्तें",
+      "privacyPolicy": "गोपनीयता नीति",
+      "aboutThryftverse": "Thryftverse के बारे में",
+      "runtimeSmokeTest": "रनटाइम स्मोक टेस्ट",
+      "runtimeSmokeTestSubtitle": "स्थानीय रनटाइम के लिए डायग्नोस्टिक जाँच",
+      "deleteAccount": "खाता हटाएँ",
+      "deleteAccountSubtitle": "अपना खाता स्थायी रूप से मिटाएँ",
+      "editProfileAccount": "प्रोफ़ाइल और खाता संपादित करें",
+      "biometricLogin": "बायोमेट्रिक लॉगिन",
+      "biometricLoginEnabled": "ऐप लॉन्च पर फेस आईडी, टच आईडी या फिंगरप्रिंट आवश्यक",
+      "biometricLoginDisabled": "अक्षम — ऐप सीधे आपके खाते पर खुलता है",
+      "notificationCategories": "सूचना श्रेणियाँ",
+      "notificationPreferencesSubtitle": "शांत समय, पूर्वावलोकन",
+      "featureFlags": "फ़ीचर फ़्लैग",
+      "featureFlagsSubtitle": "QA के लिए वर्तमान फ़्लैग मान",
+      "autoTranslate": "संदेश स्वतः अनुवाद करें",
+      "autoTranslateEnabled": "विदेशी संदेश स्वतः अनुवादित",
+      "autoTranslateDisabled": "विदेशी संदेश मैन्युअल रूप से अनुवाद करने के लिए टैप करें"
+    },
+    "toast": {
+      "themeApplying": "{{theme}} थीम लागू हो रही है…",
+      "pushEnabled": "पुश सूचनाएँ सक्षम की गईं",
+      "pushDenied": "पुश सूचनाएँ अस्वीकृत की गईं। उन्हें डिवाइस सेटिंग्स में सक्षम करें।",
+      "pushUpdateFailed": "पुश सूचना अनुमति अपडेट करने में असमर्थ।",
+      "pushManageDeviceSettings": "पुश सूचनाएँ अपनी डिवाइस सेटिंग्स में प्रबंधित करें।",
+      "searchHistoryCleared": "खोज इतिहास साफ़ किया गया",
+      "searchHistoryClearFailed": "खोज इतिहास साफ़ करने में असमर्थ",
+      "unableOpenLink": "लिंक खोलने में असमर्थ। कुछ क्षण में पुनः प्रयास करें।"
+    },
+    "notificationSummary": "{enabled}/{total} श्रेणियाँ",
+    "accessibility": {
+      "editProfileAccount": "प्रोफ़ाइल और खाता संपादित करें",
+      "editProfileAccountHint": "प्रोफ़ाइल, निजी विवरण, सुरक्षा और खाता संपादक खोलता है",
+      "verifyIdentity": "पहचान सत्यापित करें",
+      "verifyIdentityHint": "पहचान सत्यापन खोलता है",
+      "deleteAccountHint": "खाता हटाने का प्रवाह खोलता है"
+    },
+    "picker": {
+      "currencyTitle": "स्थानीय मुद्रा चुनें",
+      "themeTitle": "थीम मोड",
+      "themeSystem": "सिस्टम",
+      "themeLight": "हल्का",
+      "themeDark": "गहरा"
+    }
+  },
+  "profile": {
+    "userProfile": "{name} की प्रोफ़ाइल"
+  },
+  "listing": {
+    "create": {
+      "title": "बेचें",
+      "createListing": "लिस्टिंग बनाएँ",
+      "editTitle": "लिस्टिंग संपादित करें",
+      "listingTitle": "शीर्षक",
+      "description": "विवरण",
+      "price": "मूल्य",
+      "category": "श्रेणी",
+      "condition": "स्थिति",
+      "size": "आकार",
+      "brand": "ब्रांड",
+      "photos": "फ़ोटो",
+      "publish": "प्रकाशित करें",
+      "saveDraft": "ड्राफ़्ट सहेजें",
+      "saved": "सहेजा गया",
+      "details": "विवरण",
+      "priceAndCondition": "मूल्य और स्थिति",
+      "required": "आवश्यक",
+      "optional": "वैकल्पिक",
+      "addPhotosTitle": "शुरू करने के लिए फ़ोटो जोड़ें",
+      "addPhotosSubtitle": "कई कोणों से अच्छी रोशनी वाली फ़ोटो जल्दी बिकती हैं।",
+      "photoTips": "फ़ोटो युक्तियाँ",
+      "photoTipsMin": "न्यूनतम 3 फ़ोटो अनुशंसित",
+      "photoTipLighting": "अच्छी रोशनी",
+      "photoTipAngles": "सभी कोण दिखाएँ",
+      "photoTipBackground": "प्राकृतिक पृष्ठभूमि",
+      "titlePlaceholder": "जैसे विंटेज लेवीज़ 501 डेनिम जैकेट",
+      "descriptionHelper": "खरीदारों को यह आइटम खोजने में मदद के लिए और विवरण जोड़ें",
+      "suggestedDetails": "सुझाए गए विवरण",
+      "applyToEmptyFields": "खाली फ़ील्ड पर लागू करें",
+      "startingBid": "प्रारंभिक बोली",
+      "reservePriceOptional": "आरक्षित मूल्य (वैकल्पिक)",
+      "duration": "अवधि",
+      "totalValuation": "कुल मूल्यांकन",
+      "originalPriceHelper": "मूल्य दिखाने के लिए मूल मूल्य जोड़ें",
+      "readyToPublish": "प्रकाशित करने के लिए तैयार",
+      "bulkList": "थोक लिस्टिंग",
+      "inventory": "इन्वेंटरी",
+      "hub": "हब",
+      "tapToSet": "सेट करने के लिए टैप करें"
+    },
+    "detail": {
+      "addToCart": "कार्ट में जोड़ें",
+      "buyNow": "अभी खरीदें",
+      "makeOffer": "ऑफ़र बनाएँ",
+      "seller": "विक्रेता",
+      "itemCondition": "स्थिति",
+      "itemSize": "आकार",
+      "itemBrand": "ब्रांड",
+      "postedOn": "{{date}} को पोस्ट किया गया",
+      "addedToWishlist": "विशलिस्ट में जोड़ा गया",
+      "priceDropAlertsEnabled": "इस आइटम के लिए मूल्य गिरावट अलर्ट सक्षम हैं",
+      "priceDropAlertsDisabled": "मूल्य गिरावट अलर्ट अक्षम",
+      "couldNotUpdatePriceAlert": "मूल्य अलर्ट अपडेट नहीं कर सके। पुनः प्रयास करें।",
+      "browseSimilar": "समान ब्राउज़ करें",
+      "manageListing": "लिस्टिंग प्रबंधित करें"
+    }
+  },
+  "messaging": {
+    "compose": {
+      "placeholder": "संदेश...",
+      "send": "भेजें",
+      "attach": "संलग्न करें",
+      "attachPhoto": "फ़ोटो",
+      "attachCamera": "कैमरा",
+      "inputAccessibility": "संदेश इनपुट",
+      "dismissSafetyWarning": "सुरक्षा चेतावनी खारिज करें",
+      "dismissCautionWarning": "सावधान चेतावनी खारिज करें",
+      "removeAttachment": "अनुलग्नक हटाएँ",
+      "addAttachment": "अनुलग्नक जोड़ें",
+      "openCamera": "कैमरा खोलें",
+      "quickReply": "त्वरित उत्तर: {{label}}"
+    },
+    "conversation": {
+      "title": "संदेश",
+      "empty": "अभी कोई संदेश नहीं",
+      "startChatting": "शुरू करने के लिए नीचे एक संदेश भेजें।",
+      "startConversation": "बातचीत शुरू करें",
+      "typing": "{{name}} टाइप कर रहे हैं...",
+      "onlineNow": "अभी ऑनलाइन",
+      "newMessages": "नए संदेश",
+      "undo": "पूर्ववत करें",
+      "message": "संदेश",
+      "mediaPress": "मीडिया प्रेस",
+      "messageSent": "संदेश भेजा गया",
+      "sending": "भेजा जा रहा है…",
+      "draft": "ड्राफ़्ट",
+      "ai": "AI",
+      "retryDraft": "पुनः प्रयास के लिए टैप करें",
+      "sendDraft": "भेजें",
+      "memberCount": "{{count}} सदस्य",
+      "loadError": "संदेश लोड नहीं कर सके। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "offlineMessage": "आप ऑफ़लाइन हैं। पुनः कनेक्ट होने पर संदेश भेजे जाएँगे।",
+      "copied": "कॉपी किया गया",
+      "reportSubmitted": "रिपोर्ट सबमिट की गई। धन्यवाद।",
+      "reportFailed": "रिपोर्ट सबमिट करने में विफल। कृपया पुनः प्रयास करें।",
+      "exitSelectionMode": "चयन मोड से बाहर निकलें",
+      "exitSelectionModeHint": "संदेश चयन टूलबार बंद करता है",
+      "deleteSelected": "चयनित संदेश हटाएँ",
+      "deleteSelectedHint": "इस बातचीत से चयनित संदेश स्थायी रूप से हटाता है",
+      "undoMessageDeletion": "संदेश हटाना पूर्ववत करें",
+      "reactWith": "{{emoji}} से प्रतिक्रिया करें",
+      "openLink": "{{domain}} का लिंक खोलें",
+      "typingIndicator": "टाइप कर रहे हैं..."
+    },
+    "inbox": {
+      "primary": "प्राथमिक",
+      "buying": "खरीद",
+      "selling": "बिक्री",
+      "tabBadge": "{{label}} टैब{{plural}}",
+      "newBadge": ", {{count}} नया",
+      "openConversation": "{{title}} खोलें",
+      "performAction": "{{action}} {{title}}",
+      "performSecondaryAction": "{{action}} {{title}}",
+      "linkedListing": "जुड़ी हुई लिस्टिंग: {{title}}, {{price}}, {{availability}}",
+      "listingHint": "लिस्टिंग विवरण पृष्ठ खोलता है",
+      "scrollToBottom": "नीचे तक स्क्रॉल करें{{unread}}",
+      "scrollToBottomHint": "नवीनतम संदेश तक स्क्रॉल करता है",
+      "unread": ", {{count}} अपठित"
+    },
+    "requests": {
+      "title": "संदेश अनुरोध",
+      "noRequests": "कोई संदेश अनुरोध नहीं",
+      "noRequestsSubtitle": "जिन लोगों को आप फ़ॉलो नहीं करते, उनके संदेश यहाँ दिखते हैं।",
+      "acceptMessageRequest": "संदेश अनुरोध स्वीकार करें",
+      "deleteMessageRequest": "संदेश अनुरोध हटाएँ",
+      "deleteConfirmationTitle": "अनुरोध हटाएँ?",
+      "deleteConfirmationMessage": "यह अनुरोध हटा देता है। वे बाद में दूसरा संदेश भेज सकते हैं।",
+      "blockConfirmationTitle": "{{name}} को अवरोधित करें?",
+      "blockConfirmationMessage": "वे आपको संदेश नहीं भेज सकेंगे या आपकी प्रोफ़ाइल नहीं देख सकेंगे। अनुरोध हटा दिया जाएगा।",
+      "accepted": "अनुरोध स्वीकृत",
+      "acceptError": "इस अनुरोध को स्वीकार नहीं कर सके। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "deleted": "अनुरोध हटाया गया",
+      "deleteError": "इस अनुरोध को हटा नहीं सके। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "blockError": "इस खाते को अवरोधित नहीं कर सके। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "reportError": "इस खाते की यहाँ रिपोर्ट नहीं की जा सकती।",
+      "blocked": "{{name}} अवरोधित"
+    },
+    "archived": {
+      "title": "संग्रहीत बातचीत",
+      "subtitle": "पुनर्स्थापित बातचीत आपके इनबॉक्स में लौटती है",
+      "noArchived": "कोई संग्रहीत बातचीत नहीं",
+      "noArchivedSubtitle": "आप जो बातचीत संग्रहित करते हैं, वे हटाए बिना आपके इनबॉक्स से बाहर रहती हैं।",
+      "clearAllConversations": "सभी संग्रहीत बातचीत साफ़ करें",
+      "removeConfirmationTitle": "इनबॉक्स से हटाएँ?",
+      "removeConfirmationMessage": "\"{{title}}\" आपकी संग्रहीत बातचीत से हटाई जाएगी।",
+      "clearAllConfirmationTitle": "सभी संग्रहीत साफ़ करें?",
+      "clearAllConfirmationMessage": "सभी संग्रहीत बातचीत स्थायी रूप से हटा दी जाएँगी।",
+      "restored": "बातचीत इनबॉक्स में पुनर्स्थापित",
+      "restoreError": "इस बातचीत को पुनर्स्थापित नहीं कर सके। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "removed": "बातचीत हटाई गई",
+      "removeError": "इस बातचीत को हटा नहीं सके। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "cleared": "संग्रह साफ़ किया गया",
+      "clearError": "{{deleted}} हटाए गए · {{failed}} विफल"
+    },
+    "muted": {
+      "title": "म्यूट की गई बातचीत",
+      "subtitle": "इन चैट के लिए सूचनाएँ रोकी गई हैं",
+      "noMuted": "कोई म्यूट की गई बातचीत नहीं",
+      "noMutedSubtitle": "आपने कोई चैट म्यूट नहीं की है। म्यूट की गई बातचीत यहाँ दिखेगी।",
+      "unmute": "अनम्यूट करें",
+      "unmuteError": "इस बातचीत को अनम्यूट नहीं कर सके। अपना कनेक्शन जाँचें और पुनः प्रयास करें।"
+    },
+    "sharedMedia": {
+      "title": "साझा मीडिया",
+      "noMedia": "अभी कोई साझा मीडिया नहीं",
+      "noMediaSubtitle": "इस बातचीत में साझा की गई फ़ोटो और वीडियो यहाँ दिखेंगी।",
+      "videoThumbnail": "वीडियो थंबनेल",
+      "deleteSelected": "चयनित मीडिया हटाएँ",
+      "summary": "{{photoCount}} फ़ोटो{{photoPlural}} · {{videoCount}} वीडियो{{videoPlural}}",
+      "selectItem": "{{action}} {{type}}",
+      "select": "चुनें",
+      "deselect": "चयन हटाएँ",
+      "photo": "फ़ोटो",
+      "video": "वीडियो",
+      "selectedCount": "{{count}} चयनित",
+      "removeSelectedHint": "{{count}} चयनित आइटम{{plural}} हटाता है",
+      "filter": "{{label}} फ़िल्टर"
+    },
+    "attachments": {
+      "reviewTitle": "अनुलग्नक समीक्षा",
+      "cancelAttachment": "अनुलग्नक रद्द करें",
+      "captionPlaceholder": "कैप्शन जोड़ें...",
+      "captionAccessibility": "अनुलग्नक कैप्शन",
+      "sendAttachment": "अनुलग्नक भेजें",
+      "actionSheetTitle": "संलग्न करें",
+      "actionSheetSubtitle": "इस चैट में फ़ोटो और वीडियो साझा करें",
+      "photoAndVideo": "फ़ोटो और वीडियो",
+      "chooseFromLibrary": "अपनी लाइब्रेरी से चुनें",
+      "camera": "कैमरा",
+      "takePhotoOrVideo": "नई फ़ोटो या वीडियो लें",
+      "makeOffer": "ऑफ़र बनाएँ",
+      "product": "उत्पाद",
+      "priceQuote": "मूल्य उद्धरण",
+      "shareListing": "लिस्टिंग साझा करें",
+      "orderStatus": "ऑर्डर स्थिति",
+      "payment": "भुगतान",
+      "agent": "एजेंट"
+    },
+    "offers": {
+      "declineOffer": "ऑफ़र अस्वीकार करें",
+      "counterOffer": "काउंटर ऑफ़र",
+      "acceptOffer": "ऑफ़र स्वीकार करें",
+      "declined": "अस्वीकृत",
+      "accepted": "स्वीकृत",
+      "expired": "समाप्त",
+      "waitingForResponse": "प्रतिक्रिया की प्रतीक्षा",
+      "pass": "छोड़ें",
+      "counter": "काउंटर",
+      "accept": "स्वीकार करें",
+      "verified": "सत्यापित",
+      "verifiedSystemUpdate": "सत्यापित सिस्टम अपडेट",
+      "counterRound": "काउंटर #{{round}}",
+      "expiresIn": "{{time}} में समाप्त"
+    },
+    "agentPicker": {
+      "title": "AI एजेंट जोड़ें",
+      "sheet": "AI एजेंट शीट जोड़ें",
+      "connect": "इस चैट में मदद के लिए एक सहायक कनेक्ट करें",
+      "demoNotice": "डेमो सहायक मॉक उत्तर सुझाते हैं",
+      "noAgents": "कोई एजेंट उपलब्ध नहीं",
+      "noAgentsBody": "शुरू करने के लिए एजेंट स्क्रीन से एक एजेंट बनाएँ।",
+      "loading": "डिप्लॉय किए गए एजेंट लोड हो रहे हैं…",
+      "loadError": "एजेंट लोड नहीं कर सके",
+      "loadErrorBody": "हम सर्वर तक नहीं पहुँच सके। पुनः प्रयास के लिए खींचें।",
+      "noAgentsDeployed": "कोई एजेंट डिप्लॉय नहीं",
+      "noAgentsDeployedBody": "एजेंट स्क्रीन से इस बातचीत में एक एजेंट इंस्टॉल करें।",
+      "addAssistant": "सहायक जोड़ें",
+      "addAssistantDescription": "इस चैट में एक AI सहायक डिप्लॉय करें",
+      "addAgent": "{{name}} एजेंट जोड़ें",
+      "alreadyAdded": "{{name}} पहले जोड़ा गया",
+      "openManagement": "एजेंट प्रबंधन खोलें",
+      "activeOne": "{{name}} सक्रिय है। एजेंट प्रबंधित करने के लिए टैप करें।",
+      "activeMany": "{{count}} एजेंट सक्रिय हैं। एजेंट प्रबंधित करने के लिए टैप करें।",
+      "activeShortOne": "{{name}} सक्रिय",
+      "activeShortMany": "{{count}} एजेंट सक्रिय",
+      "retryDraft": "एजेंट ड्राफ़्ट पुनः भेजें",
+      "sendDraft": "एजेंट ड्राफ़्ट भेजें"
+    },
+    "suggestedReplies": {
+      "title": "सुझाए गए उत्तर",
+      "titleFrom": "{{agentName}} से सुझाए गए उत्तर",
+      "use": "सुझाया उत्तर उपयोग करें: {{reply}}",
+      "fill": "संदेश इनपुट को इस उत्तर से भरता है",
+      "dismiss": "सुझाए गए उत्तर खारिज करें",
+      "dismissHint": "इस बातचीत के लिए सुझाए गए उत्तर छिपाता है",
+      "manage": "उत्तर प्रबंधित करें"
+    },
+    "voice": {
+      "notAvailable": "वॉइस संदेश उपलब्ध नहीं हैं",
+      "notSupportedHint": "इस बिल्ड में ऑडियो रिकॉर्डिंग समर्थित नहीं है",
+      "micPermission": "माइक्रोफ़ोन अनुमति अस्वीकृत। अनुमति माँगने के लिए टैप करें।",
+      "deleteRecording": "रिकॉर्डिंग हटाएँ और फिर से शुरू करें",
+      "readyToSend": "भेजने के लिए तैयार",
+      "sendVoice": "वॉइस संदेश भेजें",
+      "sendVoiceHint": "रिकॉर्डिंग भेजता है। पूर्ववत नहीं किया जा सकता।",
+      "stopRecording": "रिकॉर्डिंग रोकें और समीक्षा करें",
+      "stopRecordingHint": "रिकॉर्डिंग समाप्त करने के लिए टैप करें। भेजने से पहले समीक्षा करें।",
+      "cancelRecording": "रिकॉर्डिंग रद्द करें और हटाएँ",
+      "recordVoice": "वॉइस संदेश रिकॉर्ड करें",
+      "recordVoiceHint": "रिकॉर्डिंग शुरू करने के लिए टैप करें। भेजने से पहले समीक्षा के लिए स्टॉप टैप करें।",
+      "voiceMessage": "वॉइस संदेश, {{duration}} लंबा{{state}}",
+      "playbackSpeed": "प्लेबैक गति {{rate}} गुना",
+      "playHint": "चलाने या रोकने के लिए दो बार टैप करें। सीक, गति बदलने या ट्रांसक्रिप्ट माँगने के लिए क्रियाएँ उपयोग करें।",
+      "loadError": "वॉइस लोड नहीं कर सके"
+    },
+    "transcription": {
+      "show": "इस वॉइस संदेश का ट्रांसक्रिप्ट दिखाएँ",
+      "showHint": "स्वचालित ट्रांसक्रिप्शन का अनुरोध करता है। टेक्स्ट व्युत्पन्न है, भेजने वाले के अपने शब्द नहीं।",
+      "title": "ट्रांसक्रिप्ट",
+      "notAvailable": "इस ऑडियो प्रारूप के लिए ट्रांसक्रिप्शन उपलब्ध नहीं",
+      "close": "ट्रांसक्रिप्ट बंद करें",
+      "failed": "ट्रांसक्रिप्शन विफल",
+      "temporarilyUnavailable": "अस्थायी रूप से अनुपलब्ध",
+      "retryTranscription": "ट्रांसक्रिप्शन पुनः प्रयास करें",
+      "requesting": "ट्रांसक्रिप्ट का अनुरोध किया जा रहा है…",
+      "transcribing": "ऑडियो ट्रांसक्राइब हो रहा है…",
+      "empty": "(खाली ट्रांसक्रिप्ट)",
+      "derivedLabel": "स्वचालित ट्रांसक्राइब किया गया",
+      "accurate": "ट्रांसक्रिप्शन को सटीक चिह्नित करें",
+      "inaccurate": "ट्रांसक्रिप्शन को असटीक चिह्नित करें",
+      "loadError": "ट्रांसक्रिप्ट लोड नहीं कर सके"
+    },
+    "orders": {
+      "placed": "ऑर्डर दिया गया",
+      "placedBody": "विक्रेता को सूचित कर दिया गया है।",
+      "paymentConfirmed": "भुगतान पुष्टि की गई",
+      "paymentConfirmedBody": "आपका भुगतान संसाधित कर दिया गया है।",
+      "shipped": "ऑर्डर शिप किया गया",
+      "shippedBody": "पार्सल भेज दिया गया है।",
+      "inTransit": "मार्ग में",
+      "inTransitBody": "आपका पार्सल रास्ते में है।",
+      "delivered": "वितरित",
+      "deliveredBody": "वितरण की पुष्टि हो गई है।",
+      "cancelled": "ऑर्डर रद्द",
+      "cancelledBody": "यह ऑर्डर रद्द कर दिया गया है।",
+      "refunded": "धन वापसी",
+      "refundedBody": "आपका भुगतान वापस कर दिया गया है।",
+      "orderPreview": "{{title}}. {{subtitle}}. {{orderId}}. {{timestamp}}. ऑर्डर विवरण देखने के लिए टैप करें।",
+      "viewDetails": "विवरण देखें",
+      "dispatchItem": "आइटम भेजें",
+      "trackParcel": "पार्सल ट्रैक करें",
+      "checkItem": "आइटम जाँचें",
+      "viewOrder": "ऑर्डर देखें",
+      "shipBy": "{{date}} तक शिप करें",
+      "eta": "अनुमानित समय {{window}}",
+      "etaWindow": "{{min}}–{{max}} दिन",
+      "etaDay": "{{count}} दिन",
+      "orderStatusAccessibility": "ऑर्डर {{status}}{{deadline}}{{cta}}"
+    },
+    "safety": {
+      "title": "भुगतान ThryftVerse पर रखें",
+      "body": "प्लेटफ़ॉर्म से बाहर के भुगतान खरीदार सुरक्षा में शामिल नहीं हैं। यदि यह वैध लेनदेन है, तो सुरक्षित रहने के लिए इसे ऐप में पूरा करें।",
+      "dismiss": "चेतावनी खारिज करें",
+      "reportConversation": "इस बातचीत की रिपोर्ट करें"
+    },
+    "search": {
+      "placeholder": "चैट में खोजें",
+      "inConversation": "बातचीत में खोजें",
+      "previousResult": "पिछला परिणाम",
+      "nextResult": "अगला परिणाम",
+      "closeSearch": "खोज बंद करें",
+      "browseResults": "ब्राउज़ में परिणाम देखें",
+      "browseResultsHint": "मिलान फ़िल्टर लागू करके ब्राउज़ स्क्रीन खोलता है",
+      "refine": "खोज परिष्कृत करें: {{suggestion}}",
+      "refineHint": "आपकी खोज में यह परिष्करण जोड़ता है",
+      "searchFor": "{{suggestion}} खोजें",
+      "startQueryHint": "इस क्वेरी से बातचीत खोज शुरू करता है",
+      "queryInput": "खोज क्वेरी इनपुट",
+      "queryInputHint": "जो खोजना चाहते हैं उसका स्वाभाविक भाषा विवरण टाइप करें",
+      "sendQuery": "खोज क्वेरी भेजें",
+      "sendQueryHint": "आपकी क्वेरी भेजता है और बातचीत खोज शुरू करता है",
+      "retry": "खोज पुनः प्रयास करें",
+      "retryHint": "आपकी अंतिम खोज क्वेरी पुनः भेजता है"
+    },
+    "common": {
+      "cancel": "रद्द करें",
+      "goBack": "वापस जाएँ",
+      "verifiedUser": "सत्यापित उपयोगकर्ता",
+      "retry": "पुनः प्रयास करें",
+      "delete": "हटाएँ",
+      "block": "अवरोधित करें",
+      "report": "रिपोर्ट करें",
+      "remove": "हटाएँ",
+      "clearAll": "सभी साफ़ करें",
+      "restore": "पुनर्स्थापित करें",
+      "blockWithName": "{{name}} को अवरोधित करें",
+      "reportWithName": "{{name}} की रिपोर्ट करें"
+    },
+    "messageActions": {
+      "dismissReply": "उत्तर खारिज करें",
+      "scrollToOriginal": "मूल संदेश तक स्क्रॉल करता है",
+      "quotedReply": "{{sender}} से उद्धृत उत्तर"
+    },
+    "translation": {
+      "translate": "अनुवाद करें",
+      "showOriginal": "मूल दिखाएं",
+      "translating": "अनुवाद हो रहा है...",
+      "translationFailed": "अनुवाद अनुपलब्ध",
+      "translatedFrom": "{{language}} से अनुवादित"
+    }
+  },
+  "commerce": {
+    "checkout": {
+      "title": "चेकआउट",
+      "subtotal": "उप-योग",
+      "shipping": "शिपिंग",
+      "tax": "कर",
+      "total": "कुल",
+      "payNow": "अभी भुगतान करें",
+      "paymentMethod": "भुगतान विधि",
+      "deliveryAddress": "डिलीवरी पता",
+      "orderPlaced": "ऑर्डर दिया गया",
+      "orderFailed": "ऑर्डर विफल",
+      "signInToCheckout": "चेकआउट के लिए साइन इन करें",
+      "signIn": "साइन इन करें",
+      "cannotPurchaseOwnListing": "अपनी स्वयं की लिस्टिंग नहीं खरीद सकते",
+      "cannotBuyOwnItem": "आप उस आइटम को नहीं खरीद सकते जिसे आपने बिक्री के लिए लिस्ट किया है।",
+      "itemUnavailable": "आइटम अनुपलब्ध",
+      "listingNoLongerPurchasable": "यह लिस्टिंग अब खरीदी नहीं जा सकती।",
+      "goBack": "वापस जाएँ",
+      "delivery": "डिलीवरी",
+      "noAddress": "कोई पता नहीं",
+      "change": "बदलें",
+      "add": "जोड़ें",
+      "noPaymentMethod": "कोई भुगतान विधि नहीं",
+      "requiredForDelivery": "डिलीवरी के लिए आवश्यक",
+      "needsSavingBeforePayment": "भुगतान से पहले सहेजना आवश्यक",
+      "shippingNotAvailable": "आपके क्षेत्र के लिए शिपिंग उपलब्ध नहीं",
+      "cardsUnavailableRegion": "आपके क्षेत्र में कार्ड उपलब्ध नहीं",
+      "securePayment": "सुरक्षित भुगतान · कार्ड विवरण एन्क्रिप्टेड",
+      "useWalletBalance": "वॉलेट बैलेंस का उपयोग करें",
+      "available": "उपलब्ध",
+      "retryPayment": "भुगतान पुनः प्रयास करें",
+      "tryAgain": "पुनः प्रयास करें",
+      "addAddress": "पता जोड़ें",
+      "addPayment": "भुगतान जोड़ें",
+      "item": "आइटम",
+      "buyerProtection": "खरीदार सुरक्षा",
+      "walletApplied": "वॉलेट लागू",
+      "viewFullBreakdown": "पूरा विवरण देखें",
+      "fullBreakdown": "पूरा विवरण",
+      "payWithApplePay": "Apple Pay से भुगतान करें",
+      "payWithGooglePay": "Google Pay से भुगतान करें",
+      "payWithCard": "कार्ड से भुगतान करें",
+      "processing": "प्रसंस्करण",
+      "waitingForConfirmation": "पुष्टि की प्रतीक्षा",
+      "savingWithWallet": "वॉलेट बैलेंस से {{amount}} की बचत",
+      "shippingQuoteUnavailable": "शिपिंग कोट अनुपलब्ध — मानक शिपिंग के साथ आगे बढ़ रहे हैं।",
+      "addDeliveryAddressToContinue": "जारी रखने के लिए डिलीवरी पता जोड़ें।",
+      "addPaymentMethodToContinue": "जारी रखने के लिए भुगतान विधि जोड़ें।",
+      "estimated": "अनुमानित",
+      "tracking": "ट्रैकिंग",
+      "closeCheckout": "चेकआउट बंद करें",
+      "paymentInProgress": "भुगतान प्रगति पर",
+      "paymentInProgressBody": "आपके जाने के बाद भी भुगतान पुष्टि पूरी हो सकती है। पुनः प्रयास से पहले अपने ऑर्डर जाँचें।",
+      "stay": "रुकें",
+      "leave": "छोड़ें"
+    },
+    "offer": {
+      "makeOffer": "ऑफर करें",
+      "offerAmount": "ऑफर राशि",
+      "submitOffer": "ऑफर सबमिट करें",
+      "offerAccepted": "ऑफर स्वीकृत",
+      "offerDeclined": "ऑफर अस्वीकृत",
+      "offerExpired": "ऑफर समाप्त"
+    },
+    "bid": {
+      "placeBid": "बोली लगाएँ",
+      "currentBid": "वर्तमान बोली",
+      "yourBid": "आपकी बोली",
+      "bidPlaced": "बोली लगाई गई",
+      "outbid": "आपसे अधिक बोली लगी",
+      "winning": "जीत रहे हैं"
+    },
+    "wallet": {
+      "title": "वॉलेट",
+      "balance": "बैलेंस",
+      "spendableNow": "अभी खर्च करने योग्य",
+      "withdraw": "निकालें",
+      "withdrawAmount": "निकासी राशि",
+      "withdrawSuccess": "निकासी का अनुरोध किया गया",
+      "withdrawFailed": "निकासी विफल",
+      "addMoney": "पैसे जोड़ें",
+      "transactionHistory": "लेन-देन इतिहास",
+      "convert": "रूपांतरण",
+      "recentActivity": "हाल की गतिविधि",
+      "seeAll": "सभी देखें",
+      "noBalanceYet": "अभी तक कोई 1ZE नहीं",
+      "addMoneyToStart": "Co-Own यूनिट ट्रेडिंग शुरू करने के लिए पैसे जोड़ें।",
+      "authenticateToView": "अपना वॉलेट देखने के लिए प्रमाणित करें",
+      "showBalance": "बैलेंस दिखाएँ",
+      "hideBalance": "बैलेंस छिपाएँ",
+      "balanceHidden": "बैलेंस छिपा हुआ",
+      "reservedForOrders": "ऑर्डर के लिए आरक्षित",
+      "redemptionPending": "रिडेम्पशन लंबित",
+      "otherHolds": "अन्य होल्ड",
+      "pendingDeposit": "लंबित जमा",
+      "unsettledSaleProceeds": "अनसेटल्ड बिक्री आय",
+      "withdrawable": "निकालने योग्य",
+      "sellerEarnings": "विक्रेता आय",
+      "safeguarded": "सुरक्षित",
+      "safeguardingPending": "सुरक्षा लंबित",
+      "evidence": "साक्ष्य",
+      "terms": "शर्तें",
+      "activity": "गतिविधि"
+    },
+    "order": {
+      "title": "ऑर्डर",
+      "orderNumber": "ऑर्डर #{{number}}",
+      "statusPending": "लंबित",
+      "statusProcessing": "प्रसंस्करण",
+      "statusShipped": "शिप किया गया",
+      "statusDelivered": "डिलीवर हुआ",
+      "statusCancelled": "रद्द",
+      "statusRefunded": "रिफंड हुआ"
+    }
+  },
+  "myProfile": {
+    "cover": {
+      "uploadFailed": "कवर अपलोड विफल",
+      "retry": "पुनः प्रयास",
+      "cancel": "रद्द करें"
+    },
+    "utility": {
+      "orders": "ऑर्डर",
+      "analytics": "एनालिटिक्स",
+      "closet": "क्लोज़ेट",
+      "wallet": "वॉलेट",
+      "auctions": "नीलामी",
+      "coOwn": "सह-स्वामित्व",
+      "sellerHub": "विक्रेता हब",
+      "itemsCount": "{{count}} आइटम",
+      "assetsCount": "{{count}} एसेट"
+    },
+    "notSignedIn": {
+      "subtitle": "अपनी प्रोफ़ाइल, लिस्टिंग और वॉलेट देखने के लिए साइन इन करें।",
+      "signIn": "साइन इन करें"
+    },
+    "holiday": {
+      "title": "अवकाश मोड चालू है",
+      "subtitle": "आपकी दुकान रुकी हुई है। प्रबंधित करने के लिए टैप करें।"
+    },
+    "tabs": {
+      "shop": "दुकान",
+      "looks": "लुक",
+      "about": "परिचय",
+      "reviews": "समीक्षाएँ"
+    },
+    "listings": {
+      "emptyTitle": "अपना पहला आइटम लिस्ट करें",
+      "emptyBody": "किसी आइटम की फोटो खींचें और तैयार होने पर प्रकाशित करें।",
+      "startSelling": "बिक्री शुरू करें",
+      "bringOverListings": "अपनी मौजूदा लिस्टिंग लाएँ",
+      "viewAll": "सभी देखें",
+      "sold": "बिक गया",
+      "listingsCount": "{{count}} लिस्टिंग"
+    },
+    "looks": {
+      "errorTitle": "आपके लुक लोड नहीं हो सके",
+      "errorSubtitle": "अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "tryAgain": "पुनः प्रयास करें",
+      "emptyTitle": "अभी तक कोई लुक नहीं",
+      "emptySubtitle": "अपनी शैली दिखाने के लिए अपना पहला लुक बनाएँ।",
+      "createLook": "लुक बनाएँ"
+    },
+    "about": {
+      "coOwnPortfolio": "सह-स्वामित्व पोर्टफोलियो",
+      "viewAll": "सभी देखें",
+      "unit": "यूनिट",
+      "units": "यूनिट",
+      "website": "वेबसाइट",
+      "shopPolicies": "दुकान नीतियाँ",
+      "payments": "भुगतान",
+      "paymentsValue": "खरीदार सुरक्षा के साथ सुरक्षित चेकआउट",
+      "shipping": "शिपिंग",
+      "shippingSeller": "विक्रेता {{label}}। भेजने पर ट्रैकिंग दी जाएगी।",
+      "shippingDefault": "भेजने पर ट्रैकिंग दी जाएगी।",
+      "returns": "रिटर्न",
+      "returnsValue": "वर्णित न के बराबर न होने पर आइटम के लिए रिटर्न स्वीकार।",
+      "responseRate": "प्रतिक्रिया दर",
+      "response": "प्रतिक्रिया",
+      "responseSeller": "विक्रेता आमतौर पर {{label}} में उत्तर देता है।",
+      "responseDefault": "विक्रेता शीघ्र उत्तर देने का प्रयास करता है।",
+      "noDetails": "कोई अतिरिक्त विवरण उपलब्ध नहीं।"
+    },
+    "completion": {
+      "title": "अपनी प्रोफ़ाइल पूरी करें",
+      "progress": "{{percent}}% · {{done}}/{{total}}"
+    },
+    "growth": {
+      "title": "Thryftverse पर बढ़ें",
+      "listFirstItemTitle": "अपना पहला आइटम लिस्ट करें",
+      "listFirstItemSub": "बिक्री शुरू करने के लिए आइटम की फोटो खींचें और प्रकाशित करें।",
+      "growAudienceTitle": "अपनी ऑडियंस बढ़ाएँ",
+      "growAudienceSub": "फॉलोअर आकर्षित करने के लिए अपनी प्रोफ़ाइल साझा करें और सामग्री बनाएँ।"
+    },
+    "toast": {
+      "coverUpdated": "कवर अपडेट हुआ",
+      "coverUploadFailed": "कवर अपलोड विफल",
+      "avatarUpdated": "अवतार अपडेट हुआ",
+      "avatarUploadFailed": "अवतार अपलोड विफल",
+      "portfolioLoadFailed": "पोर्टफोलियो लोड करने में असमर्थ"
+    },
+    "accessibility": {
+      "orders": "ऑर्डर",
+      "creatorAnalytics": "क्रिएटर एनालिटिक्स",
+      "closet": "क्लोज़ेट",
+      "wallet": "वॉलेट",
+      "browseAuctions": "नीलामी ब्राउज़ करें",
+      "browseCoOwnMarket": "सह-स्वामित्व बाज़ार ब्राउज़ करें",
+      "sellerHub": "विक्रेता हब",
+      "openSettings": "सेटिंग्स खोलें",
+      "openSettingsHint": "सेटिंग्स खोलता है",
+      "shareProfile": "प्रोफ़ाइल साझा करें",
+      "shareProfileHint": "अपनी प्रोफ़ाइल साझा करने के लिए सिस्टम शेयर शीट खोलता है",
+      "retryCoverUpload": "कवर अपलोड पुनः प्रयास करें",
+      "cancelCoverChange": "कवर बदलाव रद्द करें",
+      "uploadingCover": "प्रोफ़ाइल कवर अपलोड हो रहा है",
+      "changeCover": "प्रोफ़ाइल कवर बदलें",
+      "holidayMode": "अवकाश मोड चालू है — प्रबंधित करने के लिए टैप करें",
+      "importListingsHint": "eBay या फ़ाइल से कैटलॉग आयात शुरू करें",
+      "loadingLooks": "आपके लुक लोड हो रहे हैं",
+      "viewCoOwnPortfolio": "सह-स्वामित्व पोर्टफोलियो देखें",
+      "viewCoOwnPortfolioHint": "आपका सह-स्वामित्व होल्डिंग हब खोलता है",
+      "dismissCompletion": "प्रोफ़ाइल पूर्णता प्रॉम्प्ट खारिज करें",
+      "dismissGrowth": "वृद्धि प्रॉम्प्ट खारिज करें",
+      "listFirstItemHint": "अपनी पहली लिस्टिंग बनाने के लिए बिक्री प्रवाह खोलता है",
+      "growAudienceHint": "ऑडियंस वृद्धि टूल के साथ क्रिएटर एनालिटिक्स खोलता है"
+    },
+    "completionCta": {
+      "addName": "नाम जोड़ें",
+      "addBio": "बायो जोड़ें",
+      "addPhoto": "फोटो जोड़ें",
+      "addCover": "कवर जोड़ें",
+      "editProfile": "प्रोफ़ाइल संपादित करें"
+    },
+    "share": {
+      "message": "Thryftverse पर @{{username}} देखें! https://thryftverse.com/@{{username}}",
+      "title": "Thryftverse पर {{name}}"
+    }
+  },
+  "galleria": {
+    "editorial": {
+      "eyebrow": "संपादकीय"
+    },
+    "collections": {
+      "eyebrow": "क्यूरेटेड संग्रह",
+      "curatedBy": "{{curator}} द्वारा क्यूरेटेड"
+    },
+    "assets": {
+      "eyebrow": "फ़ीचर्ड एसेट",
+      "title": "सह-स्वामित्व हाइलाइट्स"
+    },
+    "editorialList": {
+      "eyebrow": "संपादकीय",
+      "title": "गैलेरिया की कहानियाँ"
+    },
+    "creativeTools": {
+      "eyebrow": "क्रिएटिव टूल्स",
+      "title": "इसे अपना बनाएँ",
+      "posterStudio": "पोस्टर स्टूडियो",
+      "posterStudioSub": "पोस्टर, लुक और मूडबोर्ड कोलाज बनाएँ"
+    },
+    "demo": {
+      "content": "डेमो सामग्री"
+    },
+    "offline": {
+      "banner": "ऑफ़लाइन — कैश की गई गैलेरिया सामग्री दिख रही है"
+    },
+    "error": {
+      "title": "गैलेरिया अनुपलब्ध",
+      "retry": "पुनः प्रयास",
+      "loadFailed": "हम गैलेरिया लोड नहीं कर सके। पुनः प्रयास करें।"
+    },
+    "empty": {
+      "title": "गैलेरिया क्यूरेट की जा रही है",
+      "subtitle": "हमारे क्यूरेटर नए संग्रह और संपादकीय टुकड़े तैयार कर रहे हैं। शीघ्र वापस जाँचें।",
+      "refresh": "रिफ्रेश"
+    },
+    "accessibility": {
+      "loadingCollections": "क्यूरेटेड संग्रह लोड हो रहे हैं",
+      "collectionsRail": "क्यूरेटेड संग्रह रेल",
+      "openPosterStudio": "पोस्टर स्टूडियो खोलें",
+      "posterStudioHint": "पोस्टर, लुक और मूडबोर्ड कोलाज बनाएँ",
+      "editorial": "संपादकीय: {{title}}",
+      "collection": "संग्रह: {{title}}",
+      "collectionHint": "संग्रह विवरण खोलता है",
+      "featuredCollection": "फ़ीचर्ड संग्रह: {{title}}",
+      "asset": "{{title}}, मूल्य {{value}}",
+      "assetHint": "एसेट विवरण खोलता है"
+    }
+  },
+  "agentLedger": {
+    "header": {
+      "title": "एजेंट रन",
+      "subtitle": "सर्वर-समर्थित निष्पादन रिकॉर्ड"
+    },
+    "status": {
+      "succeeded": "सफल",
+      "failed": "विफल",
+      "running": "चल रहा है",
+      "queued": "कतार में",
+      "cancelled": "रद्द",
+      "timedOut": "समय समाप्त",
+      "unknown": "अज्ञात",
+      "awaitingApproval": "अनुमोदन की प्रतीक्षा",
+      "awaitingInput": "इनपुट की प्रतीक्षा"
+    },
+    "error": {
+      "title": "रन लोड नहीं हो सके",
+      "retry": "पुनः प्रयास",
+      "loadFailed": "रन लोड करने में विफल"
+    },
+    "empty": {
+      "title": "अभी तक कोई एजेंट रन नहीं",
+      "body": "जब एजेंट निष्पादित होते हैं — मेंशन, कमांड या शेड्यूल के माध्यम से — उनके रन यहाँ स्थिति, टोकन उपयोग और समय के साथ दिखाई देते हैं।"
+    },
+    "footer": {
+      "note": "पहले दिखाया गया स्थानीय गतिविधि लॉग सर्वर-समर्थित रन रिकॉर्ड से बदल दिया गया है।"
+    },
+    "approvals": {
+      "title": "लंबित अनुमोदन",
+      "approving": "अनुमोदित कर रहे हैं…",
+      "approve": "अनुमोदित करें",
+      "approveAction": "{{botName}} से अनुरोध अनुमोदित करें",
+      "rejecting": "अस्वीकृत कर रहे हैं…",
+      "reject": "अस्वीकार करें",
+      "rejectAction": "{{botName}} से अनुरोध अस्वीकार करें",
+      "errorApproveTitle": "अनुमोदित नहीं किया जा सका",
+      "errorApproveMessage": "अनुरोध अनुमोदित नहीं किया जा सका।",
+      "errorRejectTitle": "अस्वीकृत नहीं किया जा सका",
+      "errorRejectMessage": "अनुरोध अस्वीकृत नहीं किया जा सका।"
+    },
+    "cancel": {
+      "cancelling": "रद्द कर रहे हैं…",
+      "cancel": "रद्द करें",
+      "cancelAction": "{{botName}} के लिए रन रद्द करें",
+      "confirmTitle": "एजेंट रन रद्द करें",
+      "confirmMessage": "{{botName}} के लिए रन रद्द करें?",
+      "confirmLabel": "रन रद्द करें",
+      "errorTitle": "रद्द नहीं किया जा सका",
+      "errorMessage": "रन रद्द नहीं किया जा सका।"
+    },
+    "tools": {
+      "search": "खोज: {{searchQuery}}",
+      "listing": "लिस्टिंग: {{listingId}}",
+      "priceHistory": "मूल्य इतिहास: {{searchQuery}}",
+      "readMessages": "{{count}} संदेश पढ़ें"
+    },
+    "time": {
+      "justNow": "अभी",
+      "minutesAgo": "{{count}}मिनट पहले",
+      "hoursAgo": "{{count}}घ पहले",
+      "daysAgo": "{{count}}दिन पहले"
+    },
+    "tokens": {
+      "usage": "{{input}} इन · {{output}} आउट"
+    }
+  },
+  "liveStreamViewer": {
+    "lotStatus": {
+      "comingUp": "आने वाला",
+      "openForBidding": "बोली के लिए खुला",
+      "closingSoon": "जल्द बंद होगा!",
+      "sold": "£{{price}} में बिक गया",
+      "passed": "पास (रिज़र्व पूरा नहीं)",
+      "cancelled": "रद्द"
+    },
+    "toast": {
+      "couldNotSend": "संदेश नहीं भेजा जा सका",
+      "bidFailed": "बोली विफल",
+      "bidNotAccepted": "बोली स्वीकार नहीं की गई",
+      "stillChecking": "अभी जाँच रहे हैं — आपकी बोली लग गई होगी",
+      "purchaseComplete": "खरीद पूर्ण — अपना इनबॉक्स जाँचें",
+      "couldNotPurchase": "खरीद पूरी नहीं हो सकी",
+      "followDemoUnavailable": "डेमो मोड में फॉलो अनुपलब्ध",
+      "followUnavailable": "फॉलो अनुपलब्ध",
+      "unfollowed": "अनफॉलो किया",
+      "following": "फॉलो कर रहे हैं",
+      "followError": "फॉलो स्थिति अपडेट नहीं कर सके",
+      "checkoutError": "चेकआउट शुरू नहीं कर सके। कृपया पुनः प्रयास करें।"
+    },
+    "share": {
+      "message": "ThryftVerse पर {{sellerName}} का लाइव स्ट्रीम देखें",
+      "defaultSeller": "यह विक्रेता"
+    },
+    "connecting": {
+      "title": "स्ट्रीम से कनेक्ट हो रहा है",
+      "subtitle": "रियल-टाइम कनेक्शन स्थापित कर रहे हैं"
+    },
+    "error": {
+      "title": "स्ट्रीम से कनेक्ट नहीं हो सका",
+      "subtitle": "स्ट्रीम समाप्त हो गई होगी या आपका कनेक्शन टूट गया।",
+      "reconnect": "पुनः कनेक्ट करें",
+      "goBack": "वापस जाएँ"
+    },
+    "ended": {
+      "title": "स्ट्रीम समाप्त",
+      "subtitle": "देखने के लिए धन्यवाद",
+      "viewers": "दर्शक",
+      "lotsSold": "लॉट बिके",
+      "totalSales": "कुल बिक्री",
+      "done": "पूर्ण"
+    },
+    "demo": {
+      "label": "डेमो",
+      "stream": "डेमो स्ट्रीम"
+    },
+    "video": {
+      "connecting": "स्ट्रीम से कनेक्ट हो रहा है..."
+    },
+    "seller": {
+      "following": "फॉलो कर रहे हैं",
+      "follow": "फॉलो करें"
+    },
+    "live": {
+      "label": "लाइव"
+    },
+    "chat": {
+      "seller": "विक्रेता",
+      "placeholder": "संदेश भेजें..."
+    },
+    "product": {
+      "bids": "बोली"
+    },
+    "bid": {
+      "placeBid": "बोली",
+      "buyNow": "खरीदें",
+      "buyNowFull": "अभी खरीदें",
+      "completeCheckout": "चेकआउट पूरा करें"
+    },
+    "bidSheet": {
+      "title": "बोली लगाएँ",
+      "currentBid": "वर्तमान बोली",
+      "minNextBid": "न्यूनतम अगली बोली",
+      "cancel": "रद्द करें",
+      "close": "बंद करें"
+    },
+    "unknown": {
+      "title": "बोली स्थिति अज्ञात",
+      "subtitle": "आपकी बोली लग गई होगी। हम परिणाम की पुष्टि नहीं कर सके।",
+      "checkResult": "परिणाम जाँचें",
+      "dismiss": "खारिज करें"
+    }
+  },
+  "liveShopping": {
+    "live": {
+      "label": "लाइव",
+      "demo": "डेमो"
+    },
+    "header": {
+      "title": "लाइव"
+    },
+    "sections": {
+      "liveNow": "अभी लाइव",
+      "comingUp": "आने वाला",
+      "pastEvents": "पिछले कार्यक्रम",
+      "streaming": "{{count}} स्ट्रीमिंग",
+      "scheduled": "{{count}} शेड्यूल्ड",
+      "replays": "{{count}} रीप्ले",
+      "replay_one": "{{count}} रीप्ले",
+      "replay_other": "{{count}} रीप्ले"
+    },
+    "featured": {
+      "currentBid": "वर्तमान बोली"
+    },
+    "replay": {
+      "justEnded": "अभी समाप्त",
+      "hoursAgo": "{{count}}घ पहले",
+      "daysAgo": "{{count}}दिन पहले"
+    },
+    "upcoming": {
+      "waiting": "प्रतीक्षा",
+      "notified": "सूचित",
+      "notifyMe": "मुझे सूचित करें",
+      "startingSoon": "जल्द शुरू होगा"
+    },
+    "scheduled": {
+      "inMinutes": "{{minutes}} मिनट में · {{time}}",
+      "inHours": "{{hours}}घ {{minutes}}मिनट में · {{time}}",
+      "inDays": "{{day}} · {{time}}"
+    },
+    "noLive": {
+      "text": "अभी कोई लाइव नहीं है"
+    },
+    "error": {
+      "title": "लाइव सत्र लोड नहीं हो सके",
+      "retry": "पुनः प्रयास",
+      "subtitle": "अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "loadFailed": "लाइव सत्र लोड करने में विफल"
+    },
+    "empty": {
+      "title": "अभी कोई लाइव सत्र नहीं",
+      "subtitle": "शीघ्र वापस जाँचें, या विक्रेता हब से अपना सत्र शुरू करें।",
+      "goToSellerHub": "विक्रेता हब पर जाएँ"
+    }
+  },
+  "conversationalSearch": {
+    "header": {
+      "title": "ThryftVerse से पूछें"
+    },
+    "demo": {
+      "banner": "कीवर्ड मिलान — हम आपके विवरण से फ़िल्टर निकालते हैं।"
+    },
+    "offline": {
+      "banner": "आप ऑफ़लाइन हैं। खोजने के लिए पुनः कनेक्ट करें।"
+    },
+    "empty": {
+      "greetingTitle": "आज आप क्या ढूँढ रहे हैं?",
+      "greetingSubtitle": "इसे अपने शब्दों में बताएँ।",
+      "suggestionsLabel": "इनमें से कोई आज़माएँ"
+    },
+    "matched": {
+      "label": "मेल खाए कीवर्ड"
+    },
+    "actions": {
+      "viewResults": "परिणाम देखें",
+      "refine": "परिष्कृत करें"
+    },
+    "error": {
+      "retry": "पुनः प्रयास करें",
+      "offline": "आप ऑफ़लाइन हैं। खोजने के लिए पुनः कनेक्ट करें।",
+      "generic": "कुछ गलत हुआ। पुनः प्रयास करें।"
+    },
+    "input": {
+      "placeholder": "बताएँ कि आप क्या ढूँढ रहे हैं…"
+    },
+    "browseTitle": "खोज परिणाम",
+    "filters": {
+      "brand": "ब्रांड: {{value}}",
+      "category": "श्रेणी: {{value}}",
+      "size": "आकार: {{value}}",
+      "condition": "स्थिति: {{value}}",
+      "colour": "रंग: {{value}}",
+      "style": "शैली: {{value}}",
+      "priceLabel": "मूल्य: ",
+      "priceUnder": "{{value}} से कम",
+      "priceOver": "{{value}} से अधिक",
+      "sustainableOnly": "केवल सतत"
+    },
+    "trust": {
+      "matchedKeywords": "मेल खाए कीवर्ड: {{keywords}}",
+      "noMatch": "कोई कीवर्ड मेल नहीं खाया — सामान्य प्रतिक्रिया दिखाई जा रही है"
+    }
+  },
+  "aiAgent": {
+    "header": {
+      "title": "एजेंट स्टूडियो",
+      "subtitle": "एजेंट, कनेक्शन और कुंजियाँ प्रबंधित करें"
+    },
+    "demo": {
+      "banner": "कुंजियाँ केवल प्रारूप द्वारा सत्यापित होती हैं — किसी भी प्रदाता को कोई लाइव अनुरोध नहीं भेजा जाता।"
+    },
+    "sections": {
+      "yourAgents": "आपके एजेंट",
+      "serverConnections": "सर्वर कनेक्शन",
+      "deviceLocalKeys": "डिवाइस-लोकल कुंजियाँ"
+    },
+    "status": {
+      "agents": " एजेंट",
+      "connections": "कनेक्शन",
+      "pendingApprovals": "{{count}} लंबित स्वीकृति",
+      "viewPending": "{{count}} लंबित स्वीकृति देखें",
+      "subtitleNone": "आरंभ करने के लिए एक एजेंट बनाएँ और एक प्रदाता कनेक्ट करें",
+      "subtitleNoAgents": "एक प्रदाता कनेक्ट करें, फिर अपना पहला एजेंट बनाएँ",
+      "subtitleNoConnections": "एजेंट निष्पादन को सशक्त करने के लिए सर्वर-साइड पर एक प्रदाता कनेक्ट करें",
+      "subtitleReady": "एजेंट आपकी कनेक्टेड सर्वर-साइड कुंजियों पर चलते हैं"
+    },
+    "agentStatus": {
+      "draft": "प्रारूप",
+      "disabled": "अक्षम",
+      "setupNeeded": "सेटअप आवश्यक",
+      "published": "प्रकाशित"
+    },
+    "serverConnections": {
+      "hint": "कुंजियाँ सत्यापित और सर्वर पर एन्क्रिप्टेड रूप में संग्रहीत हैं। ये एजेंट निष्पादन को सशक्त करती हैं।",
+      "connectServerSide": "सर्वर-साइड कनेक्ट करें",
+      "connectServerSideSub": "कुंजियाँ सत्यापित और सर्वर पर एन्क्रिप्टेड रूप में संग्रहीत हैं।",
+      "empty": "अभी तक कोई सर्वर कनेक्शन नहीं। अपने एजेंट को सशक्त करने के लिए एक प्रदाता कनेक्ट करें।"
+    },
+    "deviceLocal": {
+      "note": "केवल खोज हेतु — निष्पादन के लिए उपयोग नहीं",
+      "expandedNote": "डिवाइस-लोकल कुंजियाँ केवल मॉडल खोज के लिए उपयोग होती हैं। सर्वर कनेक्शन एजेंट निष्पादन को सशक्त करते हैं।"
+    },
+    "agents": {
+      "empty": "अभी तक कोई एजेंट नहीं। इसे विशेषता, सीमाएँ और संदर्भ देने के लिए एक बनाएँ।",
+      "create": "एजेंट बनाएँ",
+      "pauseAll": "सभी एजेंट रोकें",
+      "noSessionsRunning": "कोई एजेंट सत्र चल रहा नहीं",
+      "sessionsRunning": "{{count}} एजेंट सत्र चल रहे",
+      "activity": "एजेंट गतिविधि",
+      "activitySub": "एजेंट क्रियाओं और स्वीकृतियों की लोकल लॉग"
+    },
+    "connect": {
+      "cancel": "रद्द करें",
+      "verifySave": "सत्यापित करें और सहेजें",
+      "verifying": "सत्यापित किया जा रहा है…",
+      "apiKey": "API कुंजी",
+      "labelOptional": "लेबल (वैकल्पिक)",
+      "baseUrl": "बेस URL (वैकल्पिक, कस्टम प्रदाता)"
+    },
+    "confirm": {
+      "title": "यह कनेक्शन हटाएँ?",
+      "body": "इस कनेक्शन का उपयोग करने वाले एजेंट तब तक नहीं चल पाएँगे जब तक आप एक प्रतिस्थापन कनेक्ट न करें।",
+      "cancel": "रद्द करें",
+      "remove": "हटाएँ",
+      "removing": "हटाया जा रहा है…"
+    },
+    "connection": {
+      "reverify": "पुनः सत्यापित करें",
+      "verifying": "सत्यापित किया जा रहा है…",
+      "remove": "हटाएँ",
+      "removing": "हटाया जा रहा है…",
+      "verified": "{{time}} को सत्यापित",
+      "notVerified": "अभी तक सत्यापित नहीं",
+      "modelsCount": "{{count}} मॉडल",
+      "more": "और"
+    },
+    "health": {
+      "healthy": "स्वस्थ",
+      "failed": "विफल",
+      "revoked": "निरसित",
+      "expired": "समाप्त",
+      "degraded": "क्षतिग्रस्त",
+      "unverified": "असत्यापित"
+    },
+    "providerStatus": {
+      "comingSoon": "जल्द आ रहा है",
+      "connected": "कनेक्टेड",
+      "invalid": "अमान्य",
+      "notConnected": "कनेक्ट नहीं"
+    },
+    "provider": {
+      "soon": "जल्द",
+      "comingSoon": "जल्द आ रहा है — इस डिप्लॉयमेंट पर अभी उपलब्ध नहीं।",
+      "modelsAvailable": "{{count}} मॉडल उपलब्ध",
+      "discoveringModels": "मॉडल खोजे जा रहे हैं…",
+      "storedLocally": "लोकल रूप से संग्रहीत · {{storage}}",
+      "secureStorage": "सुरक्षित संग्रहण",
+      "deviceStorage": "डिवाइस संग्रहण",
+      "disconnect": "डिस्कनेक्ट करें",
+      "replaceKey": "कुंजी बदलें",
+      "noKeySaved": "कोई कुंजी सहेजी नहीं। {{name}} मॉडल उपयोग करने के लिए कनेक्ट करें।",
+      "connect": "कनेक्ट करें",
+      "availableModels": "उपलब्ध मॉडल",
+      "discoveringFrom": "{{name}} से मॉडल खोजे जा रहे हैं…",
+      "noModelsReturned": "{{name}} द्वारा कोई मॉडल नहीं लौटाए गए।",
+      "modelsAfterConnect": "कनेक्ट करने के बाद {{name}} से मॉडल खोजे जाते हैं।",
+      "testing": "परीक्षण किया जा रहा है…",
+      "testSave": "परीक्षण करें और सहेजें"
+    },
+    "toast": {
+      "connectionSaved": "कनेक्शन सत्यापित और सहेजा गया।",
+      "verifyFailed": "कुंजी सत्यापित नहीं हो सकी। कुंजी जाँचें और पुनः प्रयास करें।",
+      "reverified": "कनेक्शन पुनः सत्यापित हुआ।",
+      "reverifyFailed": "पुनः सत्यापन विफल।",
+      "removedWithAgents": "हटाया गया। {{count}} एजेंट अद्यतन किए गए।",
+      "connectionRemoved": "कनेक्शन हटाया गया।",
+      "removeFailed": "कनेक्शन हटाया नहीं जा सका।"
+    },
+    "help": {
+      "title": "एजेंट क्या कर सकते हैं और क्या नहीं",
+      "body": "एजेंट आपके द्वारा कनेक्ट की गई प्रदाता कुंजियों का उपयोग करके उत्तर तैयार करते हैं और वार्तालाप संक्षिप्त करते हैं। वे आपके वॉलेट तक पहुँच नहीं पा सकते, भुगतान नहीं कर सकते, या आपके द्वारा दी गई अनुमतियों के बाहर कोई कार्रवाई नहीं कर सकते। सर्वर-साइड कुंजियाँ सर्वर पर एन्क्रिप्टेड रूप में संग्रहीत हैं; डिवाइस-लोकल कुंजियाँ कभी इस डिवाइस से बाहर नहीं जातीं। प्रत्येक एजेंट क्रिया पारदर्शिता के लिए गतिविधि लेजर में लॉग की जाती है।"
+    }
+  },
+  "algorithm": {
+    "header": {
+      "title": "आपका एल्गोरिदम",
+      "subtitle": "वे संकेत जो आपके फ़ीड को आकार देते हैं"
+    },
+    "demo": {
+      "banner": "डेमो मोड में एल्गोरिदम डेटा केवल उदाहरण है।"
+    },
+    "offline": {
+      "banner": "आप ऑफ़लाइन हैं। अंतिम सहेजी गई प्रोफ़ाइल दिखाई जा रही है।"
+    },
+    "summary": {
+      "activeTopics": "सक्रिय विषय",
+      "signals": "संकेत",
+      "lastUpdated": "अंतिम अद्यतन"
+    },
+    "howItWorks": {
+      "title": "यह कैसे काम करता है"
+    },
+    "empty": {
+      "title": "अभी तक कोई विषय नहीं",
+      "subtitle": "आपका फ़ीड सामान्य लोकप्रियता पर आधारित है। अपनी सिफ़ारिशों को आकार देना शुरू करने के लिए नीचे एक विषय जोड़ें।"
+    },
+    "topics": {
+      "title": "वे विषय जो आपके फ़ीड को प्रभावित करते हैं",
+      "caption": "किसी विषय का भार समायोजित करने या हटाने के लिए उसे टैप करें।",
+      "influenceWeight": "प्रभाव भार",
+      "removeTopic": "विषय हटाएँ",
+      "lockHint": "विश्वास और लेखा के लिए रखा गया। आप इसके फ़ीड पर प्रभाव को रोक सकते हैं।"
+    },
+    "signals": {
+      "title": "हाल के संकेत",
+      "caption": "नवीनतम क्रियाएँ जिन्होंने आपके फ़ीड को आकार दिया।"
+    },
+    "addTopic": {
+      "title": "एक विषय जोड़ें",
+      "caption": "बताएँ कि आप किसमें रुचि रखते हैं।",
+      "placeholder": "उदा. विंटेज घड़ियाँ",
+      "addBtn": "विषय जोड़ें"
+    },
+    "error": {
+      "title": "आपका एल्गोरिदम लोड नहीं हो सका",
+      "subtitle": "हम आपकी एल्गोरिदम प्रोफ़ाइल लाने में असमर्थ रहे। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "retry": "पुनः प्रयास करें"
+    }
+  },
+  "aiListing": {
+    "header": {
+      "title": "क्विक लिस्ट",
+      "subtitle": "फ़ोटो लें · समीक्षा करें · प्रकाशित करें"
+    },
+    "fields": {
+      "title": "शीर्षक",
+      "description": "विवरण",
+      "category": "श्रेणी",
+      "brand": "ब्रांड",
+      "condition": "स्थिति",
+      "price": "मूल्य (GBP)",
+      "tags": "टैग",
+      "materialComposition": "सामग्री संरचना",
+      "weight": "वज़न (kg)"
+    },
+    "placeholders": {
+      "title": "उदा. विंटेज लेवीज़ 501 डेनिम जैकेट",
+      "description": "अपनी वस्तु का वर्णन करें…",
+      "selectCategory": "श्रेणी चुनें",
+      "brand": "ब्रांड",
+      "selectCondition": "स्थिति चुनें",
+      "price": "0.00",
+      "addTag": "टैग जोड़ें",
+      "material": "उदा. सूती, पॉलिएस्टर, ऊन...",
+      "weight": "उदा. 0.45"
+    },
+    "impact": {
+      "helper": "वास्तविक पर्यावरणीय प्रभाव की गणना हेतु उपयोग। वैकल्पिक लेकिन अनुशंसित।"
+    },
+    "preview": {
+      "label": "पूर्वावलोकन",
+      "completeness": "पूर्णता"
+    },
+    "photo": {
+      "cover": "कवर",
+      "enhance": "बेहतर बनाएँ",
+      "camera": "कैमरा",
+      "library": "लाइब्रेरी"
+    },
+    "suggestion": {
+      "use": "उपयोग करें",
+      "suggested": "सुझाया गया"
+    },
+    "picker": {
+      "selectCategory": "श्रेणी चुनें",
+      "selectCondition": "स्थिति चुनें"
+    },
+    "empty": {
+      "title": "लिस्ट करने के लिए फ़ोटो लें",
+      "body": "ऊपर फ़ोटो जोड़ें और हम शीर्षक, विवरण, श्रेणी और मूल्य सीमा सुझाएँगे। प्रकाशित करने से पहले सब कुछ समीक्षा करें और संपादित करें।"
+    },
+    "error": {
+      "retry": "पुनः प्रयास करें"
+    },
+    "toast": {
+      "photoEnhanced": "फ़ोटो बेहतर की गई",
+      "photoAccessTitle": "फ़ोटो एक्सेस आवश्यक",
+      "photoAccessBody": "लिस्टिंग फ़ोटो जोड़ने के लिए फ़ोटो एक्सेस आवश्यक है।",
+      "pickFailedTitle": "चयन विफल",
+      "pickFailedBody": "फ़ोटो चुनी नहीं जा सकीं। पुनः प्रयास करें।",
+      "cameraAccessTitle": "कैमरा एक्सेस आवश्यक",
+      "cameraAccessBody": "लिस्टिंग फ़ोटो लेने के लिए कैमरा एक्सेस आवश्यक है।",
+      "captureFailedTitle": "कैप्चर विफल",
+      "captureFailedBody": "फ़ोटो नहीं ली जा सकी। पुनः प्रयास करें।",
+      "smartSellSavedPreviewTitle": "स्मार्ट सेल सहेजी गई (पूर्वावलोकन)",
+      "smartSellSavedPreviewBody": "स्मार्ट सेल पूरी तरह उपलब्ध होने पर आपकी सेटिंग्स सक्रिय होंगी।"
+    },
+    "publish": {
+      "publishing": "प्रकाशित किया जा रहा है…",
+      "reviewPublish": "समीक्षा करें और प्रकाशित करें",
+      "signInToPublish": "लिस्टिंग प्रकाशित करने के लिए साइन इन करें।",
+      "offline": "आप ऑफ़लाइन प्रतीत होते हैं। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "missingFields": "प्रकाशित करने से पहले कम से कम एक फ़ोटो, एक शीर्षक और एक मूल्य जोड़ें।",
+      "missingCover": "प्रकाशित करने से पहले एक सत्यापित कवर छवि आवश्यक है।",
+      "failed": "प्रकाशित करने में विफल। पुनः प्रयास करें।"
+    },
+    "accessibility": {
+      "selectCategory": "श्रेणी चुनें",
+      "opensCategoryPicker": "श्रेणी पिकर खोलता है",
+      "selectCondition": "स्थिति चुनें",
+      "opensConditionPicker": "स्थिति पिकर खोलता है",
+      "removeTag": "टैग {{tag}} हटाएँ",
+      "removeTagHint": "इस लिस्टिंग से टैग {{tag}} हटाएँ",
+      "addTag": "टैग जोड़ें",
+      "addTagHint": "लिस्टिंग में यह टैग जोड़ें",
+      "publishListing": "लिस्टिंग प्रकाशित करें",
+      "publishListingHint": "प्रकाशन हेतु अपनी लिस्टिंग जमा करें",
+      "acceptSuggestion": "सुझाव स्वीकार करें: {{text}}",
+      "acceptSuggestionHint": "इस सुझाव को फ़ील्ड पर लागू करें",
+      "dismissSuggestion": "सुझाव खारिज करें",
+      "dismissSuggestionHint": "इस सुझाव को लागू किए बिना छिपाएँ",
+      "removePhoto": "फ़ोटो हटाएँ",
+      "removePhotoHint": "इस फ़ोटो को लिस्टिंग से हटाएँ",
+      "enhancePhoto": "फ़ोटो बेहतर बनाएँ",
+      "enhancePhotoHint": "इस लिस्टिंग छवि को बेहतर बनाने के लिए फ़ोटो एन्हांसमेंट खोलता है",
+      "takePhotoWithCamera": "कैमरा से फ़ोटो लें",
+      "takePhotoWithCameraHint": "फ़ोटो कैप्चर करने के लिए कैमरा खोलें",
+      "pickPhotosFromGallery": "गैलरी से फ़ोटो चुनें",
+      "pickPhotosFromGalleryHint": "फ़ोटो चुनने के लिए गैलरी खोलें",
+      "loadingSuggestions": "सुझाव लोड हो रहे हैं",
+      "loadingSuggestionsHint": "सुझाव तैयार किए जा रहे हैं",
+      "dismissError": "त्रुटि खारिज करें",
+      "dismissErrorHint": "इस त्रुटि संदेश को खारिज करें",
+      "retryHint": "विफल क्रिया पुनः प्रयास करें",
+      "closePicker": "पिकर बंद करें",
+      "closePickerHint": "पिकर शीट बंद करें",
+      "selectOption": "{{option}} चुनें",
+      "chooseOption": "चयनित विकल्प के रूप में {{option}} चुनें"
+    }
+  },
+  "report": {
+    "header": {
+      "title": "रिपोर्ट करें",
+      "reportAccount": "खाता रिपोर्ट करें",
+      "reportGroup": "समूह रिपोर्ट करें",
+      "reportListing": "लिस्टिंग रिपोर्ट करें",
+      "subtitle": "रिपोर्ट गोपनीय हैं"
+    },
+    "received": {
+      "title": "रिपोर्ट प्राप्त हुई",
+      "body": "हम समीक्षा करेंगे और परिणाम से अवगत कराएँगे।",
+      "reportId": "रिपोर्ट #{{reportId}}",
+      "receivedAt": "{{time}} को प्राप्त",
+      "referenceNote": "भविष्य के सहायता संपर्क में इस नंबर का संदर्भ दें।",
+      "blockUser": "इस उपयोगकर्ता को ब्लॉक करें",
+      "blockedNote": "यह खाता ब्लॉक किया गया है और आपसे संपर्क नहीं कर सकता।",
+      "done": "पूर्ण"
+    },
+    "unavailable": {
+      "title": "रिपोर्ट लक्ष्य अनुपलब्ध",
+      "body": "यह रिपोर्ट बिना मान्य संदर्भ के खोली गई। कुछ भी जमा नहीं किया गया।",
+      "goBack": "वापस जाएँ"
+    },
+    "submit": {
+      "label": "रिपोर्ट भेजें"
+    },
+    "intro": {
+      "title": "क्या हुआ?",
+      "body": "वह कारण चुनें जो समस्या का सर्वोत्तम वर्णन करता हो। पासवर्ड, भुगतान विवरण या अन्य संवेदनशील जानकारी शामिल न करें।"
+    },
+    "details": {
+      "label": "अतिरिक्त विवरण (वैकल्पिक)",
+      "placeholder": "बताएँ क्या हुआ",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "साक्ष्य फ़ोटो (वैकल्पिक)",
+      "camera": "कैमरा",
+      "gallery": "गैलरी",
+      "count": "{{count}}/3 फ़ोटो"
+    },
+    "accessibility": {
+      "blockUser": "इस उपयोगकर्ता को ब्लॉक करें",
+      "detailsInput": "अतिरिक्त रिपोर्ट विवरण",
+      "evidencePhoto": "साक्ष्य फ़ोटो {{index}}",
+      "removeEvidencePhoto": "साक्ष्य फ़ोटो {{index}} हटाएँ",
+      "takeEvidenceCamera": "कैमरा से साक्ष्य फ़ोटो लें",
+      "chooseEvidenceGallery": "गैलरी से साक्ष्य फ़ोटो चुनें"
+    },
+    "reasons": {
+      "spam": "स्पैम",
+      "spamDesc": "अवांछित प्रचार, घोटाले या दोहराए गए संदेश",
+      "harassment": "उत्पीड़न",
+      "harassmentDesc": "धमकी, दुर्व्यवहार या लक्षित अवांछित संपर्क",
+      "hateSpeech": "घृणास्पद भाषण",
+      "hateSpeechDesc": "अपमानजनक शब्द, अमानवीय भाषा, या संरक्षित समूहों पर हमले",
+      "counterfeit": "नकली वस्तु",
+      "counterfeitDesc": "नकली सामान या भ्रामक प्रामाणिकता दावे",
+      "prohibited": "निषिद्ध वस्तु",
+      "prohibitedDesc": "हथियार, ड्रग्स, वन्यजीव, या अन्य निषिद्ध श्रेणियाँ",
+      "offPlatform": "प्लेटफ़ॉर्म-बाह अनुरोध",
+      "offPlatformDesc": "Thryftverse के बाहर लेन-देन करने को कहा, नीति के विरुद्ध",
+      "scam": "घोटाला या धोखाधड़ी",
+      "scamDesc": "वित्तीय धोखाधड़ी, फ़िशिंग, या प्रतिरूपण का प्रयास",
+      "misinformation": "भ्रामक सामग्री",
+      "misinformationDesc": "किसी वस्तु के बारे में झूठे या भ्रामक दावे",
+      "privacy": "गोपनीयता उल्लंघन",
+      "privacyDesc": "बिना सहमति के निजी जानकारी साझा करना",
+      "impersonation": "प्रतिरूपण",
+      "impersonationDesc": "किसी अन्य व्यक्ति का रूप धारण करना",
+      "minorSafety": "बाल सुरक्षा",
+      "minorSafetyDesc": "बालकों के लिए खतरनाक सामग्री या व्यवहार",
+      "other": "कुछ और",
+      "otherDesc": "मॉडरेशन टीम को बताएँ क्या हुआ"
+    },
+    "toast": {
+      "attachUpTo3": "अधिकतम 3 फ़ोटो संलग्न करें।",
+      "offline": "आप ऑफ़लाइन प्रतीत होते हैं। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "allowPhotoAccess": "साक्ष्य अपलोड करने के लिए फ़ोटो एक्सेस दें।",
+      "allowCameraAccess": "साक्ष्य फ़ोटो लेने के लिए कैमरा एक्सेस दें।",
+      "photosAttached": "{{count}} फ़ोटो संलग्न की गईं।",
+      "uploadFailed": "फ़ोटो अपलोड नहीं हो सकीं। पुनः प्रयास करें।",
+      "singleUploadFailed": "फ़ोटो अपलोड नहीं हो सकी। पुनः प्रयास करें।",
+      "photoAttached": "फ़ोटो संलग्न की गई।",
+      "reportFailed": "रिपोर्ट भेजी नहीं जा सकी। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "accountBlocked": "खाता ब्लॉक किया गया",
+      "blockFailed": "इस खाते को ब्लॉक नहीं किया जा सका। पुनः प्रयास करें।"
+    }
+  },
+  "appeal": {
+    "header": {
+      "title": "निर्णय पर अपील"
+    },
+    "loading": {
+      "title": "निर्णय लोड हो रहा है",
+      "subtitle": "विवरण प्राप्त करते समय एक क्षण।"
+    },
+    "error": {
+      "title": "निर्णय लोड नहीं हो सका",
+      "subtitle": "हम निर्णय विवरण प्राप्त नहीं कर सके। पुनः प्रयास करने के लिए नीचे टैप करें।",
+      "tryAgain": "पुनः प्रयास करें",
+      "goBack": "वापस जाएँ"
+    },
+    "windowClosed": {
+      "title": "अपील अवधि समाप्त",
+      "body": "निर्णय 6 महीने के भीतर अपील किए जा सकते हैं। यह निर्णय {{date}} को सूचित किया गया था।",
+      "goBack": "वापस जाएँ"
+    },
+    "offline": {
+      "title": "आप ऑफ़लाइन हैं",
+      "subtitle": "अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "tryAgain": "पुनः प्रयास करें",
+      "goBack": "वापस जाएँ"
+    },
+    "submitted": {
+      "title": "अपील जमा हुई",
+      "body": "हम समीक्षा करेंगे और परिणाम से अवगत कराएँगे।",
+      "appealId": "अपील #{{appealId}}",
+      "submittedAt": "{{time}} को जमा",
+      "referenceNote": "भविष्य के सहायता संपर्क में इस नंबर का संदर्भ दें।",
+      "done": "पूर्ण"
+    },
+    "duration": {
+      "permanent": "स्थायी",
+      "until": "{{date}} तक"
+    },
+    "decision": {
+      "noViolation": "कोई उल्लंघन नहीं",
+      "restrict": "सामग्री प्रतिबंधित",
+      "escalate": "उन्नत किया गया",
+      "emergencyHold": "आपातकालीन रोक"
+    },
+    "grounds": {
+      "label": "आपको क्यों लगता है कि यह निर्णय गलत था?",
+      "placeholder": "बताएँ कि निर्णय पुनर्विचार क्यों होना चाहिए",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "साक्ष्य फ़ोटो (वैकल्पिक)",
+      "camera": "कैमरा",
+      "gallery": "गैलरी",
+      "count": "{{count}}/3 फ़ोटो"
+    },
+    "accessibility": {
+      "groundsInput": "अपील के आधार",
+      "evidencePhoto": "साक्ष्य फ़ोटो {{index}}",
+      "removeEvidencePhoto": "साक्ष्य फ़ोटो {{index}} हटाएँ",
+      "takeEvidenceCamera": "कैमरा से साक्ष्य फ़ोटो लें",
+      "chooseEvidenceGallery": "गैलरी से साक्ष्य फ़ोटो चुनें"
+    },
+    "submit": {
+      "label": "अपील जमा करें"
+    },
+    "toast": {
+      "attachUpTo3": "अधिकतम 3 फ़ोटो संलग्न करें।",
+      "offline": "आप ऑफ़लाइन प्रतीत होते हैं। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+      "allowPhotoAccess": "साक्ष्य अपलोड करने के लिए फ़ोटो एक्सेस दें।",
+      "allowCameraAccess": "साक्ष्य फ़ोटो लेने के लिए कैमरा एक्सेस दें।",
+      "photosAttached": "{{count}} फ़ोटो संलग्न की गईं।",
+      "uploadFailed": "फ़ोटो अपलोड नहीं हो सकीं। पुनः प्रयास करें।",
+      "singleUploadFailed": "फ़ोटो अपलोड नहीं हो सकी। पुनः प्रयास करें।",
+      "photoAttached": "फ़ोटो संलग्न की गई।",
+      "appealFailed": "अपील जमा नहीं हो सकी। अपना कनेक्शन जाँचें और पुनः प्रयास करें।"
+    }
+  }
+}

@@ -11,7 +11,7 @@ import { Image } from 'expo-image';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, FontFamily, Stroke, Elevation } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Typography } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -365,31 +365,27 @@ export function CreatorCropSheet({
       <Reanimated.View
         style={[
           styles.sheet,
-          { paddingBottom: insets.bottom + Space.md, backgroundColor: '#0A0A0A' },
+          { paddingBottom: insets.bottom + Space.md, backgroundColor: colors.surface },
           sheetStyle,
         ]}
       >
-        {/* Handle */}
-        <View style={styles.handleRow}>
-          <View style={[styles.handle, { backgroundColor: colors.border }]} />
-        </View>
-
         {/* Title row */}
         <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Crop</Text>
           <PressScale
             onPress={onClose}
             style={styles.closeBtn}
             accessibilityLabel="Close crop"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} />
           </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Crop</Text>
+          <View style={styles.closeBtn} />
         </View>
 
         {/* Crop preview area */}
-        <GestureHandlerRootView style={styles.previewArea}>
-          <View style={[styles.previewFrame, { width: displayW, height: displayH }]}>
+        <GestureHandlerRootView style={[styles.previewArea, { backgroundColor: colors.mediaOverlayScrim }]}>
+          <View style={[styles.previewFrame, { width: displayW, height: displayH, backgroundColor: colors.mediaOverlayScrim }]}>
             {/* Full image (dimmed) with rotation */}
             <Reanimated.View style={[{ width: displayW, height: displayH }, imageStyle]}>
               <Image
@@ -401,22 +397,18 @@ export function CreatorCropSheet({
             {/* Dark overlay outside crop area */}
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
               {/* Top */}
-              <View style={[styles.dimOverlay, {
-                position: 'absolute', top: 0, left: 0, right: 0,
+              <View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute', top: 0, left: 0, right: 0,
                 height: cropRect.y * scaleToDisplay }]} />
               {/* Bottom */}
-              <View style={[styles.dimOverlay, {
-                position: 'absolute',
+              <View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute',
                 top: (cropRect.y + cropRect.height) * scaleToDisplay,
                 left: 0, right: 0, bottom: 0 }]} />
               {/* Left */}
-              <View style={[styles.dimOverlay, {
-                position: 'absolute',
+              <View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute',
                 top: cropRect.y * scaleToDisplay, left: 0,
                 width: cropRect.x * scaleToDisplay, height: cropRect.height * scaleToDisplay }]} />
               {/* Right */}
-              <View style={[styles.dimOverlay, {
-                position: 'absolute',
+              <View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute',
                 top: cropRect.y * scaleToDisplay,
                 left: (cropRect.x + cropRect.width) * scaleToDisplay,
                 right: 0, height: cropRect.height * scaleToDisplay }]} />
@@ -424,17 +416,17 @@ export function CreatorCropSheet({
 
             {/* Crop rectangle border with drag/pinch handles */}
             <GestureDetector gesture={cropGesture}>
-              <Reanimated.View style={[styles.cropBorder, cropFrameStyle]}>
+              <Reanimated.View style={[styles.cropBorder, cropFrameStyle, { borderColor: colors.scrimTextPrimary }]}>
                 {/* Grid lines (rule of thirds) — animated opacity */}
-                <Reanimated.View style={[styles.gridLineV, { left: '33.33%' }, gridStyle]} />
-                <Reanimated.View style={[styles.gridLineV, { left: '66.66%' }, gridStyle]} />
-                <Reanimated.View style={[styles.gridLineH, { top: '33.33%' }, gridStyle]} />
-                <Reanimated.View style={[styles.gridLineH, { top: '66.66%' }, gridStyle]} />
+                <Reanimated.View style={[styles.gridLineV, { left: '33.33%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
+                <Reanimated.View style={[styles.gridLineV, { left: '66.66%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
+                <Reanimated.View style={[styles.gridLineH, { top: '33.33%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
+                <Reanimated.View style={[styles.gridLineH, { top: '66.66%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
                 {/* Corner handles */}
-                <View style={[styles.corner, styles.cornerTL]} />
-                <View style={[styles.corner, styles.cornerTR]} />
-                <View style={[styles.corner, styles.cornerBL]} />
-                <View style={[styles.corner, styles.cornerBR]} />
+                <View style={[styles.corner, styles.cornerTL, { borderColor: colors.scrimTextPrimary }]} />
+                <View style={[styles.corner, styles.cornerTR, { borderColor: colors.scrimTextPrimary }]} />
+                <View style={[styles.corner, styles.cornerBL, { borderColor: colors.scrimTextPrimary }]} />
+                <View style={[styles.corner, styles.cornerBR, { borderColor: colors.scrimTextPrimary }]} />
               </Reanimated.View>
             </GestureDetector>
           </View>
@@ -498,7 +490,7 @@ export function CreatorCropSheet({
         </View>
 
         {/* ── Footer — premium Cancel / Done buttons ── */}
-        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+        <View style={styles.footer}>
           <PressScale
             onPress={onClose}
             style={[styles.footerBtn, styles.footerCancel]}
@@ -535,7 +527,6 @@ export function CreatorCropSheet({
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.7)',
     zIndex: 300 },
   sheet: {
     position: 'absolute',
@@ -547,86 +538,65 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     zIndex: 301,
     elevation: 24 },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: Radius.sm },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
+    height: 44 },
   title: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
+    fontSize: 17,
+    fontFamily: Typography.family.semibold,
+    textAlign: 'center' },
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm },
+    alignItems: 'center' },
   previewArea: {
     alignItems: 'center',
-    paddingVertical: Space.md,
-    backgroundColor: '#000' },
+    paddingVertical: Space.md },
   previewFrame: {
-    overflow: 'hidden',
-    backgroundColor: '#111' },
-  dimOverlay: {
-    backgroundColor: 'rgba(0,0,0,0.55)' },
+    overflow: 'hidden' },
+  dimOverlay: {},
   cropBorder: {
     position: 'absolute',
-    borderWidth: Stroke.emphasis,
-    borderColor: '#fff' },
+    borderWidth: Stroke.emphasis },
   gridLineV: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)' },
+    width: 1 },
   gridLineH: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)' },
-  // Refined L-shaped corner brackets — Stroke.emphasis (2pt) per stroke
-  // grammar (selection/focus). Shadow for visibility over dark preview.
+    height: 1 },
+  // Minimal corner handles — 8pt visible squares, no shadows.
   corner: {
     position: 'absolute',
-    width: 20,
-    height: 20,
-    borderColor: '#fff',
-    ...Elevation.modal },
+    width: 8,
+    height: 8 },
   cornerTL: {
-    top: -1,
-    left: -1,
+    top: -4,
+    left: -4,
     borderTopWidth: Stroke.emphasis,
-    borderLeftWidth: Stroke.emphasis,
-    borderTopLeftRadius: 3 },
+    borderLeftWidth: Stroke.emphasis },
   cornerTR: {
-    top: -1,
-    right: -1,
+    top: -4,
+    right: -4,
     borderTopWidth: Stroke.emphasis,
-    borderRightWidth: Stroke.emphasis,
-    borderTopRightRadius: 3 },
+    borderRightWidth: Stroke.emphasis },
   cornerBL: {
-    bottom: -1,
-    left: -1,
+    bottom: -4,
+    left: -4,
     borderBottomWidth: Stroke.emphasis,
-    borderLeftWidth: Stroke.emphasis,
-    borderBottomLeftRadius: 3 },
+    borderLeftWidth: Stroke.emphasis },
   cornerBR: {
-    bottom: -1,
-    right: -1,
+    bottom: -4,
+    right: -4,
     borderBottomWidth: Stroke.emphasis,
-    borderRightWidth: Stroke.emphasis,
-    borderBottomRightRadius: 3 },
+    borderRightWidth: Stroke.emphasis },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -664,22 +634,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth },
+    paddingVertical: Space.sm },
   footerBtn: {
     flex: 1,
-    height: 50,
-    borderRadius: Radius.lg,
+    height: 44,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center' },
   footerCancel: {
     backgroundColor: 'transparent' },
   footerCancelText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.bodyStrong.size },
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.body.size },
   footerConfirm: {
-    // backgroundColor set inline
   },
   footerConfirmText: {
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.bodyStrong.size } });
+    fontSize: TypographyV2.body.size } });

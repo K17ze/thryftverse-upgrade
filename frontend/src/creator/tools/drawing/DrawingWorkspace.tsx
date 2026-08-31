@@ -98,13 +98,13 @@ interface DrawingWorkspaceProps {
   backgroundUri?: string;
 }
 
-const BRUSH_SEGMENTS: SegmentOption[] = [
-  { label: 'Pen', value: 'pen', icon: 'create-outline' },
-  { label: 'Marker', value: 'marker', icon: 'brush-outline' },
-  { label: 'Highlight', value: 'highlighter', icon: 'color-fill-outline' },
-  { label: 'Neon', value: 'neon', icon: 'bulb-outline' },
-  { label: 'Eraser', value: 'eraser', icon: 'backspace-outline' },
-  { label: 'Emoji', value: 'emoji', icon: 'happy-outline' },
+const BRUSH_PILLS: { label: string; value: BrushType }[] = [
+  { label: 'Pen', value: 'pen' },
+  { label: 'Marker', value: 'marker' },
+  { label: 'Highlighter', value: 'highlighter' },
+  { label: 'Neon', value: 'neon' },
+  { label: 'Eraser', value: 'eraser' },
+  { label: 'Emoji', value: 'emoji' },
 ];
 
 // ── Emoji picker catalog (Snapchat emoji-brush parity) ────────────────────
@@ -147,13 +147,9 @@ const EMOJI_MAX_SIZE = 80;
 const EMOJI_MIN_SPACING = 8;
 const EMOJI_MAX_SPACING = 80;
 
-const MIN_SIZE = 4;
-const MAX_SIZE = 40;
+const MIN_SIZE = 1;
+const MAX_SIZE = 50;
 const MAX_UNDO_LEVELS = 50;
-
-// Canvas top offset — clears the floating top bar (insets.top + bar height).
-// Canvas-specific layout value; no design token maps to this clearance.
-const CANVAS_TOP_OFFSET = 120;
 
 const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
 
@@ -264,6 +260,7 @@ const EmojiStamp = React.memo(function EmojiStamp({
   y,
   size,
   rotation }: EmojiStampProps) {
+  const { colors } = useAppTheme();
   // useFont returns null until the font is loaded. We request the system
   // emoji font; on iOS this is "Apple Color Emoji", on Android "NotoColorEmoji".
   // Skia resolves these by family name from the platform font collection.
@@ -278,7 +275,7 @@ const EmojiStamp = React.memo(function EmojiStamp({
       x={x - size * 0.4}
       y={baselineY}
       font={font}
-      color="#FFFFFF"
+      color={colors.scrimTextPrimary}
       transform={[{ rotate: rotation }, { translateX: x }, { translateY: y }]}
     />
   );
@@ -286,7 +283,25 @@ const EmojiStamp = React.memo(function EmojiStamp({
 
 const StrokePath = React.memo(function StrokePath({ stroke, keyPrefix }: StrokePathProps) {
   if (!skiaAvailable) return null;
-  if (stroke.brushType === 'eraser') return null; // eraser rendered via blend mode
+
+  const userOpacity = stroke.opacity ?? 1;
+
+  if (stroke.brushType === 'eraser') {
+    const path = smoothPathToSkia(stroke.points);
+    if (!path) return null;
+    return (
+      <SkiaPath
+        key={`${keyPrefix}_${stroke.id}`}
+        path={path}
+        style="stroke"
+        strokeCap="round"
+        strokeJoin="round"
+        strokeWidth={stroke.size * 2}
+      >
+        <SkiaPaint color="#000000" blendMode="dstOut" opacity={1} />
+      </SkiaPath>
+    );
+  }
 
   // ── Emoji brush: render emoji glyphs as text at spaced stamp points ──
   if (stroke.brushType === 'emoji') {
@@ -323,7 +338,7 @@ const StrokePath = React.memo(function StrokePath({ stroke, keyPrefix }: StrokeP
         strokeJoin="round"
         strokeWidth={stroke.size * 1.8}
       >
-        <SkiaPaint color={stroke.color} blendMode="multiply" opacity={0.3} />
+        <SkiaPaint color={stroke.color} blendMode="multiply" opacity={0.3 * userOpacity} />
       </SkiaPath>
     );
   }
@@ -332,13 +347,13 @@ const StrokePath = React.memo(function StrokePath({ stroke, keyPrefix }: StrokeP
     return (
       <Group key={`${keyPrefix}_${stroke.id}`} blendMode="plus">
         <SkiaPath path={path} style="stroke" strokeCap="round" strokeJoin="round" strokeWidth={stroke.size * 3}>
-          <SkiaPaint color={stroke.color} blendMode="plus" opacity={0.15} />
+          <SkiaPaint color={stroke.color} blendMode="plus" opacity={0.15 * userOpacity} />
         </SkiaPath>
         <SkiaPath path={path} style="stroke" strokeCap="round" strokeJoin="round" strokeWidth={stroke.size * 2}>
-          <SkiaPaint color={stroke.color} blendMode="plus" opacity={0.3} />
+          <SkiaPaint color={stroke.color} blendMode="plus" opacity={0.3 * userOpacity} />
         </SkiaPath>
         <SkiaPath path={path} style="stroke" strokeCap="round" strokeJoin="round" strokeWidth={stroke.size}>
-          <SkiaPaint color={stroke.color} blendMode="srcOver" opacity={1} />
+          <SkiaPaint color={stroke.color} blendMode="srcOver" opacity={1 * userOpacity} />
         </SkiaPath>
       </Group>
     );
@@ -354,7 +369,7 @@ const StrokePath = React.memo(function StrokePath({ stroke, keyPrefix }: StrokeP
         strokeJoin="round"
         strokeWidth={stroke.size * 1.25}
       >
-        <SkiaPaint color={stroke.color} blendMode="srcOver" opacity={0.6} />
+        <SkiaPaint color={stroke.color} blendMode="srcOver" opacity={0.6 * userOpacity} />
       </SkiaPath>
     );
   }
@@ -369,7 +384,7 @@ const StrokePath = React.memo(function StrokePath({ stroke, keyPrefix }: StrokeP
       strokeJoin="round"
       strokeWidth={stroke.size}
     >
-      <SkiaPaint color={stroke.color} blendMode="srcOver" opacity={1} />
+      <SkiaPaint color={stroke.color} blendMode="srcOver" opacity={userOpacity} />
     </SkiaPath>
   );
 });
@@ -391,6 +406,7 @@ export function DrawingWorkspace({
 
   // ── Tool state ──
   const [brushType, setBrushType] = useState<BrushType>('pen');
+  const lastDrawBrushRef = useRef<BrushType>('pen');
   // CreatorColor is the canonical color state (spec 04_COLOR_SYSTEM_ZERO_GAP §1).
   // brushColorHex is derived from it for the Skia renderer and DrawStrokeSchema.
   const [brushColorObj, setBrushColorObj] = useState<CreatorColor>(
@@ -398,8 +414,12 @@ export function DrawingWorkspace({
   );
   const brushColor = useMemo(() => toHexString(brushColorObj), [brushColorObj]);
   const [brushSize, setBrushSize] = useState<number>(8);
+  const [brushOpacity, setBrushOpacity] = useState<number>(100);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [redoStack, setRedoStack] = useState<Stroke[]>([]);
+  const [showColorPicker, setShowColorPicker] = useState<boolean>(true);
+  const [showOverflow, setShowOverflow] = useState<boolean>(false);
+  const [panelHeight, setPanelHeight] = useState<number>(0);
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
     title: string;
@@ -530,11 +550,12 @@ export function DrawingWorkspace({
         brushType,
         color: brushType === 'eraser' ? '#000000' : brushColor,
         size: brushSize,
+        opacity: brushOpacity / 100,
         points: [],
         emojiConfig: brushType === 'emoji' ? { ...emojiBrush } : undefined };
       renderTickSV.value = renderTickSV.value + 1;
     },
-    [brushType, brushColor, brushSize, emojiBrush, renderTickSV],
+    [brushType, brushColor, brushSize, brushOpacity, emojiBrush, renderTickSV],
   );
 
   const addPoint = useCallback(
@@ -610,11 +631,12 @@ export function DrawingWorkspace({
   }, []);
 
   const handleClear = useCallback(() => {
+    setShowOverflow(false);
     if (strokes.length === 0) return;
     setConfirmSheet({
       visible: true,
-      title: 'Clear canvas',
-      message: 'Remove every stroke from the canvas? This can be undone.',
+      title: 'Clear drawing?',
+      message: 'Clear all strokes? Undoable.',
       confirmLabel: 'Clear',
       variant: 'danger',
       onConfirm: () => {
@@ -648,6 +670,21 @@ export function DrawingWorkspace({
 
   const handleSelectBrush = useCallback((t: BrushType) => {
     setBrushType(t);
+    if (t !== 'eraser' && t !== 'emoji') {
+      lastDrawBrushRef.current = t;
+    }
+  }, []);
+
+  const handleBrushTool = useCallback(() => {
+    setBrushType(lastDrawBrushRef.current);
+  }, []);
+
+  const handleEraserTool = useCallback(() => {
+    setBrushType('eraser');
+  }, []);
+
+  const handleColorTool = useCallback(() => {
+    setShowColorPicker((v) => !v);
   }, []);
 
   // ── Rendered strokes (committed) + live preview ──
@@ -666,35 +703,30 @@ export function DrawingWorkspace({
 
   if (!visible) return null;
 
-  const canvasBg = isDark ? '#0A0A0A' : '#FFFFFF';
+  const brushOpacityFactor =
+    brushType === 'marker' ? 0.6 :
+    brushType === 'highlighter' ? 0.3 :
+    1;
+  const isDrawBrush = brushType !== 'eraser' && brushType !== 'emoji';
+  const previewBarHeight = Math.min(
+    brushType === 'highlighter' ? brushSize * 1.8 : brushSize,
+    16,
+  );
 
   return (
     <GestureHandlerRootView style={StyleSheet.absoluteFill}>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}>
-        {/* ── Canvas ── */}
+        {/* ── Canvas — full-bleed, no border/shadow/card ── */}
         <Reanimated.View style={[StyleSheet.absoluteFill, canvasStyle]}>
-          <View
-            style={[
-              styles.canvasFrame,
-              {
-                width: canvasWidth,
-                height: canvasHeight,
-                backgroundColor: canvasBg },
-            ]}
-          >
-            {/* ── Media background (Snapchat/Instagram pattern) ─────────── */}
-            {/* The photo/video renders as the background of the drawing
-                canvas so the user draws directly ON the media, not on a
-                blank canvas. When no backgroundUri is provided, falls back
-                to the solid canvasBg color. */}
-            {backgroundUri ? (
-              <ExpoImage
-                source={{ uri: backgroundUri }}
-                style={{ position: 'absolute', width: canvasWidth, height: canvasHeight }}
-                contentFit="cover"
-              />
-            ) : null}
+          {backgroundUri ? (
+            <ExpoImage
+              source={{ uri: backgroundUri }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+            />
+          ) : null}
 
+          <View style={styles.canvasCenter}>
             {skiaAvailable ? (
               <Canvas style={{ width: canvasWidth, height: canvasHeight }}>
                 {committedPaths}
@@ -703,17 +735,15 @@ export function DrawingWorkspace({
             ) : (
               <View style={styles.fallbackCanvas}>
                 <Text style={styles.fallbackText}>
-                  Skia unavailable — drawing preview disabled.
+                  Drawing unavailable
                 </Text>
               </View>
             )}
 
-            {/* Gesture capture surface */}
             <GestureDetector gesture={drawGesture}>
               <View
                 style={{
                   position: 'absolute',
-                  inset: 0,
                   width: canvasWidth,
                   height: canvasHeight }}
               />
@@ -721,45 +751,21 @@ export function DrawingWorkspace({
           </View>
         </Reanimated.View>
 
-        {/* ── Top bar ── */}
+        {/* ── Top bar — Close + Done only ── */}
         <View style={[styles.topBar, { paddingTop: insets.top + Space.xs }]}>
           <CreatorIconButton
             icon="close"
             onPress={onClose}
-            accessibilityLabel="Close drawing workspace"
+            accessibilityLabel="Close drawing"
             overlay
           />
-
-          <View style={styles.topActions}>
-            <CreatorIconButton
-              icon="arrow-undo"
-              disabled={strokes.length === 0}
-              onPress={handleUndo}
-              accessibilityLabel="Undo"
-              accessibilityHint="Undo the last stroke"
-            />
-            <CreatorIconButton
-              icon="arrow-redo"
-              disabled={redoStack.length === 0}
-              onPress={handleRedo}
-              accessibilityLabel="Redo"
-              accessibilityHint="Redo the last undone stroke"
-            />
-            <CreatorIconButton
-              icon="trash-outline"
-              disabled={strokes.length === 0}
-              onPress={handleClear}
-              accessibilityLabel="Clear canvas"
-              accessibilityHint="Remove all strokes from the canvas"
-            />
-            <PressScale
-              accessibilityLabel="Done — commit drawing"
-              onPress={handleDone}
-              style={[styles.doneButton, { backgroundColor: colors.brand }]}
-            >
-              <Text style={[styles.doneText, { color: colors.textInverse }]}>Done</Text>
-            </PressScale>
-          </View>
+          <PressScale
+            accessibilityLabel="Done"
+            onPress={handleDone}
+            style={[styles.doneButton, { backgroundColor: colors.brand }]}
+          >
+            <Text style={[styles.doneText, { color: colors.textInverse }]}>Done</Text>
+          </PressScale>
         </View>
 
         {/* ── Bottom tool panel ── */}
@@ -772,20 +778,101 @@ export function DrawingWorkspace({
               borderColor: colors.border },
             panelStyle,
           ]}
+          onLayout={(e) => setPanelHeight(e.nativeEvent.layout.height)}
         >
-          {/* Brush type selector — CreatorSegmentControl with sliding indicator */}
-          <CreatorSegmentControl
-            segments={BRUSH_SEGMENTS}
-            value={brushType}
-            onChange={(v) => handleSelectBrush(v as BrushType)}
-          />
+          {/* Tool bar — primary tools, 44pt targets, no labels */}
+          <View style={styles.toolBar}>
+            <CreatorIconButton
+              icon="brush-outline"
+              size={24}
+              hitTarget={Control.hit}
+              selected={isDrawBrush}
+              onPress={handleBrushTool}
+              accessibilityLabel="Brush tool"
+            />
+            <CreatorIconButton
+              icon="backspace-outline"
+              size={24}
+              hitTarget={Control.hit}
+              selected={brushType === 'eraser'}
+              onPress={handleEraserTool}
+              accessibilityLabel="Eraser tool"
+            />
+            <CreatorIconButton
+              icon="color-palette-outline"
+              size={24}
+              hitTarget={Control.hit}
+              selected={showColorPicker && brushType !== 'emoji'}
+              onPress={handleColorTool}
+              accessibilityLabel="Color picker"
+            />
+            <CreatorIconButton
+              icon="arrow-undo"
+              size={20}
+              hitTarget={Control.hit}
+              color={colors.textPrimary}
+              disabled={strokes.length === 0}
+              onPress={handleUndo}
+              accessibilityLabel="Undo"
+              accessibilityHint="Undo the last stroke"
+            />
+            <CreatorIconButton
+              icon="arrow-redo"
+              size={20}
+              hitTarget={Control.hit}
+              color={colors.textPrimary}
+              disabled={redoStack.length === 0}
+              onPress={handleRedo}
+              accessibilityLabel="Redo"
+              accessibilityHint="Redo the last undone stroke"
+            />
+            <CreatorIconButton
+              icon="ellipsis-horizontal"
+              size={24}
+              hitTarget={Control.hit}
+              selected={showOverflow}
+              onPress={() => setShowOverflow((v) => !v)}
+              accessibilityLabel="More options"
+            />
+          </View>
 
-          {/* DrawingPaletteBar — curated palettes, custom colors, palette switcher.
-              Replaces the legacy preset-swatch row with a richer, authored palette
-              surface (spec 07_MEDIA_TOOLCHAIN §Drawing). The bar manages its own
-              custom-color picker and palette sheet; the selected color flows into
-              the stroke creation logic via onColorChange/onColorCommit. */}
-          {brushType !== 'emoji' && (
+          {/* Brush picker — horizontal scroll of 36pt pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.brushPillsContent}
+          >
+            {BRUSH_PILLS.map((pill) => {
+              const selected = pill.value === brushType;
+              return (
+                <Pressable
+                  key={pill.value}
+                  onPress={() => handleSelectBrush(pill.value)}
+                  accessibilityLabel={`${pill.label} brush`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  style={[
+                    styles.brushPill,
+                    {
+                      backgroundColor: selected ? colors.surfaceAlt : 'transparent' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.brushPillText,
+                      { color: selected ? colors.textPrimary : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {pill.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* Color picker — DrawingPaletteBar with curated palettes + custom colors */}
+          {brushType !== 'emoji' && showColorPicker && (
             <DrawingPaletteBar
               color={brushColorObj}
               onColorChange={handleColorChange}
@@ -799,7 +886,6 @@ export function DrawingWorkspace({
           {/* ── Emoji brush panel (replaces color/size when emoji mode active) ── */}
           {brushType === 'emoji' ? (
             <View style={styles.emojiPanel}>
-              {/* Emoji category tabs — text-only with spring-animated underline */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -832,14 +918,12 @@ export function DrawingWorkspace({
                     </PressScale>
                   );
                 })}
-                {/* Spring-animated underline indicator (brand color, 2pt) */}
                 <Reanimated.View
                   style={[styles.emojiTabUnderline, { backgroundColor: colors.brand }, emojiUnderlineStyle]}
                   pointerEvents="none"
                 />
               </ScrollView>
 
-              {/* Emoji grid for the active category */}
               <View style={styles.emojiGrid}>
                 {(EMOJI_CATEGORIES.find((c) => c.id === activeEmojiCategory) ?? EMOJI_CATEGORIES[0]!).emojis.map(
                   (em) => {
@@ -863,7 +947,6 @@ export function DrawingWorkspace({
                 )}
               </View>
 
-              {/* Emoji size slider */}
               <View style={styles.sizeRow}>
                 <Text style={styles.emojiSizePreview}>{emojiBrush.emoji}</Text>
                 <CreatorSlider
@@ -877,7 +960,6 @@ export function DrawingWorkspace({
                 />
               </View>
 
-              {/* Stamp spacing slider */}
               <View style={styles.sizeRow}>
                 <Ionicons
                   name="resize-outline"
@@ -898,30 +980,87 @@ export function DrawingWorkspace({
             </View>
           ) : (
             <>
-              {/* Size slider — CreatorSlider (RNGH + Reanimated, 44pt touch target) */}
-              <View style={styles.sizeRow}>
-                <View style={styles.sizeDotWrap}>
-                  <View
-                    style={{
-                      width: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
-                      height: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
-                      borderRadius: Radius.full,
-                      backgroundColor: brushType === 'eraser' ? colors.border : brushColor }}
+              {/* Size slider — label + value + live stroke preview */}
+              <View style={styles.sliderRow}>
+                <View style={styles.sliderHeader}>
+                  <Text style={styles.sliderLabel}>Size</Text>
+                  <Text style={styles.sliderValue}>{brushSize}pt</Text>
+                </View>
+                <View style={styles.sliderWithPreview}>
+                  <View style={styles.strokePreview}>
+                    <View
+                      style={[
+                        styles.strokePreviewBar,
+                        {
+                          height: previewBarHeight,
+                          borderRadius: previewBarHeight / 2,
+                          backgroundColor: brushType === 'eraser' ? 'transparent' : brushColor,
+                          borderWidth: brushType === 'eraser' ? StrokeToken.standard : 0,
+                          borderColor: colors.border,
+                          opacity: brushType === 'eraser' ? 1 : (brushOpacity / 100) * brushOpacityFactor,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <CreatorSlider
+                    value={brushSize}
+                    min={MIN_SIZE}
+                    max={MAX_SIZE}
+                    step={1}
+                    onValueChange={setBrushSize}
+                    onCommit={setBrushSize}
+                    accessibilityLabel="Brush size"
                   />
                 </View>
+              </View>
+
+              {/* Opacity slider — label + value */}
+              <View style={styles.sliderRow}>
+                <View style={styles.sliderHeader}>
+                  <Text style={styles.sliderLabel}>Opacity</Text>
+                  <Text style={styles.sliderValue}>{brushOpacity}%</Text>
+                </View>
                 <CreatorSlider
-                  value={brushSize}
-                  min={MIN_SIZE}
-                  max={MAX_SIZE}
+                  value={brushOpacity}
+                  min={0}
+                  max={100}
                   step={1}
-                  onValueChange={setBrushSize}
-                  onCommit={setBrushSize}
-                  accessibilityLabel="Brush size"
+                  onValueChange={setBrushOpacity}
+                  onCommit={setBrushOpacity}
+                  accessibilityLabel="Brush opacity"
                 />
               </View>
             </>
           )}
         </Reanimated.View>
+
+        {/* ── Overflow menu — Clear ── */}
+        {showOverflow && (
+          <Pressable
+            style={styles.overflowBackdrop}
+            onPress={() => setShowOverflow(false)}
+          >
+            <View
+              style={[
+                styles.overflowMenu,
+                {
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: colors.borderSubtle,
+                  bottom: panelHeight + Space.xs },
+              ]}
+            >
+              <Pressable
+                onPress={handleClear}
+                style={styles.overflowItem}
+                accessibilityLabel="Clear drawing"
+                accessibilityRole="button"
+              >
+                <Ionicons name="trash-outline" size={20} color={colors.textPrimary} />
+                <Text style={styles.overflowItemText}>Clear</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        )}
       </View>
       <ConfirmationSheet
         visible={confirmSheet.visible}
@@ -941,12 +1080,10 @@ export function DrawingWorkspace({
 // ─────────────────────────────────────────────────────────────────────────────
 function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
-    canvasFrame: {
-      alignSelf: 'center',
-      marginTop: CANVAS_TOP_OFFSET,
-      borderRadius: Radius.md,
-      overflow: 'hidden',
-      ...Elevation.floating },
+    canvasCenter: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center' },
     fallbackCanvas: {
       flex: 1,
       alignItems: 'center',
@@ -967,10 +1104,6 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingHorizontal: Space.md,
       paddingBottom: Space.sm,
       zIndex: 10 },
-    topActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs },
     doneButton: {
       height: 50,
       paddingHorizontal: Space.lg,
@@ -991,39 +1124,81 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderTopRightRadius: Radius.xl,
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      gap: Space.sm,
-      ...Elevation.modal },
-    colorRow: {
+      gap: Space.sm },
+    // ── Tool bar ──
+    toolBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-      flexWrap: 'wrap' },
-    swatch: {
-      width: 32,
-      height: 32,
-      borderRadius: Radius.full,
-      borderWidth: StrokeToken.emphasis },
-    expandColorBtn: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.full,
-      borderWidth: StrokeToken.standard,
+      gap: Space.sm },
+    // ── Brush picker pills ──
+    brushPillsContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xxs },
+    brushPill: {
+      height: 36,
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.sm,
       alignItems: 'center',
       justifyContent: 'center' },
-    colorPickerSection: {
-      paddingTop: Space.xs },
+    brushPillText: {
+      fontFamily: FontFamily.medium,
+      fontSize: 13,
+      lineHeight: 18 },
+    // ── Sliders ──
+    sliderRow: {
+      gap: Space.xs },
+    sliderHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between' },
+    sliderLabel: {
+      fontFamily: FontFamily.regular,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textSecondary },
+    sliderValue: {
+      fontFamily: FontFamily.medium,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      color: colors.textMuted },
+    sliderWithPreview: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm },
+    strokePreview: {
+      width: 40,
+      height: 20,
+      alignItems: 'center',
+      justifyContent: 'center' },
+    strokePreviewBar: {
+      width: 40 },
     sizeRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm },
-    sizeDotWrap: {
-      width: Control.chrome,
-      height: Control.chrome,
-      borderRadius: Radius.full,
+    // ── Overflow menu ──
+    overflowBackdrop: {
+      ...StyleSheet.absoluteFill,
+      zIndex: 20 },
+    overflowMenu: {
+      position: 'absolute',
+      right: Space.md,
+      borderRadius: Radius.md,
       borderWidth: StrokeToken.standard,
-      borderColor: colors.border,
+      ...Elevation.floating },
+    overflowItem: {
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center' },
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm },
+    overflowItemText: {
+      fontFamily: FontFamily.medium,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textPrimary },
     // ── Emoji brush panel ──
     emojiPanel: {
       gap: Space.sm },
@@ -1035,7 +1210,6 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       gap: Space.md,
       paddingRight: Space.md,
       position: 'relative' },
-    // Text-only tab — no pill background; selection shown via underline only.
     emojiTab: {
       height: Control.hit,
       alignItems: 'center',
@@ -1066,11 +1240,9 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       alignItems: 'center',
       justifyContent: 'center' },
     emojiCellText: {
-      // Emoji glyph size — canvas-specific, not a type token.
       fontSize: TypographyV2.hero.size,
       lineHeight: 32 },
     emojiSizePreview: {
-      // Emoji glyph preview — canvas-specific, not a type token.
       fontSize: TypographyV2.display.size,
       width: Control.chrome,
       textAlign: 'center' } });

@@ -5,16 +5,17 @@
  * (effect node management, auto-adjust computation, effect
  * application/removal handlers) from the screen's rendering orchestration.
  *
- * The hook is self-contained: it accepts the selected layer and the
- * `updateLayer` mutation from CreatorContext, and returns all derived
- * effect state plus handlers. The screen consumes these values to render
- * the effects bottom surface and wire the AIEffectBrowserSheet.
+ * The hook is self-contained: it accepts the selected layer, the
+ * `updateLayer` mutation (history-pushing) and `updateLayerLive` mutation
+ * (no-history, for live drag previews) from CreatorContext, and returns
+ * all derived effect state plus handlers. The screen consumes these
+ * values to render the effects bottom surface and wire the AIEffectBrowserSheet.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { CreatorLayer, EffectNode } from '../composition';
-import type { AdjustNode } from '../tools/effects';
-import { computeAutoAdjust, isAutoAdjustNode } from '../tools/effects';
+import type { AdjustNode, AdjustParameterId } from '../tools/effects';
+import { ADJUST_PARAM_MAP, computeAutoAdjust, isAutoAdjustNode } from '../tools/effects';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ import { computeAutoAdjust, isAutoAdjustNode } from '../tools/effects';
 type MediaLayer = Extract<CreatorLayer, { type: 'media' }>;
 
 /**
- * The mutation signature from CreatorContext.updateLayer.
+ * The mutation signature from CreatorContext.updateLayer (history-pushing).
  */
 type UpdateLayerFn = (
   id: string,
@@ -33,11 +34,21 @@ type UpdateLayerFn = (
   label?: string,
 ) => void;
 
+/**
+ * The mutation signature from CreatorContext.updateLayerLive (no-history).
+ * Used for live drag previews that must not spam the undo stack.
+ */
+type UpdateLayerLiveFn = (
+  id: string,
+  updates: Partial<CreatorLayer>,
+) => void;
+
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export function useLookEffects(
   selectedLayer: CreatorLayer | null,
   updateLayer: UpdateLayerFn,
+  updateLayerLive: UpdateLayerLiveFn,
 ) {
   // ── Derived media layer & effect state ────────────────────────────
   const selectedMediaLayer: MediaLayer | null =
@@ -59,6 +70,18 @@ export function useLookEffects(
     return aiNode?.type === 'filter' ? aiNode.id.slice(3) : null;
   }, [currentEffects]);
 
+  // ── Current filter intensity (from the effect stack) ──────────────
+  // Derived from the filter node's `amount`. A local `liveFilterAmount`
+  // overrides this during slider drag for immediate UI response; it
+  // resets to null on commit so the derived value re-syncs.
+  const currentFilterAmount = useMemo(() => {
+    const filterNode = currentEffects.find((n) => n.type === 'filter');
+    return filterNode?.type === 'filter' ? filterNode.amount : 1;
+  }, [currentEffects]);
+
+  const [liveFilterAmount, setLiveFilterAmount] = useState<number | null>(null);
+  const filterAmount = liveFilterAmount ?? currentFilterAmount;
+
   // ── Current manual adjustments ────────────────────────────────────
   const currentAdjustments = useMemo<Partial<Omit<AdjustNode, 'type'>>>(() => {
     const adjustNode = currentEffects.find((n) => n.type === 'adjust');
@@ -71,6 +94,7 @@ export function useLookEffects(
   const handleEffectFilterSelect = useCallback(
     (presetId: string) => {
       if (!selectedMediaLayer) return;
+      setLiveFilterAmount(null);
       const newEffects: EffectNode[] = [
         ...currentEffects.filter((n) => n.type !== 'filter'),
         { type: 'filter', id: presetId, amount: 1 },
@@ -87,24 +111,101 @@ export function useLookEffects(
     [selectedMediaLayer, currentEffects, updateLayer],
   );
 
-  // ── Adjust change handler ─────────────────────────────────────────
+  // ── Filter intensity handlers ─────────────────────────────────────
+  // Live: updates the filter node's `amount` without pushing to history
+  // so the slider drag doesn't spam the undo stack. Commit: pushes one
+  // history entry on finger-up.
+  const handleEffectIntensityChange = useCallback(
+    (value: number) => {
+      if (!selectedMediaLayer) return;
+      setLiveFilterAmount(value);
+      const newEffects: EffectNode[] = currentEffects.map((n) =>
+        n.type === 'filter' ? { ...n, amount: value } : n,
+      );
+      updateLayerLive(selectedMediaLayer.id, {
+        type: 'media',
+        payload: { ...selectedMediaLayer.payload, effects: newEffects },
+      });
+    },
+    [selectedMediaLayer, currentEffects, updateLayerLive],
+  );
+
+  const handleEffectIntensityCommit = useCallback(
+    (value: number) => {
+      if (!selectedMediaLayer) return;
+      setLiveFilterAmount(null);
+      const newEffects: EffectNode[] = currentEffects.map((n) =>
+        n.type === 'filter' ? { ...n, amount: value } : n,
+      );
+      updateLayer(
+        selectedMediaLayer.id,
+        {
+          type: 'media',
+          payload: { ...selectedMediaLayer.payload, effects: newEffects },
+        },
+        'Adjust filter intensity',
+      );
+    },
+    [selectedMediaLayer, currentEffects, updateLayer],
+  );
+
+  // ── Adjust change handler (live, no history) ──────────────────────
+  // Builds a typed AdjustNode explicitly — no Record<string, unknown>
+  // cast. The parameter is validated against the known adjust parameter
+  // map before mutation. Uses updateLayerLive so slider drags don't
+  // create per-frame history entries.
   const handleEffectAdjustChange = useCallback(
     (parameter: string, value: number) => {
       if (!selectedMediaLayer) return;
+      if (!(parameter in ADJUST_PARAM_MAP)) return;
       const existingAdjust = currentEffects.find((n) => n.type === 'adjust');
-      const base = existingAdjust?.type === 'adjust'
+      const base: AdjustNode = existingAdjust?.type === 'adjust'
         ? { ...existingAdjust }
-        : { type: 'adjust' as const };
-      (base as Record<string, unknown>)[parameter] = value;
-      const newAdjust = base as Extract<EffectNode, { type: 'adjust' }>;
+        : { type: 'adjust' };
+      const newAdjust: AdjustNode = {
+        ...base,
+        [parameter as AdjustParameterId]: value,
+      };
       const newEffects: EffectNode[] = [
         ...currentEffects.filter((n) => n.type !== 'adjust'),
         newAdjust,
       ];
-      updateLayer(selectedMediaLayer.id, {
+      updateLayerLive(selectedMediaLayer.id, {
         type: 'media',
         payload: { ...selectedMediaLayer.payload, effects: newEffects },
       });
+    },
+    [selectedMediaLayer, currentEffects, updateLayerLive],
+  );
+
+  // ── Adjust commit handler (one history entry on finger-up) ────────
+  // Batches a live adjustment drag into a single undo step. Re-reads
+  // the current effect stack (which already reflects the live updates)
+  // and pushes one labelled history entry.
+  const handleEffectAdjustCommit = useCallback(
+    (parameter: string, value: number) => {
+      if (!selectedMediaLayer) return;
+      if (!(parameter in ADJUST_PARAM_MAP)) return;
+      const existingAdjust = currentEffects.find((n) => n.type === 'adjust');
+      const base: AdjustNode = existingAdjust?.type === 'adjust'
+        ? { ...existingAdjust }
+        : { type: 'adjust' };
+      const newAdjust: AdjustNode = {
+        ...base,
+        [parameter as AdjustParameterId]: value,
+      };
+      const newEffects: EffectNode[] = [
+        ...currentEffects.filter((n) => n.type !== 'adjust'),
+        newAdjust,
+      ];
+      updateLayer(
+        selectedMediaLayer.id,
+        {
+          type: 'media',
+          payload: { ...selectedMediaLayer.payload, effects: newEffects },
+        },
+        'Adjust photo',
+      );
     },
     [selectedMediaLayer, currentEffects, updateLayer],
   );
@@ -170,6 +271,7 @@ export function useLookEffects(
   const handleAIEffectApply = useCallback(
     (effectId: string, intensity: number) => {
       if (!selectedMediaLayer) return;
+      setLiveFilterAmount(null);
       const newEffects: EffectNode[] = [
         ...currentEffects.filter(
           (n) => n.type !== 'filter' || !n.id.startsWith('ai:'),
@@ -213,8 +315,12 @@ export function useLookEffects(
     selectedFilterId,
     activeAIEffectId,
     currentAdjustments,
+    filterAmount,
     handleEffectFilterSelect,
+    handleEffectIntensityChange,
+    handleEffectIntensityCommit,
     handleEffectAdjustChange,
+    handleEffectAdjustCommit,
     handleEffectReset,
     autoAdjustActive,
     handleAutoAdjust,

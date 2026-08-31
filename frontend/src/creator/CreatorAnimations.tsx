@@ -2,8 +2,9 @@
  * CreatorAnimations — shared animated primitives for the creator studio.
  *
  * PressScale: wraps any Pressable with spring-based press feedback (scale 0.97–0.98).
- * SheetContainer: animated bottom-sheet wrapper with slide-up spring, backdrop fade,
- *   16px top corner radius, and 32px grabber handle.
+ * SheetContainer: animated bottom-sheet wrapper with slide-up timing entrance,
+ *   velocity-aware swipe-to-dismiss, backdrop fade, 24px top corner radius,
+ *   solid elevated surface + 1pt hairline, and an optional title + Done header.
  *
  * Motion specs follow AGENTS.md §17:
  *   - 160–220ms for transitions
@@ -12,9 +13,8 @@
  *   - reduced-motion fallback: instant
  */
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Pressable, PressableProps, ViewStyle, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, Pressable, PressableProps, ViewStyle, useWindowDimensions, Text } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { BlurView } from 'expo-blur';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -25,7 +25,8 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, EditorRadius, EditorMaterial } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { Motion } from '../theme/motionTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 
@@ -90,10 +91,13 @@ export function PressScale({
 
 // ── SheetContainer ─────────────────────────────────────────────────
 // Animated bottom sheet with:
-//   - 16px top corner radius
-//   - 32px grabber handle
-//   - slide-up spring (damping 28, stiffness 380)
-//   - backdrop fade (160ms)
+//   - 24px top corner radius (Radius.xxl)
+//   - 36x5 grabber handle in a 44pt accessible target
+//   - slide-up entrance (220ms ease-out, no spring bounce)
+//   - velocity-aware swipe-to-dismiss (off-screen target = window height)
+//   - backdrop fade (180ms)
+//   - solid surfaceElevated background + 1pt top hairline (no glass/blur)
+//   - optional title + Done header
 //   - reduced-motion: instant
 
 interface SheetContainerProps {
@@ -109,6 +113,11 @@ interface SheetContainerProps {
    * Default false keeps the existing full-sheet + backdrop behaviour.
    */
   compact?: boolean;
+  /** Optional title shown in a header row with a Done button. When omitted,
+   *  no header is rendered (the caller provides its own header/content). */
+  title?: string;
+  /** Accessibility hint for the Done button. Defaults to "Closes this panel". */
+  doneHint?: string;
 }
 
 export function SheetContainer({
@@ -117,6 +126,8 @@ export function SheetContainer({
   children,
   maxHeight,
   compact = false,
+  title,
+  doneHint = 'Closes this panel',
 }: SheetContainerProps) {
   const effectiveMaxHeight = maxHeight ?? (compact ? 0.42 : 0.85);
   const { colors } = useAppTheme();
@@ -145,8 +156,8 @@ export function SheetContainer({
         translateY.value = 0;
         backdropOpacity.value = 1;
       } else {
-        // Flagship sheet spring — physics-based settle, zero float.
-        translateY.value = withSpring(0, Motion.spring.sheetFlagship);
+        // Sheet entrance — 220ms ease-out timing, no spring bounce.
+        translateY.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
         backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
       }
     } else if (mountedRef.current) {
@@ -163,10 +174,14 @@ export function SheetContainer({
 
   // ── Swipe-down-to-dismiss ──────────────────────────────────────────
   // The sheet follows the finger (translateY) during the pan. On release,
-  // if the user has dragged past a threshold (100pt or 25% of sheet height),
-  // the sheet dismisses via onClose(). Otherwise it springs back to 0.
-  // Reduced motion: instant dismiss on any downward swipe.
+  // the decision to dismiss vs snap back is velocity-aware: a fast downward
+  // flick dismisses even below the distance threshold, and a slow drag must
+  // cross the threshold. The off-screen target is the full window height so
+  // the sheet fully exits regardless of its own height. Reduced motion:
+  // instant dismiss on any downward swipe.
   const DISMISS_THRESHOLD = Math.max(100, sheetHeightRef.current * 0.25);
+  const DISMISS_VELOCITY = 500;
+  const offScreenTarget = windowHeight;
 
   const panGesture = Gesture.Pan()
     .activeOffsetY(10)
@@ -177,15 +192,15 @@ export function SheetContainer({
     })
     .onEnd((e) => {
       if (isDismissingRef.current) return;
-      const dragged = e.translationY;
-      if (dragged > DISMISS_THRESHOLD) {
+      const shouldDismiss = e.translationY > DISMISS_THRESHOLD || e.velocityY > DISMISS_VELOCITY;
+      if (shouldDismiss) {
         isDismissingRef.current = true;
         if (reduceMotion) {
-          translateY.value = 1000;
+          translateY.value = offScreenTarget;
           backdropOpacity.value = 0;
           runOnJS(onClose)();
         } else {
-          translateY.value = withTiming(1000, { duration: Motion.duration.slow, easing: Easing.in(Easing.ease) });
+          translateY.value = withTiming(offScreenTarget, { duration: Motion.duration.slow, easing: Easing.in(Easing.ease) });
           backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
           // Fire onClose after the dismiss animation completes.
           setTimeout(() => {
@@ -193,10 +208,10 @@ export function SheetContainer({
           }, 280);
         }
       } else {
-        // Spring back to rest.
+        // Settle back to rest — 200ms ease-out, no spring overshoot.
         translateY.value = reduceMotion
           ? withTiming(0, { duration: 0 })
-          : withSpring(0, Motion.spring.glide);
+          : withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
       }
     });
 
@@ -221,20 +236,19 @@ export function SheetContainer({
       )}
 
       {/* Sheet — swipe-down-to-dismiss via GestureDetector.
-          Glass material: BlurView provides the translucent backdrop blur,
-          the overlay color adds legibility/depth, and the hairline gives
-          the glass edge definition. This matches the 2026 flagship editor
-          sheet grammar (IG/Snapchat translucent dark sheets over media). */}
+          Solid elevated surface with a 1pt top hairline. No glass/blur —
+          per AGENTS.md §4, glass effects are an AI tell on content chrome. */}
       <GestureDetector gesture={panGesture}>
         <Reanimated.View
           style={[
             sheetStyles.sheet,
             {
-              borderTopLeftRadius: EditorRadius.sheet,
-              borderTopRightRadius: EditorRadius.sheet,
+              borderTopLeftRadius: Radius.xxl,
+              borderTopRightRadius: Radius.xxl,
               maxHeight: `${effectiveMaxHeight * 100}%`,
               paddingBottom: Math.max(insets.bottom, Space.lg),
               overflow: 'hidden',
+              backgroundColor: colors.surfaceElevated,
             },
             sheetStyle,
           ]}
@@ -242,20 +256,33 @@ export function SheetContainer({
             sheetHeightRef.current = e.nativeEvent.layout.height;
           }}
         >
-          {/* Glass blur layer */}
-          <BlurView
-            intensity={EditorMaterial.sheet.blurIntensity}
-            tint={EditorMaterial.sheet.tint}
-            style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]}
-          />
-          {/* Overlay tint for legibility */}
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-          {/* Hairline top edge */}
-          <View style={[sheetStyles.hairlineTop, { backgroundColor: EditorMaterial.sheet.hairline }]} />
-          {/* Grabber handle — primary gesture anchor (whole sheet is pannable) */}
-          <View style={sheetStyles.handleContainer}>
-            <View style={[sheetStyles.handle, { backgroundColor: 'rgba(255,255,255,0.30)' }]} />
+          {/* 1pt top hairline — gives the solid sheet edge definition */}
+          <View style={[sheetStyles.hairlineTop, { backgroundColor: colors.border }]} />
+          {/* Grabber handle — primary gesture anchor (whole sheet is pannable).
+              Wrapped in a 44pt accessible target per AGENTS.md §4. */}
+          <View
+            style={sheetStyles.handleContainer}
+            accessibilityRole="adjustable"
+            accessibilityLabel="Drag down to close"
+          >
+            <View style={[sheetStyles.handle, { backgroundColor: colors.textMuted }]} />
           </View>
+          {/* Optional title + Done header (used by GlassSheet and any
+              caller that passes the `title` prop). */}
+          {title && (
+            <View style={[sheetStyles.header, { borderBottomColor: colors.border }]}>
+              <Text style={[sheetStyles.title, { color: colors.textPrimary }]}>{title}</Text>
+              <PressScale
+                onPress={onClose}
+                style={sheetStyles.doneBtn}
+                accessibilityLabel="Done"
+                accessibilityHint={doneHint}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={[sheetStyles.doneText, { color: colors.brand }]}>Done</Text>
+              </PressScale>
+            </View>
+          )}
           {children}
         </Reanimated.View>
       </GestureDetector>
@@ -284,11 +311,37 @@ const sheetStyles = StyleSheet.create({
   },
   handleContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+    minHeight: 44,
     paddingVertical: Space.xs,
   },
   handle: {
     width: 36,
     height: 5,
     borderRadius: 2.5,
+    opacity: 0.3,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  title: {
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.bodyStrong.size,
+  },
+  doneBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  doneText: {
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.body.size,
   },
 });

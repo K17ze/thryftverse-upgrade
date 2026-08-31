@@ -17,6 +17,7 @@ import { ConversationManagementRow } from '../components/chat/ConversationManage
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import type { Conversation } from '../domain';
 import { deleteConversationOnApi, unarchiveConversationOnApi } from '../services/chatApi';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -24,6 +25,7 @@ export default function ArchivedConversationsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const conversations = useStore((s) => s.conversations);
   const conversationsLoaded = useStore((s) => s.conversationsLoaded);
   const archivedIds = useStore((s) => s.archivedConversationIds);
@@ -50,27 +52,27 @@ export default function ArchivedConversationsScreen() {
     try {
       await unarchiveConversationOnApi(id);
       toggleArchived(id);
-      show('Conversation restored to inbox', 'success');
+      show(t('archived.restored'), 'success');
     } catch {
-      show('Could not restore this conversation. Check your connection and try again.', 'error');
+      show(t('archived.restoreError'), 'error');
     }
   };
 
   const handleDelete = (id: string, title: string) => {
     setConfirmSheet({
       visible: true,
-      title: 'Remove from inbox?',
-      message: `"${title}" will be removed from your archived conversations.`,
-      confirmLabel: 'Remove',
+      title: t('archived.removeConfirmationTitle'),
+      message: t('archived.removeConfirmationMessage', { title }),
+      confirmLabel: t('common.remove'),
       variant: 'danger',
       onConfirm: async () => {
         setConfirmSheet((s) => ({ ...s, visible: false }));
         try {
           await deleteConversationOnApi(id, 'me');
           deleteConversation(id);
-          show('Conversation removed', 'info');
+          show(t('archived.removed'), 'info');
         } catch {
-          show('Could not delete this conversation. Check your connection and try again.', 'error');
+          show(t('archived.removeError'), 'error');
         }
       } });
   };
@@ -79,9 +81,9 @@ export default function ArchivedConversationsScreen() {
     if (archivedConversations.length === 0) return;
     setConfirmSheet({
       visible: true,
-      title: 'Clear all archived?',
-      message: 'All archived conversations will be permanently deleted.',
-      confirmLabel: 'Clear all',
+      title: t('archived.clearAllConfirmationTitle'),
+      message: t('archived.clearAllConfirmationMessage'),
+      confirmLabel: t('common.clearAll'),
       variant: 'danger',
       onConfirm: async () => {
         setConfirmSheet((s) => ({ ...s, visible: false }));
@@ -97,9 +99,9 @@ export default function ArchivedConversationsScreen() {
           })
         );
         if (failedCount > 0) {
-          show(`${archivedConversations.length - failedCount} deleted · ${failedCount} failed`, 'error');
+          show(t('archived.clearError', { deleted: archivedConversations.length - failedCount, failed: failedCount }), 'error');
         } else {
-          show('Archive cleared', 'info');
+          show(t('archived.cleared'), 'info');
         }
       } });
   };
@@ -112,7 +114,7 @@ export default function ArchivedConversationsScreen() {
           currentUserId={currentUser?.id}
           onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
           actionIcon="arrow-undo-outline"
-          actionLabel="Restore"
+          actionLabel={t('common.restore')}
           onAction={() => handleRestore(convo.id)}
           secondaryActionIcon="trash-outline"
           secondaryActionLabel="Delete"
@@ -142,8 +144,8 @@ export default function ArchivedConversationsScreen() {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Archived conversations"
-          subtitle="Restored conversations return to your inbox"
+          title={t('archived.title')}
+          subtitle={t('archived.subtitle')}
           onBack={() => navigation.goBack()}
           rightAction={
             archivedConversations.length > 0 ? (
@@ -151,10 +153,10 @@ export default function ArchivedConversationsScreen() {
                 onPress={handleClearAll}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 hapticFeedback="medium"
-                accessibilityLabel="Clear all archived conversations"
+                accessibilityLabel={t('archived.clearAllConversations')}
                 accessibilityRole="button"
               >
-                <Text style={styles.clearAllBtn}>Clear all</Text>
+                <Text style={styles.clearAllBtn}>{t('common.clearAll')}</Text>
               </AnimatedPressable>
             ) : undefined
           }
@@ -168,8 +170,8 @@ export default function ArchivedConversationsScreen() {
       ) : archivedConversations.length === 0 ? (
         <EmptyState
           icon="archive-outline"
-          title="No archived conversations"
-          subtitle="Conversations you archive stay out of your inbox without being deleted."
+          title={t('archived.noArchived')}
+          subtitle={t('archived.noArchivedSubtitle')}
           ctaLabel="Browse conversations"
           onCtaPress={() => navigation.goBack()}
         />

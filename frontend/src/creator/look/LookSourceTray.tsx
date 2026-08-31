@@ -202,13 +202,13 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
           <View style={[styles.onCanvasDot, { backgroundColor: colors.brand }]} />
         )}
         <Text
-          style={[styles.itemTitle, { color: onCanvas ? colors.textMuted : colors.textPrimary }]}
+          style={[styles.itemTitle, { color: onCanvas ? colors.textMuted : colors.textSecondary }]}
           numberOfLines={1}
         >
           {item.title}
         </Text>
         {item.priceGbp !== undefined && (
-          <Text style={[styles.itemPrice, { color: onCanvas ? colors.textMuted : colors.brand }]}>
+          <Text style={[styles.itemPrice, { color: onCanvas ? colors.textMuted : colors.textPrimary }]}>
             {currencySymbol}{item.priceGbp.toFixed(0)}
           </Text>
         )}
@@ -495,8 +495,7 @@ export function LookSourceTray({
             StyleSheet.absoluteFill,
             styles.scrim,
             {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.borderSubtle },
+              backgroundColor: colors.surface },
           ]}
           pointerEvents="none"
         />
@@ -507,8 +506,7 @@ export function LookSourceTray({
             StyleSheet.absoluteFill,
             styles.sheetBg,
             {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border },
+              backgroundColor: colors.surface },
             sheetBgAnimStyle,
           ]}
           pointerEvents="none"
@@ -522,12 +520,12 @@ export function LookSourceTray({
           accessibilityHint="Toggles the source tray visibility"
           accessibilityRole="button"
         >
-          <Ionicons name="bag-outline" size={IconGrammar.standard} color={colors.textSecondary} />
+          <Ionicons name="bag-outline" size={24} color={colors.textSecondary} />
           <Text style={[styles.peekLabel, { color: colors.textPrimary }]}>
             Items
           </Text>
           <Reanimated.View style={chevronAnimStyle}>
-            <Ionicons name="chevron-up" size={IconGrammar.standard} color={colors.textSecondary} />
+            <Ionicons name="chevron-up" size={24} color={colors.textSecondary} />
           </Reanimated.View>
         </Pressable>
 
@@ -556,7 +554,7 @@ export function LookSourceTray({
                 >
                   <Ionicons
                     name={tab.icon}
-                    size={IconGrammar.metadata}
+                    size={24}
                     color={isActive ? colors.brand : colors.textSecondary}
                   />
                   <Text
@@ -717,16 +715,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: Radius.xl },
   // ── Scrim — always visible, subtle so peek bar is readable ──
   scrim: {
-    opacity: 0.5,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl },
+    opacity: 0.5 },
   // ── Sheet background — fades in when expanded ──
   sheetBg: {
-    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    ...Elevation.floating },
+    borderTopRightRadius: Radius.xl },
   // ── Peek bar (48pt — always visible) ──
   peekBar: {
     height: PEEK_HEIGHT,
@@ -737,8 +730,8 @@ const styles = StyleSheet.create({
   peekBarPressed: {
     opacity: 0.6 },
   peekLabel: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.body.size },
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size },
   // ── Expanded content ──
   content: {
     height: CONTENT_HEIGHT },
@@ -746,7 +739,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     height: 44 },
   tabBtn: {
@@ -798,17 +791,16 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     alignItems: 'center',
     paddingVertical: Space.sm },
-  // ── Item card — flat, no card-on-card. Image + title + price. ──
-  // 44pt touch target via the GestureDetector wrapper.
+  // ── Item card — media-first gallery, no card background or border ──
+  // Image is the dominant element; name + price sit below as flat text.
   itemCard: {
-    width: 76,
+    width: 88,
     alignItems: 'center',
-    gap: 2 },
+    gap: Space.xs },
   itemImage: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.05)' },
+    width: 88,
+    height: 88,
+    borderRadius: Radius.md },
   // ── Dedup indicator — subtle dot on items already on canvas ──
   onCanvasDot: {
     position: 'absolute',
@@ -820,19 +812,24 @@ const styles = StyleSheet.create({
     borderWidth: Stroke.standard,
     borderColor: '#fff' },
   itemImagePlaceholder: {
-    width: 72,
-    height: 72,
+    width: 88,
+    height: 88,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center' },
   itemTitle: {
-    fontFamily: Typography.family.medium,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontWeight: TypographyV2.meta.weight as any,
     marginTop: 2,
     textAlign: 'center' },
   itemPrice: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.meta.size },
+    fontFamily: TypographyV2.numericMeta.fontFamily,
+    fontSize: TypographyV2.numericMeta.size,
+    lineHeight: TypographyV2.numericMeta.lineHeight,
+    fontWeight: TypographyV2.numericMeta.weight as any,
+    fontVariant: ['tabular-nums'] },
   // ── Floating drag preview ──
   dragPreview: {
     position: 'absolute',

@@ -221,7 +221,7 @@ export function StickerPinOverlay({
           />
           {/* Center dot */}
           <View
-            style={[crosshairStyles.dot, { backgroundColor: accent }]}
+            style={[crosshairStyles.dot, { backgroundColor: accent, borderColor: colors.scrimTextPrimary }]}
             pointerEvents="none"
           />
           {/* 44pt drag handle — transparent so the crosshair reads as the
@@ -275,7 +275,6 @@ const crosshairStyles = StyleSheet.create({
     height: 6,
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.85)',
   } as ViewStyle,
   handle: {
     // Transparent 44pt target — visible chrome is the crosshair above.

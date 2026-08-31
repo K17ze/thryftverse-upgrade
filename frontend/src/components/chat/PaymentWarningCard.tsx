@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 export interface PaymentWarningCardProps {
   /** Whether this warning has been dismissed by the user */
@@ -28,6 +29,7 @@ export interface PaymentWarningCardProps {
  */
 export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: PaymentWarningCardProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   if (dismissed) return null;
 
   return (
@@ -35,11 +37,10 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
       <Ionicons name="warning" size={20} color={colors.danger} />
       <View style={styles.textCol}>
         <Text style={[styles.title, { color: colors.danger }]}>
-          Keep payments on ThryftVerse
+          {t('safety.title')}
         </Text>
         <Text style={[styles.body, { color: colors.textSecondary }]}>
-          Off-platform payments aren't covered by Buyer Protection. If this is a
-          legitimate transaction, complete it in the app to stay protected.
+          {t('safety.body')}
         </Text>
         {onReport && (
           <Pressable
@@ -47,10 +48,10 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
             onPress={onReport}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
-            accessibilityLabel="Report this conversation"
+            accessibilityLabel={t('safety.reportConversation')}
           >
             <Ionicons name="flag-outline" size={12} color={colors.danger} />
-            <Text style={[styles.reportBtnText, { color: colors.danger }]}>Report</Text>
+            <Text style={[styles.reportBtnText, { color: colors.danger }]}>{t('common.report')}</Text>
           </Pressable>
         )}
       </View>
@@ -59,7 +60,7 @@ export function PaymentWarningCard({ dismissed, onDismiss, onReport, isMe }: Pay
         onPress={onDismiss}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss warning"
+        accessibilityLabel={t('safety.dismiss')}
       >
         <Ionicons name="close" size={14} color={colors.textMuted} />
       </Pressable>

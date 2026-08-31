@@ -27,8 +27,9 @@ export interface RecordingRingProps {
 /**
  * Recording ring — SVG circle that fills over the recording duration.
  *
- * Wraps the shutter button. A background track (rgba 0.2) sits behind a
- * red progress arc whose `strokeDashoffset` is driven by `progress`.
+ * Wraps the shutter button. A background track (scrimTextTertiary) sits
+ * behind a danger-colored progress arc whose `strokeDashoffset` is driven
+ * by `progress`.
  * An optional `scale` shared value applies a pulse spring on start.
  */
 export function RecordingRing({
@@ -72,12 +73,12 @@ export function RecordingRing({
       pointerEvents="none"
     >
       <Svg width={size} height={size}>
-        {/* Background track — camera overlay, always high contrast on dark preview */}
+        {/* Background track — scrim text tertiary for subtle ring on dark preview */}
         <SvgCircle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(255,255,255,0.2)"
+          stroke={colors.scrimTextTertiary}
           strokeWidth={stroke}
           fill="none"
         />

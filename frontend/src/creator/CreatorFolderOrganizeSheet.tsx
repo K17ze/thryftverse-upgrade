@@ -195,7 +195,6 @@ export function CreatorFolderOrganizeSheet({
       >
         {/* Header */}
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>Organize Folders</Text>
           <Pressable
             onPress={onClose}
             style={styles.closeBtn}
@@ -203,14 +202,11 @@ export function CreatorFolderOrganizeSheet({
             accessibilityRole="button"
             hitSlop={8}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} />
           </Pressable>
+          <Text style={styles.sheetTitle}>Folders</Text>
+          <View style={styles.closeBtn} />
         </View>
-
-        <Text style={styles.sheetHint}>
-          Long-press a folder to rename or delete it. Tap a folder, then tap
-          drafts to assign them.
-        </Text>
 
         {manageMode.kind === 'none' ? (
           <>
@@ -222,9 +218,8 @@ export function CreatorFolderOrganizeSheet({
               accessibilityRole="button"
               scale={0.97}
             >
-              <Ionicons name="folder-open-outline" size={IconGrammar.standard} color={colors.brand} />
+              <Ionicons name="add" size={20} color={colors.brand} />
               <Text style={styles.newFolderText}>New Folder</Text>
-              <Ionicons name="add" size={IconGrammar.standard} color={colors.brand} />
             </PressScale>
 
             {/* Folders list */}
@@ -233,9 +228,8 @@ export function CreatorFolderOrganizeSheet({
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
             >
-              <Text style={styles.sectionLabel}>FOLDERS</Text>
               {folders.length === 0 ? (
-                <Text style={styles.emptyHint}>No folders yet. Create one above.</Text>
+                <Text style={styles.emptyHint}>No folders yet</Text>
               ) : (
                 folders.map((folder) => {
                   const isSelected = selectedFolderId === folder.id;
@@ -251,14 +245,9 @@ export function CreatorFolderOrganizeSheet({
                         pressed && { opacity: 0.7 },
                       ]}
                       accessibilityLabel={`Folder ${folder.name}, ${folder.draftCount ?? 0} drafts`}
-                      accessibilityHint="Tap to select for assigning drafts. Long-press to rename or delete."
+                      accessibilityHint="Select to assign. Long-press to manage."
                       accessibilityRole="button"
                     >
-                      <Ionicons
-                        name={isSelected ? 'folder' : 'folder-outline'}
-                        size={IconGrammar.standard}
-                        color={isSelected ? colors.brand : colors.textSecondary}
-                      />
                       <View style={styles.folderInfo}>
                         <Text
                           style={[
@@ -282,7 +271,7 @@ export function CreatorFolderOrganizeSheet({
                             accessibilityRole="button"
                             hitSlop={8}
                           >
-                            <Ionicons name="create-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
+                            <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
                           </Pressable>
                           <Pressable
                             onPress={() => handleStartDelete(folder)}
@@ -291,7 +280,7 @@ export function CreatorFolderOrganizeSheet({
                             accessibilityRole="button"
                             hitSlop={8}
                           >
-                            <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
+                            <Ionicons name="trash-outline" size={18} color={colors.danger} />
                           </Pressable>
                         </View>
                       )}
@@ -305,7 +294,7 @@ export function CreatorFolderOrganizeSheet({
                 <View style={styles.assignSection}>
                   <View style={styles.assignHeader}>
                     <Text style={styles.assignTitle} numberOfLines={1}>
-                      Assign to &ldquo;{targetFolder.name}&rdquo;
+                      Move to &ldquo;{targetFolder.name}&rdquo;
                     </Text>
                     {selectedDraftIds.size > 0 && (
                       <Pressable
@@ -323,9 +312,6 @@ export function CreatorFolderOrganizeSheet({
                       </Pressable>
                     )}
                   </View>
-                  <Text style={styles.assignHint}>
-                    Tap drafts to select, then confirm.
-                  </Text>
                   {drafts.map((draft) => {
                     const isSelected = selectedDraftIds.has(draft.id);
                     const inThisFolder = draft.folderId === targetFolder.id;
@@ -388,7 +374,6 @@ export function CreatorFolderOrganizeSheet({
               {/* Quick-move section when no folder is selected */}
               {!targetFolder && drafts.length > 0 && (
                 <View style={styles.quickMoveSection}>
-                  <Text style={styles.sectionLabel}>DRAFTS</Text>
                   {drafts.map((draft) => (
                     <View key={draft.id} style={styles.quickMoveRow}>
                       <View style={styles.quickMoveInfo}>
@@ -467,8 +452,7 @@ export function CreatorFolderOrganizeSheet({
               <>
                 <Text style={styles.manageTitle}>Delete folder?</Text>
                 <Text style={styles.manageBody}>
-                  &ldquo;{manageMode.folder.name}&rdquo; will be removed. Its drafts
-                  will remain in All Projects.
+                  &ldquo;{manageMode.folder.name}&rdquo; will be removed. Drafts stay unfiled.
                 </Text>
                 <Pressable
                   onPress={handleConfirmManage}
@@ -556,31 +540,24 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm },
+      height: 44 },
     sheetTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.sectionTitle.size,
-      color: colors.textPrimary },
+      fontSize: 17,
+      color: colors.textPrimary,
+      textAlign: 'center' },
     closeBtn: {
-      width: Control.hit,
-      height: Control.hit,
+      width: 44,
+      height: 44,
       justifyContent: 'center',
       alignItems: 'center' },
-    sheetHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.meta.size,
-      color: colors.textSecondary,
-      marginBottom: Space.md,
-      lineHeight: TypographyV2.meta.lineHeight },
     newFolderBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.sm,
-      paddingVertical: Space.md,
-      borderRadius: Radius.lg,
-      backgroundColor: colors.brandSubtle,
-      marginBottom: Space.md },
+      gap: Space.xs,
+      paddingVertical: Space.smMd,
+      marginBottom: Space.sm },
     newFolderText: {
       fontFamily: Typography.family.semibold,
       fontSize: TypographyV2.bodyStrong.size,
@@ -589,13 +566,6 @@ function createStyles(colors: ThemeColors) {
       flex: 1 },
     scrollContent: {
       paddingBottom: Space.lg },
-    sectionLabel: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.label.size,
-      letterSpacing: TypographyV2.label.letterSpacing,
-      color: colors.textMuted,
-      marginTop: Space.sm,
-      marginBottom: Space.xs },
     emptyHint: {
       fontFamily: Typography.family.regular,
       fontSize: TypographyV2.body.size,
@@ -610,7 +580,7 @@ function createStyles(colors: ThemeColors) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderSubtle },
     folderRowSelected: {
-      backgroundColor: 'transparent' },
+      backgroundColor: colors.brandSubtle },
     folderInfo: {
       flex: 1,
       gap: 2 },
@@ -656,12 +626,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       fontSize: TypographyV2.body.size,
       color: colors.textInverse },
-    assignHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.meta.size,
-      color: colors.textSecondary,
-      marginTop: Space.xs,
-      marginBottom: Space.sm },
     draftPickRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -671,7 +635,7 @@ function createStyles(colors: ThemeColors) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderSubtle },
     draftPickRowSelected: {
-      backgroundColor: 'transparent' },
+      backgroundColor: colors.brandSubtle },
     draftPickInfo: {
       flex: 1,
       gap: 2 },

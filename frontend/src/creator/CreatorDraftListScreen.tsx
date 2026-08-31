@@ -30,7 +30,6 @@ import { createStableId, makeStableId } from '../utils/createStableId';
 import { formatRelativeTime } from '../utils/dateFormat';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SwipeableRow } from '../components/SwipeableRow';
-import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
@@ -82,7 +81,7 @@ function DraftListSkeleton() {
             borderBottomColor: 'transparent' }}
         >
           {/* Thumbnail rectangle */}
-          <SkeletonBlock width={100} height={100} radius={Radius.lg} />
+          <SkeletonBlock width={48} height={48} radius={Radius.md} />
           {/* Two text lines */}
           <View style={{ flex: 1, gap: Space.xs }}>
             <SkeletonBlock width={'60%'} height={TypographyV2.bodyStrong.size + 4} radius={Radius.sm} />
@@ -397,11 +396,10 @@ export function CreatorDraftListScreen() {
 
   const renderItem = useCallback(({ item, index }: { item: DraftMeta; index: number }) => {
     const doc = draftDocs[item.id];
-    const thumbW = 120;
-    const thumbH = doc ? Math.floor(thumbW / doc.canvas.aspectRatio) : 120;
-    const isPortrait = thumbH > thumbW;
-    const finalThumbW = isPortrait ? 100 : thumbW;
-    const finalThumbH = isPortrait ? Math.min(140, Math.floor(finalThumbW / (doc?.canvas.aspectRatio ?? 0.8))) : thumbH;
+    const thumbW = 48;
+    const thumbH = 48;
+    const finalThumbW = thumbW;
+    const finalThumbH = thumbH;
     return (
       <DraftCard
         item={item}
@@ -431,7 +429,7 @@ export function CreatorDraftListScreen() {
             accessibilityLabel="Back"
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-back" size={IconGrammar.hero} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={IconGrammar.standard} color={colors.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>Drafts</Text>
           <View style={styles.organizeBtn} />
@@ -450,7 +448,7 @@ export function CreatorDraftListScreen() {
           accessibilityLabel="Back"
           accessibilityRole="button"
         >
-          <Ionicons name="chevron-back" size={IconGrammar.hero} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={IconGrammar.standard} color={colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Drafts</Text>
         <Pressable
@@ -610,10 +608,10 @@ function UndoToast({
           justifyContent: 'space-between',
           gap: Space.sm,
           shadowColor: colors.shadow,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.18,
-          shadowRadius: 12,
-          elevation: 8 },
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.12,
+          shadowRadius: 8,
+          elevation: 4 },
         toastStyle,
       ]}
     >
@@ -760,11 +758,11 @@ function DraftCard({
                   />
                 </View>
               ) : (
-                <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: item.type === 'look' ? colors.discoverySubtle : colors.bronzeSubtle }]}>
+                <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: colors.surfaceAlt }]}>
                   <Ionicons
                     name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
-                    size={IconGrammar.hero}
-                    color={item.type === 'look' ? colors.discovery : colors.bronze}
+                    size={20}
+                    color={colors.textMuted}
                   />
                 </View>
               )}
@@ -772,12 +770,9 @@ function DraftCard({
           </Pressable>
           <View style={styles.draftInfo}>
             <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
-            <View style={styles.draftMetaRow}>
-              <View style={[styles.typeDot, { backgroundColor: item.type === 'poster' ? colors.antiqueGold : '#FFFFFF' }]} />
-              <Text style={styles.draftMeta} numberOfLines={1}>
-                {item.type === 'look' ? 'Look' : 'Poster'} · {formatRelativeTime(item.updatedAt)}
-              </Text>
-            </View>
+            <Text style={styles.draftMeta} numberOfLines={1}>
+              {formatRelativeTime(item.updatedAt)}
+            </Text>
           </View>
           <View style={styles.actions}>
             <Pressable
@@ -834,17 +829,16 @@ function EmptyDraftsState({ colors, styles, reduceMotion, onCreate }: EmptyDraft
     <View style={styles.emptyState}>
       <Reanimated.View style={entranceStyle}>
         <Text style={styles.emptyTitle}>No drafts yet</Text>
+        <Text style={styles.emptySubtitle}>Start creating to see your drafts here.</Text>
       </Reanimated.View>
-      <Text style={styles.emptySubtext}>Create your first poster to see it here</Text>
-      <PressScale
+      <Pressable
         onPress={onCreate}
-        style={styles.emptyCta}
-        accessibilityLabel="Create your first poster"
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityLabel="New post"
         accessibilityRole="button"
-        scale={0.95}
       >
-        <Text style={styles.emptyCtaText}>Create Poster</Text>
-      </PressScale>
+        <Text style={styles.emptyCtaText}>New post</Text>
+      </Pressable>
     </View>
   );
 }
@@ -917,10 +911,10 @@ function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }
           <View style={{ width: 32, height: 4, borderRadius: Radius.sm, backgroundColor: colors.borderSubtle }} />
         </View>
         <Text style={{ fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: colors.textPrimary, marginTop: Space.sm, textAlign: 'center' }}>
-          Delete this draft?
+          Delete draft?
         </Text>
         <Text style={{ fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs, marginBottom: Space.md }}>
-          &ldquo;{draft?.title ?? ''}&rdquo; will be permanently deleted.
+          This can&rsquo;t be undone.
         </Text>
         <Pressable
           onPress={onConfirm}
@@ -976,9 +970,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border },
+    paddingVertical: Space.sm },
   backBtn: {
     width: Control.hit,
     height: Control.hit,
@@ -1010,17 +1002,15 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    padding: Space.md,
-    borderBottomWidth: Stroke.hairline,
-    borderBottomColor: colors.borderSubtle },
+    padding: Space.md },
   draftRowPressed: {
     opacity: 0.85 },
   draftThumb: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt },
   draftIcon: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center' },
   draftInfo: {
@@ -1034,14 +1024,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     fontSize: TypographyV2.meta.size,
     color: colors.textSecondary },
-  draftMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xxs },
-  typeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: Radius.full },
   actions: {
     flexDirection: 'row',
     gap: Space.xs },
@@ -1057,27 +1039,20 @@ function createStyles(colors: ThemeColors) {
   emptyState: {
     alignItems: 'center',
     paddingVertical: Space.xl * 2,
-    gap: Space.sm },
+    gap: Space.md },
   emptyTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.sectionTitle.size,
-    color: colors.textPrimary },
-  emptySubtext: {
     fontFamily: Typography.family.regular,
     fontSize: TypographyV2.body.size,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     textAlign: 'center' },
-  emptyCta: {
-    backgroundColor: colors.brand,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.lg,
-    minHeight: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.md,
-    marginTop: Space.sm },
+  emptySubtitle: {
+    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: Space.xs },
   emptyCtaText: {
     fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size,
-    color: colors.textInverse } });
+    fontSize: TypographyV2.body.size,
+    color: colors.brand } });
 }

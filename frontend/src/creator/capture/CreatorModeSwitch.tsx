@@ -9,6 +9,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { setStoredCreateMode } from '../../preferences/createModePreferences';
 
 // ── CreatorModeSwitch ──────────────────────────────────────────────────
@@ -48,6 +49,7 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
+  const { colors } = useAppTheme();
 
   // Active-indicator x-offset (animated dot). Each slot is SLOT_WIDTH wide;
   // the dot centres under the active slot.
@@ -98,7 +100,9 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
               <Reanimated.Text
                 style={[
                   styles.label,
-                  active && styles.labelActive,
+                  active
+                    ? { color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold }
+                    : { color: colors.scrimTextSecondary, fontFamily: Typography.family.regular },
                 ]}
               >
                 {m.label}
@@ -110,7 +114,7 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
       {/* Active indicator — a small dot that springs beneath the active label.
           The track matches the row width so translateX maps 1:1 to slots. */}
       <View style={styles.indicatorTrack} pointerEvents="none">
-        <Reanimated.View style={[styles.dot, dotStyle]} />
+        <Reanimated.View style={[styles.dot, { backgroundColor: colors.scrimTextPrimary }, dotStyle]} />
       </View>
     </View>
   );
@@ -131,12 +135,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center' },
   label: {
-    fontFamily: Typography.family.medium,
     fontSize: TypographyV2.body.size,
-    color: 'rgba(255,255,255,0.55)' },
+    // color + fontFamily applied inline via scrim text tokens (active/inactive)
+  },
   labelActive: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold },
+    // Applied inline via colors.scrimTextPrimary + Typography.family.semibold
+  },
   // The dot track is exactly the row width (3 × SLOT_WIDTH).
   indicatorTrack: {
     position: 'relative',
@@ -150,6 +154,7 @@ const styles = StyleSheet.create({
     width: DOT_SIZE,
     height: DOT_SIZE,
     borderRadius: DOT_SIZE / 2,
-    backgroundColor: '#fff' } });
+    // backgroundColor applied inline via colors.scrimTextPrimary (theme token)
+  } });
 
 export default CreatorModeSwitch;

@@ -14,9 +14,6 @@
  * primary actions (always visible on the rail) and an overflow list (revealed
  * under the "More" button). The {@link ContextToolRail} surface consumes
  * these groups to render the appropriate tool set.
- *
- * Design references:
- *   - 09_VISUAL_SYSTEM spec: max 4 primary actions, overflow under "More"
  *   - AGENTS.md §4: composition and hierarchy over decoration
  *   - AGENTS.md §11: every visible control must perform a truthful action
  */
@@ -57,20 +54,7 @@ export type ToolContext =
   | 'look-text-selected'
   | 'look-product-selected'
   | 'look-multi-select'
-  | 'look-quiz-selected'
-  | 'look-question-selected'
-  | 'look-countdown-selected'
-  | 'look-emojiSlider-selected'
-  | 'look-draw-selected'
-  | 'look-gif-selected'
-  | 'look-music-selected'
-  | 'look-link-selected'
-  | 'look-location-selected'
-  | 'look-hashtag-selected'
-  | 'look-vote-selected'
-  | 'look-mention-selected'
-  | 'look-decorative-selected'
-  | 'look-look-selected';
+  | 'look-sticker-selected';
 
 // ── Tool definition ─────────────────────────────────────────────────
 // A single tool action rendered as an icon + label inside the rail.
@@ -124,16 +108,23 @@ export interface ToolDefinition {
    * media capabilities).
    */
   capabilityId?: string;
+  /**
+   * Visual weight within the rail. 'primary' tools are the dominant
+   * actions for the current context; 'secondary' tools recede. Tools
+   * without an explicit weight default to 'secondary'. The rail may use
+   * this to insert a separator between primary and secondary tools.
+   */
+  weight?: 'primary' | 'secondary';
 }
 
 // ── Tool group ──────────────────────────────────────────────────────
 // A context maps to one group. Primary tools are always visible on the
-// rail (max 6); overflow tools are revealed under the "More" button.
+// rail (max 4); overflow tools are revealed under the "More" button.
 
 export type ToolGroup = {
   /** The context this group serves. */
   context: ToolContext;
-  /** Primary actions — always visible. Capped at 6 by the rail. */
+  /** Primary actions — always visible. Capped at 4 by the rail. */
   primary: ToolDefinition[];
   /** Overflow actions — revealed under "More". */
   overflow: ToolDefinition[];
@@ -188,7 +179,7 @@ export function getToolsForContext(
 
 /**
  * Returns the primary tools for a context, filtered by capability and
- * capped at 6. The rail renders these as always-visible icon+label
+ * capped at 4. The rail renders these as always-visible icon+label
  * buttons.
  */
 export function getPrimaryTools(
@@ -197,7 +188,7 @@ export function getPrimaryTools(
 ): ToolDefinition[] {
   const group = groups.find((g) => g.context === context);
   if (!group) return [];
-  return filterToolsByCapability(group.primary).slice(0, 6);
+  return filterToolsByCapability(group.primary).slice(0, 4);
 }
 
 /**

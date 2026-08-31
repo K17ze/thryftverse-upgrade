@@ -26,7 +26,7 @@ import Reanimated, {
   useAnimatedStyle,
   withTiming,
   useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Typography, FontFamily, Control, Stroke } from '../../../theme/designTokens';
+import { Space, Radius, Typography, FontFamily, Control } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { Motion } from '../../../theme/motionTokens';
@@ -97,7 +97,7 @@ const MAX_RECENT = 30;
 const ALL_TABS: Array<{ key: TabKey; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { key: 'discover', label: 'Discover', icon: 'search-outline' },
   { key: 'closet', label: 'Closet', icon: 'shirt-outline' },
-  { key: 'listings', label: 'My Listings', icon: 'pricetag-outline' },
+  { key: 'listings', label: 'Listings', icon: 'pricetag-outline' },
   { key: 'saved', label: 'Saved', icon: 'bookmark-outline' },
 ];
 
@@ -181,16 +181,16 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
   );
 }
 
-// ── ProductTileSkeleton — matches a single product row (thumb + text + price) ──
+// ── ProductTileSkeleton — matches a single product row (64pt, thumb + text + price) ──
 function ProductTileSkeleton() {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'transparent' }}>
-      <SkeletonBlock width={48} height={48} radius={Radius.sm} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, height: 64, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'transparent' }}>
+      <SkeletonBlock width={48} height={48} radius={Radius.md} />
       <View style={{ flex: 1, gap: Space.xs }}>
         <SkeletonBlock width={'70%'} height={TypographyV2.body.size + 2} radius={Radius.sm} />
-        <SkeletonBlock width={'40%'} height={TypographyV2.meta.size + 2} radius={Radius.sm} />
-        <SkeletonBlock width={36} height={TypographyV2.meta.size + 2} radius={Radius.sm} />
+        <SkeletonBlock width={40} height={TypographyV2.captionElevated.size + 2} radius={Radius.sm} />
       </View>
+      <SkeletonBlock width={20} height={20} radius={Radius.full} />
     </View>
   );
 }
@@ -206,19 +206,27 @@ function SearchLoadingSkeleton() {
   );
 }
 
-// ── ProductGridSkeleton — full loading state (2 cols × 3 rows of tiles) ──
+// ── ProductCardSkeleton — matches a single media-first grid card ──
+function ProductCardSkeleton() {
+  return (
+    <View style={{ flex: 1, paddingHorizontal: Space.xs, paddingVertical: Space.sm }}>
+      <SkeletonBlock width={'100%'} height={120} radius={Radius.md} />
+      <View style={{ gap: Space.xxs, marginTop: Space.xs }}>
+        <SkeletonBlock width={'80%'} height={TypographyV2.captionElevated.size + 2} radius={Radius.sm} />
+        <SkeletonBlock width={40} height={TypographyV2.captionElevated.size + 2} radius={Radius.sm} />
+      </View>
+    </View>
+  );
+}
+
+// ── ProductGridSkeleton — 2-column media-first card grid (loading state) ──
 function ProductGridSkeleton() {
   return (
     <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
-      {[0, 1, 2].map((row) => (
-        <View key={row} style={{ flexDirection: 'row', gap: Space.sm, marginBottom: Space.md }}>
-          {[0, 1].map((col) => (
-            <View key={col} style={{ flex: 1, gap: Space.xs }}>
-              <SkeletonBlock width={'100%'} height={120} radius={Radius.md} />
-              <SkeletonBlock width={'80%'} height={TypographyV2.body.size + 2} radius={Radius.sm} />
-              <SkeletonBlock width={40} height={TypographyV2.meta.size + 2} radius={Radius.sm} />
-            </View>
-          ))}
+      {[0, 1, 2].map((i) => (
+        <View key={i} style={{ flexDirection: 'row', gap: Space.sm }}>
+          <ProductCardSkeleton />
+          <ProductCardSkeleton />
         </View>
       ))}
     </View>
@@ -247,10 +255,14 @@ export function ProductBrowserSheet({
   const defaultTab = visibleTabs[0]?.key ?? 'discover';
 
   const [activeTab, setActiveTab] = useState<TabKey>(defaultTab);
+  const [selectedProduct, setSelectedProduct] = useState<ListingSearchResult | null>(null);
 
   // Reset to default tab when the sheet opens
   useEffect(() => {
-    if (visible) setActiveTab(defaultTab);
+    if (visible) {
+      setActiveTab(defaultTab);
+      setSelectedProduct(null);
+    }
   }, [visible, defaultTab]);
 
   // ── Discover/Search state ──────────────────────────────────────────
@@ -375,11 +387,17 @@ export function ProductBrowserSheet({
     (item: ListingSearchResult) => {
       haptic.selection();
       recordRecentListing(item);
-      onProductSelect(listingToProductRef(item));
-      onClose();
+      setSelectedProduct(item);
     },
-    [onProductSelect, onClose, haptic],
+    [haptic],
   );
+
+  const handleDone = useCallback(() => {
+    if (!selectedProduct) return;
+    haptic.medium();
+    onProductSelect(listingToProductRef(selectedProduct));
+    onClose();
+  }, [selectedProduct, haptic, onProductSelect, onClose]);
 
   const handleRetry = useCallback(() => {
     if (activeTab === 'discover') {
@@ -430,7 +448,6 @@ export function ProductBrowserSheet({
       >
         {/* ── Header ──────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Add Item</Text>
           <PressScale
             onPress={onClose}
             style={styles.closeBtn}
@@ -439,6 +456,17 @@ export function ProductBrowserSheet({
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+          </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Tag Product</Text>
+          <PressScale
+            onPress={handleDone}
+            style={styles.doneBtn}
+            accessibilityLabel="Done"
+            accessibilityRole="button"
+            accessibilityHint="Tags the selected product and closes the sheet"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
           </PressScale>
         </View>
 
@@ -467,18 +495,18 @@ export function ProductBrowserSheet({
 
         {/* ── Search input (Discover tab only) ────────────────────── */}
         {activeTab === 'discover' && (
-          <View style={styles.searchRow}>
+          <View style={[styles.searchRow, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="search" size={IconGrammar.metadata} color={colors.textMuted} style={styles.searchIcon} />
             <TextInput
-              style={[styles.searchInput, { color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="Search listings..."
+              style={[styles.searchInput, { color: colors.textPrimary }]}
+              placeholder="Search"
               placeholderTextColor={colors.textMuted}
               value={query}
               onChangeText={setQuery}
               autoCapitalize="none"
               autoCorrect={false}
               autoFocus
-              accessibilityLabel="Search listings"
+              accessibilityLabel="Search products"
             />
             {isSearchLoading && (
               <View style={{ flex: 1 }}>
@@ -491,7 +519,7 @@ export function ProductBrowserSheet({
         {/* ── Results / states ────────────────────────────────────── */}
         {activeError ? (
           <View style={styles.errorBody}>
-            <Text style={[styles.errorText, { color: colors.textMuted }]}>Couldn't load items</Text>
+            <Text style={[styles.errorText, { color: colors.textMuted }]}>Couldn't load</Text>
             <Pressable
               onPress={handleRetry}
               style={[styles.retryBtn, { borderColor: colors.border }]}
@@ -508,51 +536,55 @@ export function ProductBrowserSheet({
           <FlatList
             data={activeResults}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => handleSelect(item)}
-                style={[styles.resultRow, { borderBottomColor: colors.border }]}
-                accessibilityLabel={`Select ${item.title}`}
-                accessibilityRole="button"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <View style={[styles.resultThumb, { backgroundColor: colors.surfaceAlt }]}>
-                  {item.imageUrl ? (
-                    <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} contentFit="cover" />
-                  ) : (
-                    <Ionicons name="pricetag" size={IconGrammar.metadata} color={colors.textSecondary} />
-                  )}
-                </View>
-                <View style={styles.resultInfo}>
-                  <Text style={[styles.resultName, { color: colors.textPrimary }]} numberOfLines={1}>
+            numColumns={2}
+            columnWrapperStyle={styles.productGridRow}
+            renderItem={({ item }) => {
+              const isSelected = selectedProduct?.id === item.id;
+              return (
+                <Pressable
+                  onPress={() => handleSelect(item)}
+                  style={styles.productCard}
+                  accessibilityLabel={`Select ${item.title}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <View style={styles.productImageWrap}>
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.productImage} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.productImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
+                        <Ionicons name="pricetag" size={IconGrammar.metadata} color={colors.textSecondary} />
+                      </View>
+                    )}
+                    {isSelected && (
+                      <View style={styles.selectedBadge}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.brand} />
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.productName, { color: colors.textPrimary }]} numberOfLines={1}>
                     {item.title}
                   </Text>
-                  {item.brand && (
-                    <Text style={[styles.resultSubtext, { color: colors.textMuted }]} numberOfLines={1}>
-                      {item.brand}
-                    </Text>
-                  )}
-                  <Text style={[styles.resultPrice, { color: colors.brand }]}>
+                  <Text style={[styles.productPrice, { color: colors.textPrimary }]}>
                     {currencySymbol}{item.priceGbp.toFixed(0)}
                   </Text>
-                </View>
-              </Pressable>
-            )}
+                </Pressable>
+              );
+            }}
             style={styles.resultList}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               activeTab === 'discover' ? (
                 hasSearched && !isSearchLoading ? (
                   <View style={styles.emptyState}>
-                    <Text style={[styles.emptyText, { color: colors.textMuted }]}>No listings found</Text>
+                    <Text style={[styles.emptyText, { color: colors.textMuted }]}>No products</Text>
                   </View>
                 ) : null
               ) : (
                 <View style={styles.emptyState}>
                   <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                    {activeTab === 'closet' || activeTab === 'listings'
-                      ? 'No listings yet'
-                      : 'No saved items'}
+                    No products
                   </Text>
                 </View>
               )
@@ -575,14 +607,23 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm },
     title: {
+      flex: 1,
+      textAlign: 'center',
       fontFamily: Typography.family.semibold,
       fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: 44,
       height: 44,
       justifyContent: 'center',
-      alignItems: 'center',
-      borderRadius: Radius.sm },
+      alignItems: 'center' },
+    doneBtn: {
+      width: 44,
+      height: 44,
+      justifyContent: 'center',
+      alignItems: 'center' },
+    doneBtnText: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size },
     // ── Tab bar ──
     tabBar: {
       flexDirection: 'row',
@@ -603,56 +644,59 @@ function createStyles(colors: ThemeColors) {
     searchRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      gap: Space.sm },
+      marginHorizontal: Space.md,
+      marginVertical: Space.sm,
+      height: 36,
+      borderRadius: Radius.sm,
+      paddingHorizontal: Space.sm,
+      gap: Space.xs },
     searchIcon: {},
     searchInput: {
       flex: 1,
-      borderWidth: Stroke.standard,
-      borderRadius: Radius.md,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      fontSize: TypographyV2.body.size },
+      fontFamily: FontFamily.regular,
+      fontSize: TypographyV2.captionElevated.size,
+      padding: 0 },
     // ── Results ──
     resultList: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.xl },
-    resultRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth },
-    resultThumb: {
-      width: 48,
-      height: 48,
-      borderRadius: Radius.sm,
-      justifyContent: 'center',
-      alignItems: 'center',
-      overflow: 'hidden' },
-    resultThumbImg: {
+    productGridRow: {
+      gap: Space.sm },
+    productCard: {
+      flex: 1,
+      paddingHorizontal: Space.xs,
+      paddingVertical: Space.sm },
+    productImageWrap: {
+      width: '100%',
+      aspectRatio: 1,
+      borderRadius: Radius.md,
+      overflow: 'hidden',
+      marginBottom: Space.xs },
+    productImage: {
       width: '100%',
       height: '100%' },
-    resultInfo: {
-      flex: 1,
-      gap: 2 },
-    resultName: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.body.size },
-    resultSubtext: {
+    productImagePlaceholder: {
+      width: '100%',
+      height: '100%',
+      justifyContent: 'center',
+      alignItems: 'center' },
+    selectedBadge: {
+      position: 'absolute',
+      top: Space.xs,
+      right: Space.xs },
+    productName: {
       fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.meta.size },
-    resultPrice: {
-      fontFamily: Typography.family.bold,
-      fontSize: TypographyV2.meta.size },
+      fontSize: TypographyV2.captionElevated.size },
+    productPrice: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.captionElevated.size },
     // ── States ──
     emptyState: {
       paddingVertical: Space.xl,
       alignItems: 'center' },
     emptyText: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.body.size },
+      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.bodyStrong.size },
     errorBody: {
       paddingVertical: Space.xl,
       alignItems: 'center',

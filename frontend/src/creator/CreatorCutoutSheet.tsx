@@ -19,7 +19,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius, FontFamily, Stroke } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Typography } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -383,41 +383,35 @@ export function CreatorCutoutSheet({
           sheetStyle,
         ]}
       >
-        {/* Handle */}
-        <View style={styles.handleRow}>
-          <View style={[styles.handle, { backgroundColor: colors.border }]} />
-        </View>
-
         {/* Title row */}
         <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Manual Crop</Text>
           <PressScale
             onPress={onClose}
             style={styles.closeBtn}
             accessibilityLabel="Close manual crop"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} />
           </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Cutout</Text>
+          <View style={styles.closeBtn} />
         </View>
 
         {/* Instructions */}
         <Text style={[styles.instructions, { color: colors.textMuted }]}>
-          {previewCrop && cropBBox ? 'Crop region shown — tap Crop to save' : 'Trace around your subject, then crop to that region'}
-        </Text>
-        <Text style={[styles.note, { color: colors.textMuted }]}>
-          For automatic background removal, use a subject with a clean background.
+          {previewCrop && cropBBox ? 'Tap Crop to save' : 'Trace around your subject'}
         </Text>
 
         {/* Drawing canvas with drag/pinch for cutout positioning */}
-        <GestureHandlerRootView style={styles.canvasArea}>
+        <GestureHandlerRootView style={[styles.canvasArea, { backgroundColor: colors.mediaOverlayScrim }]}>
           <GestureDetector gesture={Gesture.Race(dragGesture, pinchGesture)}>
             <Reanimated.View
               style={[
                 styles.canvasFrame,
                 {
                   width: displaySize.width,
-                  height: displaySize.height },
+                  height: displaySize.height,
+                  backgroundColor: colors.mediaOverlayScrim },
                 cutoutTransformStyle,
               ]}
             >
@@ -647,47 +641,31 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     zIndex: 301,
     elevation: 24 },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: Radius.sm },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
+    height: 44 },
   title: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
+    fontSize: 17,
+    fontFamily: Typography.family.semibold,
+    textAlign: 'center' },
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm },
+    alignItems: 'center' },
   instructions: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     paddingBottom: 4 },
-  note: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    textAlign: 'center',
-    paddingBottom: 12,
-    fontStyle: 'italic' },
   canvasArea: {
     alignItems: 'center',
-    paddingVertical: Space.sm,
-    backgroundColor: '#000' },
+    paddingVertical: Space.sm },
   canvasFrame: {
-    overflow: 'hidden',
-    backgroundColor: '#111' },
+    overflow: 'hidden' },
   toolSelectorRow: {
     flexDirection: 'row',
     marginHorizontal: Space.md,

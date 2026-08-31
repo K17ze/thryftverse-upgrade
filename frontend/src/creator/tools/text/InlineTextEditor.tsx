@@ -26,10 +26,11 @@ import Reanimated, {
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { Typography } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
+import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { getPresetById } from './textStylePresets';
 import { toHexString } from '../../color/ColorMath';
-import type { CreatorColor } from '../../color/ColorTypes';
+
 import type { CreatorLayer } from '../../composition';
 
 type TextLayer = Extract<CreatorLayer, { type: 'text' }>;
@@ -75,11 +76,11 @@ const STYLE_METRICS: Record<
   squeeze: { fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.size * 1.1, letterSpacing: -0.3 },
   signature: { fontSize: TypographyV2.bodyStrong.size + 2, lineHeight: (TypographyV2.bodyStrong.size + 2) * 1.4 } };
 
-function resolveColor(layer: TextLayer): string {
+function resolveColor(layer: TextLayer, fallback: string): string {
   const { payload } = layer;
   if (payload.textColor) return payload.textColor;
-  if (payload.fill) return toHexString(payload.fill as CreatorColor);
-  return '#ffffff';
+  if (payload.fill) return toHexString(payload.fill);
+  return fallback;
 }
 
 export function InlineTextEditor({
@@ -92,6 +93,7 @@ export function InlineTextEditor({
   onCommit,
   onDismiss }: InlineTextEditorProps) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const inputRef = useRef<TextInput>(null);
@@ -129,7 +131,7 @@ export function InlineTextEditor({
 
   const preset = getPresetById(payload.textStyle ?? 'clean');
   const metrics = STYLE_METRICS[payload.textStyle ?? 'clean'] ?? STYLE_METRICS.clean;
-  const color = resolveColor(layer);
+  const color = resolveColor(layer, colors.scrimTextPrimary);
 
   const alignment = payload.alignment ?? 'center';
   const textAlign: TextStyle['textAlign'] = alignment === 'justify' ? 'left' : alignment;
@@ -183,10 +185,13 @@ export function InlineTextEditor({
             {
               color,
               fontFamily: preset?.fontFamily ?? Typography.family.medium,
-              fontSize: metrics.fontSize,
+              fontSize: payload.fontSize ?? metrics.fontSize,
               lineHeight: metrics.lineHeight,
               letterSpacing: metrics.letterSpacing,
               textTransform: metrics.textTransform,
+              fontWeight: payload.bold ? 'bold' : 'normal',
+              fontStyle: payload.italic ? 'italic' : 'normal',
+              textDecorationLine: payload.underline ? 'underline' : 'none',
               textAlign },
           ]}
           accessibilityLabel="Edit text content"

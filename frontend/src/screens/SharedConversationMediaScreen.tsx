@@ -19,6 +19,7 @@ import { CachedImage } from '../components/CachedImage';
 import { isVideoUri } from '../utils/media';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SharedConversationMedia'>;
 
@@ -52,6 +53,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const { width } = useWindowDimensions();
+  const { t } = useAppTranslation('messaging');
   const thumbSize = (width - Space.md * 2 - GAP * (COLS - 1)) / COLS;
 
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -148,7 +150,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
 
   const subtitle =
     allMedia.length > 0
-      ? `${photos.length} photo${photos.length === 1 ? '' : 's'} · ${videos.length} video${videos.length === 1 ? '' : 's'}`
+      ? t('sharedMedia.summary', { photoCount: photos.length, photoPlural: photos.length === 1 ? '' : 's', videoCount: videos.length, videoPlural: videos.length === 1 ? '' : 's' })
       : undefined;
 
   const renderItem = ({ item }: { item: MediaItem }) => {
@@ -191,7 +193,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 recyclingKey={item.thumbnailUri}
-                accessibilityLabel="Video thumbnail"
+                accessibilityLabel={t('sharedMedia.videoThumbnail')}
               />
             ) : null}
           </View>
@@ -233,7 +235,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
 
   const selectionHeader = (
     <FlagshipHeader
-      title={`${selectedIds.size} selected`}
+      title={t('sharedMedia.selectedCount', { count: selectedIds.size })}
       onBack={exitSelectionMode}
       backIcon="close"
       rightAction={
@@ -242,8 +244,8 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
           disabled={selectedIds.size === 0}
           style={styles.deleteBtn}
           accessibilityRole="button"
-          accessibilityLabel="Delete selected media"
-          accessibilityHint={`Removes ${selectedIds.size} selected item${selectedIds.size === 1 ? '' : 's'}`}
+          accessibilityLabel={t('sharedMedia.deleteSelected')}
+          accessibilityHint={t('sharedMedia.removeSelectedHint', { count: selectedIds.size, plural: selectedIds.size === 1 ? '' : 's' })}
           scaleValue={0.96}
           hapticFeedback="medium"
           activeOpacity={0.7}
@@ -265,7 +267,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
           selectionHeader
         ) : (
           <FlagshipHeader
-            title="Shared media"
+            title={t('sharedMedia.title')}
             subtitle={subtitle}
             onBack={() => navigation.goBack()}
           />
@@ -291,7 +293,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
                 scaleValue={0.96}
                 hapticFeedback="selection"
                 accessibilityRole="tab"
-                accessibilityLabel={`${label} filter`}
+                accessibilityLabel={t('sharedMedia.filter', { label })}
                 accessibilityState={{ selected: active }}
               >
                 <Text style={[styles.filterText, active && styles.filterTextActive]}>
@@ -306,8 +308,8 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       {filteredMedia.length === 0 ? (
         <EmptyState
           icon="images-outline"
-          title="No shared media yet"
-          subtitle="Photos and videos shared in this conversation will appear here."
+          title={t('sharedMedia.noMedia')}
+          subtitle={t('sharedMedia.noMediaSubtitle')}
           ctaLabel="Back"
           onCtaPress={() => navigation.goBack()}
         />

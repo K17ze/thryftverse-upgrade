@@ -7,6 +7,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CommerceStateCard, CommerceStateType } from './CommerceStateCard';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface OfferData {
   price: number;
@@ -115,6 +116,7 @@ export function MarketplaceChatCard({
   onExpire,
 }: MarketplaceChatCardProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const { currencySymbol } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   // Stable callback so the countdown hook doesn't re-run every render
@@ -133,7 +135,7 @@ export function MarketplaceChatCard({
     const showCountdown = offer.expiresAt && (status === 'pending' || status === 'countered');
     const tone = getExpiryTone(msRemaining, colors);
     const counterRoundLabel = offer.counterRound && offer.counterRound > 0
-      ? `Counter #${offer.counterRound}`
+      ? t('offers.counterRound', { round: offer.counterRound })
       : null;
     const discountPct = offer.originalPrice > offer.price
       ? Math.round(((offer.originalPrice - offer.price) / offer.originalPrice) * 100)
@@ -166,47 +168,47 @@ export function MarketplaceChatCard({
           <View style={[styles.offerExpiryRow, { backgroundColor: `${tone.color}12` }]}>
             <Ionicons name={tone.icon} size={11} color={tone.color} />
             <Text style={[styles.offerExpiryText, { color: tone.color }]}>
-              Expires in {formatCountdown(msRemaining)}
+              {t('offers.expiresIn', { time: formatCountdown(msRemaining) })}
             </Text>
           </View>
         ) : null}
         {status === 'declined' && (
           <View style={styles.offerStatusRow}>
             <Ionicons name="close-circle-outline" size={13} color={colors.danger} />
-            <Text style={[styles.offerStatusText, { color: colors.danger }]}>Declined</Text>
+            <Text style={[styles.offerStatusText, { color: colors.danger }]}>{t('offers.declined')}</Text>
           </View>
         )}
         {status === 'accepted' && (
           <View style={styles.offerStatusRow}>
             <Ionicons name="checkmark-circle-outline" size={13} color={colors.success} />
-            <Text style={[styles.offerStatusText, { color: colors.success }]}>Accepted</Text>
+            <Text style={[styles.offerStatusText, { color: colors.success }]}>{t('offers.accepted')}</Text>
           </View>
         )}
         {status === 'expired' && (
           <View style={styles.offerStatusRow}>
             <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-            <Text style={[styles.offerStatusText, { color: colors.textMuted }]}>Expired</Text>
+            <Text style={[styles.offerStatusText, { color: colors.textMuted }]}>{t('offers.expired')}</Text>
           </View>
         )}
         {!status && isMe && (
           <View style={styles.offerStatusRow}>
             <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-            <Text style={[styles.offerStatusText, { color: colors.textMuted }]}>Waiting for response</Text>
+            <Text style={[styles.offerStatusText, { color: colors.textMuted }]}>{t('offers.waitingForResponse')}</Text>
           </View>
         )}
         {/* Action buttons — only show when pending and not expired */}
         {isPending && (
           <View style={styles.offerActions}>
-            <AnimatedPressable style={styles.offerPass} onPress={onDecline} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light" accessibilityRole="button" accessibilityLabel="Decline offer">
-              <Text style={styles.offerPassText} numberOfLines={1}>Pass</Text>
+            <AnimatedPressable style={styles.offerPass} onPress={onDecline} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light" accessibilityRole="button" accessibilityLabel={t('offers.declineOffer')}>
+              <Text style={styles.offerPassText} numberOfLines={1}>{t('offers.pass')}</Text>
             </AnimatedPressable>
             {onCounter && (
-              <AnimatedPressable style={styles.offerCounter} onPress={onCounter} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light" accessibilityRole="button" accessibilityLabel="Counter offer">
-                <Text style={styles.offerCounterText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.88}>Counter</Text>
+              <AnimatedPressable style={styles.offerCounter} onPress={onCounter} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light" accessibilityRole="button" accessibilityLabel={t('offers.counterOffer')}>
+                <Text style={styles.offerCounterText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.88}>{t('offers.counter')}</Text>
               </AnimatedPressable>
             )}
-            <AnimatedPressable style={styles.offerAccept} onPress={onAccept} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="medium" accessibilityRole="button" accessibilityLabel="Accept offer">
-              <Text style={styles.offerAcceptText} numberOfLines={1}>Accept</Text>
+            <AnimatedPressable style={styles.offerAccept} onPress={onAccept} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="medium" accessibilityRole="button" accessibilityLabel={t('offers.acceptOffer')}>
+              <Text style={styles.offerAcceptText} numberOfLines={1}>{t('offers.accept')}</Text>
             </AnimatedPressable>
           </View>
         )}
@@ -263,9 +265,9 @@ export function MarketplaceChatCard({
           <View style={styles.systemEventHeading}>
             {systemTitle ? <Text style={styles.systemEventTitle}>{systemTitle}</Text> : null}
             {systemVerified ? (
-              <View style={styles.verifiedPill} accessibilityLabel="Verified system update">
+              <View style={styles.verifiedPill} accessibilityLabel={t('offers.verifiedSystemUpdate')}>
                 <Ionicons name="checkmark" size={10} color={colors.textSecondary} />
-                <Text style={styles.verifiedText}>Verified</Text>
+                <Text style={styles.verifiedText}>{t('offers.verified')}</Text>
               </View>
             ) : null}
           </View>

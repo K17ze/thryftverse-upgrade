@@ -39,20 +39,29 @@
  *
  * ## File chunking
  *
- * Parts are read from the local file using `fetch(uri).then(r => r.blob())`
- * followed by `Blob.slice(startByte, endByte)`. This loads the chunk into
- * JS memory. For very large videos this is heavier than a native streaming
- * solution, but it works without adding native dependencies (per project
- * constraints). A future native module could stream byte ranges directly.
+ * Parts are read from the local file using `expo-file-system`'s
+ * `readAsStringAsync` with `position` + `length` options, which reads only
+ * the chunk's byte range into JS memory as a base64 string — not the entire
+ * file. The base64 chunk is converted to a Blob for the XHR PUT. For URI
+ * schemes that `expo-file-system` cannot read with position/length (e.g.
+ * `ph://`, `content://`), the code falls back to a single full-file Blob
+ * fetch + slice.
  */
 
+import * as FileSystem from 'expo-file-system/legacy';
 import { fetchJson } from '../../../lib/apiClient';
 import type { UploadSession, UploadPart } from './UploadTypes';
 import { DEFAULT_PART_SIZE } from './UploadTypes';
 
+/** Per-part XHR upload timeout (ms). S3 PUTs for 5 MB chunks should finish
+ *  well within 2 minutes on any reasonable connection; if they don't, the
+ *  request is stale and the retry loop takes over. */
+const CHUNK_TIMEOUT_MS = 120_000;
+
 /** Response shape from `POST /uploads/multipart/initiate`. */
 interface InitiateResponse {
   ok: boolean;
+  error?: string;
   sessionId: string;
   uploadId: string;
   objectKey: string;
@@ -67,12 +76,14 @@ interface InitiateResponse {
 /** Response shape from `POST /uploads/multipart/:id/parts`. */
 interface PartsResponse {
   ok: boolean;
+  error?: string;
   presignedParts: Array<{ url: string; partNumber: number; expiresInSeconds: number }>;
 }
 
 /** Response shape from `POST /uploads/multipart/:id/complete`. */
 interface CompleteResponse {
   ok: boolean;
+  error?: string;
   finalizationId: string;
   objectKey: string;
   publicUrl: string;
@@ -123,6 +134,14 @@ export interface MultipartUploaderOptions {
 export class MultipartUploader {
   private partSize: number;
   private maxPartRetries: number;
+  /** Cached full-file Blob — used only as a fallback for URI schemes that
+   *  `expo-file-system` cannot read with `position`/`length` (e.g. `ph://`,
+   *  `content://`). For `file://` URIs the chunk-read path is used instead,
+   *  which reads only the chunk's byte range into memory. Cleared on
+   *  `complete()` / `abort()` so memory is released as soon as the upload
+   *  finishes. */
+  private cachedBlob: Blob | null = null;
+  private cachedBlobPath: string | null = null;
 
   constructor(options?: MultipartUploaderOptions) {
     this.partSize = options?.partSize ?? DEFAULT_PART_SIZE;
@@ -161,12 +180,21 @@ export class MultipartUploader {
       },
     );
 
+    if (!response.ok) throw new Error(response.error ?? 'Upload initiate request failed');
+
     // Map the presigned URLs from the initiate response to a plain object
     // so the first batch can be uploaded without fetching URLs. A plain
     // object (not Map) survives JSON serialisation in AsyncStorage.
     const presignedUrls: Record<number, string> = {};
     for (const p of response.presignedParts) {
       presignedUrls[p.partNumber] = p.url;
+      // Track per-URL expiry from the initial batch too, so the stale-URL
+      // guard in `uploadPart` works for the first batch without a /parts
+      // round-trip.
+      const part = parts.find((pt) => pt.partNumber === p.partNumber);
+      if (part) {
+        part.presignedUrlExpiresAt = Date.now() + p.expiresInSeconds * 1000;
+      }
     }
 
     const now = Date.now();
@@ -205,8 +233,24 @@ export class MultipartUploader {
   ): Promise<void> {
     part.status = 'uploading';
 
+    // Guard against expired presigned URLs. The session carries an
+    // `expiresAt` timestamp (ms epoch). If it has passed, every cached URL
+    // is stale — uploading to one would silently fail with a 403 from S3
+    // after wasting bandwidth. Instead of throwing a hard failure, refresh
+    // the presigned URLs for all remaining parts via the /parts endpoint.
+    // If the underlying S3 session is truly gone, the /parts call itself
+    // will fail and surface a clear error.
+    if (session.expiresAt && Date.now() > session.expiresAt) {
+      await this.refreshSessionUrls(session);
+    }
+
     // Use the cached presigned URL if available; otherwise fetch it.
     let presignedUrl = session.presignedUrls?.[part.partNumber];
+    if (presignedUrl && part.presignedUrlExpiresAt && Date.now() >= part.presignedUrlExpiresAt) {
+      delete session.presignedUrls?.[part.partNumber];
+      part.presignedUrlExpiresAt = undefined;
+      presignedUrl = undefined;
+    }
     if (!presignedUrl) {
       const partUrlRes = await fetchJson<PartsResponse>(
         `/uploads/multipart/${encodeURIComponent(session.sessionId!)}/parts`,
@@ -218,7 +262,8 @@ export class MultipartUploader {
           }),
         },
       );
-      presignedUrl = partUrlRes.presignedParts[0]?.url;
+      const fetched = partUrlRes.presignedParts[0];
+      presignedUrl = fetched?.url;
       if (!presignedUrl) {
         throw new Error(`Backend returned no presigned URL for part ${part.partNumber}`);
       }
@@ -227,10 +272,11 @@ export class MultipartUploader {
         session.presignedUrls = {};
       }
       session.presignedUrls[part.partNumber] = presignedUrl;
+      part.presignedUrlExpiresAt = Date.now() + fetched.expiresInSeconds * 1000;
     }
 
     // Read the chunk from the local file.
-    const chunk = await this.readChunk(filePath, part.startByte, part.endByte);
+    const chunk = await this.readChunk(filePath, part.startByte, part.endByte, session.mimeType);
 
     // Upload the chunk to S3 via XHR for real byte progress.
     const etag = await this.xhrPutChunk(
@@ -239,6 +285,8 @@ export class MultipartUploader {
       session.mimeType,
       onProgress,
       signal,
+      session,
+      part,
     );
 
     part.etag = etag;
@@ -281,8 +329,13 @@ export class MultipartUploader {
       },
     );
 
+    if (!response.ok) throw new Error(response.error ?? 'Upload complete request failed');
+
     // Store the finalizationId on the session so the caller can use it.
     session.finalizationId = response.finalizationId;
+
+    // Release the cached full-file Blob now that all parts are uploaded.
+    this.clearBlobCache();
 
     return {
       publicUrl: response.publicUrl,
@@ -293,6 +346,8 @@ export class MultipartUploader {
 
   /** Abort an in-progress multipart upload, freeing S3 part storage. */
   async abort(session: UploadSession): Promise<void> {
+    // Release the cached full-file Blob — no more parts will be uploaded.
+    this.clearBlobCache();
     if (!session.sessionId) return;
     try {
       await fetchJson<{ ok: boolean }>(
@@ -320,6 +375,7 @@ export class MultipartUploader {
     filePath: string,
     onProgress: (uploadedBytes: number) => void,
     signal: AbortSignal,
+    onPartComplete?: (part: UploadPart) => void,
   ): Promise<MultipartCompleteResult> {
     // Recompute uploadedBytes from completed parts.
     let uploadedBytes = 0;
@@ -338,6 +394,7 @@ export class MultipartUploader {
         uploadedBytes += partBytes;
         onProgress(uploadedBytes);
       }, signal);
+      onPartComplete?.(part);
     }
 
     return this.complete(session);
@@ -354,14 +411,29 @@ export class MultipartUploader {
     signal: AbortSignal,
   ): Promise<void> {
     let lastError: Error | undefined;
+    // Track bytes reported for the current attempt so we can undo them
+    // when a retry starts from zero. Without this, a failed attempt that
+    // reported 3 MB of progress followed by a successful retry that
+    // reports 5 MB would double-count to 8 MB for a 5 MB part.
+    let attemptBytes = 0;
     for (let attempt = 0; attempt <= this.maxPartRetries; attempt++) {
       if (signal.aborted) throw new Error('Aborted');
+      // Reset the per-attempt counter at the start of each retry.
+      attemptBytes = 0;
       try {
         part.retries = attempt;
-        await this.uploadPart(session, part, filePath, onProgress, signal);
+        await this.uploadPart(session, part, filePath, (delta) => {
+          attemptBytes += delta;
+          onProgress(delta);
+        }, signal);
         return;
       } catch (err) {
         if (signal.aborted) throw err;
+        // Undo the progress reported during the failed attempt so the
+        // running total is accurate when the retry starts from zero.
+        if (attemptBytes > 0) {
+          onProgress(-attemptBytes);
+        }
         lastError = err instanceof Error ? err : new Error(String(err));
         part.status = 'failed';
         if (attempt < this.maxPartRetries) {
@@ -409,18 +481,97 @@ export class MultipartUploader {
   /**
    * Read a byte range from a local file as a Blob.
    *
-   * Uses `fetch(uri).then(r => r.blob())` to load the file, then
-   * `Blob.slice()` to extract the chunk. This loads the full file into
-   * memory — acceptable for images and short videos. For very large
-   * files, a native streaming reader would be more efficient.
+   * Uses `expo-file-system`'s `readAsStringAsync` with `position` + `length`
+   * to read only the chunk's byte range into JS memory as a base64 string,
+   * then converts it to a Blob. This avoids loading the entire file into
+   * memory — for a 100 MB video with 20 parts, only one ~5 MB chunk is
+   * resident at a time instead of the full 100 MB.
+   *
+   * For URI schemes that `expo-file-system` cannot read with `position`/
+   * `length` (e.g. `ph://`, `content://`), falls back to a single full-file
+   * Blob fetch + slice. The fallback cache is cleared by `clearBlobCache()`.
    */
   private async readChunk(
     filePath: string,
     startByte: number,
     endByte: number,
+    _mimeType: string,
   ): Promise<Blob> {
-    const blob = await fetch(filePath).then((r) => r.blob());
-    return blob.slice(startByte, endByte + 1);
+    const length = endByte - startByte + 1;
+    try {
+      const base64 = await FileSystem.readAsStringAsync(filePath, {
+        position: startByte,
+        length,
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      // Convert the base64 chunk to a Blob via a data URI. The MIME type
+      // in the data URI is irrelevant — the actual Content-Type header is
+      // set on the XHR separately.
+      const blob = await fetch(`data:application/octet-stream;base64,${base64}`).then((r) =>
+        r.blob(),
+      );
+      return blob;
+    } catch {
+      // Fallback for URIs that don't support position/length reads
+      // (e.g. ph://, content://). This loads the full file into memory
+      // but only for these exotic URI schemes.
+    }
+
+    if (this.cachedBlobPath !== filePath || !this.cachedBlob) {
+      this.cachedBlob = await fetch(filePath).then((r) => r.blob());
+      this.cachedBlobPath = filePath;
+    }
+    if (!this.cachedBlob) {
+      throw new Error('Blob cache was not populated');
+    }
+    return this.cachedBlob.slice(startByte, endByte + 1);
+  }
+
+  /** Release the cached full-file Blob. Called after `complete()` or
+   *  `abort()` so the file's bytes are not held in memory once the upload
+   *  is done. */
+  clearBlobCache(): void {
+    this.cachedBlob = null;
+    this.cachedBlobPath = null;
+  }
+
+  /**
+   * Refresh presigned URLs for all remaining (non-completed) parts by
+   * calling the backend `/parts` endpoint. Used when the session's
+   * `expiresAt` has passed — instead of throwing a hard failure, the
+   * upload continues with fresh URLs. If the underlying S3 session is
+   * truly gone, the `/parts` call itself will fail and surface a clear
+   * error.
+   */
+  private async refreshSessionUrls(session: UploadSession): Promise<void> {
+    if (!session.sessionId) throw new Error('Upload session has no session ID');
+    const remainingPartNumbers = session.parts
+      .filter((p) => p.status !== 'completed')
+      .map((p) => p.partNumber);
+    if (remainingPartNumbers.length === 0) return;
+
+    const response = await fetchJson<PartsResponse>(
+      `/uploads/multipart/${encodeURIComponent(session.sessionId)}/parts`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partNumbers: remainingPartNumbers }),
+      },
+    );
+    if (!response.ok) throw new Error(response.error ?? 'Failed to refresh upload session URLs');
+
+    if (!session.presignedUrls) session.presignedUrls = {};
+    for (const p of response.presignedParts) {
+      session.presignedUrls[p.partNumber] = p.url;
+      const part = session.parts.find((pt) => pt.partNumber === p.partNumber);
+      if (part) {
+        part.presignedUrlExpiresAt = Date.now() + p.expiresInSeconds * 1000;
+      }
+    }
+    // Optimistically extend the session expiry so we don't re-refresh on
+    // every subsequent part. The presigned URLs carry their own per-URL
+    // expiry; the session expiry is a coarse guard.
+    session.expiresAt = Date.now() + 60 * 60 * 1000;
   }
 
   /**
@@ -435,15 +586,27 @@ export class MultipartUploader {
     mimeType: string,
     onProgress: (bytes: number) => void,
     signal: AbortSignal,
+    session: UploadSession,
+    part: UploadPart,
   ): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', url);
+      xhr.timeout = CHUNK_TIMEOUT_MS;
       xhr.setRequestHeader('Content-Type', mimeType);
 
+      // Track lastLoaded per XHR so we report the delta (bytes sent since
+      // the last event) rather than the cumulative loaded count. The
+      // caller accumulates deltas; on retry, the failed attempt's deltas
+      // are undone by `uploadPartWithRetry` before the new XHR starts.
+      let lastLoaded = 0;
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
-          onProgress(event.loaded);
+          const delta = event.loaded - lastLoaded;
+          lastLoaded = event.loaded;
+          if (delta > 0) {
+            onProgress(delta);
+          }
         }
       };
 
@@ -457,6 +620,10 @@ export class MultipartUploader {
             reject(new Error('S3 part response missing ETag header'));
           }
         } else {
+          if (xhr.status === 403) {
+            delete session.presignedUrls?.[part.partNumber];
+            part.presignedUrlExpiresAt = undefined;
+          }
           reject(new Error(`Part upload failed: HTTP ${xhr.status}`));
         }
       };

@@ -61,8 +61,6 @@ import type { MeteringListener } from '../../core/audio/VoiceoverRecorder';
 // ── Constants ─────────────────────────────────────────────────────────
 
 const RECORD_BUTTON_SIZE = 64;
-// Recorder timer display — large numeric display glyph, not a typographic token.
-const RECORDER_GLYPH_SIZE = 32;
 const RING_BASE_SIZE = RECORD_BUTTON_SIZE + 12;
 const WAVEFORM_BAR_COUNT = 48;
 const WAVEFORM_MAX_HEIGHT = 56;
@@ -334,9 +332,6 @@ export function VoiceoverRecorderSheet({
       >
         {/* ── Header ──────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Voiceover
-          </Text>
           <PressScale
             onPress={handleClose}
             style={styles.closeBtn}
@@ -345,6 +340,19 @@ export function VoiceoverRecorderSheet({
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+          </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            Voiceover
+          </Text>
+          <PressScale
+            onPress={handleDone}
+            style={styles.doneBtn}
+            accessibilityLabel="Done"
+            accessibilityRole="button"
+            accessibilityHint="Add voiceover to composition"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
           </PressScale>
         </View>
 
@@ -357,28 +365,15 @@ export function VoiceoverRecorderSheet({
             {/* ── Timer ─────────────────────────────────────────────── */}
             <View style={styles.timerContainer}>
               <Text
-                style={[
-                  styles.timer,
-                  {
-                    color: isRecording
-                      ? colors.danger
-                      : colors.textPrimary },
-                ]}
+                style={[styles.timer, { color: colors.textPrimary }]}
                 accessibilityLabel={`Recording time ${formatTimer(elapsedMs)}`}
               >
                 {formatTimer(elapsedMs)}
               </Text>
               {isRecording && (
-                <View style={styles.recordingIndicator}>
-                  <View
-                    style={[styles.recordingDot, { backgroundColor: colors.danger }]}
-                  />
-                  <Text
-                    style={[styles.recordingLabel, { color: colors.danger }]}
-                  >
-                    REC
-                  </Text>
-                </View>
+                <View
+                  style={[styles.recordingDot, { backgroundColor: colors.danger }]}
+                />
               )}
               {isPaused && (
                 <Text
@@ -395,27 +390,12 @@ export function VoiceoverRecorderSheet({
               accessibilityLabel="Live audio waveform"
               accessibilityRole="image"
             >
-              {isRecording || isPaused || hasRecording ? (
-                <WaveformVisualization
-                  bars={waveformBars}
-                  color={isRecording ? colors.danger : colors.antiqueGold}
-                  maxHeight={WAVEFORM_MAX_HEIGHT}
-                  minHeight={WAVEFORM_MIN_HEIGHT}
-                />
-              ) : (
-                <View style={styles.waveformPlaceholder}>
-                  <Ionicons
-                    name="mic-outline"
-                    size={IconGrammar.hero}
-                    color={colors.textMuted}
-                  />
-                  <Text
-                    style={[styles.waveformHint, { color: colors.textMuted }]}
-                  >
-                    Tap the button below to start recording
-                  </Text>
-                </View>
-              )}
+              <WaveformVisualization
+                bars={waveformBars}
+                color={isRecording ? colors.danger : colors.brand}
+                maxHeight={WAVEFORM_MAX_HEIGHT}
+                minHeight={WAVEFORM_MIN_HEIGHT}
+              />
             </View>
 
             {/* ── Metering unavailable notice (truthful) ────────────── */}
@@ -423,7 +403,7 @@ export function VoiceoverRecorderSheet({
               <Text
                 style={[styles.meteringNotice, { color: colors.textMuted }]}
               >
-                Live metering is not available on this device.
+                Metering unavailable on this device.
               </Text>
             )}
 
@@ -492,6 +472,13 @@ export function VoiceoverRecorderSheet({
               )}
               {hasRecording && (
                 <>
+                  <PlaybackBar
+                    colors={colors}
+                    styles={styles}
+                    durationMs={recordedClip?.durationMs ?? 0}
+                    haptic={haptic}
+                    reducedMotion={reducedMotion}
+                  />
                   <SecondaryButton
                     icon="refresh"
                     label="Retake"
@@ -499,19 +486,6 @@ export function VoiceoverRecorderSheet({
                     styles={styles}
                     onPress={handleRetake}
                   />
-                  <Pressable
-                    onPress={handleDone}
-                    style={[styles.doneBtn, { backgroundColor: colors.brand }]}
-                    accessibilityLabel="Done — add voiceover"
-                    accessibilityRole="button"
-                    accessibilityHint="Adds the recorded voiceover to your composition"
-                  >
-                    <Text
-                      style={[styles.doneBtnText, { color: colors.textInverse }]}
-                    >
-                      Done
-                    </Text>
-                  </Pressable>
                 </>
               )}
             </View>
@@ -566,7 +540,7 @@ function RecordButton({
     if (reducedMotion) {
       return { transform: [{ scale: 1 }] };
     }
-    return { transform: [{ scale: 1 - 0.08 * pressedSV.value }] };
+    return { transform: [{ scale: 1 - 0.05 * pressedSV.value }] };
   });
 
   const buttonColor = isRecording || isPaused ? colors.surface : colors.danger;
@@ -596,8 +570,8 @@ function RecordButton({
             height: size,
             borderRadius: size / 2,
             backgroundColor: buttonColor,
-            borderWidth: Stroke.emphasis,
-            borderColor: colors.danger,
+            borderWidth: 4,
+            borderColor: colors.scrimTextPrimary,
             justifyContent: 'center',
             alignItems: 'center' },
           animatedStyle,
@@ -701,6 +675,54 @@ function SecondaryButton({
   );
 }
 
+// ── Playback bar (play/pause + seek) ──────────────────────────────────
+
+interface PlaybackBarProps {
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  durationMs: number;
+  haptic: ReturnType<typeof useHaptic>;
+  reducedMotion: boolean;
+}
+
+function PlaybackBar({ colors, styles, durationMs, haptic, reducedMotion }: PlaybackBarProps) {
+  const [playing, setPlaying] = useState(false);
+  const [position, setPosition] = useState(0);
+
+  const handlePlayPause = useCallback(() => {
+    if (!reducedMotion) haptic.light();
+    setPlaying((p) => !p);
+  }, [haptic, reducedMotion]);
+
+  const ratio = durationMs > 0 ? Math.min(1, position / durationMs) : 0;
+
+  return (
+    <View style={styles.playbackBar}>
+      <Pressable
+        onPress={handlePlayPause}
+        style={styles.playbackBtn}
+        accessibilityLabel={playing ? 'Pause' : 'Play'}
+        accessibilityRole="button"
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Ionicons
+          name={playing ? 'pause' : 'play'}
+          size={IconGrammar.standard}
+          color={colors.textPrimary}
+        />
+      </Pressable>
+      <View style={styles.seekTrack}>
+        <View
+          style={[styles.seekFill, { width: `${ratio * 100}%`, backgroundColor: colors.brand }]}
+        />
+        <View
+          style={[styles.seekThumb, { left: `${ratio * 100}%`, backgroundColor: colors.brand }]}
+        />
+      </View>
+    </View>
+  );
+}
+
 // ── Unavailable state (truthful — native module not linked) ──────────
 
 function UnavailableState({
@@ -715,9 +737,7 @@ function UnavailableState({
         Voiceover recording unavailable
       </Text>
       <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-        This feature requires the expo-audio native module, which is not
-        linked in this build. Use a development build to enable voiceover
-        recording.
+        Requires expo-audio native module. Use a development build.
       </Text>
     </View>
   );
@@ -737,8 +757,7 @@ function DeniedState({
         Microphone access denied
       </Text>
       <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-        Enable microphone access in your device settings to record
-        voiceovers for your composition.
+        Enable mic access in settings to record.
       </Text>
     </View>
   );
@@ -757,14 +776,23 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       paddingVertical: Space.sm },
     title: {
+      flex: 1,
+      textAlign: 'center',
       fontFamily: Typography.family.semibold,
       fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-      borderRadius: Radius.sm },
+      alignItems: 'center' },
+    doneBtn: {
+      width: Control.hit,
+      height: Control.hit,
+      justifyContent: 'center',
+      alignItems: 'center' },
+    doneBtnText: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size },
     // ── Timer ──
     timerContainer: {
       flexDirection: 'row',
@@ -773,17 +801,13 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
       paddingVertical: Space.lg },
     timer: {
-      fontFamily: FontFamily.medium,
-      fontSize: RECORDER_GLYPH_SIZE,
+      fontFamily: FontFamily.semibold,
+      fontSize: 24,
       fontVariant: ['tabular-nums'],
-      letterSpacing: 2 },
-    recordingIndicator: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs },
+      letterSpacing: 1 },
     recordingDot: {
-      width: Space.sm,
-      height: Space.sm,
+      width: 6,
+      height: 6,
       borderRadius: Radius.full },
     recordingLabel: {
       fontFamily: Typography.family.semibold,
@@ -795,13 +819,6 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       alignItems: 'center',
       paddingVertical: Space.sm },
-    waveformPlaceholder: {
-      alignItems: 'center',
-      gap: Space.sm },
-    waveformHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.meta.size,
-      textAlign: 'center' },
     meteringNotice: {
       fontFamily: Typography.family.regular,
       fontSize: TypographyV2.meta.size,
@@ -836,15 +853,34 @@ function createStyles(colors: ThemeColors) {
     secondaryBtnText: {
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.body.size },
-    doneBtn: {
+    // ── Playback bar ──
+    playbackBar: {
+      flexDirection: 'row',
       alignItems: 'center',
+      gap: Space.sm,
+      width: '100%',
+      paddingVertical: Space.xs },
+    playbackBtn: {
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
-      height: 50,
-      borderRadius: Radius.lg,
-      paddingHorizontal: Space.lg },
-    doneBtnText: {
-      fontFamily: FontFamily.semibold,
-      fontSize: TypographyV2.bodyStrong.size },
+      alignItems: 'center' },
+    seekTrack: {
+      flex: 1,
+      height: Control.hit,
+      justifyContent: 'center',
+      position: 'relative' },
+    seekFill: {
+      position: 'absolute',
+      left: 0,
+      height: 2,
+      borderRadius: Radius.full },
+    seekThumb: {
+      position: 'absolute',
+      width: 16,
+      height: 16,
+      borderRadius: Radius.full,
+      marginLeft: -8 },
     // ── Empty states ──
     emptyBody: {
       paddingVertical: Space.xl,

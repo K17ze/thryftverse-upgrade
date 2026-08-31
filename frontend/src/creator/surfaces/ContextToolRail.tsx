@@ -65,10 +65,12 @@ export interface ContextToolRailProps {
 
 // ── Constants ───────────────────────────────────────────────────────
 
-/** Maximum primary tools visible before overflow. The 2026 flagship creator
- *  UX research (Meta Edits, Instagram, CapCut) converges on ≤4 immediately
- *  relevant actions — the primary layer is ruthlessly guarded against
- *  feature creep. More tools ≠ better; cognitive fluency peaks at 4. */
+/** Maximum primary tools before overflow — context determines actual count,
+ *  not this constant. This is a ceiling, not a target. The 2026 flagship
+ *  creator UX research (Meta Edits, Instagram, CapCut) converges on a small
+ *  number of immediately relevant actions — the primary layer is ruthlessly
+ *  guarded against feature creep. More tools ≠ better; cognitive fluency
+ *  peaks with a focused set. */
 const MAX_PRIMARY = 4;
 /** Badge diameter. */
 const BADGE_SIZE = 16;
@@ -183,7 +185,7 @@ const MoreButton = React.memo(function MoreButton({
       label="More"
       onPress={onPress}
       accessibilityLabel="More tools"
-      accessibilityHint="Opens additional creative tools — layers, transitions, templates, and advanced editing"
+      accessibilityHint="More editing tools"
     />
   );
 });
@@ -196,6 +198,7 @@ export function ContextToolRail({
   onOverflowPress,
   style,
 }: ContextToolRailProps) {
+  const { colors } = useAppTheme();
   const { pinned, recordUse } = usePinnedTools();
 
   // Resolve the active tool set from the registry.
@@ -257,6 +260,21 @@ export function ContextToolRail({
     }
   }, [onOverflowPress]);
 
+  // Split primary tools into weighted primary and secondary groups.
+  // A hairline separator is rendered between the two when both exist,
+  // giving the rail a clear visual hierarchy without decorative chrome.
+  const { weightedPrimary, weightedSecondary } = useMemo(() => {
+    const primary: ToolDefinition[] = [];
+    const secondary: ToolDefinition[] = [];
+    for (const tool of primaryTools) {
+      if (tool.weight === 'primary') primary.push(tool);
+      else secondary.push(tool);
+    }
+    return { weightedPrimary: primary, weightedSecondary: secondary };
+  }, [primaryTools]);
+
+  const hasSeparator = weightedPrimary.length > 0 && weightedSecondary.length > 0;
+
   return (
     <ScrollView
       horizontal
@@ -264,7 +282,15 @@ export function ContextToolRail({
       style={[styles.rail, style]}
       contentContainerStyle={styles.railContent}
     >
-      {primaryTools.map((tool) => (
+      {weightedPrimary.map((tool) => (
+        <RailToolButton
+          key={tool.id}
+          tool={tool}
+          onToolUsed={handleToolUsed}
+        />
+      ))}
+      {hasSeparator && <View style={[styles.separator, { backgroundColor: colors.border }]} />}
+      {weightedSecondary.map((tool) => (
         <RailToolButton
           key={tool.id}
           tool={tool}
@@ -300,6 +326,14 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // ── Primary/secondary separator ──
+  // A hairline vertical divider between weighted-primary and weighted-
+  // secondary tools. Communicates hierarchy without decorative chrome.
+  separator: {
+    width: StyleSheet.hairlineWidth,
+    height: Space.lg, // 24pt — spans the tool button visual height
+    marginHorizontal: Space.xs, // 4pt — matches inter-tool gap
   },
   // ── Badge overlay ──
   // Positioned at the top-right corner of the tool button.

@@ -15,6 +15,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 export type AttachmentType =
   | 'gallery'
@@ -38,16 +39,16 @@ interface AttachmentOption {
 }
 
 const OPTIONS: AttachmentOption[] = [
-  { id: 'gallery', label: 'Photo & Video', icon: 'images-outline', colorKey: 'brand' },
-  { id: 'camera', label: 'Camera', icon: 'camera-outline', colorKey: 'success' },
-  { id: 'offer', label: 'Make Offer', icon: 'pricetag-outline', colorKey: 'warning' },
-  { id: 'product', label: 'Product', icon: 'cube-outline', colorKey: 'discovery' },
-  { id: 'priceQuote', label: 'Price Quote', icon: 'receipt-outline', colorKey: 'brand' },
-  { id: 'shareListing', label: 'Share Listing', icon: 'share-outline', colorKey: 'discovery' },
-  { id: 'shareOrder', label: 'Order Status', icon: 'cube-outline', colorKey: 'brand' },
-  { id: 'requestPayment', label: 'Payment', icon: 'card-outline', colorKey: 'success' },
-  { id: 'inviteBot', label: 'Agent', icon: 'hardware-chip-outline', colorKey: 'social' },
-  { id: 'report', label: 'Report', icon: 'flag-outline', colorKey: 'danger' },
+  { id: 'gallery', label: 'attachments.photoAndVideo', icon: 'images-outline', colorKey: 'brand' },
+  { id: 'camera', label: 'attachments.camera', icon: 'camera-outline', colorKey: 'success' },
+  { id: 'offer', label: 'attachments.makeOffer', icon: 'pricetag-outline', colorKey: 'warning' },
+  { id: 'product', label: 'attachments.product', icon: 'cube-outline', colorKey: 'discovery' },
+  { id: 'priceQuote', label: 'attachments.priceQuote', icon: 'receipt-outline', colorKey: 'brand' },
+  { id: 'shareListing', label: 'attachments.shareListing', icon: 'share-outline', colorKey: 'discovery' },
+  { id: 'shareOrder', label: 'attachments.orderStatus', icon: 'cube-outline', colorKey: 'brand' },
+  { id: 'requestPayment', label: 'attachments.payment', icon: 'card-outline', colorKey: 'success' },
+  { id: 'inviteBot', label: 'attachments.agent', icon: 'hardware-chip-outline', colorKey: 'social' },
+  { id: 'report', label: 'common.report', icon: 'flag-outline', colorKey: 'danger' },
 ];
 
 interface AttachmentPickerSheetProps {
@@ -61,6 +62,7 @@ interface AttachmentPickerSheetProps {
 
 export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = false, hasLinkedItem = false, hasLinkedOrder = false }: AttachmentPickerSheetProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const reducedMotion = useReducedMotion();
   const { height: screenHeight } = useWindowDimensions();
   const translateY = useSharedValue(screenHeight);
@@ -133,10 +135,10 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
                 scaleValue={0.92}
                 hapticFeedback="light"
                 accessibilityRole="button"
-                accessibilityLabel={opt.label}
+                accessibilityLabel={t(opt.label)}
               >
                 <Ionicons name={opt.icon} size={24} color={colors[opt.colorKey]} />
-                <Caption color={colors.textPrimary} style={styles.optionLabel}>{opt.label}</Caption>
+                <Caption color={colors.textPrimary} style={styles.optionLabel}>{t(opt.label)}</Caption>
               </AnimatedPressable>
             ))}
           </View>
@@ -148,9 +150,9 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
             scaleValue={0.98}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityLabel={t('common.cancel')}
           >
-            <BodyEmphasis color={colors.textPrimary}>Cancel</BodyEmphasis>
+            <BodyEmphasis color={colors.textPrimary}>{t('common.cancel')}</BodyEmphasis>
           </AnimatedPressable>
         </Reanimated.View>
       </GestureDetector>

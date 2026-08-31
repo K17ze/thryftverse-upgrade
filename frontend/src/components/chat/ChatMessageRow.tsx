@@ -19,7 +19,8 @@ import { PaymentWarningCard } from "./PaymentWarningCard";
 
 import { useAppTheme } from "../../theme/ThemeContext";
 import { Space, Radius, Control, Stroke } from "../../theme/designTokens";
-import { t } from "../../i18n";
+import { t as legacyT } from "../../i18n";
+import { useAppTranslation } from "../../i18n/useAppTranslation";
 import { type SupportedCurrencyCode } from "../../constants/currencies";
 import type { CurrencyDisplayMode } from "../../utils/currency";
 import { useFormattedPrice } from "../../hooks/useFormattedPrice";
@@ -108,6 +109,7 @@ export function ChatMessageRow({
   onDismissWarning,
   isNewMessage }: ChatMessageRowProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const { currencyCode } = useFormattedPrice();
 
   const styles = useMemo(() => StyleSheet.create({
@@ -241,7 +243,7 @@ export function ChatMessageRow({
     <View style={styles.unreadDividerWrap}>
       <View style={styles.unreadDividerLine} />
       <View style={styles.unreadDividerBadge}>
-        <Text style={styles.unreadDividerText}>New messages</Text>
+        <Text style={styles.unreadDividerText}>{t('conversation.newMessages')}</Text>
       </View>
       <View style={styles.unreadDividerLine} />
     </View>
@@ -481,7 +483,7 @@ export function ChatMessageRow({
                   );
                   return parent
                     ? {
-                        senderName: parent.senderLabel ?? t('chat.fallbackUserName'),
+                        senderName: parent.senderLabel ?? legacyT('chat.fallbackUserName'),
                         text: parent.text ?? "" }
                     : null;
                 })()

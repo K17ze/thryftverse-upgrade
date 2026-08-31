@@ -64,8 +64,7 @@ import {
   fromHexString,
   BLACK,
   WHITE,
-  type CreatorColor,
-  type RecentColor } from '../../color';
+  type CreatorColor } from '../../color';
 
 export interface TextEditorSheetProps {
   visible: boolean;
@@ -515,7 +514,7 @@ export function TextEditorSheet({
             onChange={setFillColor}
             onCommit={handleFillCommit}
             mode={expandedColor === 'fill' ? 'expanded' : 'compact'}
-            recents={recents as RecentColor[]}
+            recents={recents}
             onCommitRecent={addRecent}
             accessibilityLabel="Text fill color picker"
             style={styles.colorPicker}
@@ -608,7 +607,7 @@ export function TextEditorSheet({
                   onChange={setStrokeColor}
                   onCommit={handleStrokeCommit}
                   mode="expanded"
-                  recents={recents as RecentColor[]}
+                  recents={recents}
                   onCommitRecent={addRecent}
                   accessibilityLabel="Stroke color picker"
                   style={styles.colorPicker}
@@ -690,7 +689,7 @@ export function TextEditorSheet({
                   onChange={setShadowColor}
                   onCommit={handleShadowCommit}
                   mode="expanded"
-                  recents={recents as RecentColor[]}
+                  recents={recents}
                   onCommitRecent={addRecent}
                   accessibilityLabel="Shadow color picker"
                   style={styles.colorPicker}
@@ -772,7 +771,7 @@ export function TextEditorSheet({
                   onChange={setBgColor}
                   onCommit={handleBgCommit}
                   mode="expanded"
-                  recents={recents as RecentColor[]}
+                  recents={recents}
                   onCommitRecent={addRecent}
                   accessibilityLabel="Background color picker"
                   style={styles.colorPicker}

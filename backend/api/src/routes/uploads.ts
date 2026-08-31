@@ -121,7 +121,26 @@ export const registerUploadRoutes = ({
   resolveAuthenticatedUserId,
   verifyUploadedObject = assertObjectMatchesUploadPolicy,
 }: UploadRouteDependencies) => {
-  app.post('/uploads/presign', async (request) => {
+  app.post('/uploads/presign', {
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: '1 minute',
+      },
+    },
+  }, async (request) => {
+    // Explicit file-size guard before Zod parsing so that oversized files
+    // receive a semantically correct 413 (FILE_TOO_LARGE) instead of the
+    // generic 400 that Zod's .max() constraint would produce.
+    const rawBody = request.body as Record<string, unknown> | null;
+    if (
+      rawBody
+      && typeof rawBody.sizeBytes === 'number'
+      && rawBody.sizeBytes > 500 * 1024 * 1024
+    ) {
+      throw createApiError('FILE_TOO_LARGE', 'File exceeds maximum size of 500MB');
+    }
+
     const payload = uploadRequestSchema.parse(request.body);
     const actorUserId = resolveAuthenticatedUserId(request);
     if (payload.folder === 'smoke' && config.nodeEnv === 'production') {
@@ -201,58 +220,113 @@ export const registerUploadRoutes = ({
       );
     }
 
+    // ── Pre-transaction phase ───────────────────────────────────────
+    // The S3 HEAD verification is a network call that can take hundreds
+    // of milliseconds. Performing it inside the DB transaction held the
+    // FOR UPDATE row locks open across that call, causing lock contention
+    // under concurrent finalize traffic. The intent and any existing
+    // finalization row are read here (without locks), validated, and the
+    // HEAD check is run before the transaction is opened. The transaction
+    // below re-fetches the finalization row with FOR UPDATE for write
+    // serialization but only holds the lock for the duration of the DB
+    // writes themselves.
+    const intentResult = await db.query<{
+      id: string;
+      object_key: string;
+      bucket: string;
+      owner_id: string;
+      folder: string;
+      file_name: string;
+      content_type: string;
+      size_bytes: string;
+      public_url: string;
+      expires_at: string;
+      finalized_at: string | null;
+    }>(
+      `SELECT id, object_key, bucket, owner_id, folder, file_name,
+              content_type, size_bytes::text, public_url,
+              expires_at::text, finalized_at::text
+       FROM upload_intents
+       WHERE object_key = $1
+       LIMIT 1`,
+      [payload.objectKey],
+    );
+
+    if (!intentResult.rowCount) {
+      reply.code(404);
+      return { ok: false, error: 'Upload intent not found or no longer valid' };
+    }
+
+    const intent = intentResult.rows[0];
+    if (intent.owner_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Upload intent belongs to another user' };
+    }
+    if (Date.parse(intent.expires_at) <= Date.now() && !intent.finalized_at) {
+      reply.code(410);
+      return { ok: false, error: 'Upload intent has expired' };
+    }
+    if (payload.bucket && payload.bucket !== intent.bucket) {
+      reply.code(422);
+      return { ok: false, error: 'Upload bucket does not match the presigned intent' };
+    }
+
+    const bucket = intent.bucket;
+    const existing = await db.query<FinalizationRow>(
+      `SELECT id, object_key, bucket, owner_id, folder, file_name, content_type,
+              size_bytes::text, public_url, status, scope, scope_ref_id,
+              head_checked_at::text, failure_reason, metadata,
+              upload_intent_id, media_asset_id,
+              created_at::text, updated_at::text
+       FROM upload_finalizations
+       WHERE bucket = $1 AND object_key = $2
+       LIMIT 1`,
+      [bucket, payload.objectKey],
+    );
+
+    let row = existing.rows[0];
+    if (row && row.owner_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Finalization belongs to another user' };
+    }
+
+    const shouldVerify =
+      !row
+      || row.status !== 'finalized'
+      || row.upload_intent_id !== intent.id;
+
+    let status: 'pending' | 'finalized' | 'failed' = 'pending';
+    let failureReason: string | null = null;
+    let headCheckedAt: string | null = null;
+
+    if (shouldVerify) {
+      try {
+        await verifyUploadedObject(
+          intent.object_key,
+          intent.content_type,
+          Number(intent.size_bytes),
+        );
+        status = 'finalized';
+        headCheckedAt = new Date().toISOString();
+      } catch (error) {
+        status = 'failed';
+        failureReason = error instanceof Error ? error.message : 'HEAD_FAILED';
+        headCheckedAt = new Date().toISOString();
+      }
+    } else if (row?.status === 'finalized') {
+      status = 'finalized';
+    }
+
+    // ── Transaction phase: DB writes only ───────────────────────────
     const client = await db.connect();
     try {
       await client.query('BEGIN');
 
-      const intentResult = await client.query<{
-        id: string;
-        object_key: string;
-        bucket: string;
-        owner_id: string;
-        folder: string;
-        file_name: string;
-        content_type: string;
-        size_bytes: string;
-        public_url: string;
-        expires_at: string;
-        finalized_at: string | null;
-      }>(
-        `SELECT id, object_key, bucket, owner_id, folder, file_name,
-                content_type, size_bytes::text, public_url,
-                expires_at::text, finalized_at::text
-         FROM upload_intents
-         WHERE object_key = $1
-         LIMIT 1
-         FOR UPDATE`,
-        [payload.objectKey],
-      );
-
-      if (!intentResult.rowCount) {
-        await client.query('ROLLBACK');
-        reply.code(404);
-        return { ok: false, error: 'Upload intent not found or no longer valid' };
-      }
-
-      const intent = intentResult.rows[0];
-      if (intent.owner_id !== actorUserId) {
-        await client.query('ROLLBACK');
-        reply.code(403);
-        return { ok: false, error: 'Upload intent belongs to another user' };
-      }
-      if (Date.parse(intent.expires_at) <= Date.now() && !intent.finalized_at) {
-        await client.query('ROLLBACK');
-        reply.code(410);
-        return { ok: false, error: 'Upload intent has expired' };
-      }
-      if (payload.bucket && payload.bucket !== intent.bucket) {
-        await client.query('ROLLBACK');
-        reply.code(422);
-        return { ok: false, error: 'Upload bucket does not match the presigned intent' };
-      }
-
-      const bucket = intent.bucket;
-      const existing = await client.query<FinalizationRow>(
+      // Re-fetch the finalization row with FOR UPDATE to serialize
+      // concurrent finalize calls writing the same object. The intent
+      // data and HEAD result are already in hand from the pre-transaction
+      // phase, so the lock is held only for the writes below.
+      const lockedExisting = await client.query<FinalizationRow>(
         `SELECT id, object_key, bucket, owner_id, folder, file_name, content_type,
                 size_bytes::text, public_url, status, scope, scope_ref_id,
                 head_checked_at::text, failure_reason, metadata,
@@ -264,39 +338,18 @@ export const registerUploadRoutes = ({
          FOR UPDATE`,
         [bucket, payload.objectKey],
       );
+      row = lockedExisting.rows[0] ?? row;
 
-      let row = existing.rows[0];
-      if (row && row.owner_id !== actorUserId) {
-        await client.query('ROLLBACK');
-        reply.code(403);
-        return { ok: false, error: 'Finalization belongs to another user' };
-      }
-
-      const shouldVerify =
-        !row
-        || row.status !== 'finalized'
-        || row.upload_intent_id !== intent.id;
-
-      let status: 'pending' | 'finalized' | 'failed' = 'pending';
-      let failureReason: string | null = null;
-      let headCheckedAt: string | null = null;
-
-      if (shouldVerify) {
-        try {
-          await verifyUploadedObject(
-            intent.object_key,
-            intent.content_type,
-            Number(intent.size_bytes),
-          );
-          status = 'finalized';
-          headCheckedAt = new Date().toISOString();
-        } catch (error) {
-          status = 'failed';
-          failureReason = error instanceof Error ? error.message : 'HEAD_FAILED';
-          headCheckedAt = new Date().toISOString();
-        }
-      } else if (row?.status === 'finalized') {
+      // Reconcile: if another concurrent request already finalized this
+      // object for the same intent while we ran the HEAD check, honour
+      // that result instead of overwriting it with ours.
+      if (
+        row
+        && row.status === 'finalized'
+        && row.upload_intent_id === intent.id
+      ) {
         status = 'finalized';
+        failureReason = null;
       }
 
       const finalizationId = row?.id ?? `fin_${crypto.randomUUID()}`;

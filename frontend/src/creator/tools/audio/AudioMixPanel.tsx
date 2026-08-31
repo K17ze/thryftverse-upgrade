@@ -285,9 +285,6 @@ export function AudioMixPanel({
       >
         {/* ── Header ──────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Audio Mix
-          </Text>
           <PressScale
             onPress={handleClose}
             style={styles.closeBtn}
@@ -295,8 +292,12 @@ export function AudioMixPanel({
             accessibilityHint="Closes the audio mixing panel"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} />
           </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            Audio
+          </Text>
+          <View style={styles.closeBtn} />
         </View>
 
         {hasTracks ? (
@@ -323,15 +324,11 @@ export function AudioMixPanel({
             </View>
 
             {/* ── Ducking ────────────────────────────────────────────── */}
-            <View style={styles.sectionDivider} />
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Ducking
-              </Text>
               <Pressable
                 onPress={handleDuckingToggle}
                 style={styles.toggleRow}
-                accessibilityLabel="Ducking — auto-lower music during voiceover"
+                accessibilityLabel="Ducking"
                 accessibilityRole="switch"
                 accessibilityState={{ checked: localDuckingEnabled }}
                 disabled={!hasVoiceover}
@@ -340,14 +337,7 @@ export function AudioMixPanel({
                   <Text
                     style={[styles.toggleTitle, { color: colors.textPrimary }]}
                   >
-                    Auto-lower music during voiceover
-                  </Text>
-                  <Text
-                    style={[styles.toggleHint, { color: colors.textMuted }]}
-                  >
-                    {hasVoiceover
-                      ? 'Background music dips when voiceover is active.'
-                      : 'Add a voiceover to enable ducking.'}
+                    Ducking
                   </Text>
                 </View>
                 <View
@@ -380,17 +370,13 @@ export function AudioMixPanel({
             </View>
 
             {/* ── Master volume ──────────────────────────────────────── */}
-            <View style={styles.sectionDivider} />
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Master
-              </Text>
               <CreatorSlider
                 value={masterVolume}
                 min={0}
                 max={1}
                 step={0.01}
-                label="Master Volume"
+                label="Master"
                 accessibilityLabel={`Master volume, ${formatPercent(masterVolume)}`}
                 onValueChange={handleMasterVolumeChange}
                 onCommit={handleMasterVolumeChange}
@@ -400,12 +386,8 @@ export function AudioMixPanel({
         ) : (
           /* ── Empty state (truthful) ── */
           <View style={styles.emptyBody}>
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-              No audio tracks
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-              Add music or record a voiceover to start mixing audio for
-              your composition.
+            <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>
+              No audio tracks yet
             </Text>
           </View>
         )}
@@ -481,7 +463,7 @@ function TrackRow({
             selectedStyle="fill"
             onPress={onMuteToggle}
             accessibilityLabel={isMuted ? 'Unmute track' : 'Mute track'}
-            accessibilityHint={`Mutes or unmutes ${track.name}`}
+            accessibilityHint="Mute or unmute track"
           />
           <CreatorToolButton
             icon={isSoloed ? 'headset' : 'headset-outline'}
@@ -489,13 +471,13 @@ function TrackRow({
             selectedStyle="fill"
             onPress={onSoloToggle}
             accessibilityLabel={isSoloed ? 'Unsolo track' : 'Solo track'}
-            accessibilityHint={`Solos ${track.name}, muting all other tracks`}
+            accessibilityHint="Solo track"
           />
           <CreatorToolButton
             icon="trash-outline"
             onPress={onDelete}
             accessibilityLabel="Delete track"
-            accessibilityHint={`Removes ${track.name} from the composition`}
+            accessibilityHint="Delete track"
           />
         </View>
       </View>
@@ -555,10 +537,12 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm },
+      paddingVertical: Space.sm,
+      height: 44 },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.sectionTitle.size },
+      fontSize: 17,
+      textAlign: 'center' },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
@@ -571,9 +555,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm },
     trackRow: {
       gap: Space.sm,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border },
+      paddingVertical: Space.sm },
     trackHeader: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -604,15 +586,9 @@ function createStyles(colors: ThemeColors) {
     fadeColumn: {
       flex: 1 },
     // ── Sections ──
-    sectionDivider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-      marginVertical: Space.md },
     section: {
-      gap: Space.sm },
-    sectionTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.bodyStrong.size },
+      gap: Space.sm,
+      marginTop: Space.lg },
     // ── Toggle ──
     toggleRow: {
       flexDirection: 'row',
@@ -625,11 +601,8 @@ function createStyles(colors: ThemeColors) {
       paddingRight: Space.md,
       gap: 2 },
     toggleTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.body.size },
-    toggleHint: {
       fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.meta.size },
+      fontSize: TypographyV2.body.size },
     switchTrack: {
       width: 46,
       height: 28,
@@ -644,16 +617,10 @@ function createStyles(colors: ThemeColors) {
     // ── Empty state ──
     emptyBody: {
       paddingVertical: Space.xl,
-      alignItems: 'center',
-      gap: Space.sm },
+      alignItems: 'center' },
     emptyTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.bodyStrong.size },
-    emptySubtitle: {
       fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.body.size,
-      textAlign: 'center',
-      paddingHorizontal: Space.lg } });
+      fontSize: TypographyV2.body.size } });
 }
 
 // ── Memoised style factory ────────────────────────────────────────────

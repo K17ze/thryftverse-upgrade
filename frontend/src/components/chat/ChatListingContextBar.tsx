@@ -7,6 +7,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 export interface ChatListingContextBarProps {
   thumbnailUri: string | null;
@@ -37,6 +38,7 @@ export function ChatListingContextBar({
   onTitlePress,
   defaultCollapsed = false }: ChatListingContextBarProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const reducedMotion = useReducedMotion();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -60,8 +62,8 @@ export function ChatListingContextBar({
           hapticFeedback="light"
           disabled={!onTitlePress}
           accessibilityRole={onTitlePress ? 'button' : undefined}
-          accessibilityLabel={`Linked listing: ${title}, ${price}, ${availability}`}
-          accessibilityHint="Opens the listing detail page"
+          accessibilityLabel={t('inbox.linkedListing', { title, price, availability })}
+          accessibilityHint={t('inbox.listingHint')}
           style={styles.row}
         >
           {thumbnailUri ? (

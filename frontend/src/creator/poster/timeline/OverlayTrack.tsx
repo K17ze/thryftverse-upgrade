@@ -1,23 +1,27 @@
 import React, { useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useSharedValue, runOnJS } from 'react-native-reanimated';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  runOnJS,
+} from 'react-native-reanimated';
 import { Space, FontFamily } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { withAlpha } from '../../../components/poster/shared/colorUtils';
 import type { OverlayLayer, TimeRange } from './TimelineTypes';
 
 // ───────────────────────────────────────────────────────────────────────────
 // OverlayTrack — a track for timed overlays (text, stickers, products,
 // music, drawings).
 //
-// Each overlay renders as a colored bar spanning its time range across the
+// Each overlay renders as a neutral bar spanning its time range across the
 // track width. Bars show the overlay label and are draggable to move the
-// overlay in time. Color is derived from the overlay type:
-//   text=brand, sticker=warning, product=success,
-//   music=antiqueGold (secondary accent), drawing=danger.
+// overlay in time. All bars share one neutral track background; the
+// selected overlay gets a 3pt brand accent on its left edge.
 // ───────────────────────────────────────────────────────────────────────────
 
 const TRACK_HEIGHT = 28;
@@ -29,20 +33,6 @@ export interface OverlayTrackProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onMove: (id: string, timeRange: TimeRange) => void;
-}
-
-function overlayColor(
-  type: OverlayLayer['type'],
-  colors: ReturnType<typeof useAppTheme>['colors']
-): string {
-  switch (type) {
-    case 'text': return colors.brand;
-    case 'sticker': return colors.warning;
-    case 'product': return colors.success;
-    case 'music': return colors.antiqueGold;
-    case 'drawing': return colors.danger;
-    default: return colors.brand;
-  }
 }
 
 export const OverlayTrack = React.memo(function OverlayTrack({
@@ -82,7 +72,6 @@ export const OverlayTrack = React.memo(function OverlayTrack({
       {overlays.map((ov) => {
         const left = Math.max(0, ov.timeRange.startMs) * pxPerMs;
         const width = Math.max(20, (ov.timeRange.endMs - ov.timeRange.startMs) * pxPerMs);
-        const color = ov.color || overlayColor(ov.type, colors);
         const isSelected = ov.id === selectedId;
         return (
           <OverlayBar
@@ -90,7 +79,6 @@ export const OverlayTrack = React.memo(function OverlayTrack({
             overlay={ov}
             left={left}
             width={width}
-            color={color}
             isSelected={isSelected}
             trackWidth={trackWidth}
             totalDurationMs={totalDurationMs}
@@ -108,7 +96,6 @@ interface OverlayBarProps {
   overlay: OverlayLayer;
   left: number;
   width: number;
-  color: string;
   isSelected: boolean;
   trackWidth: number;
   totalDurationMs: number;
@@ -120,68 +107,107 @@ const OverlayBar = React.memo(function OverlayBar({
   overlay,
   left,
   width,
-  color,
   isSelected,
   trackWidth,
   totalDurationMs,
   onPress,
   onMove,
 }: OverlayBarProps) {
+  const { colors } = useAppTheme();
   const haptic = useHaptic();
   const startMsSV = useSharedValue(overlay.timeRange.startMs);
+  // Pixel offset accumulated during the drag — drives the animated style
+  // on the UI thread so the bar tracks the finger 1:1 without crossing
+  // the JS bridge.
+  const dragOffsetSV = useSharedValue(0);
   const durationMs = overlay.timeRange.endMs - overlay.timeRange.startMs;
 
   React.useEffect(() => {
     startMsSV.value = overlay.timeRange.startMs;
-  }, [overlay.timeRange.startMs, startMsSV]);
+    dragOffsetSV.value = 0;
+  }, [overlay.timeRange.startMs, startMsSV, dragOffsetSV]);
 
   const pxPerMs = trackWidth > 0 && totalDurationMs > 0 ? trackWidth / totalDurationMs : 0;
 
-  const moveGesture = React.useMemo(() =>
+  // ── Animated position (UI thread) ───────────────────────────────────
+  // The bar translates by dragOffsetSV pixels during the drag. On end,
+  // the offset is converted to ms, committed to the parent, and reset.
+  const barAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dragOffsetSV.value }],
+  }));
+
+  // Tap selects the overlay (with haptic); pan drags it immediately. Racing
+  // the two gestures means a quick touch selects, while any movement starts
+  // dragging right away — no long-press delay (Instagram/CapCut behaviour).
+  const tapGesture = React.useMemo(() =>
+    Gesture.Tap()
+      .onEnd(() => {
+        'worklet';
+        runOnJS(onPress)();
+      }),
+    [onPress]
+  );
+
+  const panGesture = React.useMemo(() =>
     Gesture.Pan()
-      .activateAfterLongPress(120)
+      .onBegin(() => {
+        'worklet';
+        dragOffsetSV.value = 0;
+      })
       .onChange((e) => {
         'worklet';
         if (pxPerMs <= 0) return;
         const deltaMs = e.changeX / pxPerMs;
         let newStart = startMsSV.value + deltaMs;
         newStart = Math.max(0, Math.min(totalDurationMs - durationMs, newStart));
+        // Accumulate only the clamped delta in pixels for 1:1 visual.
+        const actualDeltaMs = newStart - startMsSV.value;
         startMsSV.value = newStart;
-        runOnJS(onMove)(overlay.id, { startMs: newStart, endMs: newStart + durationMs });
+        dragOffsetSV.value += actualDeltaMs * pxPerMs;
       })
       .onEnd(() => {
         'worklet';
+        const finalStart = startMsSV.value;
+        runOnJS(onMove)(overlay.id, { startMs: finalStart, endMs: finalStart + durationMs });
         runOnJS(haptic.light)();
+        dragOffsetSV.value = 0;
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pxPerMs, totalDurationMs, durationMs, overlay.id, onMove, haptic]
+    [pxPerMs, totalDurationMs, durationMs, overlay.id, onMove, haptic, startMsSV, dragOffsetSV]
+  );
+
+  const moveGesture = React.useMemo(() =>
+    Gesture.Race(tapGesture, panGesture),
+    [tapGesture, panGesture]
   );
 
   return (
     <GestureDetector gesture={moveGesture}>
-      <Pressable
-        onPress={onPress}
+      <Reanimated.View
         accessibilityLabel={`${overlay.type} overlay: ${overlay.label}`}
         accessibilityRole="button"
         style={[
           overlayTrackStyles.bar,
+          barAnimStyle,
           {
             left,
             width,
-            backgroundColor: `${color}33` /* TODO: replace with subtle token once color is resolved */, // 20% fill
-            borderColor: color,
+            backgroundColor: withAlpha(colors.textMuted, 0.16),
+            borderColor: colors.textMuted,
             borderWidth: isSelected ? 2 : 1,
           },
         ]}
       >
-        <View style={[overlayTrackStyles.barAccent, { backgroundColor: color }]} />
+        {isSelected && (
+          <View style={[overlayTrackStyles.barAccent, { backgroundColor: colors.brand }]} />
+        )}
         <Text
-          style={[overlayTrackStyles.barLabel, { color: '#fff' }]}
+          style={[overlayTrackStyles.barLabel, { color: colors.scrimTextPrimary }]}
           numberOfLines={1}
         >
           {overlay.label}
         </Text>
-      </Pressable>
+      </Reanimated.View>
     </GestureDetector>
   );
 });

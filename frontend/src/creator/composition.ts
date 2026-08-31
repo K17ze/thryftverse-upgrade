@@ -143,6 +143,8 @@ const TextLayerPayloadSchema = z.object({
   // Typography
   fontFamilyId: z.string().optional(),
   fontWeight: z.union([z.string(), z.number()]).optional(),
+  fontSize: z.number().min(8).max(200).optional(),
+  bold: z.boolean().optional(),
   italic: z.boolean().optional(),
   underline: z.boolean().optional(),
   letterSpacing: z.number().optional(),
@@ -201,6 +203,14 @@ const MediaLayerPayloadSchema = z.object({
   // and read by the playback pipeline to ramp volume at clip boundaries.
   fadeInMs: z.number().min(0).max(5000).optional(),
   fadeOutMs: z.number().min(0).max(5000).optional(),
+  // Focal point for art-directed crops (AGENTS.md §4 — no blind `cover`).
+  // Normalized 0–1 for both x and y. When present and contentFit is 'cover',
+  // the renderer shifts the crop window so the focal point stays in frame.
+  // Defaults to center (0.5, 0.5) when absent.
+  focalPoint: z.object({
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+  }).optional(),
   // Effect stack — ordered list of adjustments/filters applied to the media
   effects: z.array(EffectNodeSchema).optional(),
 });

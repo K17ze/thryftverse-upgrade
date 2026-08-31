@@ -43,17 +43,19 @@ export const OverflowItem = React.memo(function OverflowItem({
   icon,
   glyph,
   label,
-  colors,
+  colors: propColors,
   onPress,
   disabled = false,
   danger = false,
   selected = false }: OverflowItemProps) {
   const haptic = useHaptic();
+  const { colors: themeColors } = useAppTheme();
+  const colors = propColors ?? themeColors;
   const contentColor = disabled
-    ? (colors?.textMuted ?? 'rgba(255,255,255,0.4)')
+    ? colors.textMuted
     : danger
-      ? '#ff6b6b'
-      : (colors?.textPrimary ?? '#fff');
+      ? colors.danger
+      : colors.textPrimary;
   return (
     <PressScale
       onPress={() => {

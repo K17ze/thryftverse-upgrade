@@ -32,6 +32,7 @@ import { fetchLooksFromApi } from '../services/looksApi';
 import { createStableId } from '../utils/createStableId';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { useToast } from '../context/ToastContext';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { withAlpha } from '../components/poster/shared/colorUtils';
@@ -328,10 +329,11 @@ function PickerShell({ title, onClose, children, compact }: { title: string; onC
     <SheetContainer visible={true} onClose={onClose} compact={compact}>
       <KeyboardAwareScrollView contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ maxHeight: '100%' }}>
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
           <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
+            <Ionicons name="close" size={22} color={colors.textSecondary} aria-hidden={true} />
           </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+          <View style={styles.headerSpacer} />
         </View>
         {children}
       </KeyboardAwareScrollView>
@@ -398,12 +400,12 @@ interface MediaAsset {
 // "Square" so the filter label matches what it actually does. Querying
 // actual smart albums (iOS Selfies album) requires platform-specific APIs
 // not reliably available through expo-media-library.
-type MediaCategory = 'recent' | 'photos' | 'videos' | 'square';
-const MEDIA_CATEGORIES: { key: MediaCategory; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
-  { key: 'recent', label: 'Recent', icon: 'time-outline' },
-  { key: 'photos', label: 'Photos', icon: 'images-outline' },
-  { key: 'videos', label: 'Videos', icon: 'videocam-outline' },
-  { key: 'square', label: 'Square', icon: 'crop-outline' },
+type MediaCategory = 'recent' | 'photos' | 'videos' | 'albums';
+const MEDIA_CATEGORIES: { key: MediaCategory; label: string }[] = [
+  { key: 'recent', label: 'Recent' },
+  { key: 'photos', label: 'Photos' },
+  { key: 'videos', label: 'Videos' },
+  { key: 'albums', label: 'Albums' },
 ];
 
 // ── MediaGridItem — spring press feedback + spring scale selection badge ──
@@ -412,12 +414,14 @@ function MediaGridItem({
   isSelected,
   selectionOrder,
   onPress,
+  onLongPress,
   colors,
   styles }: {
   asset: MediaAsset;
   isSelected: boolean;
   selectionOrder: number;
   onPress: () => void;
+  onLongPress?: () => void;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
@@ -448,9 +452,11 @@ function MediaGridItem({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       onPressIn={() => { pressedSV.value = withSpring(1, spring.tap); }}
       onPressOut={() => { pressedSV.value = withSpring(0, spring.tap); }}
       accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
+      accessibilityHint="Long-press to preview"
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -472,9 +478,9 @@ function MediaGridItem({
           </View>
         )}
         {isSelected && (
-          <View style={styles.mediaGridSelectedOverlay}>
+          <View style={[styles.mediaGridSelectedOverlay, { borderColor: colors.brand }]}>
             <Reanimated.View style={[styles.mediaGridSelectionBadge, { backgroundColor: colors.brand }, badgeStyle]}>
-              <Text style={[styles.mediaGridSelectionText, { color: colors.textInverse }]}>{selectionOrder}</Text>
+              <Ionicons name="checkmark" size={10} color={colors.scrimTextPrimary} aria-hidden={true} />
             </Reanimated.View>
           </View>
         )}
@@ -483,25 +489,14 @@ function MediaGridItem({
   );
 }
 
-// ── StaticStateIcon — replaces the previous infinite breathing animation.
-// Per AGENTS.md §17, continuous pulsing is prohibited. Empty/permission
-// states use a static icon with a restrained one-shot entrance fade instead.
-function StaticStateIcon({ name, size, color }: { name: React.ComponentProps<typeof Ionicons>['name']; size: number; color: string }) {
-  return (
-    <Ionicons name={name} size={size} color={color} aria-hidden={true} />
-  );
-}
-
 // ── PermissionDeniedState — spring entrance with retry CTA ──
 function PermissionDeniedState({
-  icon,
   title,
   message,
   ctaLabel,
   onCta,
   colors,
   styles }: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
   message: string;
   ctaLabel: string;
@@ -525,7 +520,6 @@ function PermissionDeniedState({
 
   return (
     <Reanimated.View style={[styles.mediaPermissionState, entranceStyle]}>
-      <StaticStateIcon name={icon} size={IconGrammar.hero} color={colors.textMuted} />
       <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
         {title}
       </Text>
@@ -547,6 +541,7 @@ function PermissionDeniedState({
 const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { show: showToast } = useToast();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const { spring } = useMotionConfig();
@@ -556,6 +551,10 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Long-press preview — shows a transient full-screen preview of the
+  // long-pressed asset (iOS Photos peek pattern).
+  const [previewAsset, setPreviewAsset] = useState<MediaAsset | null>(null);
   // Ordered selection — preserved as an array instead of deriving order
   // from Set iteration semantics (which is not deterministic across JS
   // engines). This ensures the selection order matches the user's tap order.
@@ -588,9 +587,6 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
       });
     return () => { cancelled = true; };
   }, [status?.granted]);
-
-  const activeAlbum = albums.find((a) => a.id === activeAlbumId) ?? null;
-  const albumLabel = activeAlbum?.title ?? 'All Photos';
 
   // Spring indicator for category tab
   const tabIndicatorXSV = useSharedValue(0);
@@ -659,10 +655,28 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     }
   }, [status, loadRecentMedia]);
 
+  // ── Pull-to-refresh ──────────────────────────────────────────────
+  // Reloads the first page of the media library. Distinct from the initial
+  // load: the FlashList keeps its scroll position while the data refreshes.
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await loadRecentMedia(true);
+    } finally {
+      if (mountedRef.current) setIsRefreshing(false);
+    }
+  }, [loadRecentMedia]);
+
   // ── Category tab switch with spring indicator ────────────────────
   const handleCategorySwitch = useCallback((cat: MediaCategory) => {
+    if (cat === 'albums') {
+      haptic.selection();
+      setShowAlbumPicker((v) => !v);
+      return;
+    }
     if (cat === activeCategory) return;
     haptic.selection();
+    setShowAlbumPicker(false);
     setActiveCategory(cat);
     const layout = tabLayoutsRef.current[cat];
     if (layout) {
@@ -681,7 +695,6 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     if (activeCategory === 'recent') return assets;
     if (activeCategory === 'photos') return assets.filter(a => a.mediaType === 'image');
     if (activeCategory === 'videos') return assets.filter(a => a.mediaType === 'video');
-    if (activeCategory === 'square') return assets.filter(a => a.mediaType === 'image' && a.width === a.height);
     return assets;
   }, [assets, activeCategory]);
 
@@ -690,13 +703,12 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
   // enter the selection. This prevents the user from building a selection
   // that will be rejected downstream by the editor or upload pipeline.
   const MAX_VIDEO_DURATION_MS = 60_000;
-  const videoPreflightError = useRef<string | null>(null);
 
   const toggleSelect = useCallback((asset: MediaAsset) => {
     if (asset.mediaType === 'video') {
       if (asset.durationMs != null && asset.durationMs > MAX_VIDEO_DURATION_MS) {
         haptic.medium();
-        videoPreflightError.current = `Video is ${Math.floor(asset.durationMs / 1000)}s — max 60s supported`;
+        showToast(`Video is ${Math.floor(asset.durationMs / 1000)}s — max 60s`, 'error');
         return;
       }
     }
@@ -734,22 +746,6 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     onClose();
   }, [selectedIds, assets, onAddLayer, onClose]);
 
-  // ── Reorder selection ──
-  // Move a selected item left or right in the ordered array. This lets the
-  // user correct their tap order before committing to the canvas.
-  const reorderSelection = useCallback((id: string, direction: -1 | 1) => {
-    haptic.selection();
-    setSelectedIds((prev) => {
-      const idx = prev.indexOf(id);
-      if (idx < 0) return prev;
-      const targetIdx = idx + direction;
-      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
-      const next = [...prev];
-      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
-      return next;
-    });
-  }, [haptic]);
-
   const handleTakePhoto = useCallback(async () => {
     haptic.light();
     const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
@@ -778,6 +774,12 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       quality: 0.9 });
     if (!result.canceled && result.assets[0]) {
+      const durationMs = result.assets[0].duration ?? 0;
+      if (durationMs > MAX_VIDEO_DURATION_MS) {
+        haptic.medium();
+        showToast(`Video is ${Math.floor(durationMs / 1000)}s — max 60s`, 'error');
+        return;
+      }
       onAddLayer({
         ...baseLayer(createStableId('media'), 0),
         type: 'media',
@@ -787,12 +789,11 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
           mediaUri: result.assets[0].uri,
           mediaType: 'video',
           contentFit: 'cover',
-          // ImagePicker returns duration in milliseconds.
-          videoDurationMs: result.assets[0].duration ?? undefined,
+          videoDurationMs: durationMs || undefined,
           opacity: 1 } });
       onClose();
     }
-  }, [onAddLayer, onClose]);
+  }, [onAddLayer, onClose, haptic, showToast, MAX_VIDEO_DURATION_MS]);
 
   const handleOpenSettings = useCallback(async () => {
     const { Linking } = await import('react-native');
@@ -807,32 +808,8 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     width: tabIndicatorWidthSV.value }));
 
   // ── FlashList renderItem ─────────────────────────────────────────
-  const renderItem: ListRenderItem<MediaAsset | 'camera' | 'video'> = useCallback(({ item }) => {
-    if (item === 'camera') {
-      return (
-        <PressScale
-          onPress={handleTakePhoto}
-          style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
-          accessibilityLabel="Take photo with camera"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.textPrimary} aria-hidden={true} />
-        </PressScale>
-      );
-    }
-    if (item === 'video') {
-      return (
-        <PressScale
-          onPress={handlePickVideo}
-          style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
-          accessibilityLabel="Pick video from gallery"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="videocam-outline" size={IconGrammar.hero} color={colors.textPrimary} aria-hidden={true} />
-        </PressScale>
-      );
-    }
-    const asset = item as MediaAsset;
+  const renderItem: ListRenderItem<MediaAsset> = useCallback(({ item }) => {
+    const asset = item;
     const isSelected = selectedIds.includes(asset.id);
     const selectionOrder = isSelected ? selectedIds.indexOf(asset.id) + 1 : 0;
     return (
@@ -841,22 +818,41 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
         isSelected={isSelected}
         selectionOrder={selectionOrder}
         onPress={() => toggleSelect(asset)}
+        onLongPress={() => setPreviewAsset(asset)}
         colors={colors}
         styles={styles}
       />
     );
-  }, [colors, handleTakePhoto, handlePickVideo, toggleSelect, selectedIds, styles]);
+  }, [colors, toggleSelect, selectedIds, styles]);
 
-  const gridData: (MediaAsset | 'camera' | 'video')[] = useMemo(() => {
-    return ['camera', 'video', ...filteredAssets];
+  const gridData: MediaAsset[] = useMemo(() => {
+    return filteredAssets;
   }, [filteredAssets]);
+
+  // ── Camera hero header — full-width primary action above the grid ──
+  const cameraHero = useMemo(() => (
+    <PressScale
+      onPress={handleTakePhoto}
+      style={styles.mediaCameraHero}
+      accessibilityLabel="Take photo with camera"
+      accessibilityRole="button"
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.textPrimary} aria-hidden={true} />
+      <Text style={[styles.mediaCameraHeroLabel, { color: colors.textPrimary }]}>
+        Camera
+      </Text>
+    </PressScale>
+  ), [handleTakePhoto, styles, colors]);
 
   // ── Permission states (after all hooks) ──
   if (!status) {
     return (
-      <PickerShell title="Add Media" onClose={onClose}>
-        <View style={styles.mediaLoadingState}>
-          <ActivityIndicator size="large" color={colors.brand} />
+      <PickerShell title="Select" onClose={onClose}>
+        <View style={styles.mediaGridContent}>
+          {Array.from({ length: 18 }).map((_, i) => (
+            <View key={i} style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]} />
+          ))}
         </View>
       </PickerShell>
     );
@@ -864,11 +860,10 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
 
   if (!status.granted && !status.canAskAgain) {
     return (
-      <PickerShell title="Add Media" onClose={onClose}>
+      <PickerShell title="Select" onClose={onClose}>
         <PermissionDeniedState
-          icon="lock-closed-outline"
           title="Photo access needed"
-          message="Allow access to your photo library to pick media for your creation."
+          message="Allow access to your photos to start creating."
           ctaLabel="Open settings"
           onCta={handleOpenSettings}
           colors={colors}
@@ -880,11 +875,10 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
 
   if (!status.granted) {
     return (
-      <PickerShell title="Add Media" onClose={onClose}>
+      <PickerShell title="Select" onClose={onClose}>
         <PermissionDeniedState
-          icon="images-outline"
-          title="Access your photos"
-          message="We need access to show your recent photos and videos here."
+          title="Photo access needed"
+          message="Allow access to your photos to start creating."
           ctaLabel="Allow access"
           onCta={() => requestPermission()}
           colors={colors}
@@ -899,97 +893,71 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
   return (
     <SheetContainer visible={true} onClose={selectedCount > 0 ? () => { setSelectedIds([]); } : onClose} maxHeight={0.9}>
       <View style={styles.header}>
-        {/* The title stays as the static sheet title regardless of selection
-            state. The selection count is shown in exactly one place — the
-            Add (N) button — to avoid the label-everything AI-tell of
-            restating the count in the title, a badge, and the button
-            (AGENTS.md §4). This matches the MediaBrowserSheet pattern. */}
+        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Ionicons name="close" size={22} color={colors.textSecondary} aria-hidden={true} />
+        </PressScale>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
-          Add Media
+          Select
         </Text>
-        <View style={styles.headerRight}>
-          {selectedCount > 0 && (
-            <PressScale
-              onPress={handleAddSelected}
-              style={[styles.addBtn, { backgroundColor: colors.brand }]}
-              accessibilityLabel={`Add ${selectedCount} selected media`}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Text style={[styles.addBtnText, { color: colors.textInverse }]}>
-                Add ({selectedCount})
-              </Text>
-            </PressScale>
-          )}
-          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
-          </PressScale>
-        </View>
+        <PressScale
+          onPress={selectedCount > 0 ? handleAddSelected : onClose}
+          style={styles.doneBtn}
+          accessibilityLabel={selectedCount > 0 ? `Add ${selectedCount} selected media` : 'Done'}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={[styles.doneBtnText, { color: selectedCount > 0 ? colors.brand : colors.textMuted }]}>
+            Done
+          </Text>
+        </PressScale>
       </View>
 
-      {/* Album/source disclosure — per audit: "album/source disclosure" in
-          the canonical MediaAcquireSheet header. Shows the current album
-          name and opens a dropdown to switch between device albums. */}
-      {albums.length > 0 && (
-        <Pressable
-          style={styles.albumDisclosure}
-          onPress={() => { haptic.light(); setShowAlbumPicker((v) => !v); }}
-          accessibilityLabel={`Current album: ${albumLabel}. Tap to change album.`}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: showAlbumPicker }}
-          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
-        >
-          <Ionicons name="folder-open-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />
-          <Text style={[styles.albumDisclosureText, { color: colors.textPrimary }]} numberOfLines={1}>
-            {albumLabel}
-          </Text>
-          <Ionicons name={showAlbumPicker ? 'chevron-up' : 'chevron-down'} size={IconGrammar.badge} color={colors.textMuted} aria-hidden={true} />
-        </Pressable>
-      )}
-
-      {/* Album picker dropdown — flat list of device albums */}
+      {/* Album picker dropdown — triggered from the "Albums" tab.
+          48pt rows, no thumbnails. Row: album name + count + chevron. */}
       {showAlbumPicker && albums.length > 0 && (
-        <View style={[styles.albumPickerDropdown, { borderColor: colors.border }]}>
+        <ScrollView style={styles.albumPickerDropdown} contentContainerStyle={{ paddingBottom: Space.sm }}>
           <Pressable
-            style={[styles.albumPickerItem, activeAlbumId === null && { backgroundColor: colors.brandSubtle }]}
+            style={styles.albumPickerItem}
             onPress={() => {
               haptic.selection();
               setActiveAlbumId(null);
               setShowAlbumPicker(false);
+              setActiveCategory('recent');
             }}
             accessibilityLabel="All Photos album"
             accessibilityRole="button"
             accessibilityState={{ selected: activeAlbumId === null }}
           >
-            <Ionicons name="images-outline" size={IconGrammar.metadata} color={activeAlbumId === null ? colors.brand : colors.textSecondary} aria-hidden={true} />
-            <Text style={[styles.albumPickerItemText, { color: activeAlbumId === null ? colors.brand : colors.textPrimary }]}>
+            <Text style={[styles.albumPickerItemText, { color: activeAlbumId === null ? colors.brand : colors.textPrimary }]} numberOfLines={1}>
               All Photos
             </Text>
-            {activeAlbumId === null && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} aria-hidden={true} />}
+            <Text style={styles.albumPickerItemCount}>{''}</Text>
+            <Ionicons name={activeAlbumId === null ? 'checkmark' : 'chevron-forward'} size={16} color={activeAlbumId === null ? colors.brand : colors.textMuted} aria-hidden={true} />
           </Pressable>
           {albums.slice(0, 12).map((album) => (
             <Pressable
               key={album.id}
-              style={[styles.albumPickerItem, activeAlbumId === album.id && { backgroundColor: colors.brandSubtle }]}
+              style={styles.albumPickerItem}
               onPress={() => {
                 haptic.selection();
                 setActiveAlbumId(album.id);
                 setShowAlbumPicker(false);
+                setActiveCategory('recent');
               }}
               accessibilityLabel={`${album.title} album`}
               accessibilityRole="button"
               accessibilityState={{ selected: activeAlbumId === album.id }}
             >
-              <Ionicons name="folder-outline" size={IconGrammar.metadata} color={activeAlbumId === album.id ? colors.brand : colors.textSecondary} aria-hidden={true} />
               <Text style={[styles.albumPickerItemText, { color: activeAlbumId === album.id ? colors.brand : colors.textPrimary }]} numberOfLines={1}>
                 {album.title}
               </Text>
-              {activeAlbumId === album.id && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} aria-hidden={true} />}
+              <Text style={styles.albumPickerItemCount}>{album.assetCount}</Text>
+              <Ionicons name={activeAlbumId === album.id ? 'checkmark' : 'chevron-forward'} size={16} color={activeAlbumId === album.id ? colors.brand : colors.textMuted} aria-hidden={true} />
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       )}
 
-      {/* Camera roll category tabs with spring indicator */}
+      {/* Category tabs — text-only, 2pt brand underline indicator */}
       <View style={styles.categoryTabRow}>
         <Reanimated.View
           style={[styles.categoryTabIndicator, { backgroundColor: colors.brand }, tabIndicatorStyle]}
@@ -1009,20 +977,14 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
                 }
               }}
               style={styles.categoryTab}
-              accessibilityLabel={`Category ${cat.label}`}
+              accessibilityLabel={cat.label}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons
-                name={cat.icon}
-                size={IconGrammar.metadata}
-                color={active ? colors.textInverse : colors.textSecondary}
-                aria-hidden={true}
-              />
               <Text style={[
                 styles.categoryTabLabel,
-                { color: active ? colors.textInverse : colors.textSecondary },
+                { color: active ? colors.textPrimary : colors.textSecondary },
               ]}>
                 {cat.label}
               </Text>
@@ -1031,25 +993,30 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
         })}
       </View>
 
-      {isLoading ? (
-        <View style={styles.mediaLoadingState}>
-          <ActivityIndicator size="large" color={colors.brand} />
+      {!showAlbumPicker && (isLoading ? (
+        <View style={styles.mediaGridContent}>
+          {Array.from({ length: 18 }).map((_, i) => (
+            <View key={i} style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]} />
+          ))}
         </View>
       ) : filteredAssets.length === 0 ? (
-        // Empty state
         <View style={styles.mediaEmptyState}>
-          <StaticStateIcon name="images-outline" size={IconGrammar.hero} color={colors.textMuted} />
-          <Text style={[styles.mediaEmptyText, { color: colors.textSecondary }]}>
-            {activeCategory === 'videos' ? 'No videos found' : activeCategory === 'square' ? 'No square photos found' : 'No photos found'}
+          <Text style={[styles.mediaEmptyTitle, { color: colors.textPrimary }]}>
+            No photos yet
           </Text>
-          <PressScale
+          <Text style={[styles.mediaEmptySubtitle, { color: colors.textSecondary }]}>
+            Take photos with the camera to get started.
+          </Text>
+          <Pressable
             onPress={handleTakePhoto}
-            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Take photo"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Open camera"
+            accessibilityRole="button"
           >
-            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Take photo</Text>
-          </PressScale>
+            <Text style={[styles.mediaEmptyLink, { color: colors.brand }]}>
+              Open camera
+            </Text>
+          </Pressable>
         </View>
       ) : (
         <>
@@ -1076,7 +1043,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
             </Pressable>
           )}
 
-          {/* Selection preview rail — ordered thumbnails with reorder support */}
+          {/* Selection preview rail — ordered thumbnails with order badge + remove */}
           {selectedCount > 0 && (
             <View style={styles.selectionPreviewRail}>
               <ScrollView
@@ -1087,8 +1054,12 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
                 {selectedIds.map((id, index) => {
                   const asset = assets.find((a) => a.id === id);
                   if (!asset) return null;
+                  const isMostRecent = index === selectedIds.length - 1;
                   return (
-                    <View key={id} style={styles.selectionPreviewItem}>
+                    <View
+                      key={id}
+                      style={[styles.selectionPreviewItem, isMostRecent && styles.selectionPreviewItemSelected]}
+                    >
                       <Image
                         source={{ uri: asset.uri }}
                         style={styles.selectionPreviewThumb}
@@ -1099,38 +1070,14 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
                           {index + 1}
                         </Text>
                       </View>
-                      {/* Reorder left — move this item earlier in the sequence */}
-                      {index > 0 && (
-                        <Pressable
-                          style={styles.selectionPreviewReorderLeft}
-                          onPress={() => reorderSelection(id, -1)}
-                          hitSlop={4}
-                          accessibilityLabel={`Move ${asset.mediaType} ${index + 1} earlier in selection`}
-                          accessibilityRole="button"
-                        >
-                          <Ionicons name="chevron-back-circle" size={IconGrammar.standard} color={colors.scrimTextPrimary} aria-hidden={true} />
-                        </Pressable>
-                      )}
-                      {/* Reorder right — move this item later in the sequence */}
-                      {index < selectedIds.length - 1 && (
-                        <Pressable
-                          style={styles.selectionPreviewReorderRight}
-                          onPress={() => reorderSelection(id, 1)}
-                          hitSlop={4}
-                          accessibilityLabel={`Move ${asset.mediaType} ${index + 1} later in selection`}
-                          accessibilityRole="button"
-                        >
-                          <Ionicons name="chevron-forward-circle" size={IconGrammar.standard} color={colors.scrimTextPrimary} aria-hidden={true} />
-                        </Pressable>
-                      )}
                       <Pressable
-                        style={styles.selectionPreviewRemove}
+                        style={[styles.selectionPreviewRemove, { backgroundColor: colors.dangerSubtle }]}
                         onPress={() => toggleSelect(asset)}
                         hitSlop={8}
                         accessibilityLabel={`Remove ${asset.mediaType} ${index + 1} from selection`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.scrimTextPrimary} aria-hidden={true} />
+                        <Ionicons name="close" size={12} color={colors.danger} aria-hidden={true} />
                       </Pressable>
                     </View>
                   );
@@ -1142,12 +1089,15 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
           {/* Full grid via FlashList for virtualization */}
           <FlashList
             data={gridData}
-            keyExtractor={(item) => typeof item === 'string' ? item : item.id}
+            keyExtractor={(item) => item.id}
             renderItem={renderItem}
             numColumns={GRID_COLUMNS}
             contentContainerStyle={styles.mediaGridContent}
+            ListHeaderComponent={cameraHero}
             onEndReached={() => loadRecentMedia(false)}
             onEndReachedThreshold={0.5}
+            onRefresh={handleRefresh}
+            refreshing={isRefreshing}
             ListFooterComponent={loadingMore ? (
               <View style={styles.mediaGridFooter}>
                 <ActivityIndicator size="small" color={colors.textMuted} />
@@ -1155,6 +1105,24 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
             ) : null}
           />
         </>
+      ))}
+
+      {/* ── Long-press preview overlay (iOS Photos peek pattern) ──
+          Shows the full-resolution image while the user holds. Dismisses
+          on touch up. No chrome — the image is the preview. */}
+      {previewAsset && (
+        <Pressable
+          style={styles.previewOverlay}
+          onPress={() => setPreviewAsset(null)}
+          accessibilityLabel="Preview, tap to dismiss"
+          accessibilityRole="button"
+        >
+          <Image
+            source={{ uri: previewAsset.uri }}
+            style={styles.previewImage}
+            contentFit="contain"
+          />
+        </Pressable>
       )}
     </SheetContainer>
   );
@@ -1466,11 +1434,11 @@ const ProductPicker = React.memo(function ProductPicker({ onClose, onAddLayer }:
     </Pressable>
   ), [handleSelect, styles, colors, currencySymbol]);
 
-  const tabs: Array<{ key: ProductSourceTab; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
-    { key: 'search', label: 'Search', icon: 'search-outline' },
-    { key: 'closet', label: 'My Closet', icon: 'shirt-outline' },
-    { key: 'saved', label: 'Saved', icon: 'bookmark-outline' },
-    { key: 'recent', label: 'Recent', icon: 'time-outline' },
+  const tabs: Array<{ key: ProductSourceTab; label: string }> = [
+    { key: 'search', label: 'Search' },
+    { key: 'closet', label: 'My Closet' },
+    { key: 'saved', label: 'Saved' },
+    { key: 'recent', label: 'Recent' },
   ];
 
   return (
@@ -1484,13 +1452,12 @@ const ProductPicker = React.memo(function ProductPicker({ onClose, onAddLayer }:
               <Pressable
                 key={tab.key}
                 onPress={() => { haptic.light(); setActiveTab(tab.key); }}
-                style={[styles.productTab, isActive && styles.productTabActive]}
+                style={styles.productTab}
                 accessibilityLabel={tab.label}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
               >
-                <Ionicons name={tab.icon} size={IconGrammar.metadata} color={isActive ? colors.brand : colors.textSecondary} aria-hidden={true} />
-                <Text style={[styles.productTabLabel, { color: isActive ? colors.brand : colors.textSecondary }]}>{tab.label}</Text>
+                <Text style={[styles.productTabLabel, { color: isActive ? colors.textPrimary : colors.textSecondary }]}>{tab.label}</Text>
               </Pressable>
             );
           })}
@@ -3113,7 +3080,7 @@ const QuestionPicker = React.memo(function QuestionPicker({ onClose, onAddLayer,
       <View style={styles.textPickerBody}>
         <View style={[styles.questionPreviewWrap, { backgroundColor: bgColor }]}>
           <View style={styles.questionPreviewIconRow}>
-            <Ionicons name="chatbubble-ellipses" size={IconGrammar.metadata} color="rgba(255,255,255,0.7)" aria-hidden={true} />
+            <Ionicons name="chatbubble-ellipses" size={IconGrammar.metadata} color={colors.scrimTextSecondary} aria-hidden={true} />
           </View>
           <Text style={styles.questionPreviewPrompt}>
             {prompt.trim() || 'Ask me a question'}
@@ -3351,10 +3318,10 @@ const CountdownPicker = React.memo(function CountdownPicker({ onClose, onAddLaye
     <PickerShell title={isEditing ? 'Edit Countdown' : 'Countdown'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={[styles.textPreview, { backgroundColor: color }]}>
-          <Text style={{ color: '#fff', fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size }}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size }}>
             {label.trim() || 'Event countdown'}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: TypographyV2.screenTitle.fontFamily, fontSize: TypographyV2.screenTitle.size, marginTop: Space.xs }}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.screenTitle.fontFamily, fontSize: TypographyV2.screenTitle.size, marginTop: Space.xs }}>
             {formatDate(endDate)}
           </Text>
         </View>
@@ -4226,7 +4193,7 @@ const WeatherPicker = React.memo(function WeatherPicker({ onClose, onAddLayer, e
           </View>
           {locationName.trim().length > 0 && (
             <View style={styles.weatherPreviewLocation}>
-              <Ionicons name="location-outline" size={IconGrammar.badge} color="rgba(255,255,255,0.7)" aria-hidden={true} />
+              <Ionicons name="location-outline" size={IconGrammar.badge} color={colors.scrimTextSecondary} aria-hidden={true} />
               <Text style={styles.weatherPreviewLocationText} numberOfLines={1}>{locationName.trim()}</Text>
             </View>
           )}
@@ -4249,8 +4216,8 @@ const WeatherPicker = React.memo(function WeatherPicker({ onClose, onAddLayer, e
                 accessibilityState={{ selected: isActive }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={[styles.weatherCellEmoji, isActive && { color: '#fff' }]}>{w.emoji}</Text>
-                <Text style={[styles.weatherCellLabel, isActive && { color: '#fff' }]} numberOfLines={1}>{w.condition}</Text>
+                <Text style={[styles.weatherCellEmoji, isActive && { color: colors.scrimTextPrimary }]}>{w.emoji}</Text>
+                <Text style={[styles.weatherCellLabel, isActive && { color: colors.scrimTextPrimary }]} numberOfLines={1}>{w.condition}</Text>
               </Pressable>
             );
           })}
@@ -4294,65 +4261,49 @@ const WeatherPicker = React.memo(function WeatherPicker({ onClose, onAddLayer, e
 function createStyles(colors: ThemeColors, screenWidth: number) {
   const THUMB_SIZE = Math.floor((screenWidth - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
   return StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, paddingVertical: Space.sm },
-  title: { fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: colors.textPrimary },
-  closeBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: Radius.sm },
-  mediaOptions: { flexDirection: 'row', justifyContent: 'center', gap: Space.lg, paddingVertical: Space.xl },
-  mediaOption: { alignItems: 'center', gap: 8, minWidth: 80 },
-  mediaOptionLabel: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
-  // ── Album/source disclosure ──
-  albumDisclosure: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
-  albumDisclosureText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.meta.size,
-    flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm },
+  title: { flex: 1, textAlign: 'center', fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: colors.textPrimary },
+  closeBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  headerSpacer: { width: 44, height: 44 },
+  doneBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  doneBtnText: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size },
   albumPickerDropdown: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.md,
     marginHorizontal: Space.md,
-    marginBottom: Space.xs,
-    overflow: 'hidden' },
+    marginBottom: Space.xs },
   albumPickerItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.smMd,
-    minHeight: 40 },
+    height: 48 },
   albumPickerItemText: {
     fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.body.size,
+    fontSize: 14,
     flex: 1 },
+  albumPickerItemCount: {
+    fontFamily: Typography.family.regular,
+    fontSize: 12,
+    color: colors.textMuted },
   // ── Category tabs ──
   categoryTabRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
     position: 'relative',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border },
   categoryTabIndicator: {
     position: 'absolute',
-    top: Space.xs,
     bottom: 0,
-    borderRadius: Radius.md,
-    height: 36 },
+    height: 2 },
   categoryTab: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.md,
     zIndex: 1 },
   categoryTabLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size },
+    fontSize: 14 },
   // ── Limited-access banner ──
   limitedAccessBanner: {
     flexDirection: 'row',
@@ -4377,43 +4328,58 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   selectionPreviewItem: {
     width: 56,
     height: 56,
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
     overflow: 'hidden' },
+  selectionPreviewItemSelected: {
+    borderWidth: 2,
+    borderColor: colors.brand },
   selectionPreviewThumb: {
     width: '100%',
     height: '100%' },
   selectionPreviewOrder: {
     position: 'absolute',
-    top: 4,
-    left: 4,
-    width: 18,
-    height: 18,
+    top: -6,
+    left: -6,
+    width: 20,
+    height: 20,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center' },
+    alignItems: 'center',
+    zIndex: 2 },
   selectionPreviewOrderText: {
-    fontFamily: Typography.family.bold,
-    fontSize: TypographyV2.meta.size },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.meta.size,
+    fontWeight: '700' },
   selectionPreviewRemove: {
     position: 'absolute',
-    top: 2,
-    right: 2 },
-  selectionPreviewReorderLeft: {
-    position: 'absolute',
-    left: 2,
-    top: '50%',
-    marginTop: -9 },
-  selectionPreviewReorderRight: {
-    position: 'absolute',
-    right: 2,
-    bottom: 2 },
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2 },
   // ── Media grid ──
   mediaGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   mediaGridRow: { gap: Space.xs, marginBottom: Space.xs },
+  mediaCameraHero: {
+    width: '100%',
+    aspectRatio: 2,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginBottom: Space.xs },
+  mediaCameraHeroLabel: {
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.bodyStrong.size,
+    color: colors.textPrimary },
   mediaGridCell: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center' },
@@ -4427,48 +4393,27 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.mediaOverlayScrim,
     paddingHorizontal: Space.xs,
     paddingVertical: 2,
     borderRadius: Radius.sm },
   mediaGridDuration: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.medium },
-  // Selection overlay — subtle tint + border highlight (iOS Photos pattern).
-  // The border communicates selection more clearly than a heavy dark overlay.
   mediaGridSelectedOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.25)',
     borderWidth: 2,
-    borderColor: '#fff',
-    borderRadius: Radius.md },
+    borderRadius: Radius.sm },
   mediaGridSelectionBadge: {
     position: 'absolute',
     top: 6,
     right: 6,
-    width: 24,
-    height: 24,
+    width: 16,
+    height: 16,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
     justifyContent: 'center',
-    alignItems: 'center',
-    ...Elevation.modal },
-  mediaGridSelectionText: {
-    color: '#000',
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs },
-  addBtn: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.full },
-  addBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size },
+    alignItems: 'center' },
   mediaGridFooter: {
     paddingVertical: Space.md,
     alignItems: 'center' },
@@ -4478,34 +4423,49 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   mediaEmptyState: {
     paddingVertical: Space.xxl,
     alignItems: 'center',
-    gap: Space.md },
-  mediaEmptyText: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.body.size },
-  mediaPermissionState: {
-    paddingVertical: Space.xxl,
-    alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.xl },
-  mediaPermissionTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.screenTitle.size,
-    marginTop: Space.sm },
-  mediaPermissionText: {
-    fontFamily: Typography.family.regular,
+  mediaEmptyTitle: {
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontWeight: TypographyV2.sectionTitle.weight as any,
+    color: colors.textPrimary },
+  mediaEmptySubtitle: {
+    fontFamily: TypographyV2.body.fontFamily,
     fontSize: TypographyV2.body.size,
-    textAlign: 'center',
-    lineHeight: 22 },
+    color: colors.textSecondary,
+    textAlign: 'center' },
+  mediaEmptyLink: {
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.bodyStrong.size,
+    color: colors.brand,
+    marginTop: Space.xs },
+  mediaPermissionState: {
+    paddingVertical: Space.xxl + Space.lg,
+    alignItems: 'center',
+    gap: Space.md,
+    paddingHorizontal: Space.xl },
+  mediaPermissionTitle: {
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontWeight: TypographyV2.sectionTitle.weight as any,
+    color: colors.textPrimary },
+  mediaPermissionText: {
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: TypographyV2.body.size,
+    color: colors.textSecondary,
+    textAlign: 'center' },
   mediaPermissionBtn: {
-    paddingHorizontal: Space.lg,
-    height: 44,
-    borderRadius: Radius.md,
+    width: '100%',
+    height: 52,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Space.sm },
+    marginTop: Space.md },
   mediaPermissionBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.body.size },
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.bodyStrong.size,
+    color: colors.textInverse },
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: 8 },
   searchIcon: {},
   searchInput: {
@@ -4540,7 +4500,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     paddingVertical: Space.md + 2,
     paddingHorizontal: Space.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.06)' },
+    borderColor: colors.scrimTextTertiary },
   textPreviewText: {
     fontFamily: Typography.family.medium,
     fontSize: TypographyV2.body.size },
@@ -4575,7 +4535,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     borderRadius: Radius.lg,
     backgroundColor: '#161616',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.scrimTextTertiary,
     overflow: 'hidden',
     marginBottom: Space.sm },
   drawCanvasHint: {
@@ -4588,7 +4548,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   drawCanvasHintText: {
     fontFamily: Typography.family.regular,
     fontSize: TypographyV2.meta.size,
-    color: 'rgba(255,255,255,0.28)',
+    color: colors.scrimTextTertiary,
     letterSpacing: 0.3 },
   brushSizeRow: { flexDirection: 'row', gap: Space.md, alignItems: 'center', paddingVertical: Space.xs },
   brushSizeOption: { width: 44, height: 44, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
@@ -4601,7 +4561,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   drawActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   drawActionLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   drawDoneBtn: { paddingHorizontal: Space.xl, paddingVertical: Space.sm, borderRadius: Radius.full, marginLeft: 'auto' },
-  drawDoneBtnText: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: '#fff' },
+  drawDoneBtnText: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textInverse },
   // ── GIF picker ──
   gifList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   gifRow: { gap: Space.xs, marginBottom: Space.xs },
@@ -4655,16 +4615,16 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   stickerEmptyText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textMuted },
   // ── Sticker preview pill (shared by Link/Location/Hashtag/Time/Weather) ──
   stickerPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.lg, backgroundColor: 'rgba(201,164,106,0.9)', alignSelf: 'center', marginBottom: Space.sm },
-  stickerPreviewPillText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: '#fff' },
+  stickerPreviewPillText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textInverse },
   stickerPreviewPillEmoji: { fontSize: TypographyV2.priceList.size },
   // ── Weather picker ──
   weatherPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.xl, backgroundColor: 'rgba(201,164,106,0.95)', alignSelf: 'center', marginBottom: Space.sm, ...Elevation.floating, minWidth: 180 },
   weatherPreviewEmoji: { fontSize: TypographyV2.display.size },
   weatherPreviewInfo: { gap: 0 },
-  weatherPreviewTemp: { fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: '#fff' },
-  weatherPreviewCondition: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: 'rgba(255,255,255,0.85)' },
+  weatherPreviewTemp: { fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: colors.textInverse },
+  weatherPreviewCondition: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.scrimTextSecondary },
   weatherPreviewLocation: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
-  weatherPreviewLocationText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: 'rgba(255,255,255,0.7)' },
+  weatherPreviewLocationText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.scrimTextSecondary },
   weatherGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   weatherCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
   weatherCellActive: { backgroundColor: colors.brand },
@@ -4678,14 +4638,14 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   spectrumWrap: { marginTop: Space.sm, gap: Space.xs },
   spectrumBar: { height: 36, borderRadius: Radius.full, overflow: 'hidden', position: 'relative', ...Elevation.floating },
   spectrumOverlay: { ...StyleSheet.absoluteFill },
-  spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: '#fff', backgroundColor: '#fff', ...Elevation.modal, left: '50%', marginLeft: -14 },
+  spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: colors.textInverse, backgroundColor: colors.textInverse, ...Elevation.modal, left: '50%', marginLeft: -14 },
   spectrumClose: { alignSelf: 'center', paddingVertical: Space.xs },
   // ── Vertical brush size slider ──
   brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10, ...Elevation.modal },
-  brushSliderTrack: { width: 28, height: 120, borderRadius: Radius.full, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
-  brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.full },
+  brushSliderTrack: { width: 28, height: 120, borderRadius: Radius.full, backgroundColor: colors.mediaOverlayScrim, justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.scrimTextTertiary },
+  brushSliderFill: { width: '100%', backgroundColor: colors.scrimTextTertiary, borderRadius: Radius.full },
   brushSliderHandle: { position: 'absolute', left: '50%', marginLeft: -11, width: 22, height: 22, justifyContent: 'center', alignItems: 'center' },
-  brushSliderDot: { borderWidth: Stroke.standard, borderColor: 'rgba(255,255,255,0.4)' },
+  brushSliderDot: { borderWidth: Stroke.standard, borderColor: colors.scrimTextSecondary },
   // ── Text effect chips (visual preview) ──
   effectChip: { width: 56, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
   effectChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
@@ -4729,10 +4689,10 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   // ── Question preview (improved) ──
   questionPreviewWrap: { borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, ...Elevation.floating },
   questionPreviewIconRow: { marginBottom: Space.xs },
-  questionPreviewPrompt: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: '#fff', lineHeight: TypographyV2.bodyStrong.size * 1.3 },
-  questionPreviewInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.md, paddingVertical: Space.sm, paddingHorizontal: Space.md },
-  questionPreviewPlaceholder: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: 'rgba(255,255,255,0.6)' },
-  questionPreviewSendDot: { width: 24, height: 24, borderRadius: Radius.full, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+  questionPreviewPrompt: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.scrimTextPrimary, lineHeight: TypographyV2.bodyStrong.size * 1.3 },
+  questionPreviewInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.scrimTextTertiary, borderRadius: Radius.md, paddingVertical: Space.sm, paddingHorizontal: Space.md },
+  questionPreviewPlaceholder: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.scrimTextSecondary },
+  questionPreviewSendDot: { width: 24, height: 24, borderRadius: Radius.full, backgroundColor: colors.scrimTextSecondary, justifyContent: 'center', alignItems: 'center' },
   // ── Emoji slider preview (improved) ──
   sliderPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, ...Elevation.card },
   sliderPreviewQuestion: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary, textAlign: 'center' },
@@ -4740,12 +4700,19 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   sliderPreviewEmoji: { fontSize: TypographyV2.display.size },
   sliderPreviewTrack: { flex: 1, height: 8, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, position: 'relative' },
   sliderPreviewFill: { height: '100%', borderRadius: Radius.sm },
-  sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: '#fff', ...Elevation.modal },
+  sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: colors.textInverse, ...Elevation.modal },
   sliderPreviewEndLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textAlign: 'center' },
   // ── Product source tabs ──
-  productTabBar: { flexDirection: 'row', paddingHorizontal: Space.md, paddingVertical: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  productTabBarContent: { gap: Space.xs, paddingVertical: Space.xs },
-  productTab: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingVertical: Space.sm - 2, paddingHorizontal: Space.md, borderRadius: Radius.full, borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
-  productTabActive: { borderColor: colors.brand, backgroundColor: colors.brandSubtle },
-  productTabLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary } });
+  productTabBar: { flexDirection: 'row', paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  productTabBarContent: { gap: Space.md },
+  productTab: { paddingVertical: Space.md },
+  productTabLabel: { fontFamily: Typography.family.medium, fontSize: 14, color: colors.textSecondary },
+  // ── Long-press preview overlay ──
+  previewOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.background,
+    zIndex: 1000 },
+  previewImage: {
+    ...StyleSheet.absoluteFill,
+  } });
 }

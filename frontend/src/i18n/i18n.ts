@@ -33,6 +33,7 @@ import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import { I18nManager, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   EN_TRANSLATIONS,
@@ -46,9 +47,17 @@ import { localeResources } from './locales';
 
 // ── Locale constants ───────────────────────────────────────────────
 
-export const SUPPORTED_LOCALES: SupportedLocale[] = ['en', 'es', 'fr', 'de'];
+export const SUPPORTED_LOCALES: SupportedLocale[] = ['en', 'es', 'fr', 'de', 'ar', 'hi', 'zh', 'pt', 'ja', 'ru', 'tr', 'ko', 'id'];
 
 const RTL_LOCALES: string[] = ['ar', 'he', 'fa', 'ur'];
+
+/**
+ * Dedicated AsyncStorage key for the persisted user locale choice.
+ * Separate from the general settings preferences key so locale
+ * hydration can happen early in app startup before the full
+ * settings context is mounted.
+ */
+export const LOCALE_STORAGE_KEY = 'thryftverse:locale:v1';
 
 // ── Resource construction ──────────────────────────────────────────
 
@@ -87,6 +96,15 @@ const resources: Record<string, Record<string, Record<string, string>>> = {
   es: buildLocaleResources(ES_TRANSLATION_PATCH, 'es'),
   fr: buildLocaleResources(FR_TRANSLATION_PATCH, 'fr'),
   de: buildLocaleResources(DE_TRANSLATION_PATCH, 'de'),
+  ar: buildLocaleResources({}, 'ar'),
+  hi: buildLocaleResources({}, 'hi'),
+  zh: buildLocaleResources({}, 'zh'),
+  pt: buildLocaleResources({}, 'pt'),
+  ja: buildLocaleResources({}, 'ja'),
+  ru: buildLocaleResources({}, 'ru'),
+  tr: buildLocaleResources({}, 'tr'),
+  ko: buildLocaleResources({}, 'ko'),
+  id: buildLocaleResources({}, 'id'),
 };
 
 // ── Device locale detection ────────────────────────────────────────
@@ -146,6 +164,10 @@ export function initI18n(initialLocale?: SupportedLocale): void {
     lng: locale,
     fallbackLng: 'en',
     supportedLngs: SUPPORTED_LOCALES,
+    // Load only the base language code (e.g. 'en' not 'en-US'),
+    // so i18next matches our flat resource keys regardless of the
+    // region tag returned by the device or AsyncStorage.
+    load: 'languageOnly',
     // Use v4 plural compatibility for modern ICU plural rules
     // (required by intl-pluralrules polyfill for correct pluralisation)
     compatibilityJSON: 'v4',
@@ -182,13 +204,40 @@ export function initI18n(initialLocale?: SupportedLocale): void {
 // ── Locale management ──────────────────────────────────────────────
 
 /**
+ * Hydrate the persisted locale from AsyncStorage on app startup.
+ * Returns the persisted locale, or the device locale if no choice
+ * has been saved yet (first launch). Falls back to 'en'.
+ *
+ * Call this early in app initialization, before the settings context
+ * is mounted, so the correct locale is active from the first render.
+ */
+export async function hydratePersistedLocale(): Promise<SupportedLocale> {
+  try {
+    const stored = await AsyncStorage.getItem(LOCALE_STORAGE_KEY);
+    if (stored && SUPPORTED_LOCALES.includes(stored as SupportedLocale)) {
+      return stored as SupportedLocale;
+    }
+  } catch {
+    // AsyncStorage unavailable — fall through to device detection
+  }
+  return detectDeviceLocale();
+}
+
+/**
  * Change the active locale. Updates i18next, RTL support, and persists
- * the choice for next app launch.
+ * the choice to AsyncStorage so it survives app restarts.
  */
 export async function setI18nLocale(locale: SupportedLocale): Promise<void> {
   if (!initialized) initI18n(locale);
   await i18next.changeLanguage(locale);
   applyRTLSupport(locale);
+  // Persist the user's locale choice in a dedicated key so it can be
+  // hydrated early on next launch, independent of the full settings context.
+  try {
+    await AsyncStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    // Best-effort persistence — don't block the locale change
+  }
 }
 
 /**

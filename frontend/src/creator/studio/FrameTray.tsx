@@ -7,6 +7,7 @@ import { IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useAppTheme } from '../../theme/ThemeContext';
 import type { CreatorPage } from '../composition';
 
 // ── Poster Frame Tray ──────────────────────────────────────────────
@@ -49,6 +50,7 @@ export function FrameTray({
   videoInfoFrameIndex }: FrameTrayProps) {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
 
   const handleSelect = useCallback((index: number) => {
     if (index === activePageIndex) {
@@ -87,14 +89,15 @@ export function FrameTray({
               onLongPress={() => handleLongPress(i)}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               accessibilityLabel={`Frame ${i + 1}${isActive ? ', active' : ''}`}
-              accessibilityHint="Switches to this frame. Long press for frame options."
+              accessibilityHint="Switch frame. Long press for options."
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
             >
               <View
                 style={[
                   styles.thumb,
-                  isActive && styles.thumbActive,
+                  { backgroundColor: colors.scrimTextTertiary },
+                  isActive && { borderColor: colors.brand, borderWidth: 2 },
                 ]}
               >
                 {mediaLayer?.payload?.mediaUri ? (
@@ -105,7 +108,7 @@ export function FrameTray({
                   />
                 ) : (
                   <View style={styles.thumbPlaceholder}>
-                    <Ionicons name="image-outline" size={IconGrammar.metadata} color="rgba(255,255,255,0.4)" />
+                    <Ionicons name="image-outline" size={IconGrammar.metadata} color={colors.scrimTextSecondary} />
                   </View>
                 )}
                 {/* Video duration marker — tappable to show trim info */}
@@ -118,27 +121,31 @@ export function FrameTray({
                       onVideoBadgePress?.(i);
                     }}
                     accessibilityLabel={`Video frame ${i + 1}, ${Math.ceil(durationMs / 1000)} seconds`}
-                    accessibilityHint="Video trim and mute will be available in a future update"
+                    accessibilityHint="Trim and mute coming soon"
                     accessibilityRole="button"
                     hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                   >
-                    <Ionicons name="play" size={8} color="#fff" />
-                    <Text style={styles.durationText}>
+                    <Ionicons name="play" size={8} color={colors.scrimTextPrimary} />
+                    <Text style={[styles.durationText, { color: colors.scrimTextPrimary }]}>
                       {Math.ceil(durationMs / 1000)}s
                     </Text>
                   </Pressable>
                 )}
                 {/* Video trim info — inline text label on the frame */}
                 {isVideo && videoInfoFrameIndex === i && (
-                  <View style={styles.videoInfoLabel} pointerEvents="none">
-                    <Text style={styles.videoInfoText}>
-                      Video trim and mute will be available in a future update. The full clip will be used.
+                  <View style={[styles.videoInfoLabel, { backgroundColor: colors.mediaOverlayScrim }]} pointerEvents="none">
+                    <Text style={[styles.videoInfoText, { color: colors.scrimTextPrimary }]}>
+                      Trim and mute coming soon.
                     </Text>
                   </View>
                 )}
               </View>
               {/* Frame number — subtle, below thumbnail */}
-              <Text style={[styles.thumbLabel, isActive && styles.thumbLabelActive]}>
+              <Text style={[
+                styles.thumbLabel,
+                { color: isActive ? colors.scrimTextPrimary : colors.scrimTextSecondary },
+                isActive && styles.thumbLabelActive,
+              ]}>
                 {i + 1}
               </Text>
             </Pressable>
@@ -148,14 +155,14 @@ export function FrameTray({
         {/* Add frame button */}
         {pages.length < 10 && (
           <Pressable
-            style={styles.addBtn}
+            style={[styles.addBtn, { borderColor: colors.scrimTextTertiary }]}
             onPress={() => { haptic.light(); onAddPage(); }}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             accessibilityLabel="Add frame"
             accessibilityHint="Adds a new frame to the story"
             accessibilityRole="button"
           >
-            <Ionicons name="add" size={IconGrammar.standard} color="rgba(255,255,255,0.7)" />
+            <Ionicons name="add" size={IconGrammar.standard} color={colors.scrimTextSecondary} />
           </Pressable>
         )}
       </ScrollView>
@@ -183,13 +190,7 @@ const styles = StyleSheet.create({
     width: THUMB_WIDTH,
     height: THUMB_HEIGHT,
     borderRadius: RadiusRoleValue.compactControl,
-    overflow: 'hidden',
-    borderWidth: Stroke.emphasis,
-    borderColor: 'transparent',
-    backgroundColor: 'rgba(255,255,255,0.08)' },
-  thumbActive: {
-    borderColor: '#fff',
-    borderWidth: 2 },
+    overflow: 'hidden' },
   thumbImage: {
     width: '100%',
     height: '100%' },
@@ -204,12 +205,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.7)',
     paddingHorizontal: 3,
     paddingVertical: 1,
     borderRadius: RadiusRoleValue.compactControl },
   durationText: {
-    color: '#fff',
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium },
   videoInfoLabel: {
@@ -217,29 +216,24 @@ const styles = StyleSheet.create({
     top: 2,
     left: 2,
     right: 2,
-    backgroundColor: 'rgba(0,0,0,0.85)',
     borderRadius: RadiusRoleValue.compactControl,
     paddingHorizontal: 4,
     paddingVertical: 3 },
   videoInfoText: {
-    color: '#fff',
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     lineHeight: 9,
     textAlign: 'center' },
   thumbLabel: {
-    color: 'rgba(255,255,255,0.5)',
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium },
   thumbLabelActive: {
-    color: '#fff',
     fontFamily: FontFamily.semibold },
   addBtn: {
     width: THUMB_WIDTH,
     height: THUMB_HEIGHT,
     borderRadius: RadiusRoleValue.compactControl,
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.2)',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center' } });

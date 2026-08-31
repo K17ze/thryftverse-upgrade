@@ -915,7 +915,7 @@ export const registerCreatorDocumentRoutes = ({
         sourceDocumentId: documentId,
         sourceCreatorId: result.rows[0].creator_id,
         allowRemix: false,
-        title: `Remix of ${sourceDoc.metadata?.title || 'Untitled'}`,
+        title: `Recreated from ${sourceDoc.metadata?.title || 'Untitled'}`,
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

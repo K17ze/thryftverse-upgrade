@@ -64,10 +64,15 @@ export interface ThemeColors {
   /** Subtle accent tints — icon-badge fills, category backgrounds. Replaces hex-alpha. */
   commerceTrustSubtle: string;
   discoverySubtle: string;
+  /** @deprecated Premium accent — many external consumers remain. Do not
+   *  add new uses; creator surfaces should use neutral tokens per AGENTS.md §4. */
   bronzeSubtle: string;
-  /** Premium accent from Design.md proposed-luxury. Used sparingly for
-   * verified status, authenticated value, or curated distinction. */
+  /** @deprecated Premium accent from Design.md proposed-luxury. Used sparingly for
+   * verified status, authenticated value, or curated distinction. Do not add
+   * new uses; creator surfaces should use neutral tokens per AGENTS.md §4. */
   antiqueGold: string;
+  /** @deprecated Premium accent — many external consumers remain. Do not
+   *  add new uses; creator surfaces should use neutral tokens per AGENTS.md §4. */
   bronze: string;
   /** Text over media scrims — always white regardless of theme, because
    *  scrims are dark-on-image in both light and dark mode. Replaces
@@ -99,11 +104,15 @@ export interface ThemeColors {
   tabBar: string;
   header: string;
   shadow: string;
+  /** @deprecated Glass/blur surface tokens — many external consumers remain.
+   *  Do not add new uses; use surfaceElevated + hairline per AGENTS.md §4. */
   glassBg: string;
+  /** @deprecated Glass/blur surface tokens — many external consumers remain.
+   *  Do not add new uses; use border (hairline) per AGENTS.md §4. */
   glassBorder: string;
   /** Outfit builder background swatches — warm-paper neutrals for light mode,
    *  muted darks for dark mode. 8 curated tones per theme; replaces the
-   *  static OutfitColors array so the picker respects dark-mode parity. */
+   *  former static OutfitColors array so the picker respects dark-mode parity. */
   outfitBackgrounds: readonly string[];
 }
 

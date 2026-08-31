@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Space, Radius, Elevation } from "../../theme/designTokens";
 import { useAppTheme } from "../../theme/ThemeContext";
 import { AnimatedPressable } from "../AnimatedPressable";
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 export type ChatAction = "gallery" | "camera" | "agent";
 
@@ -28,25 +29,26 @@ export function ChatActionSheet({
   onClose,
   onSelect }: ChatActionSheetProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const actions = useMemo<ActionDef[]>(
     () => [
       {
         id: "gallery",
         icon: "images-outline",
-        label: "Photo & Video",
-        description: "Choose from your library" },
+        label: t('attachments.photoAndVideo'),
+        description: t('attachments.chooseFromLibrary') },
       {
         id: "camera",
         icon: "camera-outline",
-        label: "Camera",
-        description: "Take a new photo or video" },
+        label: t('attachments.camera'),
+        description: t('attachments.takePhotoOrVideo') },
       {
         id: "agent",
         icon: 'hardware-chip-outline',
-        label: "Add assistant",
-        description: "Deploy an AI assistant into this chat" },
+        label: t('agentPicker.addAssistant'),
+        description: t('agentPicker.addAssistantDescription') },
     ],
-    [],
+    [t],
   );
 
   return (
@@ -58,9 +60,9 @@ export function ChatActionSheet({
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>Attach</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>{t('attachments.actionSheetTitle')}</Text>
             <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-              Share photos and videos in this chat
+              {t('attachments.actionSheetSubtitle')}
             </Text>
           </View>
 
@@ -123,10 +125,10 @@ export function ChatActionSheet({
             style={[styles.cancelBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
             onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityLabel={t('common.cancel')}
           >
             <Text style={[styles.cancelText, { color: colors.textPrimary }]}>
-              Cancel
+              {t('common.cancel')}
             </Text>
           </Pressable>
         </View>

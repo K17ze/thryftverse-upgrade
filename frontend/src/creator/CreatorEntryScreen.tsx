@@ -14,7 +14,6 @@ import { Typography, Radius, Space, EditorMaterial, Stroke} from '../theme/desig
 import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
-import { BlurView } from 'expo-blur';
 import type { CreatorInitialMedia } from '../navigation/types';
 import CreatorCamera from './CreatorCamera';
 import type { CaptureViewport } from './capture/CaptureViewport';
@@ -294,15 +293,12 @@ export function CreatorEntryScreen({
         )}
         renderTopRightAccessory={mode === 'poster' ? () => (
           <Pressable
-            style={styles.textModeAccessory}
+            style={[styles.textModeAccessory, { backgroundColor: colors.surface }]}
             onPress={() => { haptic.light(); onBlankStart(); }}
             accessibilityLabel="Create text poster"
             accessibilityHint="Starts a blank text poster"
             accessibilityRole="button"
           >
-            {/* Glass plate — translucent blur + overlay for on-camera legibility */}
-            <BlurView intensity={EditorMaterial.plate.blurIntensity} tint={EditorMaterial.plate.tint} style={[StyleSheet.absoluteFill, { borderRadius: Radius.full }]} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay, borderRadius: Radius.full }]} />
             <Text style={[styles.textModeBtnLabel, { color: colors.scrimTextPrimary }]}>Aa</Text>
           </Pressable>
         ) : undefined}
@@ -322,13 +318,13 @@ export function CreatorEntryScreen({
           accessibilityHint="Shows your saved creator drafts"
           accessibilityRole="button"
         >
-          <Ionicons name="documents-outline" size={IconGrammar.standard} color="#fff" />
+          <Ionicons name="documents-outline" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
           {drafts.length > 1 ? (
             <View style={[styles.draftsCountBadge, { backgroundColor: colors.brand }]}>
               <Text style={[styles.draftsCountText, { color: colors.textInverse }]}>{drafts.length}</Text>
             </View>
           ) : (
-            <View style={[styles.draftsBadge, { backgroundColor: colors.brand }]} />
+            <View style={[styles.draftsBadge, { backgroundColor: colors.brand, borderColor: colors.mediaOverlayScrim }]} />
           )}
         </Pressable>
       )}
@@ -386,15 +382,15 @@ export function CreatorEntryScreen({
                   {draft.thumbnailUri ? (
                     <Image
                       source={{ uri: draft.thumbnailUri }}
-                      style={styles.draftThumb}
+                      style={[styles.draftThumb, { backgroundColor: colors.mediaOverlayScrim }]}
                       resizeMode="cover"
                     />
                   ) : (
-                    <View style={[styles.draftThumb, styles.draftThumbPlaceholder]}>
+                    <View style={[styles.draftThumb, styles.draftThumbPlaceholder, { backgroundColor: colors.mediaOverlayScrim }]}>
                       <Ionicons
                         name={draft.type === 'poster' ? 'film-outline' : 'square-outline'}
                         size={IconGrammar.hero}
-                        color="rgba(255,255,255,0.2)"
+                        color={colors.scrimTextSecondary}
                       />
                     </View>
                   )}
@@ -457,8 +453,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(0,0,0,0.4)' },
+    borderWidth: Stroke.standard },
   // Count badge — when there are 2+ drafts, show the number instead of a dot.
   // Uses brand color fill with count text for clearer affordance.
   draftsCountBadge: {
@@ -506,10 +501,7 @@ const styles = StyleSheet.create({
   draftThumb: {
     width: 140,
     height: 175,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.06)' },
+    borderRadius: Radius.md },
   draftThumbPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center' },

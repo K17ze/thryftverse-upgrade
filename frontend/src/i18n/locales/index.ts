@@ -26,6 +26,15 @@ import enJson from './en.json';
 import esJson from './es.json';
 import frJson from './fr.json';
 import deJson from './de.json';
+import arJson from './ar.json';
+import hiJson from './hi.json';
+import zhJson from './zh.json';
+import ptJson from './pt.json';
+import jaJson from './ja.json';
+import ruJson from './ru.json';
+import trJson from './tr.json';
+import koJson from './ko.json';
+import idJson from './id.json';
 
 // ── Flatten utility ─────────────────────────────────────────────────
 
@@ -89,6 +98,15 @@ function mergeWithEnglishFallback(
 const esFlattened = buildFlattenedResources(esJson as LocaleNamespaces);
 const frFlattened = buildFlattenedResources(frJson as LocaleNamespaces);
 const deFlattened = buildFlattenedResources(deJson as LocaleNamespaces);
+const arFlattened = buildFlattenedResources(arJson as LocaleNamespaces);
+const hiFlattened = buildFlattenedResources(hiJson as LocaleNamespaces);
+const zhFlattened = buildFlattenedResources(zhJson as LocaleNamespaces);
+const ptFlattened = buildFlattenedResources(ptJson as LocaleNamespaces);
+const jaFlattened = buildFlattenedResources(jaJson as LocaleNamespaces);
+const ruFlattened = buildFlattenedResources(ruJson as LocaleNamespaces);
+const trFlattened = buildFlattenedResources(trJson as LocaleNamespaces);
+const koFlattened = buildFlattenedResources(koJson as LocaleNamespaces);
+const idFlattened = buildFlattenedResources(idJson as LocaleNamespaces);
 
 /** Per-locale flattened namespace resources (with English fallback). */
 export const localeResources: Record<string, FlattenedResources> = {
@@ -96,6 +114,15 @@ export const localeResources: Record<string, FlattenedResources> = {
   es: mergeWithEnglishFallback(esFlattened),
   fr: mergeWithEnglishFallback(frFlattened),
   de: mergeWithEnglishFallback(deFlattened),
+  ar: mergeWithEnglishFallback(arFlattened),
+  hi: mergeWithEnglishFallback(hiFlattened),
+  zh: mergeWithEnglishFallback(zhFlattened),
+  pt: mergeWithEnglishFallback(ptFlattened),
+  ja: mergeWithEnglishFallback(jaFlattened),
+  ru: mergeWithEnglishFallback(ruFlattened),
+  tr: mergeWithEnglishFallback(trFlattened),
+  ko: mergeWithEnglishFallback(koFlattened),
+  id: mergeWithEnglishFallback(idFlattened),
 };
 
 // ── i18next resource format ─────────────────────────────────────────
@@ -124,4 +151,4 @@ export function buildI18nResources(): Record<string, Record<string, Record<strin
 export type NamespaceKeys<N extends AppNamespace> = keyof FlattenedResources[N];
 
 // Re-export the raw JSON for tooling (e.g. i18n:extract script)
-export { enJson, esJson, frJson, deJson };
+export { enJson, esJson, frJson, deJson, arJson, hiJson, zhJson, ptJson, jaJson, ruJson, trJson, koJson, idJson };

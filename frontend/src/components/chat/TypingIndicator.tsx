@@ -12,6 +12,7 @@ import Reanimated, {
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Space } from '../../theme/designTokens';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface TypingIndicatorProps {
   dotColor?: string;
@@ -108,13 +109,14 @@ export function TypingIndicator({
   style,
 }: TypingIndicatorProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const { isEnabled } = useMotionConfig();
   const resolvedColor = dotColor ?? colors.textMuted;
 
   return (
     <View
       style={StyleSheet.flatten([styles.container, style])}
-      accessibilityLabel="Typing..."
+      accessibilityLabel={t('conversation.typingIndicator')}
       accessibilityRole="text"
     >
       {Array.from({ length: DOT_COUNT }, (_, i) => (

@@ -19,7 +19,7 @@ import { RecordingRing } from './RecordingRing';
 // the bottom bar, small enough to leave the viewfinder unobstructed.
 const SHUTTER_SIZE = 78;
 const SHUTTER_INNER = 60;
-const SHUTTER_RING_WIDTH = 5;
+const SHUTTER_RING_WIDTH = 4;
 
 export type CameraMode = 'photo' | 'video' | 'boomerang';
 
@@ -114,7 +114,7 @@ export function ShutterButton({
       <Reanimated.View
         style={[
           styles.outer,
-          { borderColor: handsFreeMode && !isRecording ? colors.antiqueGold : colors.brand },
+          { borderColor: handsFreeMode && !isRecording ? colors.brand : colors.brand },
           shutterStyle,
         ]}
       >
@@ -127,16 +127,17 @@ export function ShutterButton({
         <View
           style={[
             styles.inner,
+            { backgroundColor: colors.scrimTextPrimary },
             isRecording && styles.innerRecording,
             isRecording && { backgroundColor: colors.danger },
-            handsFreeMode && !isRecording && { backgroundColor: colors.antiqueGold },
+            handsFreeMode && !isRecording && { backgroundColor: colors.brand },
           ]}
         />
         {/* Speed indicator badge — shows the current speed multiplier
             on the shutter when a non-1× speed is selected */}
         {showSpeedIndicator && !isRecording && (
-          <View style={styles.speedBadge}>
-            <Text style={styles.speedBadgeText}>{speedMode}×</Text>
+          <View style={[styles.speedBadge, { backgroundColor: colors.mediaOverlayScrim }]}>
+            <Text style={[styles.speedBadgeText, { color: colors.scrimTextPrimary }]}>{speedMode}×</Text>
           </View>
         )}
       </Reanimated.View>
@@ -145,11 +146,9 @@ export function ShutterButton({
 }
 
 const styles = StyleSheet.create({
-  // Camera overlay — always high contrast on dark preview. The shutter ring
-  // + inner fill are white on the dark camera preview in both themes; the
-  // theme has no `textOnMedia` token, so literal white is retained here.
+  // Camera overlay — shutter ring + inner fill use scrim text tokens for
+  // high contrast on the dark camera preview in both themes.
   // Outer ring — brand color border (applied inline via colors.brand).
-  // The white inner fill remains for high contrast on the dark preview.
   outer: {
     width: SHUTTER_SIZE,
     height: SHUTTER_SIZE,
@@ -164,7 +163,7 @@ const styles = StyleSheet.create({
     width: SHUTTER_INNER,
     height: SHUTTER_INNER,
     borderRadius: SHUTTER_INNER / 2,
-    backgroundColor: '#fff',
+    // backgroundColor applied inline via colors.scrimTextPrimary (theme token)
   },
   innerRecording: {
     width: SHUTTER_INNER * 0.6,
@@ -180,11 +179,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xxs,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    // backgroundColor applied inline via colors.mediaOverlayScrim (theme token)
   },
   speedBadgeText: {
     fontFamily: Typography.family.bold,
     fontSize: TypographyV2.meta.size,
-    color: '#fff',
+    // color applied inline via colors.scrimTextPrimary (theme token)
   },
 });

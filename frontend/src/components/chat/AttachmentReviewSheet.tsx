@@ -16,6 +16,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface AttachmentReviewSheetProps {
   visible: boolean;
@@ -32,6 +33,7 @@ export function AttachmentReviewSheet({
   onClose,
   onSend }: AttachmentReviewSheetProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const { height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const [caption, setCaption] = useState('');
@@ -67,12 +69,12 @@ export function AttachmentReviewSheet({
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-            Review attachment
+            {t('attachments.reviewTitle')}
           </Text>
           <Pressable
             onPress={onClose}
             hitSlop={12}
-            accessibilityLabel="Cancel attachment"
+            accessibilityLabel={t('attachments.cancelAttachment')}
             accessibilityRole="button"
           >
             <Ionicons name="close" size={24} color={colors.textPrimary} />
@@ -97,17 +99,17 @@ export function AttachmentReviewSheet({
             style={[styles.captionInput, { backgroundColor: colors.surfaceAlt, color: colors.textPrimary }]}
             value={caption}
             onChangeText={setCaption}
-            placeholder="Add a caption..."
+            placeholder={t('attachments.captionPlaceholder')}
             placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}
-            accessibilityLabel="Attachment caption"
+            accessibilityLabel={t('attachments.captionAccessibility')}
             accessibilityRole="text"
           />
           <Pressable
             onPress={() => onSend(caption.trim())}
             style={[styles.sendBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Send attachment"
+            accessibilityLabel={t('attachments.sendAttachment')}
             accessibilityRole="button"
           >
             <Ionicons name="arrow-up" size={20} color={colors.textInverse} />

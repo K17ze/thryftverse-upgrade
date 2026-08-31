@@ -51,6 +51,8 @@ import { ListingPublishFooter } from '../components/listing/ListingPublishFooter
 import { useListingAutofill } from '../hooks/useListingAutofill';
 import { useSoldComps } from '../hooks/useSoldComps';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useOfflineQueue } from '../lib/offlineQueue';
+import { fetchWithAuth, getApiBaseUrl } from '../lib/apiClient';
 import { useBackendData } from '../context/BackendDataContext';
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { useFeatureFlag, trackFunnelStep } from '../analytics';
@@ -176,7 +178,55 @@ export default function SellScreen() {
 
   const currency = useCurrencyPref();
   const currencySymbol = CURRENCIES[currency.currencyCode].symbol;
-  const { isOffline } = useConnectivity();
+  const { isOffline, isConnected } = useConnectivity();
+  const { show: showToast } = useToast();
+
+  // ── Network-restoration flush ──
+  // When the device transitions from offline → online, flush the persisted
+  // offline queue so any write mutations the user authored while disconnected
+  // (e.g. a listing creation that was queued instead of submitted) are
+  // replayed immediately. If any queued items were successfully processed,
+  // surface a toast so the user knows their listing has been published.
+  const prevConnectedRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const wasConnected = prevConnectedRef.current;
+    prevConnectedRef.current = isConnected ?? null;
+
+    // Only flush on the false → true transition, not on every connectivity
+    // event or the initial null → true seed.
+    if (wasConnected === false && isConnected === true) {
+      const queue = useOfflineQueue.getState();
+      const countBefore = queue.queue.length;
+      if (countBefore === 0) return;
+
+      // Replay queued mutations through the same authenticated fetch
+      // pipeline used by live requests. The offline queue stores full URLs
+      // (baseUrl + path), but `fetchWithAuth` prepends the API base URL
+      // itself, so strip the base URL to recover the path. This ensures
+      // replayed writes carry a valid Authorization header and benefit from
+      // the 401 token-refresh logic — without it, a queued mutation would
+      // be sent with no auth header and silently dropped as a 401.
+      const apiBaseUrl = getApiBaseUrl();
+      queue
+        .flushQueue(async (url, init) => {
+          const path = typeof url === 'string' && url.startsWith(apiBaseUrl)
+            ? url.slice(apiBaseUrl.length)
+            : String(url);
+          return fetchWithAuth(path, init ?? undefined);
+        })
+        .then(() => {
+          const countAfter = useOfflineQueue.getState().queue.length;
+          if (countAfter < countBefore) {
+            showToast('Your listing has been published', 'success');
+          }
+        })
+        .catch(() => {
+          // Flush failures are non-fatal — the queue retains the items and
+          // the exponential-backoff retry logic will try again on the next
+          // flush or app foreground.
+        });
+    }
+  }, [isConnected, showToast]);
 
   // ── Draft persistence (restore on mount, persist on change) ──
   // Owns the transient "Saved" indicator state and the draft save/load

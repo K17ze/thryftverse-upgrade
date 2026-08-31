@@ -28,6 +28,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { blockUser } from '../services/profileApi';
 import { deleteConversationOnApi, acceptMessageRequestOnApi } from '../services/chatApi';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -39,6 +40,7 @@ export default function MessageRequestsScreen() {
   const haptic = useHaptic();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
 
   const conversations = useStore((state) => state.conversations);
   const conversationsLoaded = useStore((state) => state.conversationsLoaded);
@@ -83,10 +85,10 @@ export default function MessageRequestsScreen() {
     try {
       await acceptMessageRequestOnApi(id);
       acceptMessageRequest(id);
-      show('Request accepted', 'success');
+      show(t('requests.accepted'), 'success');
       navigation.navigate('Chat', { conversationId: id });
     } catch {
-      show('Could not accept this request. Check your connection and try again.', 'error');
+      show(t('requests.acceptError'), 'error');
     } finally {
       setPendingId(null);
       setPendingAction(null);
@@ -97,9 +99,9 @@ export default function MessageRequestsScreen() {
     if (pendingId) return;
     setConfirmSheet({
       visible: true,
-      title: 'Delete request?',
-      message: 'This removes the request. They can still send another message later.',
-      confirmLabel: 'Delete',
+      title: t('requests.deleteConfirmationTitle'),
+      message: t('requests.deleteConfirmationMessage'),
+      confirmLabel: t('common.delete'),
       variant: 'danger',
       onConfirm: async () => {
         setConfirmSheet((s) => ({ ...s, visible: false }));
@@ -109,9 +111,9 @@ export default function MessageRequestsScreen() {
         try {
           await deleteConversationOnApi(id, 'me');
           declineMessageRequest(id);
-          show('Request deleted', 'info');
+          show(t('requests.deleted'), 'info');
         } catch {
-          show('Could not delete this request. Check your connection and try again.', 'error');
+          show(t('requests.deleteError'), 'error');
         } finally {
           setPendingId(null);
           setPendingAction(null);
@@ -123,9 +125,9 @@ export default function MessageRequestsScreen() {
     if (pendingId) return;
     setConfirmSheet({
       visible: true,
-      title: `Block ${name}?`,
-      message: 'They will not be able to message you or see your profile. The request will be removed.',
-      confirmLabel: 'Block',
+      title: t('requests.blockConfirmationTitle', { name }),
+      message: t('requests.blockConfirmationMessage'),
+      confirmLabel: t('common.block'),
       variant: 'danger',
       onConfirm: async () => {
         setConfirmSheet((s) => ({ ...s, visible: false }));
@@ -140,9 +142,9 @@ export default function MessageRequestsScreen() {
           }
           await deleteConversationOnApi(id, 'me');
           declineMessageRequest(id);
-          show(`${name} blocked`, 'info');
+          show(t('requests.blocked', { name }), 'info');
         } catch {
-          show('Could not block this account. Check your connection and try again.', 'error');
+          show(t('requests.blockError'), 'error');
         } finally {
           setPendingId(null);
           setPendingAction(null);
@@ -155,7 +157,7 @@ export default function MessageRequestsScreen() {
     haptic.light();
     const counterpartyId = resolveCounterpartyId(id);
     if (!counterpartyId) {
-      show('This account cannot be reported here.', 'error');
+      show(t('requests.reportError'), 'error');
       return;
     }
     navigation.navigate('Report', { type: 'user', targetId: counterpartyId });
@@ -247,10 +249,10 @@ export default function MessageRequestsScreen() {
               hapticFeedback="light"
               disabled={isPending}
               accessibilityRole="button"
-              accessibilityLabel="Delete message request"
+              accessibilityLabel={t('requests.deleteMessageRequest')}
               accessibilityState={{ busy: isPending && pendingAction === 'delete', disabled: isPending }}
             >
-              {renderActionContent('delete', 'Delete')}
+              {renderActionContent('delete', t('common.delete'))}
             </AnimatedPressable>
             <AnimatedPressable
               style={[styles.requestAccept, isPending && pendingAction !== 'accept' && styles.actionDisabledBg]}
@@ -260,7 +262,7 @@ export default function MessageRequestsScreen() {
               hapticFeedback="medium"
               disabled={isPending}
               accessibilityRole="button"
-              accessibilityLabel="Accept message request"
+              accessibilityLabel={t('requests.acceptMessageRequest')}
               accessibilityState={{ busy: isPending && pendingAction === 'accept', disabled: isPending }}
             >
               {renderActionContent('accept', 'Accept')}
@@ -278,12 +280,12 @@ export default function MessageRequestsScreen() {
               hapticFeedback="medium"
               disabled={isPending}
               accessibilityRole="button"
-              accessibilityLabel={`Block ${displayTitle}`}
+              accessibilityLabel={t('common.blockWithName', { name: displayTitle })}
               accessibilityState={{ busy: isPending && pendingAction === 'block', disabled: isPending }}
               style={styles.safetyLink}
             >
               <Ionicons name="ban-outline" size={13} color={colors.danger} />
-              <Text style={styles.safetyLinkTextDanger}>Block</Text>
+              <Text style={styles.safetyLinkTextDanger}>{t('common.block')}</Text>
             </AnimatedPressable>
             <View style={styles.safetyDivider} />
             <AnimatedPressable
@@ -293,11 +295,11 @@ export default function MessageRequestsScreen() {
               hapticFeedback="light"
               disabled={isPending}
               accessibilityRole="button"
-              accessibilityLabel={`Report ${displayTitle}`}
+              accessibilityLabel={t('common.reportWithName', { name: displayTitle })}
               style={styles.safetyLink}
             >
               <Ionicons name="flag-outline" size={13} color={colors.textMuted} />
-              <Text style={styles.safetyLinkText}>Report</Text>
+              <Text style={styles.safetyLinkText}>{t('common.report')}</Text>
             </AnimatedPressable>
           </View>
         </View>
@@ -312,7 +314,7 @@ export default function MessageRequestsScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.screenRoot}>
       <ScreenHeader
-        title="Message requests"
+        title={t('requests.title')}
         onBack={() => navigation.goBack()}
         style={{
           borderBottomWidth: StyleSheet.hairlineWidth,
@@ -323,8 +325,8 @@ export default function MessageRequestsScreen() {
       ) : showEmpty ? (
         <EmptyState
           icon="mail-outline"
-          title="No message requests"
-          subtitle="Messages from people you don't follow appear here."
+          title={t('requests.noRequests')}
+          subtitle={t('requests.noRequestsSubtitle')}
         />
       ) : (
         <FlashList

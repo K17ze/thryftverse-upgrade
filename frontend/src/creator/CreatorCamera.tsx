@@ -41,6 +41,7 @@ import Reanimated, {
   withTiming,
   withSequence,
   withDelay,
+  withRepeat,
   Easing,
   runOnJS,
   interpolate,
@@ -213,11 +214,35 @@ export default function CreatorCamera({
   // VisionCamera v5: "Enabling Audio requires microphone permission."
   const videoOutput = useVideoOutput({ enableAudio: capturePermissions.shouldRecordAudio });
   const [cameraReady, setCameraReady] = useState(false);
+  // "Starting camera" label is delayed so a fast init never flashes text.
+  // Only surfaces if the camera takes more than 800ms to report ready.
+  const [showInitLabel, setShowInitLabel] = useState(false);
+  // Camera init spinner rotation — 1.2s linear loop
+  const spinnerRotation = useSharedValue(0);
   // Deactivate the camera on unmount to release the native CameraSession
   // promptly. Without this, the native session can linger until GC, causing
   // "A resource failed to call release" warnings and blocking other camera
   // consumers (e.g. VisualSearchCamera) from acquiring the device.
   const [cameraActive, setCameraActive] = useState(true);
+  // Reveal the "Starting camera" label only when init exceeds 800ms.
+  // A fast init never shows the label, keeping the overlay a pure spinner.
+  // The spinner rotates continuously at 1.2s/rev while the camera initializes.
+  useEffect(() => {
+    if (cameraReady) {
+      setShowInitLabel(false);
+      spinnerRotation.value = 0;
+      return;
+    }
+    const t = setTimeout(() => setShowInitLabel(true), 800);
+    if (!reducedMotion) {
+      spinnerRotation.value = withRepeat(
+        withTiming(360, { duration: 1200, easing: Easing.linear }),
+        -1,
+        false,
+      );
+    }
+    return () => clearTimeout(t);
+  }, [cameraReady, reducedMotion, spinnerRotation]);
   const [flash, setFlash] = useState<FlashMode>('off');
   const [zoomIndex, setZoomIndex] = useState<ZoomStepIndex>(0);
   // ── Real-time camera effect (Skia frame processor) ──
@@ -280,13 +305,12 @@ export default function CreatorCamera({
   const [greenScreenSettings, setGreenScreenSettings] = useState<GreenScreenSettings | null>(null);
 
   // ── Shared animation values ──
-  // Flip animation (double-tap to switch camera)
-  const flipRotation = useSharedValue(0);
+  // Flip animation (double-tap to switch camera) — a quick fade, not a
+  // full rotation. The device switch is hidden by a brief opacity dip.
+  const flipOpacity = useSharedValue(1);
   // Zoom indicator spring appearance
   const zoomIndicatorOpacity = useSharedValue(0);
   const zoomIndicatorScale = useSharedValue(0.8);
-  // Flash control spring scale
-  const flashScale = useSharedValue(1);
   // Permission entrance animation
   const permissionEntrance = useSharedValue(0);
   // Recording state + ring progress
@@ -344,14 +368,17 @@ export default function CreatorCamera({
 
   const captureFlashStyle = useAnimatedStyle(() => ({ opacity: captureFlash.value }));
 
+  // ── Camera init spinner rotation — 1.2s linear loop ──
+  const spinnerStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${spinnerRotation.value}deg` }] }));
+
   // ── Quick-review overlay opacity ──
   const reviewOpacityStyle = useAnimatedStyle(() => ({ opacity: reviewOpacity.value }));
 
   // ── Framing-guide opacity (crossfade on mode switch) ──
 
-  // ── Flip rotation: rotateY 0→180→360 for double-tap camera switch ──
-  const cameraFlipStyle = useAnimatedStyle(() => ({
-    transform: [{ rotateY: `${flipRotation.value}deg` }] }));
+  // ── Flip: quick opacity fade (1→0→1) to hide the device switch ──
+  const cameraFlipStyle = useAnimatedStyle(() => ({ opacity: flipOpacity.value }));
 
   // ── Zoom indicator: spring appearance ──
   const zoomIndicatorStyle = useAnimatedStyle(() => ({
@@ -411,28 +438,23 @@ export default function CreatorCamera({
   // ── Camera controls ──
   const cycleFlash = useCallback(() => {
     haptic.light();
-    // Spring scale pop on flash toggle
-    if (!reducedMotion) {
-      flashScale.value = withSequence(
-        withSpring(0.88, spring.tap),
-        withSpring(1, spring.entrance),
-      );
-    }
     setFlash((p) => p === 'off' ? 'on' : p === 'on' ? 'auto' : 'off');
-  }, [haptic, reducedMotion, flashScale, spring]);
+  }, [haptic]);
 
   const toggleFacing = useCallback(() => {
     haptic.medium();
     setCameraReady(false);
-    // Spring 3D flip animation: rotateY 0→180→360
+    // Quick fade out → swap → fade in. No full rotation; a flip is a
+    // device swap, not a spectacle.
     if (!reducedMotion) {
-      flipRotation.value = withSequence(
-        withSpring(flipRotation.value + 180, spring.lift),
+      flipOpacity.value = withSequence(
+        withTiming(0, { duration: Motion.duration.fast, easing: Easing.in(Easing.cubic) }),
+        withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) }),
       );
     }
     setFacing((p) => (p === 'back' ? 'front' : 'back'));
     // device is reactive — useCameraDevice(facing) will resolve the new device
-  }, [haptic, reducedMotion, flipRotation, spring]);
+  }, [haptic, reducedMotion, flipOpacity]);
 
   // ── Double-tap to switch camera ──
   const doubleTapGesture = useMemo(() => {
@@ -443,6 +465,26 @@ export default function CreatorCamera({
         runOnJS(toggleFacing)();
       });
   }, [toggleFacing]);
+
+  // ── Swipe-down to dismiss (Snapchat/Instagram pattern) ──
+  // A fast downward swipe from the top area closes the camera. Only
+  // activates when the swipe starts in the top 120pt region and moves
+  // predominantly downward, so it doesn't conflict with tap-to-focus
+  // or the pinch-to-zoom gesture.
+  const swipeDownDismiss = useMemo(() => {
+    return Gesture.Pan()
+      .activateAfterLongPress(0)
+      .minDistance(40)
+      .minPointers(1)
+      .maxPointers(1)
+      .onEnd((e) => {
+        'worklet';
+        // Only dismiss for predominantly downward swipes with sufficient velocity
+        if (e.translationY > 80 && Math.abs(e.translationY) > Math.abs(e.translationX) * 2) {
+          runOnJS(onClose)();
+        }
+      });
+  }, [onClose]);
 
   // ── Tools sheet open/close ──
   const openToolsSheet = useCallback(() => {
@@ -718,7 +760,12 @@ export default function CreatorCamera({
   // warning, which logs synchronously on the Android UI thread and causes
   // ANRs (input dispatch timeout).
   const pinchStartZoom = useSharedValue(0);
+  // Pinch zoom delta — shared value for UI-thread updates during pinch,
+  // mirrored to React state on a throttled basis (every 50ms) to avoid
+  // per-frame JS re-renders while keeping the Camera prop responsive.
+  const pinchZoomDeltaSV = useSharedValue(0);
   const [pinchZoomDelta, setPinchZoomDelta] = useState(0);
+  const lastZoomBridgeMs = useSharedValue(0);
 
   const showZoomIndicator = useCallback(() => {
     if (!reducedMotion) {
@@ -748,17 +795,25 @@ export default function CreatorCamera({
           'worklet';
           // Map pinch scale to zoom delta. A scale of 2 doubles the zoom.
           const newZoom = Math.max(1, pinchStartZoom.value + (e.scale - 1) * 0.5);
-          runOnJS(setPinchZoomDelta)(newZoom - pinchStartZoom.value);
+          pinchZoomDeltaSV.value = newZoom - pinchStartZoom.value;
+          // Throttle JS bridge to every 50ms — smooth enough for the Camera
+          // zoom prop while avoiding per-frame React re-renders.
+          const now = global.performance?.now?.() ?? Date.now();
+          if (now - lastZoomBridgeMs.value > 50) {
+            lastZoomBridgeMs.value = now;
+            runOnJS(setPinchZoomDelta)(pinchZoomDeltaSV.value);
+          }
         })
         .onEnd((e) => {
           'worklet';
           const finalZoom = Math.max(1, pinchStartZoom.value + (e.scale - 1) * 0.5);
+          pinchZoomDeltaSV.value = 0;
           runOnJS(setPinchZoomDelta)(0);
           runOnJS(snapPinchToStep)(finalZoom);
           runOnJS(haptic.light)();
           runOnJS(showZoomIndicator)();
         }),
-    [zoomValue, snapPinchToStep, haptic, showZoomIndicator, pinchStartZoom],
+    [zoomValue, snapPinchToStep, haptic, showZoomIndicator, pinchStartZoom, pinchZoomDeltaSV, lastZoomBridgeMs],
   );
 
   // Effective zoom = stepped baseline + pinch delta, clamped to device range
@@ -793,6 +848,10 @@ export default function CreatorCamera({
     }
 
     try {
+      // Immediate haptic the instant the shutter fires — before the async
+      // capture completes — so the user feels instant response (flagship
+      // camera pattern: iOS Camera, Snapchat).
+      haptic.medium();
       const captureStart = Date.now();
       // vision-camera V5: capturePhoto returns an in-memory Photo object.
       // Save to temp file and dispose to free native memory.
@@ -809,10 +868,10 @@ export default function CreatorCamera({
       photo.dispose();
       const captureLatencyMs = Date.now() - captureStart;
       if (photoUri) {
-        haptic.medium();
         // Capture flash — white overlay 0→0.8→0 over 200ms. This is the
-        // capture feedback signal and runs regardless of whether the
-        // capture goes direct-to-editor or through the review overlay.
+        // capture completion feedback signal (the haptic already fired at
+        // shutter press). Runs regardless of whether the capture goes
+        // direct-to-editor or through the review overlay.
         if (!reducedMotion) {
           captureFlash.value = withSequence(
             withTiming(0.8, { duration: Motion.duration.touch, easing: Easing.out(Easing.cubic) }),
@@ -1159,7 +1218,7 @@ export default function CreatorCamera({
 
   // ── Camera viewfinder ──
   return (
-    <GestureDetector gesture={pinchGesture}>
+    <GestureDetector gesture={Gesture.Race(pinchGesture, swipeDownDismiss)}>
       <View style={StyleSheet.absoluteFill}>
         {/* Double-tap gesture for camera flip (wrapped around camera feed) */}
         <GestureDetector gesture={doubleTapGesture}>
@@ -1213,9 +1272,12 @@ export default function CreatorCamera({
                     instead of a black screen with no feedback. */}
                 {!cameraReady && (
                   <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                    <View style={styles.cameraInitOverlay} />
+                    <View style={[styles.cameraInitOverlay, { backgroundColor: colors.mediaOverlayScrim }]} />
                     <View style={styles.cameraInitSpinnerWrap}>
-                      <View style={styles.cameraInitSpinner} />
+                      <Reanimated.View style={[styles.cameraInitSpinner, { borderColor: colors.scrimTextTertiary, borderTopColor: colors.scrimTextPrimary }, spinnerStyle]} />
+                      {showInitLabel && (
+                        <Text style={[styles.cameraInitLabel, { color: colors.scrimTextSecondary }]}>Starting camera</Text>
+                      )}
                     </View>
                   </View>
                 )}
@@ -1226,18 +1288,18 @@ export default function CreatorCamera({
 
       {/* Capture flash — subtle white overlay on capture */}
       <Reanimated.View
-        style={[styles.captureFlash, captureFlashStyle]}
+        style={[styles.captureFlash, { backgroundColor: colors.scrimTextPrimary }, captureFlashStyle]}
         pointerEvents="none"
       />
 
-      {/* Gradient overlays — 0.25 top, 0.35 bottom */}
+      {/* Gradient overlays — 0.18 top, 0.28 bottom (legibility only, not a wash) */}
       <LinearGradient
-        colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)']}
+        colors={['rgba(0,0,0,0.18)', 'rgba(0,0,0,0)']}
         style={styles.topGradient}
         pointerEvents="none"
       />
       <LinearGradient
-        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)']}
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.28)']}
         style={styles.bottomGradient}
         pointerEvents="none"
       />
@@ -1265,10 +1327,10 @@ export default function CreatorCamera({
             For ordinary capture this is the only guide (no brackets). */}
         {showGrid ? (
           <View style={styles.gridOverlay}>
-            <View style={styles.gridLineV1} />
-            <View style={styles.gridLineV2} />
-            <View style={styles.gridLineH1} />
-            <View style={styles.gridLineH2} />
+            <View style={[styles.gridLineV1, { backgroundColor: colors.scrimTextTertiary }]} />
+            <View style={[styles.gridLineV2, { backgroundColor: colors.scrimTextTertiary }]} />
+            <View style={[styles.gridLineH1, { backgroundColor: colors.scrimTextTertiary }]} />
+            <View style={[styles.gridLineH2, { backgroundColor: colors.scrimTextTertiary }]} />
           </View>
         ) : null}
         {/* Corner brackets + crosshair — Visual Search or explicit framing
@@ -1286,13 +1348,13 @@ export default function CreatorCamera({
                 height: viewport.viewRect.height },
             ]}
           >
-            <View style={styles.bracketTL} />
-            <View style={styles.bracketTR} />
-            <View style={styles.bracketBL} />
-            <View style={styles.bracketBR} />
+            <View style={[styles.bracketTL, { borderColor: colors.scrimTextSecondary }]} />
+            <View style={[styles.bracketTR, { borderColor: colors.scrimTextSecondary }]} />
+            <View style={[styles.bracketBL, { borderColor: colors.scrimTextSecondary }]} />
+            <View style={[styles.bracketBR, { borderColor: colors.scrimTextSecondary }]} />
             <View style={styles.crosshair}>
-              <View style={styles.crosshairH} />
-              <View style={styles.crosshairV} />
+              <View style={[styles.crosshairH, { backgroundColor: colors.scrimTextTertiary }]} />
+              <View style={[styles.crosshairV, { backgroundColor: colors.scrimTextTertiary }]} />
             </View>
           </View>
         ) : null}
@@ -1308,19 +1370,12 @@ export default function CreatorCamera({
         }}
       />
 
-      {/* Zoom level indicator — spring appearance (1×/2×/3×) */}
-      <Reanimated.View style={[styles.zoomIndicator, zoomIndicatorStyle]} pointerEvents="none">
-        <Text style={styles.zoomIndicatorText}>
-          {zoomLabel}
-        </Text>
-      </Reanimated.View>
-
       {/* Countdown overlay — Reanimated spring scale + fade.
           Shows the self-timer countdown OR the hands-free countdown. */}
       {(countdown !== null || handsFreeCountdown !== null) && (
         <View style={styles.countdownOverlay} pointerEvents="none">
           <Reanimated.Text
-            style={[styles.countdownText, countdownTextStyle]}
+            style={[styles.countdownText, { color: colors.scrimTextPrimary, textShadowColor: colors.shadow }, countdownTextStyle]}
           >
             {countdown ?? handsFreeCountdown}
           </Reanimated.Text>
@@ -1336,14 +1391,14 @@ export default function CreatorCamera({
           accessibilityLabel="Close camera"
           accessibilityRole="button"
         >
-          <Ionicons name="close" size={IconGrammar.hero} color="#fff" />
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
         </Pressable>
 
         <View style={styles.topRightControls}>
           {renderTopRightAccessory?.()}
-          {/* Flash — top-right, prominent circular button */}
+          {/* Flash — subtle 20pt glyph in a 44pt target; no background unless active */}
           <Pressable
-            style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed, flash !== 'off' && styles.topIconBtnActive]}
+            style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed, flash !== 'off' && { backgroundColor: colors.scrimTextTertiary }]}
             onPress={cycleFlash}
             hitSlop={12}
             accessibilityLabel={`Flash ${flash}`}
@@ -1351,11 +1406,11 @@ export default function CreatorCamera({
           >
             <Ionicons
               name={flash === 'off' ? 'flash-off' : flash === 'auto' ? 'flash-outline' : 'flash'}
-              size={IconGrammar.hero}
-              color={flash === 'off' ? '#fff' : colors.antiqueGold}
+              size={20}
+              color={flash === 'off' ? colors.scrimTextPrimary : colors.brand}
             />
           </Pressable>
-          {/* Tools button — opens CaptureToolsSheet for all secondary tools */}
+          {/* Tools — single "more" affordance, transparent 20pt ellipsis */}
           <Pressable
             style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed]}
             onPress={openToolsSheet}
@@ -1364,7 +1419,7 @@ export default function CreatorCamera({
             accessibilityHint="Opens timer, grid, hands-free, speed, green screen, and multi-capture"
             accessibilityRole="button"
           >
-            <Ionicons name="ellipsis-horizontal-circle-outline" size={IconGrammar.hero} color="#fff" />
+            <Ionicons name="ellipsis-horizontal" size={20} color={colors.scrimTextPrimary} />
           </Pressable>
         </View>
       </View>
@@ -1397,14 +1452,10 @@ export default function CreatorCamera({
                 accessibilityLabel={`Frame ${i + 1} of ${multiCaptures.length}, tap to remove`}
                 accessibilityRole="button"
               >
-                <Image source={{ uri: cap.uri }} style={styles.stagingThumb} />
+                <Image source={{ uri: cap.uri }} style={[styles.stagingThumb, { borderColor: colors.scrimTextPrimary }]} />
                 {/* Order index — bottom-left, the verified multi-select pattern */}
-                <View style={styles.stagingOrderBadge}>
-                  <Text style={styles.stagingOrderText}>{i + 1}</Text>
-                </View>
-                {/* Remove glyph — top-right, signals the tap action */}
-                <View style={styles.stagingRemoveBadge}>
-                  <Ionicons name="close" size={IconGrammar.badge} color="#fff" />
+                <View style={[styles.stagingOrderBadge, { backgroundColor: colors.mediaOverlayScrim }]}>
+                  <Text style={[styles.stagingOrderText, { color: colors.scrimTextPrimary }]}>{i + 1}</Text>
                 </View>
               </Pressable>
             ))}
@@ -1413,15 +1464,15 @@ export default function CreatorCamera({
                 accumulates captures, then taps Done to enter the editor
                 with the full batch. */}
             <Pressable
-              style={styles.stagingDoneBtn}
+              style={({ pressed }) => [styles.stagingDoneBtn, { backgroundColor: colors.scrimTextTertiary }, pressed && styles.btnPressed]}
               onPress={handleFinishMultiCapture}
               hitSlop={4}
               accessibilityLabel={`Done, ${multiCaptures.length} captures selected`}
               accessibilityHint="Finishes multi-capture and opens the editor with all captures"
               accessibilityRole="button"
             >
-              <Ionicons name="checkmark" size={IconGrammar.badge} color="#fff" />
-              <Text style={styles.stagingDoneText}>Done ({multiCaptures.length})</Text>
+              <Ionicons name="checkmark" size={12} color={colors.scrimTextPrimary} />
+              <Text style={[styles.stagingDoneText, { color: colors.scrimTextPrimary }]}>Done ({multiCaptures.length})</Text>
             </Pressable>
           </ScrollView>
         </View>
@@ -1457,45 +1508,59 @@ export default function CreatorCamera({
             controls default to transparent). The bottom scrim provides
             legibility; no persistent dark plate. */}
         <Pressable
-          style={({ pressed }) => [styles.flipBtn, pressed && styles.btnPressed]}
+          style={({ pressed }) => [styles.flipBtn, pressed && { backgroundColor: colors.scrimTextTertiary, transform: [{ scale: 0.97 }] }]}
           onPress={toggleFacing}
           hitSlop={12}
           accessibilityLabel="Flip camera"
           accessibilityRole="button"
         >
-          <Ionicons name="camera-reverse-outline" size={IconGrammar.hero} color="#fff" />
+          <Ionicons name="camera-reverse-outline" size={22} color={colors.scrimTextPrimary} />
         </Pressable>
       </View>
 
-      {/* Recording timer badge — shown while recording.
-          Includes speed indicator when a non-1× speed mode is active.
-          Includes muted indicator when recording without microphone.
-          Wrapped in a full-width container so the badge stays centered
-          regardless of whether the muted indicator adds width. */}
-      {isRecording && (
-        <View style={[styles.recordingBadgeWrap, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
-          <View style={styles.recordingBadge}>
+      {/* ── Consolidated status region ───────────────────────────────────
+          One top-center pill shows the single most-relevant status so the
+          top area never hosts competing badges. Priority:
+          recording > hands-free > green-screen > zoom. The zoom indicator
+          is the transient fallback (animated opacity, invisible unless a
+          pinch just occurred). One consistent pill style:
+          colors.mediaOverlayScrim fill, colors.scrimTextPrimary text,
+          Radius.full. */}
+      <View style={[styles.statusRegion, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
+        {isRecording ? (
+          <View style={[styles.statusPill, { backgroundColor: colors.mediaOverlayScrim }]}>
             <View style={[styles.recordingDot, { backgroundColor: colors.danger }]} />
-            <Text style={styles.recordingTimerText}>
+            <Text style={[styles.statusPillText, { color: colors.scrimTextPrimary }]}>
               {Math.floor(recordingElapsed / 1000)}s
               {speedMode !== DEFAULT_SPEED && `  ${speedMode}×`}
             </Text>
             {isMutedRecording && (
               <View style={styles.mutedIndicator}>
-                <Ionicons name="mic-off" size={12} color="#fff" />
+                <Ionicons name="mic-off" size={10} color={colors.scrimTextPrimary} />
               </View>
             )}
           </View>
-        </View>
-      )}
-
-      {/* Hands-free mode indicator — subtle badge when hands-free is armed */}
-      {handsFreeMode && !isRecording && handsFreeCountdown === null && (
-        <View style={[styles.handsFreeBadge, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
-          <Ionicons name="hand-right-outline" size={IconGrammar.badge} color={colors.antiqueGold} />
-          <Text style={[styles.handsFreeBadgeText, { color: colors.antiqueGold }]}>Hands-free</Text>
-        </View>
-      )}
+        ) : handsFreeMode && handsFreeCountdown === null ? (
+          <View style={[styles.statusPill, { backgroundColor: colors.mediaOverlayScrim }]}>
+            <Ionicons name="hand-right-outline" size={12} color={colors.scrimTextSecondary} />
+            <Text style={[styles.statusPillText, { color: colors.scrimTextPrimary }]}>Hands-free</Text>
+          </View>
+        ) : greenScreenSettings && !showGreenScreenSheet ? (
+          <View style={[styles.statusPill, { backgroundColor: colors.mediaOverlayScrim }]}>
+            <Image
+              source={{ uri: greenScreenSettings.backgroundUri }}
+              style={styles.greenScreenThumb}
+            />
+            <Text style={[styles.statusPillText, { color: colors.scrimTextPrimary }]}>Green Screen</Text>
+          </View>
+        ) : (
+          <Reanimated.View style={[styles.statusPill, { backgroundColor: colors.mediaOverlayScrim }, zoomIndicatorStyle]}>
+            <Text style={[styles.statusPillText, { color: colors.scrimTextPrimary }]}>
+              {zoomLabel}
+            </Text>
+          </Reanimated.View>
+        )}
+      </View>
 
       {/* Green screen sheet — background image picker, key color,
           tolerance, feather. Settings are saved with the capture and
@@ -1546,20 +1611,6 @@ export default function CreatorCamera({
         videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none'}
       />
 
-      {/* Green screen active indicator — shows the selected background
-          thumbnail when green screen is armed. Suppressed while recording
-          or hands-free is armed: only one status chip may occupy a region
-          at a time (recording > hands-free > zoom > effect metadata). */}
-      {greenScreenSettings && !showGreenScreenSheet && !isRecording && !handsFreeMode && (
-        <View style={[styles.greenScreenBadge, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
-          <Image
-            source={{ uri: greenScreenSettings.backgroundUri }}
-            style={styles.greenScreenThumb}
-          />
-          <Text style={styles.greenScreenBadgeText}>Green Screen (post)</Text>
-        </View>
-      )}
-
       {/* Optional bottom overlay (e.g. mode switcher) */}
       {renderBottomOverlay?.()}
 
@@ -1576,56 +1627,40 @@ export default function CreatorCamera({
 
           {/* Top scrim for close-area legibility over bright captures */}
           <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
+            colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0)']}
             style={styles.reviewTopScrim}
             pointerEvents="none"
           />
 
-          {/* Review actions — single-capture mode only. When multi-capture
-              is explicitly enabled, captures accumulate silently to the
-              staging tray and the review overlay never appears. This
-              overlay is reached only in the default single-capture mode,
-              or in visual search mode (which always uses a confirm step). */}
-          <View style={[styles.reviewActions, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
-            {/* Retake */}
-            <Pressable
-              style={({ pressed }) => [styles.reviewBtn, pressed && styles.btnPressed]}
-              onPress={handleRetake}
-              hitSlop={12}
-              accessibilityLabel="Retake photo"
-              accessibilityHint="Discards the current photo and returns to the camera"
-              accessibilityRole="button"
-            >
-              <Ionicons name="refresh-outline" size={IconGrammar.hero} color="#fff" />
-              <Text style={styles.reviewBtnLabel}>Retake</Text>
-            </Pressable>
+          {/* Retake — top-left quiet text-only button (no icon chrome).
+              Saving lives in the editor, not the camera review, so the
+              only secondary affordance is retake. */}
+          <Pressable
+            style={({ pressed }) => [styles.reviewRetakeBtn, { top: Math.max(insets.top, 16) + 8 }, pressed && styles.reviewRetakePressed]}
+            onPress={handleRetake}
+            hitSlop={12}
+            accessibilityLabel="Retake photo"
+            accessibilityHint="Discards the current photo and returns to the camera"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.reviewRetakeText, { color: colors.scrimTextPrimary }]}>Retake</Text>
+          </Pressable>
 
-            {/* Use — primary action */}
+          {/* Use — single confident primary action, full-width brand
+              button at the bottom. One obvious next step, not a row of
+              equals. */}
+          <View style={[styles.reviewPrimaryWrap, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
             <Pressable
-              style={({ pressed }) => [styles.reviewPrimaryBtn, { backgroundColor: colors.textPrimary }, pressed && styles.btnPressed]}
+              style={({ pressed }) => [styles.reviewPrimaryFullBtn, { backgroundColor: colors.textPrimary }, pressed && styles.reviewPrimaryPressed]}
               onPress={handleConfirmCapture}
               hitSlop={16}
-              accessibilityLabel={isVisualSearch ? 'Search with this photo' : 'Edit in studio'}
+              accessibilityLabel={isVisualSearch ? 'Search with this photo' : 'Use this photo'}
               accessibilityHint={isVisualSearch ? 'Starts a visual search with the captured photo' : 'Opens the studio editor with this photo'}
               accessibilityRole="button"
             >
-              <Ionicons name="arrow-forward" size={IconGrammar.hero} color={colors.background} />
-              <Text style={[styles.reviewPrimaryLabel, { color: colors.background }]}>
-                {isVisualSearch ? 'Search' : 'Edit'}
+              <Text style={[styles.reviewPrimaryFullLabel, { color: colors.background }]}>
+                {isVisualSearch ? 'Search' : 'Use'}
               </Text>
-            </Pressable>
-
-            {/* Save to gallery */}
-            <Pressable
-              style={({ pressed }) => [styles.reviewBtn, pressed && styles.btnPressed]}
-              onPress={handleSaveToGallery}
-              hitSlop={12}
-              accessibilityLabel="Save to gallery"
-              accessibilityHint="Saves the photo to the device photo library"
-              accessibilityRole="button"
-            >
-              <Ionicons name="download-outline" size={IconGrammar.hero} color="#fff" />
-              <Text style={styles.reviewBtnLabel}>Save</Text>
             </Pressable>
           </View>
         </Reanimated.View>
@@ -1641,27 +1676,35 @@ const styles = StyleSheet.create({
   // ── Camera initialization loading overlay ──
   cameraInitOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.6)' },
+    // backgroundColor applied inline via colors.mediaOverlayScrim
+  },
   cameraInitSpinnerWrap: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center' },
   cameraInitSpinner: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2.5,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderTopColor: 'rgba(255,255,255,0.9)' },
-  // ── Camera-overlay whites ──────────────────────────────────────────
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    // borderColor / borderTopColor applied inline via scrim text tokens
+  },
+  cameraInitLabel: {
+    marginTop: Space.sm,
+    fontSize: 12,
+    // color applied inline via colors.scrimTextSecondary
+    fontFamily: Typography.family.regular },
+  // ── Camera-overlay text colours ────────────────────────────────────
   // The camera preview is always dark regardless of app theme, so overlay
   // controls (brackets, crosshair, grid, labels, shutter ring, review
-  // secondary actions) intentionally use white / rgba(255,255,255,*) for
-  // high contrast. The theme has no `textOnMedia` token, and `textPrimary`
-  // resolves to black in light mode (invisible on dark preview), so these
-  // are kept as literal whites. Semantic colours (danger, antiqueGold) and
-  // non-overlay surfaces (review overlay, primary button) use theme tokens
-  // via inline overrides above.
+  // secondary actions) use the theme's scrim text tokens —
+  // `scrimTextPrimary`, `scrimTextSecondary`, `scrimTextTertiary` — which
+  // resolve to white / rgba-white in both light and dark themes. The
+  // `mediaOverlayScrim` token is used for pill backgrounds. These are
+  // applied via inline overrides above because StyleSheet.create is static
+  // and cannot reference theme tokens. Semantic colours (danger,
+  // antiqueGold) and non-overlay surfaces (review overlay, primary button)
+  // use theme tokens directly.
   btnPressed: {
     opacity: 0.7,
     transform: [{ scale: 0.97 }] },
@@ -1671,13 +1714,13 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 140 },
+    height: 120 },
   bottomGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 160 },
+    height: 140 },
   // One geometry owner for rule-of-thirds, framing corners and crosshair.
   captureGuideViewport: {
     position: 'absolute' },
@@ -1695,45 +1738,37 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)' },
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
   gridLineV2: {
     position: 'absolute',
     left: '66.66%',
     top: 0,
     bottom: 0,
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)' },
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
   gridLineH1: {
     position: 'absolute',
     top: '33.33%',
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)' },
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
   gridLineH2: {
     position: 'absolute',
     top: '66.66%',
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)' },
-  // Pinch zoom indicator — subtle pill at bottom center
-  zoomIndicator: {
-    position: 'absolute',
-    bottom: 220,
-    alignSelf: 'center',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.6)' },
-  zoomIndicatorText: {
-    fontFamily: Typography.family.bold,
-    fontSize: TypographyV2.body.size,
-    color: '#fff' },
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
   // Capture flash — full-screen white overlay
   captureFlash: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#fff' },
+    // backgroundColor applied inline via colors.scrimTextPrimary
+  },
   // Countdown overlay
   countdownOverlay: {
     ...StyleSheet.absoluteFill,
@@ -1742,11 +1777,11 @@ const styles = StyleSheet.create({
   countdownText: {
     fontFamily: Typography.family.bold,
     fontSize: SHUTTER_GLYPH_SIZE,
-    color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    // color applied inline via colors.scrimTextPrimary
+    // textShadowColor applied inline via colors.shadow
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8 },
-  // Corner brackets — refined 2pt stroke, smaller and more elegant
+  // Corner brackets — refined 1.5pt stroke, 6pt radius
   bracketTL: {
     position: 'absolute',
     top: 0,
@@ -1755,8 +1790,8 @@ const styles = StyleSheet.create({
     height: CORNER_SIZE,
     borderTopWidth: CORNER_STROKE,
     borderLeftWidth: CORNER_STROKE,
-    borderColor: 'rgba(255,255,255,0.85)',
-    borderTopLeftRadius: 8 },
+    // borderColor applied inline via colors.scrimTextSecondary
+    borderTopLeftRadius: 6 },
   bracketTR: {
     position: 'absolute',
     top: 0,
@@ -1765,8 +1800,8 @@ const styles = StyleSheet.create({
     height: CORNER_SIZE,
     borderTopWidth: CORNER_STROKE,
     borderRightWidth: CORNER_STROKE,
-    borderColor: 'rgba(255,255,255,0.85)',
-    borderTopRightRadius: 8 },
+    // borderColor applied inline via colors.scrimTextSecondary
+    borderTopRightRadius: 6 },
   bracketBL: {
     position: 'absolute',
     bottom: 0,
@@ -1775,8 +1810,8 @@ const styles = StyleSheet.create({
     height: CORNER_SIZE,
     borderBottomWidth: CORNER_STROKE,
     borderLeftWidth: CORNER_STROKE,
-    borderColor: 'rgba(255,255,255,0.85)',
-    borderBottomLeftRadius: 8 },
+    // borderColor applied inline via colors.scrimTextSecondary
+    borderBottomLeftRadius: 6 },
   bracketBR: {
     position: 'absolute',
     bottom: 0,
@@ -1785,29 +1820,31 @@ const styles = StyleSheet.create({
     height: CORNER_SIZE,
     borderBottomWidth: CORNER_STROKE,
     borderRightWidth: CORNER_STROKE,
-    borderColor: 'rgba(255,255,255,0.85)',
-    borderBottomRightRadius: 8 },
+    // borderColor applied inline via colors.scrimTextSecondary
+    borderBottomRightRadius: 6 },
   // Crosshair — centered in the framing guide area
   crosshair: {
     position: 'absolute',
     left: '50%',
     top: '50%',
-    width: 24,
-    height: 24,
-    marginLeft: -12,
-    marginTop: -12,
+    width: 16,
+    height: 16,
+    marginLeft: -8,
+    marginTop: -8,
     alignItems: 'center',
     justifyContent: 'center' },
   crosshairH: {
     position: 'absolute',
-    width: 24,
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.5)' },
+    width: 16,
+    height: 1,
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
   crosshairV: {
     position: 'absolute',
-    width: 2,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.5)' },
+    width: 1,
+    height: 16,
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
   // Top bar
   topBar: {
     position: 'absolute',
@@ -1832,7 +1869,8 @@ const styles = StyleSheet.create({
   // Flash active state — subtle accent background so the user can read
   // the toggle state at a glance without a heavy fill.
   topIconBtnActive: {
-    backgroundColor: 'rgba(255,255,255,0.12)' },
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
   // ── Multi-snap staging tray ──
   // A persistent horizontal row of captured thumbnails below the top bar.
   // Reads as a staging area (Snapchat pattern), not a chrome panel: flat
@@ -1848,57 +1886,43 @@ const styles = StyleSheet.create({
     alignItems: 'center' },
   stagingThumbWrap: {
     position: 'relative' },
-  // 40pt thumbnail — smaller than the 44pt gallery thumb so the tray stays
-  // compact and does not compete with the viewfinder. 2pt white/90 ring.
+  // 36x48pt thumbnail — compact and elegant. 2pt ring, 4px radius.
   stagingThumb: {
-    width: 40,
-    height: 52,
+    width: 36,
+    height: 48,
     borderRadius: Radius.sm,
     borderWidth: Stroke.emphasis,
-    borderColor: 'rgba(255,255,255,0.9)' },
-  // Order index badge — bottom-left, the verified multi-select pattern.
+    // borderColor applied inline via colors.scrimTextPrimary
+  },
+  // Order index badge — 12pt diameter, bottom-left.
   stagingOrderBadge: {
     position: 'absolute',
     bottom: 2,
     left: 2,
-    minWidth: 14,
-    height: 14,
-    paddingHorizontal: 3,
+    width: 12,
+    height: 12,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    // backgroundColor applied inline via colors.mediaOverlayScrim
     alignItems: 'center',
     justifyContent: 'center' },
   stagingOrderText: {
-    color: '#fff',
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  // Remove glyph — top-right, signals the tap-to-drop action.
-  stagingRemoveBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 16,
-    height: 16,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    alignItems: 'center',
-    justifyContent: 'center' },
+    // color applied inline via colors.scrimTextPrimary
+    fontSize: 9,
+    fontFamily: Typography.family.medium },
   // Done button — finishes multi-capture and enters the editor.
   // Snapchat Multi Snap "Edit & Send" pattern: a compact pill with a
-  // checkmark that commits the accumulated batch. Translucent dark fill
-  // with a brighter border so it reads as the primary action in the tray.
+  // checkmark that commits the accumulated batch. Translucent fill.
   stagingDoneBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 12,
-    height: 28,
+    height: 36,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.3)' },
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
   stagingDoneText: {
-    color: '#fff',
+    // color applied inline via colors.scrimTextPrimary
     fontSize: TypographyV2.caption.size,
     fontFamily: Typography.family.semibold },
   // Bottom bar — gallery (left) | shutter (center) | flip (right).
@@ -1920,34 +1944,26 @@ const styles = StyleSheet.create({
   flipBtn: {
     width: 44,
     height: 44,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center' },
-  // Recording badge — timer + red dot at top.
-  // A full-width wrapper centers the badge so it stays centered
-  // whether or not the muted indicator adds width.
-  recordingBadgeWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center' },
-  recordingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Space.md,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)' },
+  // Flip press feedback — subtle background circle only while pressed.
+  // Applied inline via colors.scrimTextTertiary + scale transform.
+  flipBtnPressed: {
+    // backgroundColor / transform applied inline
+  },
+  // Recording dot — used inside the consolidated status pill.
   recordingDot: {
-    width: 8,
-    height: 8,
+    width: 6,
+    height: 6,
     borderRadius: Radius.full,
     // backgroundColor applied inline via colors.danger (theme token)
   },
   recordingTimerText: {
     fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.body.size,
-    color: '#fff' },
+    fontSize: TypographyV2.caption.size,
+    // color applied inline via colors.scrimTextPrimary
+    fontVariant: ['tabular-nums'] },
   // Muted recording indicator — mic-off icon shown when recording without audio
   mutedIndicator: {
     marginLeft: 2,
@@ -1983,54 +1999,78 @@ const styles = StyleSheet.create({
     gap: 6 },
   reviewBtnLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size,
-    color: 'rgba(255,255,255,0.85)' },
+    fontSize: TypographyV2.captionElevated.size,
+    // color applied inline via colors.scrimTextPrimary
+  },
   reviewPrimaryBtn: {
-    width: 72,
-    height: 72,
+    height: 52,
+    paddingHorizontal: Space.lg,
     borderRadius: Radius.full,
     // backgroundColor applied inline via colors.textPrimary (theme token)
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2 },
+    flexDirection: 'row',
+    gap: Space.xs },
+  reviewPrimaryPressed: {
+    transform: [{ scale: 0.97 }] },
   reviewPrimaryLabel: {
     fontFamily: Typography.family.bold,
-    fontSize: TypographyV2.meta.size,
+    fontSize: TypographyV2.captionElevated.size,
     // color applied inline via colors.background (theme token)
   },
-  // ── Hands-free mode badge ──
-  // Subtle indicator that hands-free is armed. Positioned at top-left
-  // so it doesn't conflict with the recording badge (top-center).
-  handsFreeBadge: {
+  // ── Consolidated status region (replaces separate top badges) ──
+  statusRegion: {
     position: 'absolute',
-    left: 12,
-    flexDirection: 'row',
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)' },
-  handsFreeBadgeText: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size },
-  // ── Green screen active badge ──
-  // Shows the selected background thumbnail + truthful "post-capture" label.
-  greenScreenBadge: {
-    position: 'absolute',
-    left: 12,
+  },
+  statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: Space.sm + 2,
     paddingVertical: 6,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)' },
-  greenScreenThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.sm },
-  greenScreenBadgeText: {
-    fontFamily: Typography.family.medium,
+  },
+  statusPillText: {
+    fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.meta.size,
-    color: 'rgba(255,255,255,0.85)' } });
+    letterSpacing: 0.3,
+  },
+  // ── Simplified review actions ──
+  reviewRetakeBtn: {
+    position: 'absolute',
+    left: Space.md,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  reviewRetakePressed: {
+    opacity: 0.6,
+  },
+  reviewRetakeText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+  },
+  reviewPrimaryWrap: {
+    position: 'absolute',
+    left: Space.md,
+    right: Space.md,
+    bottom: 0,
+  },
+  reviewPrimaryFullBtn: {
+    height: 52,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewPrimaryFullLabel: {
+    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+  },
+  // ── Green screen thumbnail (used inside the consolidated status pill) ──
+  greenScreenThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.sm },
+  });

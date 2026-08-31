@@ -15,6 +15,7 @@ import { deriveMessageActions } from '../../utils/messageContextMenuCapabilities
 import type { ActionDef } from '../../utils/messageContextMenuCapabilities';
 import { Motion } from '../../theme/motionTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report';
 
@@ -36,6 +37,7 @@ export function MessageContextMenu({
   isFailed,
 }: MessageContextMenuProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const reducedMotion = useReducedMotion();
   const { height: screenHeight } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -155,12 +157,12 @@ export function MessageContextMenu({
             style={styles.cancelBtn}
             onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityLabel={t('common.cancel')}
             activeOpacity={0.7}
             scaleValue={0.98}
             hapticFeedback="light"
           >
-            <BodyEmphasis color={colors.textPrimary}>Cancel</BodyEmphasis>
+            <BodyEmphasis color={colors.textPrimary}>{t('common.cancel')}</BodyEmphasis>
           </AnimatedPressable>
         </Animated.View>
       </View>

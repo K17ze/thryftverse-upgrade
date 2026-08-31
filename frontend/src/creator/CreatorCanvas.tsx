@@ -27,7 +27,7 @@ import {
   Fit as SkiaFit,
   fitbox as skiaFitbox,
   rect as skiaRect } from '@shopify/react-native-skia';
-import { Space, Radius, Typography, IconGrammar, Stroke, Elevation} from '../theme/designTokens';
+import { Space, Radius, Typography, IconGrammar, Stroke, Elevation, FontFamily, FontFamilySerif} from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -66,11 +66,52 @@ import { getCanvasLabel, CANVAS_ACCESSIBILITY_ACTIONS } from './core/a11y/Canvas
 import {
   getLayerAccentColor,
   getLayerCategoryLabel } from '../components/poster/shared/layerAccents';
-import { ContextMenu, type ContextMenuAction } from '../components/poster/shared/ContextMenu';
 import { SafeZoneOverlay } from './surfaces/SafeZoneOverlay';
 import { GestureBadge } from './surfaces/GestureBadge';
 
 const RAD_TO_DEG = 180 / Math.PI;
+
+// ── Video player ref contract ──────────────────────────────────────
+// The canvas populates this ref with the active expo-video player
+// instance so the parent (timeline / PlaybackClock adapter) can issue
+// imperative play / pause / seek / rate commands. We model only the
+// surface actually consumed downstream — not the full expo-video class —
+// so a typo in a method name is a compile error, not a silent no-op.
+export interface VideoPlayerRef {
+  play(): void;
+  pause(): void;
+  seekBy(seconds: number): void;
+  replay(): void;
+  currentTime: number;
+  duration: number;
+  muted: boolean;
+  loop: boolean;
+  volume: number;
+  playbackRate: number;
+  playing: boolean;
+  status: string;
+}
+
+// Shared empty array for the (impossible) case where a layer id is not in
+// the memoised sibling map — avoids allocating a fresh [] on each render.
+const EMPTY_LAYERS: CreatorLayer[] = [];
+
+// ── Creator text-style font families ───────────────────────────────
+// Single source of truth for the 10 display fonts used by the creator
+// text layer. Inter and Playfair Display come from the design-token
+// FontFamily / FontFamilySerif objects; Anton, Caveat and Bebas Neue are
+// creator-only display faces loaded globally in App.tsx. Centralising
+// them here means a typo (e.g. 'Anton_400Reglar') is a compile error
+// against a `const` reference, not a silent platform fallback.
+const CreatorTextFont = {
+  anton: 'Anton_400Regular',
+  bebasNeue: 'BebasNeue_400Regular',
+  caveat: 'Caveat_400Regular',
+  interRegular: FontFamily.regular,
+  interSemibold: FontFamily.semibold,
+  playfairBold: FontFamilySerif.bold,
+  playfairRegular: FontFamilySerif.regular,
+} as const;
 
 function normaliseDegrees(deg: number): number {
   let result = deg % 360;
@@ -140,6 +181,12 @@ export interface CreatorCanvasProps {
    *  temporal visibility, keyframe evaluation, and overlay time ranges.
    *  When absent, layers render in their static (non-temporal) state. */
   currentTimeMs?: number;
+  /** Optional ref that the canvas populates with the active video layer's
+   *  expo-video player instance. The parent can use this to issue imperative
+   *  seek / play / pause / rate commands (e.g. from a PlaybackClock video
+   *  adapter). Only the first (primary) video layer on the current page
+   *  populates the ref — a poster page has at most one media layer. */
+  videoPlayerRef?: React.MutableRefObject<VideoPlayerRef | null>;
   /** Shared value that the canvas sets to 1 during an active layer
    *  manipulation gesture (pan/pinch/rotate) and 0 when idle. The parent
    *  can drive chrome-recedes-during-manipulation from this value. */
@@ -184,12 +231,35 @@ export function CreatorCanvas({
   safeZoneBottom = 0,
   playbackClock = null,
   currentTimeMs,
+  videoPlayerRef,
   manipulationActiveSV,
   onManipulationChange,
   isInTrashZoneSV,
   onTrashZoneEnter }: CreatorCanvasProps) {
   const { canvas } = document;
-  const visibleLayers = getVisibleLayersSorted(page);
+  // Memoize the visible+sorted layer list so its reference is stable across
+  // renders when `page` hasn't changed. Without this, getVisibleLayersSorted
+  // returns a fresh array every render, which would force every memoised
+  // child (LayerRenderer is React.memo) to re-render and re-allocate.
+  const visibleLayers = useMemo(
+    () => getVisibleLayersSorted(page),
+    [page],
+  );
+  // Pre-compute the sibling set for every layer once per visibleLayers
+  // change, instead of filtering inside the .map() (which allocated N
+  // arrays of size N-1 on every render). The map is keyed by layer id so
+  // each LayerRenderer receives a stable siblingLayers reference until the
+  // page's visible layer set actually changes.
+  const siblingLayersByLayerId = useMemo(() => {
+    const map = new Map<string, CreatorLayer[]>();
+    for (const layer of visibleLayers) {
+      map.set(
+        layer.id,
+        visibleLayers.filter((l) => l.id !== layer.id),
+      );
+    }
+    return map;
+  }, [visibleLayers]);
   const { colors } = useAppTheme();
   const isEmpty = visibleLayers.length === 0;
 
@@ -232,48 +302,6 @@ export function CreatorCanvas({
   // only fires the end callback when a compare was actually in progress
   // (not on a regular tap release).
   const comparingRef = React.useRef(false);
-
-  // Context menu state — long-press opens an ActionSheet with layer actions.
-  // The per-layer gesture composition calls onContextMenu(layer) to set this;
-  // the shared <ContextMenu> sheet is then driven by `visible`.
-  const [contextMenuLayer, setContextMenuLayer] = useState<CreatorLayer | null>(null);
-
-  // Build the context-menu action list from the active layer + callbacks.
-  // Mirrors the previous inline LayerContextMenu action set (duplicate,
-  // front/back, lock/unlock, flip, delete) but via the shared ContextMenu API.
-  const contextMenuActions = useMemo<ContextMenuAction[]>(() => {
-    if (!contextMenuLayer) return [];
-    const id = contextMenuLayer.id;
-    const isLocked = !!contextMenuLayer.locked;
-    const actions: ContextMenuAction[] = [];
-    if (onLayerDuplicate) {
-      actions.push({ id: 'duplicate', label: 'Duplicate', icon: 'copy-outline', onPress: () => onLayerDuplicate(id) });
-    }
-    if (onLayerReorder) {
-      actions.push({ id: 'front', label: 'Front', icon: 'arrow-up-circle-outline', onPress: () => onLayerReorder(id, 'front') });
-      actions.push({ id: 'back', label: 'Back', icon: 'arrow-down-circle-outline', onPress: () => onLayerReorder(id, 'back') });
-    }
-    if (onLayerToggleLock) {
-      actions.push({
-        id: 'lock',
-        label: isLocked ? 'Unlock' : 'Lock',
-        icon: isLocked ? 'lock-open-outline' : 'lock-closed-outline',
-        onPress: () => onLayerToggleLock(id) });
-    }
-    // Flip: reset rotation to 0 (2D flip equivalent)
-    actions.push({
-      id: 'flip',
-      label: 'Flip',
-      icon: 'swap-horizontal-outline',
-      onPress: () => onLayerTransformChange?.(id, { rotation: 0 }) });
-    if (onLayerDelete) {
-      actions.push({ id: 'delete', label: 'Delete', icon: 'trash-outline', danger: true, onPress: () => onLayerDelete(id) });
-    }
-    return actions;
-  }, [contextMenuLayer, onLayerDuplicate, onLayerDelete, onLayerReorder, onLayerToggleLock, onLayerTransformChange]);
-
-  const contextMenuTitle = contextMenuLayer ? getLayerCategoryLabel(contextMenuLayer.type) : 'Options';
-  const contextMenuAccent = contextMenuLayer ? getLayerAccentColor(contextMenuLayer.type) : undefined;
 
   const renderBackground = () => {
     // When a full-bleed media layer is present AND the background is still
@@ -376,7 +404,7 @@ export function CreatorCanvas({
         />
       )}
 
-      {visibleLayers.map((layer) => {
+      {visibleLayers.map((layer, layerIndex) => {
         const isInMultiSelect = !!(selectedLayerIds && selectedLayerIds.length > 0);
         const isSelected = isInMultiSelect
           ? selectedLayerIds.includes(layer.id)
@@ -384,11 +412,15 @@ export function CreatorCanvas({
         const isPrimarySelected = isInMultiSelect
           ? selectedLayerIds[0] === layer.id
           : false;
+        const multiSelectIndex = isInMultiSelect
+          ? selectedLayerIds.indexOf(layer.id) + 1
+          : 0;
         return (
         <LayerRenderer
           key={layer.id}
           layer={layer}
-          siblingLayers={visibleLayers.filter((l) => l.id !== layer.id)}
+          siblingLayers={siblingLayersByLayerId.get(layer.id) ?? EMPTY_LAYERS}
+          documentType={document.type}
           resolvedLayer={resolvedByLayerId.get(layer.id)}
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
@@ -396,6 +428,7 @@ export function CreatorCanvas({
           isSelected={isSelected}
           isPrimarySelected={isPrimarySelected}
           isMultiSelectActive={isInMultiSelect && isSelected && (selectedLayerIds?.length ?? 0) > 1}
+          multiSelectIndex={multiSelectIndex}
           onPress={onLayerPress}
           onTransformChange={onLayerTransformChange}
           onDoubleTap={onLayerDoubleTap}
@@ -403,13 +436,13 @@ export function CreatorCanvas({
           onMultiDragStart={onMultiDragStart}
           onMultiDragUpdate={onMultiDragUpdate}
           onMultiDragCommit={onMultiDragCommit}
-          onContextMenu={(l) => setContextMenuLayer(l)}
           onDuplicate={onLayerDuplicate}
           onDelete={onLayerDelete}
           onReorder={onLayerReorder}
           onToggleLock={onLayerToggleLock}
           playbackClock={playbackClock}
           currentTimeMs={currentTimeMs}
+          videoPlayerRef={videoPlayerRef}
           manipulationActiveSV={manipulationActiveSV}
           onManipulationChange={onManipulationChange}
           isInTrashZoneSV={isInTrashZoneSV}
@@ -422,25 +455,6 @@ export function CreatorCanvas({
       {/* Empty canvas state — guides the user to start creating */}
       {mode === 'edit' && isEmpty && (
         <EmptyCanvasState colors={colors} />
-      )}
-
-      {/* Long-press context menu — shared ContextMenu sheet with layer actions.
-          The per-layer gesture composition sets contextMenuLayer on long-press;
-          the shared <ContextMenu> renders the spring-entrance sheet driven by
-          `visible`. `enabled={false}` disables the wrapper's own long-press
-          (each LayerRenderer manages its own long-press inside its gesture race). */}
-      {mode === 'edit' && (
-        <ContextMenu
-          actions={contextMenuActions}
-          visible={!!contextMenuLayer}
-          onDismiss={() => setContextMenuLayer(null)}
-          onOpen={() => setContextMenuLayer(contextMenuLayer)}
-          enabled={false}
-          title={contextMenuTitle}
-          accentColor={contextMenuAccent}
-        >
-          <View />
-        </ContextMenu>
       )}
 
       {/* Safe zone overlay — shared visual guide for reserved top/bottom
@@ -458,48 +472,20 @@ export function CreatorCanvas({
 }
 
 // ── Empty canvas state ─────────────────────────────────────────────
-// Premium empty state with layered icon, title, and guidance.
-// Not just a pulsing icon — a proper designed empty surface.
+// A flagship empty state for a creative canvas is not an overlay card or
+// an illustration — it is confident typography placed directly on the
+// canvas surface. The prompt reads as part of the stage, not as chrome
+// floating above it. Short, direct, actionable (AGENTS.md §4).
 function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['colors'] }) {
-  const reducedMotion = useReducedMotion();
-  const scaleSV = useSharedValue(reducedMotion ? 1 : 0.9);
-  const opacitySV = useSharedValue(reducedMotion ? 1 : 0);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      // WCAG 2.2 §2.3.3 — instant, no animation when Reduce Motion is on
-      cancelAnimation(scaleSV);
-      cancelAnimation(opacitySV);
-      scaleSV.value = 1;
-      opacitySV.value = 1;
-      return;
-    }
-    // One-time entrance: fade in + scale from 0.9 → 1.0, then stop.
-    // No continuous pulsing (AGENTS.md §17).
-    scaleSV.value = withTiming(1, { duration: Motion.duration.slower, easing: Easing.out(Easing.cubic) });
-    opacitySV.value = withTiming(1, { duration: Motion.duration.slow, easing: Easing.out(Easing.ease) });
-    return () => {
-      cancelAnimation(scaleSV);
-      cancelAnimation(opacitySV);
-    };
-  }, [scaleSV, opacitySV, reducedMotion]);
-
-  const animatedIconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scaleSV.value }],
-    opacity: opacitySV.value }));
-
   return (
-    <View style={styles.emptyState} pointerEvents="none" accessibilityLabel="Empty canvas, tap a tool to start" accessibilityRole="text">
-      <View style={styles.emptyStateIconWrap}>
-        <Reanimated.View style={animatedIconStyle}>
-          <Ionicons name="add-circle-outline" size={IconGrammar.hero} color="rgba(255,255,255,0.4)" aria-hidden={true} />
-        </Reanimated.View>
-      </View>
-      <Text style={styles.emptyStateTitle}>
-        Tap a tool to start
-      </Text>
-      <Text style={styles.emptyStateSubtitle}>
-        Media · Text · Product · Elements · Layout
+    <View style={styles.emptyState} pointerEvents="none" accessibilityLabel="Empty canvas, add media to begin" accessibilityRole="text">
+      <Text
+        style={[
+          styles.emptyStateTitle,
+          { color: colors.textSecondary },
+        ]}
+      >
+        Add media to begin
       </Text>
     </View>
   );
@@ -508,6 +494,7 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
 interface LayerRendererProps {
   layer: CreatorLayer;
   siblingLayers: CreatorLayer[];
+  documentType: CreatorDocument['type'];
   /** Resolved scene data for this layer from evaluateScene. Carries the
    *  effect graph and Skia-video-frame gating decision so the renderer
    *  does not re-derive them. Optional — absent when the layer was filtered
@@ -521,6 +508,8 @@ interface LayerRendererProps {
   isPrimarySelected?: boolean;
   /** True when this layer is selected AND multiple layers are selected. */
   isMultiSelectActive?: boolean;
+  /** 1-based index within the multi-select set; 0 when not multi-selected. */
+  multiSelectIndex?: number;
   onPress?: (layerId: string) => void;
   onTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
   onDoubleTap?: (layerId: string) => void;
@@ -537,6 +526,8 @@ interface LayerRendererProps {
   playbackClock?: PlaybackClock | null;
   /** Current playback time (ms) — used for temporal visibility and keyframe evaluation. */
   currentTimeMs?: number;
+  /** Ref populated with the active video layer's expo-video player instance. */
+  videoPlayerRef?: React.MutableRefObject<VideoPlayerRef | null>;
   /** Shared value set to 1 during active gesture, 0 when idle. */
   manipulationActiveSV?: SharedValue<number>;
   onManipulationChange?: (active: boolean) => void;
@@ -558,6 +549,7 @@ const TRASH_ZONE_THRESHOLD = 0.85;
 const LayerRenderer = React.memo(function LayerRenderer({
   layer,
   siblingLayers,
+  documentType,
   resolvedLayer,
   canvasWidth,
   canvasHeight,
@@ -565,6 +557,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
   isSelected,
   isPrimarySelected,
   isMultiSelectActive,
+  multiSelectIndex,
   onPress,
   onTransformChange,
   onDoubleTap,
@@ -576,6 +569,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
   onDelete,
   playbackClock,
   currentTimeMs,
+  videoPlayerRef,
   manipulationActiveSV,
   onManipulationChange,
   isInTrashZoneSV,
@@ -625,13 +619,12 @@ const LayerRenderer = React.memo(function LayerRenderer({
 
   useEffect(() => {
     if (isSelected) {
-      selectionOpacity.value = reducedMotion ? withTiming(1, { duration: 0 }) : withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) });
-      handleScale.value = reducedMotion ? withTiming(1, { duration: 0 }) : withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) });
+      selectionOpacity.value = reducedMotion ? withTiming(1, { duration: 0 }) : withTiming(1, { duration: 80, easing: Easing.out(Easing.cubic) });
+      handleScale.value = reducedMotion ? withTiming(1, { duration: 0 }) : withTiming(1, { duration: 80, easing: Easing.out(Easing.cubic) });
       if (!reducedMotion) haptic.light();
     } else {
       selectionOpacity.value = reducedMotion ? withTiming(0, { duration: 0 }) : withTiming(0, { duration: 180, easing: Easing.in(Easing.cubic) });
       handleScale.value = reducedMotion ? withTiming(0.8, { duration: 0 }) : withTiming(0.8, { duration: 180, easing: Easing.in(Easing.cubic) });
-      if (!reducedMotion) haptic.light();
     }
   }, [isSelected, selectionOpacity, handleScale, reducedMotion, haptic]);
 
@@ -690,13 +683,27 @@ const LayerRenderer = React.memo(function LayerRenderer({
     let snappedX = false;
     let snappedY = false;
 
-    // Snapping to center
-    if (Math.abs(normX - 0.5) < SNAP_THRESHOLD) { normX = 0.5; snappedX = true; }
-    if (Math.abs(normY - 0.5) < SNAP_THRESHOLD) { normY = 0.5; snappedY = true; }
-
-    // Safe-zone clamping accounting for layer width, height and scale
+    // Half-dimensions in normalized coords (accounting for scale)
     const halfW = (layer.width * layer.scale) / 2;
     const halfH = (layer.height * layer.scale) / 2;
+
+    // Snapping: center, then canvas edges (layer edge flush with canvas edge)
+    if (Math.abs(normX - 0.5) < SNAP_THRESHOLD) {
+      normX = 0.5; snappedX = true;
+    } else if (Math.abs(normX - halfW) < SNAP_THRESHOLD) {
+      normX = halfW; snappedX = true;
+    } else if (Math.abs(normX - (1 - halfW)) < SNAP_THRESHOLD) {
+      normX = 1 - halfW; snappedX = true;
+    }
+    if (Math.abs(normY - 0.5) < SNAP_THRESHOLD) {
+      normY = 0.5; snappedY = true;
+    } else if (Math.abs(normY - halfH) < SNAP_THRESHOLD) {
+      normY = halfH; snappedY = true;
+    } else if (Math.abs(normY - (1 - halfH)) < SNAP_THRESHOLD) {
+      normY = 1 - halfH; snappedY = true;
+    }
+
+    // Safe-zone clamping accounting for layer width, height and scale
     const minX = Math.max(SAFE_MARGIN, halfW);
     const maxX = Math.min(1 - SAFE_MARGIN, 1 - halfW);
     const minY = Math.max(SAFE_MARGIN, halfH);
@@ -744,6 +751,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
           startY.value = translateY.value;
           if (manipulationActiveSV) manipulationActiveSV.value = 1;
           if (onManipulationChange) runOnJS(onManipulationChange)(true);
+          liftSV.value = 1;
           // Reset trash-zone tracking at the start of every drag.
           wasInTrashZoneSV.value = 0;
           if (isInTrashZoneSV) isInTrashZoneSV.value = 0;
@@ -805,8 +813,9 @@ const LayerRenderer = React.memo(function LayerRenderer({
         .onFinalize(() => {
           if (manipulationActiveSV) manipulationActiveSV.value = 0;
           if (onManipulationChange) runOnJS(onManipulationChange)(false);
+          liftSV.value = 0;
         }),
-    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit, isMultiSelectActive, onMultiDragStart, onMultiDragUpdate, onMultiDragCommit, canvasWidth, canvasHeight, manipulationActiveSV, onManipulationChange, isInTrashZoneSV, onTrashZoneEnter, onDelete, haptic]
+    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit, isMultiSelectActive, onMultiDragStart, onMultiDragUpdate, onMultiDragCommit, canvasWidth, canvasHeight, manipulationActiveSV, onManipulationChange, isInTrashZoneSV, onTrashZoneEnter, onDelete, haptic, reducedMotion, liftSV]
   );
 
   const pinchGesture = useMemo(
@@ -817,10 +826,12 @@ const LayerRenderer = React.memo(function LayerRenderer({
           startScale.value = scaleSV.value;
           if (manipulationActiveSV) manipulationActiveSV.value = 1;
           if (onManipulationChange) runOnJS(onManipulationChange)(true);
+          liftSV.value = 1;
         })
         .onUpdate((e) => {
           scaleSV.value = startScale.value * e.scale;
-          runOnJS(setGestureBadge)(`${Math.round(startScale.value * e.scale * 100)}%`);
+          const pct = Math.round(scaleSV.value * 100);
+          runOnJS(setGestureBadge)(`${pct}%`);
         })
         .onEnd(() => {
           runOnJS(setGestureBadge)(null);
@@ -829,8 +840,9 @@ const LayerRenderer = React.memo(function LayerRenderer({
         .onFinalize(() => {
           if (manipulationActiveSV) manipulationActiveSV.value = 0;
           if (onManipulationChange) runOnJS(onManipulationChange)(false);
+          liftSV.value = 0;
         }),
-    [mode, layer.locked, scaleSV, startScale, rotationSV, handleTransformCommit, manipulationActiveSV, onManipulationChange]
+    [mode, layer.locked, scaleSV, startScale, rotationSV, handleTransformCommit, manipulationActiveSV, onManipulationChange, reducedMotion, liftSV]
   );
 
   const rotationGesture = useMemo(
@@ -841,11 +853,11 @@ const LayerRenderer = React.memo(function LayerRenderer({
           startRotation.value = rotationSV.value;
           if (manipulationActiveSV) manipulationActiveSV.value = 1;
           if (onManipulationChange) runOnJS(onManipulationChange)(true);
+          liftSV.value = 1;
         })
         .onUpdate((e) => {
-          // Convert gesture radians to degrees at the boundary
           rotationSV.value = startRotation.value + e.rotation * RAD_TO_DEG;
-          const deg = Math.round(normaliseDegrees(startRotation.value + e.rotation * RAD_TO_DEG));
+          const deg = Math.round(normaliseDegrees(rotationSV.value));
           runOnJS(setGestureBadge)(`${deg}°`);
         })
         .onEnd(() => {
@@ -855,8 +867,9 @@ const LayerRenderer = React.memo(function LayerRenderer({
         .onFinalize(() => {
           if (manipulationActiveSV) manipulationActiveSV.value = 0;
           if (onManipulationChange) runOnJS(onManipulationChange)(false);
+          liftSV.value = 0;
         }),
-    [mode, layer.locked, rotationSV, startRotation, scaleSV, handleTransformCommit, manipulationActiveSV, onManipulationChange]
+    [mode, layer.locked, rotationSV, startRotation, scaleSV, handleTransformCommit, manipulationActiveSV, onManipulationChange, reducedMotion, liftSV]
   );
 
   const tapGesture = useMemo(
@@ -905,24 +918,6 @@ const LayerRenderer = React.memo(function LayerRenderer({
     ),
     [panGesture, pinchGesture, rotationGesture, tapGesture, doubleTapGesture, longPressGesture]
   );
-
-  const animatedStyle = useAnimatedStyle(() => {
-    const baseWidth = layer.width * canvasWidth;
-    const baseHeight = layer.height * canvasHeight;
-    const w = baseWidth * scaleSV.value;
-    const h = baseHeight * scaleSV.value;
-    return {
-      position: 'absolute' as const,
-      left: translateX.value - w / 2,
-      top: translateY.value - h / 2,
-      width: w,
-      height: h,
-      transform: [
-        { rotate: `${rotationSV.value}deg` },
-      ],
-      opacity: effectiveOpacity,
-      zIndex: layer.zIndex };
-  });
 
   // ── Temporal visibility & keyframe evaluation ───────────────────
   // When a playback clock is provided, layers with a timeRange are only
@@ -980,7 +975,31 @@ const LayerRenderer = React.memo(function LayerRenderer({
     return opacity;
   }, [layer.opacity, keyframeValues, hasPlaybackClock, isTemporallyVisible]);
 
-  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, siblingLayers, compareOriginal, resolvedLayer);
+  const animatedStyle = useAnimatedStyle(() => {
+    const baseWidth = layer.width * canvasWidth;
+    const baseHeight = layer.height * canvasHeight;
+    const w = baseWidth * scaleSV.value;
+    const h = baseHeight * scaleSV.value;
+    const lift = liftSV.value;
+    return {
+      position: 'absolute' as const,
+      left: translateX.value - w / 2,
+      top: translateY.value - h / 2,
+      width: w,
+      height: h,
+      transform: [
+        { rotate: `${rotationSV.value}deg` },
+        { scale: 1 + lift * 0.02 },
+      ],
+      opacity: effectiveOpacity,
+      shadowColor: colors.shadow,
+      shadowOpacity: lift * 0.08,
+      shadowRadius: lift * 8,
+      shadowOffset: { width: 0, height: lift * 6 },
+      elevation: lift * 4 };
+  });
+
+  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, videoPlayerRef, siblingLayers, compareOriginal, resolvedLayer, documentType);
 
   // Smart alignment guides: while dragging, detect when this layer's
   // left/right/centre aligns with a sibling's left/right/centre (vertical
@@ -1059,24 +1078,18 @@ const LayerRenderer = React.memo(function LayerRenderer({
   // product/mention/look/vote = 8px (pill content), decorative = 0
   const layerRadius = getLayerRadius(layer);
 
-  // Animated selection border style. The primary selection in a
-  // multi-select set uses a thicker (3pt) outline; secondary selections
-  // use the standard 2pt. Both use the brand colour.
   const selectionBorderStyle = useAnimatedStyle(() => ({
-    borderWidth: isPrimarySelected ? 3 : 2,
-    borderColor: layer.locked
-      ? colors.warning
-      : colors.brand,
+    borderWidth: Stroke.emphasis,
+    borderColor: layer.locked ? colors.warning : colors.brand,
     borderRadius: layerRadius,
-    opacity: selectionOpacity.value,
-    borderStyle: layer.locked ? 'dashed' as const : 'solid' as const }));
+    opacity: selectionOpacity.value }));
 
   if (mode === 'edit') {
     return (
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         <GestureDetector gesture={composedGesture}>
           <Reanimated.View
-            style={animatedStyle}
+            style={[animatedStyle, { zIndex: layer.zIndex }]}
             accessibilityLabel={`${getLayerCategoryLabel(layer.type)} layer${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
             accessibilityRole="adjustable"
             accessibilityHint="Drag to move, pinch to resize, rotate to rotate, double-tap to edit, long-press for options"
@@ -1088,6 +1101,12 @@ const LayerRenderer = React.memo(function LayerRenderer({
             {isSelected && (
               <Reanimated.View style={[StyleSheet.absoluteFill, selectionBorderStyle]} pointerEvents="none" />
             )}
+            {/* Multi-select index badge — 16pt circle, brand bg, white text, top-right */}
+            {isSelected && isMultiSelectActive && (multiSelectIndex ?? 0) > 0 && (
+              <View style={[styles.multiSelectBadge, { backgroundColor: colors.brand }]} pointerEvents="none" accessibilityLabel={`Selected ${multiSelectIndex}`} accessibilityRole="text">
+                <Text style={[styles.multiSelectBadgeText, { color: colors.scrimTextPrimary }]}>{multiSelectIndex}</Text>
+              </View>
+            )}
             {/* Selection handles — draggable corner + rotation handles.
                 Hidden in multi-select mode; only the primary shows handles. */}
             {isSelected && !isMultiSelectActive && (
@@ -1097,10 +1116,9 @@ const LayerRenderer = React.memo(function LayerRenderer({
                 layerLocked={layer.locked}
                 scaleSV={scaleSV}
                 rotationSV={rotationSV}
-                onScaleChange={(s) => setGestureBadge(`${Math.round(s * 100)}%`)}
-                onRotationChange={(r) => setGestureBadge(`${r}°`)}
+                layerWidth={layer.width * canvasWidth}
+                layerHeight={layer.height * canvasHeight}
                 onCommit={() => {
-                  setGestureBadge(null);
                   handleTransformCommit(scaleSV.value, rotationSV.value);
                 }}
               />
@@ -1159,40 +1177,36 @@ const LayerRenderer = React.memo(function LayerRenderer({
 });
 
 // ── Per-type layer corner radius ───────────────────────────────────
-// Media: 0 (full-bleed), text: conditional on background, pill content: 8px, decorative: 0
+// Two non-avatar radii per viewport (AGENTS.md §4 radius budget):
+//   Radius.sm (4px) — sharp media edges (media, draw, decorative, gif)
+//   Radius.md (8px) — compact utility content (product, mention, look,
+//     vote, quiz, question, countdown, music, link, location, hashtag,
+//     time, weather, emojiSlider)
+//   0 — text has no container
 function getLayerRadius(layer: CreatorLayer): number {
   switch (layer.type) {
     case 'media':
-      return 0;
-    case 'text':
-      return layer.payload.backgroundColor ? Radius.md : 0;
+    case 'draw':
+    case 'decorative':
+    case 'gif':
+      return Radius.sm;
     case 'product':
     case 'mention':
     case 'look':
     case 'vote':
-      return Radius.md;
     case 'quiz':
-      return Radius.md;
     case 'question':
-      return Radius.md;
     case 'emojiSlider':
-      return Radius.lg;
     case 'countdown':
-      return Radius.md;
-    case 'decorative':
-      return 0;
-    case 'draw':
-      return 0;
-    case 'gif':
-      return Radius.sm;
     case 'music':
-      return Radius.md;
     case 'link':
     case 'location':
     case 'hashtag':
     case 'time':
     case 'weather':
       return Radius.md;
+    case 'text':
+      return 0;
     default:
       return 0;
   }
@@ -1204,49 +1218,57 @@ function renderLayerContent(
   height: number,
   playbackClock?: PlaybackClock | null,
   currentTimeMs?: number,
+  videoPlayerRef?: React.MutableRefObject<VideoPlayerRef | null>,
   siblingLayers?: CreatorLayer[],
   compareOriginal?: boolean,
   resolvedLayer?: ResolvedLayer,
+  documentType?: CreatorDocument['type'],
 ): React.ReactNode {
+  // Look documents support a reduced layer set: media, text, product,
+  // draw, and decorative only. Every other layer type is gated out so
+  // the Look composer never renders interactive stickers that don't
+  // belong on a fashion Look surface.
+  const isLook = documentType === 'look';
   switch (layer.type) {
     case 'media':
-      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} siblingLayers={siblingLayers} compareOriginal={compareOriginal} resolvedLayer={resolvedLayer} />;
+      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} videoPlayerRef={videoPlayerRef} siblingLayers={siblingLayers} compareOriginal={compareOriginal} resolvedLayer={resolvedLayer} />;
     case 'text':
       return <TextLayerContent layer={layer} />;
     case 'product':
       return <ProductLayerContent layer={layer} />;
-    case 'mention':
-      return <MentionLayerContent layer={layer} />;
-    case 'look':
-      return <LookLayerContent layer={layer} />;
-    case 'vote':
-      return <VoteLayerContent layer={layer} />;
-    case 'quiz':
-      return <QuizLayerContent layer={layer} />;
-    case 'question':
-      return <QuestionLayerContent layer={layer} />;
-    case 'emojiSlider':
-      return <EmojiSliderLayerContent layer={layer} />;
-    case 'countdown':
-      return <CountdownLayerContent layer={layer} />;
-    case 'decorative':
-      return <DecorativeLayerContent layer={layer} width={width} height={height} />;
     case 'draw':
       return <DrawLayerContent layer={layer} width={width} height={height} />;
+    case 'decorative':
+      return <DecorativeLayerContent layer={layer} width={width} height={height} />;
+    // ── Layer types available only on poster documents (not Look) ──
+    case 'mention':
+      return isLook ? null : <MentionLayerContent layer={layer} />;
+    case 'look':
+      return isLook ? null : <LookLayerContent layer={layer} />;
+    case 'vote':
+      return isLook ? null : <VoteLayerContent layer={layer} />;
+    case 'quiz':
+      return isLook ? null : <QuizLayerContent layer={layer} />;
+    case 'question':
+      return isLook ? null : <QuestionLayerContent layer={layer} />;
+    case 'emojiSlider':
+      return isLook ? null : <EmojiSliderLayerContent layer={layer} />;
+    case 'countdown':
+      return isLook ? null : <CountdownLayerContent layer={layer} />;
     case 'gif':
-      return <GifLayerContent layer={layer} />;
+      return isLook ? null : <GifLayerContent layer={layer} />;
     case 'music':
-      return <MusicLayerContent layer={layer} />;
+      return isLook ? null : <MusicLayerContent layer={layer} />;
     case 'link':
-      return <LinkLayerContent layer={layer} />;
+      return isLook ? null : <LinkLayerContent layer={layer} />;
     case 'location':
-      return <LocationLayerContent layer={layer} />;
+      return isLook ? null : <LocationLayerContent layer={layer} />;
     case 'hashtag':
-      return <HashtagLayerContent layer={layer} />;
+      return isLook ? null : <HashtagLayerContent layer={layer} />;
     case 'time':
-      return <TimeLayerContent layer={layer} />;
+      return isLook ? null : <TimeLayerContent layer={layer} />;
     case 'weather':
-      return <WeatherLayerContent layer={layer} />;
+      return isLook ? null : <WeatherLayerContent layer={layer} />;
     default:
       return null;
   }
@@ -1364,6 +1386,7 @@ function SkiaVideoLayerContent({
           uri={payload.thumbnailUri}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
+          focalPoint={payload.focalPoint}
         />
       )}
       <SkiaCanvas style={{ width, height }} accessibilityLabel="Video media layer with effects" accessibilityRole="image">
@@ -1411,7 +1434,7 @@ function SkiaVideoLayerContent({
           </SkiaImage>
         )}
       </SkiaCanvas>
-      <View style={mediaStyles.videoBadge} pointerEvents="none" accessibilityLabel="Video media layer" accessibilityRole="image">
+      <View style={[mediaStyles.videoBadge, { backgroundColor: colors.mediaOverlayScrim }]} pointerEvents="none" accessibilityLabel="Video media layer" accessibilityRole="image">
         <Ionicons name="videocam" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
       </View>
     </>
@@ -1424,6 +1447,7 @@ function MediaLayerContent({
   height,
   playbackClock,
   currentTimeMs,
+  videoPlayerRef,
   siblingLayers,
   compareOriginal,
   resolvedLayer }: {
@@ -1432,6 +1456,7 @@ function MediaLayerContent({
   height: number;
   playbackClock?: PlaybackClock | null;
   currentTimeMs?: number;
+  videoPlayerRef?: React.MutableRefObject<VideoPlayerRef | null>;
   siblingLayers?: CreatorLayer[];
   compareOriginal?: boolean;
   resolvedLayer?: ResolvedLayer;
@@ -1595,6 +1620,7 @@ function MediaLayerContent({
             uri={payload.thumbnailUri}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
+            focalPoint={payload.focalPoint}
           />
         )}
         <Video
@@ -1605,6 +1631,7 @@ function MediaLayerContent({
           shouldPlay={shouldPlay}
           isMuted={isMuted}
           isLooping={isLooping}
+          playerRef={videoPlayerRef}
           onError={() => setVideoError(true)}
         />
         {/* Video effects: the native expo-video VideoView renders natively
@@ -1615,7 +1642,7 @@ function MediaLayerContent({
             metadata-only effect is advertised as a visible result). The
             Skia video frame path above renders the full effect graph
             when the capability is supported. */}
-        <View style={mediaStyles.videoBadge} pointerEvents="none" accessibilityLabel="Video media layer" accessibilityRole="image">
+        <View style={[mediaStyles.videoBadge, { backgroundColor: colors.mediaOverlayScrim }]} pointerEvents="none" accessibilityLabel="Video media layer" accessibilityRole="image">
           <Ionicons name="videocam" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
         </View>
       </>
@@ -1632,6 +1659,25 @@ function MediaLayerContent({
       contain: 'contain',
       fill: 'fill' };
     const fit = contentFitMap[payload.contentFit] ?? 'cover';
+
+    // Focal-point art direction for Skia image paths (AGENTS.md §4 — no
+    // blind `cover`). Skia's cover fit crops from center by default. When
+    // the layer carries a focalPoint, compute a translate offset that
+    // shifts the over-scaled image so the focal region stays in frame.
+    // The offset is the difference between the focal point and center,
+    // scaled by the overflow on each axis.
+    const focalTransform = useMemo(() => {
+      if (fit !== 'cover' || !payload.focalPoint || !skiaImage) return undefined;
+      const imgW = skiaImage.width();
+      const imgH = skiaImage.height();
+      if (imgW === 0 || imgH === 0) return undefined;
+      const scale = Math.max(width / imgW, height / imgH);
+      const overflowX = imgW * scale - width;
+      const overflowY = imgH * scale - height;
+      const dx = (0.5 - payload.focalPoint.x) * overflowX;
+      const dy = (0.5 - payload.focalPoint.y) * overflowY;
+      return [{ translateX: dx }, { translateY: dy }];
+    }, [fit, payload.focalPoint, skiaImage, width, height]);
 
     return (
       <SkiaCanvas style={{ width, height }} accessibilityLabel="Media layer with effects" accessibilityRole="image">
@@ -1656,6 +1702,7 @@ function MediaLayerContent({
               width={width}
               height={height}
               fit={fit}
+              transform={focalTransform}
             >
               {hasColorMatrix && (
                 <SkiaColorMatrix matrix={evaluatedEffect!.colorMatrix!} />
@@ -1670,6 +1717,7 @@ function MediaLayerContent({
             width={width}
             height={height}
             fit={fit}
+            transform={focalTransform}
           >
             {hasColorMatrix && (
               <SkiaColorMatrix matrix={evaluatedEffect!.colorMatrix!} />
@@ -1684,17 +1732,25 @@ function MediaLayerContent({
   // BlurHash placeholder support, and CDN downscale support — consistent
   // with the rest of the app. CachedImage handles its own loading shimmer
   // and error fallback graphic internally.
+  //
+  // Focal-point art direction (AGENTS.md §4 — no blind `cover`): when the
+  // layer carries a focalPoint, pass it through so CachedImage shifts the
+  // cover crop to keep the important region in frame. Absent focalPoint
+  // defaults to center (0.5, 0.5) — the existing cover behaviour.
+  const contentFit = payload.contentFit === 'contain' ? 'contain' : payload.contentFit === 'fill' ? 'fill' : 'cover';
   return (
     <CachedImage
       uri={payload.mediaUri}
       style={StyleSheet.absoluteFill}
-      contentFit={payload.contentFit === 'contain' ? 'contain' : payload.contentFit === 'fill' ? 'fill' : 'cover'}
+      contentFit={contentFit}
+      focalPoint={contentFit === 'cover' ? payload.focalPoint : undefined}
     />
   );
 }
 
 function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'text' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
 
@@ -1754,73 +1810,74 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
 
   // Per-style typography — real visual distinction, not just font size
   // Instagram 2025-2026: 10 fonts with distinct visual character
-  const styleMap: Record<string, any> = {
+  type TextStyleId = 'headline' | 'editorial' | 'clean' | 'compact' | 'handwritten' | 'bubble' | 'deco' | 'poster' | 'squeeze' | 'signature';
+  const styleMap: Record<TextStyleId, TextStyle> = {
     headline: {
       // Anton — display/impact for cover statements
-      fontFamily: 'Anton_400Regular',
+      fontFamily: CreatorTextFont.anton,
       fontSize: TypographyV2.screenTitle.size + 4,
       lineHeight: (TypographyV2.screenTitle.size + 4) * 1.15,
-      textShadowColor: 'rgba(0,0,0,0.4)',
+      textShadowColor: colors.mediaOverlayScrim,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 4 },
     editorial: {
       // Playfair Display Bold — editorial serif for issue/collection titles
-      fontFamily: 'PlayfairDisplay_700Bold',
+      fontFamily: CreatorTextFont.playfairBold,
       fontSize: TypographyV2.screenTitle.size + 1,
       lineHeight: (TypographyV2.screenTitle.size + 1) * 1.2,
-      textShadowColor: 'rgba(0,0,0,0.35)',
+      textShadowColor: colors.mediaOverlayScrim,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3 },
     clean: {
       // Inter Regular — clean modern sans (lighter weight)
-      fontFamily: 'Inter_400Regular',
+      fontFamily: CreatorTextFont.interRegular,
       fontSize: TypographyV2.body.size + 1,
       lineHeight: (TypographyV2.body.size + 1) * 1.35,
-      textShadowColor: 'rgba(0,0,0,0.3)',
+      textShadowColor: colors.mediaOverlayScrim,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 2 },
     compact: {
       // Inter SemiBold — uppercase labels (kept as-is)
-      fontFamily: 'Inter_600SemiBold',
+      fontFamily: CreatorTextFont.interSemibold,
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.size * 1.3,
       letterSpacing: 0.8,
       textTransform: 'uppercase' },
     handwritten: {
       // Caveat — genuine handwriting font
-      fontFamily: 'Caveat_400Regular',
+      fontFamily: CreatorTextFont.caveat,
       fontSize: TypographyV2.body.size + 2,
       lineHeight: (TypographyV2.body.size + 2) * 1.3 },
     bubble: {
       // Playfair Display Regular — editorial serif for a restrained,
       // non-template feel (replaces round script Pacifico)
-      fontFamily: 'PlayfairDisplay_400Regular',
+      fontFamily: CreatorTextFont.playfairRegular,
       fontSize: TypographyV2.bodyStrong.size + 6,
       lineHeight: (TypographyV2.bodyStrong.size + 6) * 1.2,
       letterSpacing: 0.5 },
     deco: {
       // Anton — strong display (replaces retro Lobster for a more
       // cohesive, less template-like feel)
-      fontFamily: 'Anton_400Regular',
+      fontFamily: CreatorTextFont.anton,
       fontSize: TypographyV2.bodyStrong.size + 2,
       lineHeight: (TypographyV2.bodyStrong.size + 2) * 1.3,
       letterSpacing: 1.5 },
     poster: {
       // Bebas Neue — condensed display for poster titles
-      fontFamily: 'BebasNeue_400Regular',
+      fontFamily: CreatorTextFont.bebasNeue,
       fontSize: TypographyV2.screenTitle.size - 2,
       lineHeight: (TypographyV2.screenTitle.size - 2) * 1.1,
       letterSpacing: -0.5 },
     squeeze: {
       // Bebas Neue — condensed display (tighter feel)
-      fontFamily: 'BebasNeue_400Regular',
+      fontFamily: CreatorTextFont.bebasNeue,
       fontSize: TypographyV2.body.size,
       lineHeight: TypographyV2.body.size * 1.1,
       letterSpacing: -0.3 },
     signature: {
       // Playfair Display Regular italic — refined serif signature
       // (replaces generic Dancing Script for a more editorial feel)
-      fontFamily: 'PlayfairDisplay_400Regular',
+      fontFamily: CreatorTextFont.playfairRegular,
       fontStyle: 'italic',
       fontSize: TypographyV2.bodyStrong.size + 2,
       lineHeight: (TypographyV2.bodyStrong.size + 2) * 1.4 } };
@@ -1828,7 +1885,7 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
   // Text effect styles (Instagram 2025-2026)
   const effectStyle: TextStyle = {};
   if (payload.textEffect === 'shadow') {
-    effectStyle.textShadowColor = 'rgba(0,0,0,0.6)';
+    effectStyle.textShadowColor = colors.mediaOverlayScrim;
     effectStyle.textShadowOffset = { width: 2, height: 2 };
     effectStyle.textShadowRadius = 4;
   } else if (payload.textEffect === 'neon') {
@@ -1840,7 +1897,7 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
     effectStyle.textShadowOffset = { width: 0, height: 0 };
     effectStyle.textShadowRadius = 12;
   } else if (payload.textEffect === 'outline') {
-    effectStyle.textShadowColor = '#000';
+    effectStyle.textShadowColor = colors.textPrimary;
     effectStyle.textShadowOffset = { width: 0, height: 0 };
     effectStyle.textShadowRadius = 1;
   }
@@ -1877,7 +1934,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
   const { payload } = layer;
   const { colors } = useAppTheme();
   const { currencySymbol } = useFormattedPrice();
-  const productStyles = React.useMemo(() => createProductStyles(colors), [colors]);
+  const o = React.useMemo(() => createOverlayStyles(colors), [colors]);
   const isSold = payload.availability === 'sold';
   const isDeleted = payload.availability === 'deleted';
   const hasImage = !!payload.snapshotImageUrl;
@@ -1886,31 +1943,31 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
   if (hasImage) {
     return (
       <View
-        style={productStyles.imageContainer}
+        style={productImageStyles.imageContainer}
         accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}`}
         accessibilityRole="link"
       >
         <ExpoImage
           source={{ uri: payload.snapshotImageUrl! }}
-          style={productStyles.thumbnail}
+          style={productImageStyles.thumbnail}
           contentFit="cover"
           cachePolicy="memory-disk"
           recyclingKey={payload.snapshotImageUrl!}
           enforceEarlyResizing
         />
-        <View style={productStyles.imageOverlay}>
-          <Text style={productStyles.imageTitle} numberOfLines={1}>
+        <View style={productImageStyles.imageOverlay}>
+          <Text style={o.overlayLabel} numberOfLines={1}>
             {payload.snapshotTitle || 'Listing'}
           </Text>
           {payload.snapshotPriceGbp !== undefined && (
-            <Text style={[productStyles.imagePrice, isSold && productStyles.soldPrice]}>
+            <Text style={[o.overlayAccent, { fontSize: TypographyV2.meta.size }, isSold && { color: colors.danger }]}>
               {isSold ? 'SOLD' : `${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}`}
             </Text>
           )}
         </View>
         {isSold && (
-          <View style={productStyles.soldBadge}>
-            <Text style={productStyles.soldBadgeText}>SOLD</Text>
+          <View style={[productImageStyles.soldBadge, { backgroundColor: colors.danger }]}>
+            <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size }}>SOLD</Text>
           </View>
         )}
       </View>
@@ -1920,16 +1977,16 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
   if (hasHotspot) {
     return (
       <View
-        style={productStyles.hotspotContainer}
+        style={[o.overlayPill, { borderRadius: Radius.full, paddingHorizontal: Space.smMd, paddingVertical: 6, gap: 6 }]}
         accessibilityLabel={`Product hotspot, ${payload.hotspotLabel}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}`}
         accessibilityRole="link"
       >
-        <View style={productStyles.hotspotDot} />
-        <Text style={productStyles.hotspotLabel} numberOfLines={1}>
+        <View style={{ width: 7, height: 7, borderRadius: Radius.full, backgroundColor: colors.textPrimary, borderWidth: Stroke.standard, borderColor: colors.brand }} />
+        <Text style={[o.overlayLabel, { flex: 1 }]} numberOfLines={1}>
           {payload.hotspotLabel}
         </Text>
         {payload.snapshotPriceGbp !== undefined && !isSold && (
-          <Text style={productStyles.hotspotPrice}>
+          <Text style={[o.overlayAccent, { fontSize: TypographyV2.meta.size }]}>
             {currencySymbol}{payload.snapshotPriceGbp.toFixed(0)}
           </Text>
         )}
@@ -1937,20 +1994,18 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
     );
   }
 
-  // Fallback: compact tag with icon — premium shoppable pin style
-
   return (
     <View
-      style={productStyles.container}
+      style={o.overlayPill}
       accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}${isDeleted ? ', unavailable' : ''}`}
       accessibilityRole="link"
     >
-      <View style={productStyles.row}>
-        <Ionicons name="pricetag" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
-        <Text style={productStyles.title} numberOfLines={1}>{payload.snapshotTitle || 'Listing'}</Text>
+      <View style={o.overlayRow}>
+        <Ionicons name="pricetag" size={IconGrammar.badge} color={colors.textPrimary} aria-hidden={true} />
+        <Text style={[o.overlayLabel, { fontFamily: TypographyV2.body.fontFamily }]} numberOfLines={1}>{payload.snapshotTitle || 'Listing'}</Text>
       </View>
       {payload.snapshotPriceGbp !== undefined && (
-        <Text style={[productStyles.price, isSold && productStyles.soldPrice, isDeleted && productStyles.deletedPrice]}>
+        <Text style={[o.overlayAccent, isSold && { color: colors.danger }, isDeleted && o.overlayMuted]}>
           {isSold ? 'SOLD' : isDeleted ? 'UNAVAILABLE' : `${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}`}
         </Text>
       )}
@@ -1961,10 +2016,10 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 function MentionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mention' }> }) {
   const { payload } = layer;
   const { colors } = useAppTheme();
-  const mentionStyles = React.useMemo(() => createMentionStyles(colors), [colors]);
+  const o = React.useMemo(() => createOverlayStyles(colors), [colors]);
   return (
-    <View style={mentionStyles.container} accessibilityLabel={`Mention @${payload.username}`} accessibilityRole="link">
-      <Text style={mentionStyles.text}>@{payload.username}</Text>
+    <View style={[o.overlayPill, { flexDirection: 'row', paddingHorizontal: Space.smMd, paddingVertical: Space.xs }]} accessibilityLabel={`Mention @${payload.username}`} accessibilityRole="link">
+      <Text style={o.overlayBodySemibold}>@{payload.username}</Text>
     </View>
   );
 }
@@ -1972,11 +2027,11 @@ function MentionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 function LookLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'look' }> }) {
   const { payload } = layer;
   const { colors } = useAppTheme();
-  const lookStyles = React.useMemo(() => createLookStyles(colors), [colors]);
+  const o = React.useMemo(() => createOverlayStyles(colors), [colors]);
   return (
-    <View style={lookStyles.container} accessibilityLabel={`Look, ${payload.snapshotCaption || 'View look'}`} accessibilityRole="link">
-      <Ionicons name="shirt-outline" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
-      <Text style={lookStyles.text} numberOfLines={1}>{payload.snapshotCaption || 'View look'}</Text>
+    <View style={[o.overlayPill, { flexDirection: 'row', gap: 4 }]} accessibilityLabel={`Look, ${payload.snapshotCaption || 'View look'}`} accessibilityRole="link">
+      <Ionicons name="shirt-outline" size={IconGrammar.badge} color={colors.textPrimary} aria-hidden={true} />
+      <Text style={[o.overlayLabel, { fontFamily: FontFamily.medium }]} numberOfLines={1}>{payload.snapshotCaption || 'View look'}</Text>
     </View>
   );
 }
@@ -1984,7 +2039,7 @@ function LookLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'loo
 function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vote' }> }) {
   const { payload } = layer;
   const { colors } = useAppTheme();
-  const voteStyles = React.useMemo(() => createVoteStyles(colors), [colors]);
+  const o = React.useMemo(() => createOverlayStyles(colors), [colors]);
   const hasTimer = payload.timerMs !== undefined && payload.timerMs > 0;
   const timerSeconds = hasTimer ? Math.round(payload.timerMs! / 1000) : 0;
   const timerLabel = timerSeconds >= 3600
@@ -1995,23 +2050,23 @@ function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vot
 
   return (
     <View
-      style={[voteStyles.container, payload.backgroundColor && { backgroundColor: payload.backgroundColor }]}
+      style={[o.overlayPill, { gap: 8, minWidth: 160 }, payload.backgroundColor && { backgroundColor: payload.backgroundColor }]}
       accessibilityLabel={`Poll, ${payload.question}${hasTimer ? `, ${timerLabel} timer` : ''}`}
       accessibilityRole="summary"
     >
-      <View style={voteStyles.headerRow}>
-        <Text style={voteStyles.question}>{payload.question}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <Text style={[o.overlayBodySemibold, { textAlign: 'center', flexShrink: 1 }]}>{payload.question}</Text>
         {hasTimer && (
-          <View style={voteStyles.timerBadge}>
-            <Ionicons name="timer-outline" size={IconGrammar.badge} color="#fff" aria-hidden={true} />
-            <Text style={voteStyles.timerText}>{timerLabel}</Text>
+          <View style={o.overlayTimerBadge}>
+            <Ionicons name="timer-outline" size={IconGrammar.badge} color={colors.textPrimary} aria-hidden={true} />
+            <Text style={[o.overlayLabel, { fontFamily: TypographyV2.body.fontFamily }]}>{timerLabel}</Text>
           </View>
         )}
       </View>
-      <View style={voteStyles.optionsRow}>
+      <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
         {payload.options.map((opt) => (
-          <View key={opt.id} style={voteStyles.option}>
-            <Text style={voteStyles.optionText} numberOfLines={1}>{opt.label}</Text>
+          <View key={opt.id} style={o.overlayOption}>
+            <Text style={[o.overlayLabel, { fontFamily: FontFamily.medium, fontSize: TypographyV2.meta.size + 1 }]} numberOfLines={1}>{opt.label}</Text>
           </View>
         ))}
       </View>
@@ -2019,33 +2074,31 @@ function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vot
   );
 }
 
-// ── Quiz layer content ─────────────────────────────────────────────
-// Instagram 2026: multiple-choice quiz with emoji and correct answer indicator.
-// Premium rendering: gradient surface, proper button styling, filled correct badge.
 function QuizLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'quiz' }> }) {
   const { payload } = layer;
   const { colors } = useAppTheme();
-  const quizStyles = React.useMemo(() => createQuizStyles(colors), [colors]);
+  const o = React.useMemo(() => createOverlayStyles(colors), [colors]);
   return (
-    <View style={quizStyles.container} accessibilityLabel={`Quiz, ${payload.emoji} ${payload.question}`} accessibilityRole="summary">
-      <View style={quizStyles.header}>
-        <Text style={quizStyles.emoji}>{payload.emoji}</Text>
-        <Text style={quizStyles.question}>{payload.question}</Text>
+    <View style={[o.overlayPill, { gap: 10, minWidth: 180 }]} accessibilityLabel={`Quiz, ${payload.emoji} ${payload.question}`} accessibilityRole="summary">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Text style={{ fontSize: TypographyV2.sectionTitle.size }}>{payload.emoji}</Text>
+        <Text style={[o.overlayBody, { fontFamily: TypographyV2.sectionTitle.fontFamily, flex: 1 }]}>{payload.question}</Text>
       </View>
-      <View style={quizStyles.optionsCol}>
+      <View style={{ gap: 6 }}>
         {payload.options.map((opt, i) => {
           const isCorrect = opt.id === payload.correctOptionId;
           return (
             <View key={opt.id} style={[
-              quizStyles.option,
-              isCorrect && quizStyles.optionCorrect,
+              o.overlayOption,
+              { flexDirection: 'row', justifyContent: 'space-between', maxWidth: '100%', flex: 0 },
+              isCorrect && o.overlayOptionCorrect,
             ]}>
-              <Text style={[quizStyles.optionText, isCorrect && quizStyles.optionTextCorrect]}>
+              <Text style={[o.overlayOptionText, isCorrect && o.overlayOptionTextCorrect]}>
                 {opt.label}
               </Text>
               {isCorrect && (
-                <View style={quizStyles.correctBadge}>
-                  <Ionicons name="checkmark" size={IconGrammar.badge} color="#1a1a1a" aria-hidden={true} />
+                <View style={o.overlayCorrectBadge}>
+                  <Ionicons name="checkmark" size={IconGrammar.badge} color={colors.surface} aria-hidden={true} />
                 </View>
               )}
             </View>
@@ -2056,45 +2109,39 @@ function QuizLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'qui
   );
 }
 
-// ── Question box layer content ─────────────────────────────────────
-// Instagram 2026: open-ended question box sticker.
-// Premium rendering: gradient background, input affordance with cursor hint.
 function QuestionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'question' }> }) {
   const { payload } = layer;
   const { colors } = useAppTheme();
-  const questionStyles = React.useMemo(() => createQuestionStyles(colors), [colors]);
+  const o = React.useMemo(() => createOverlayStyles(colors), [colors]);
   return (
-    <View style={[questionStyles.container, { backgroundColor: payload.backgroundColor }]} accessibilityLabel={`Question box, ${payload.prompt}`} accessibilityRole="search">
-      <Text style={questionStyles.prompt}>{payload.prompt}</Text>
-      <View style={questionStyles.inputAffordance}>
-        <Ionicons name="chatbubbles-outline" size={IconGrammar.metadata} color="rgba(255,255,255,0.5)" aria-hidden={true} />
-        <Text style={questionStyles.placeholder}>{payload.placeholder}</Text>
-        <View style={questionStyles.sendHint}>
-          <Ionicons name="arrow-up" size={IconGrammar.badge} color="rgba(255,255,255,0.4)" aria-hidden={true} />
+    <View style={[o.overlayPill, { minWidth: 180, maxWidth: '100%' }, { backgroundColor: payload.backgroundColor }]} accessibilityLabel={`Question box, ${payload.prompt}`} accessibilityRole="search">
+      <Text style={[o.overlayBodySemibold, { fontSize: TypographyV2.bodyStrong.size, marginBottom: Space.sm }]}>{payload.prompt}</Text>
+      <View style={o.overlayInputAffordance}>
+        <Ionicons name="chatbubbles-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />
+        <Text style={{ flex: 1, color: colors.textSecondary, fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.meta.size }}>{payload.placeholder}</Text>
+        <View style={o.overlaySendHint}>
+          <Ionicons name="arrow-up" size={IconGrammar.badge} color={colors.textMuted} aria-hidden={true} />
         </View>
       </View>
     </View>
   );
 }
 
-// ── Emoji slider layer content ─────────────────────────────────────
-// Instagram 2026: emoji slider for intensity measurement.
-// Premium rendering: dark glass surface, proper slider track with thumb.
 function EmojiSliderLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'emojiSlider' }> }) {
   const { payload } = layer;
   const { colors } = useAppTheme();
-  const sliderStyles = React.useMemo(() => createSliderStyles(colors), [colors]);
+  const o = React.useMemo(() => createOverlayStyles(colors), [colors]);
   return (
-    <View style={sliderStyles.container} accessibilityLabel={`Emoji slider, ${payload.emoji} ${payload.question}`} accessibilityRole="adjustable">
-      <Text style={sliderStyles.question}>{payload.question}</Text>
-      <View style={sliderStyles.sliderRow}>
-        <Text style={sliderStyles.emoji}>{payload.emoji}</Text>
-        <View style={sliderStyles.track}>
-          <View style={[sliderStyles.trackFill, { backgroundColor: payload.sliderColor }]} />
-          <View style={[sliderStyles.thumb, { borderColor: payload.sliderColor }]} />
+    <View style={[o.overlayPill, { minWidth: 200, maxWidth: '100%' }]} accessibilityLabel={`Emoji slider, ${payload.emoji} ${payload.question}`} accessibilityRole="adjustable">
+      <Text style={[o.overlayBodySemibold, { marginBottom: 10, textAlign: 'center' }]}>{payload.question}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={{ fontSize: TypographyV2.display.size }}>{payload.emoji}</Text>
+        <View style={o.overlayTrack}>
+          <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '50%', borderRadius: Radius.full, backgroundColor: payload.sliderColor }} />
+          <View style={[o.overlayThumb, { borderColor: payload.sliderColor }]} />
         </View>
         {payload.endLabel ? (
-          <Text style={sliderStyles.endLabel}>{payload.endLabel}</Text>
+          <Text style={{ color: colors.textSecondary, fontFamily: TypographyV2.display.fontFamily, fontSize: TypographyV2.meta.size }}>{payload.endLabel}</Text>
         ) : null}
       </View>
     </View>
@@ -2238,13 +2285,21 @@ function DecorativeLayerContent({ layer, width, height }: { layer: Extract<Creat
 // ── Draw layer content ─────────────────────────────────────────────
 // Renders freehand strokes using Skia. Points are normalized 0-1
 // relative to the layer bounds; scaled to the rendered pixel size.
+interface RenderedStroke {
+  key: number;
+  path: ReturnType<typeof Skia.Path.Make>;
+  stroke: Extract<CreatorLayer, { type: 'draw' }>['payload']['strokes'][number];
+}
+
 function DrawLayerContent({ layer, width, height }: { layer: Extract<CreatorLayer, { type: 'draw' }>; width: number; height: number }) {
   const { payload } = layer;
 
-  const strokePaths = useMemo(() => {
-    return payload.strokes.map((stroke, i) => {
-      if (stroke.points.length === 0) return null;
+  const strokePaths = useMemo<RenderedStroke[]>(() => {
+    const result: RenderedStroke[] = [];
+    payload.strokes.forEach((stroke, i) => {
+      if (stroke.points.length === 0) return;
       const path = Skia.Path.Make();
+      if (!path) return;
       const first = stroke.points[0];
       path.moveTo(first.x * width, first.y * height);
       for (let j = 1; j < stroke.points.length; j++) {
@@ -2256,13 +2311,14 @@ function DrawLayerContent({ layer, width, height }: { layer: Extract<CreatorLaye
       }
       const last = stroke.points[stroke.points.length - 1];
       path.lineTo(last.x * width, last.y * height);
-      return { key: i, path, stroke };
-    }).filter(Boolean);
+      result.push({ key: i, path, stroke });
+    });
+    return result;
   }, [payload.strokes, width, height]);
 
   return (
     <SkiaCanvas style={{ width, height }} accessibilityLabel="Drawing layer" accessibilityRole="image">
-      {strokePaths.map((sp: any) => {
+      {strokePaths.map((sp) => {
         const isEraser = sp.stroke.tool === 'eraser';
         const isMarker = sp.stroke.tool === 'marker';
         const isHighlighter = sp.stroke.tool === 'highlighter';
@@ -2319,7 +2375,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
         paddingHorizontal: 12,
         paddingVertical: 10,
         borderRadius: Radius.lg,
-        backgroundColor: 'rgba(0,0,0,0.75)',
+        backgroundColor: colors.mediaOverlayScrim,
         minWidth: 160,
         maxWidth: '100%' }}
       accessibilityLabel={`Music, ${payload.trackName}${payload.artistName ? ` by ${payload.artistName}` : ''}`}
@@ -2350,11 +2406,11 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
         </View>
       )}
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: '#fff' }} numberOfLines={1}>
+        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: colors.scrimTextPrimary }} numberOfLines={1}>
           {payload.trackName}
         </Text>
         {payload.artistName ? (
-          <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: 'rgba(255,255,255,0.6)' }} numberOfLines={1}>
+          <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.scrimTextSecondary }} numberOfLines={1}>
             {payload.artistName}
           </Text>
         ) : null}
@@ -2363,7 +2419,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
         width: 22,
         height: 22,
         borderRadius: Radius.full,
-        backgroundColor: 'rgba(255,255,255,0.12)',
+        backgroundColor: colors.scrimTextTertiary,
         justifyContent: 'center',
         alignItems: 'center' }}>
         <Ionicons name="play" size={IconGrammar.badge} color={colors.scrimTextPrimary} aria-hidden={true} />
@@ -2396,6 +2452,7 @@ function LinkLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'lin
 // ── Location layer content ─────────────────────────────────────────
 function LocationLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'location' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
   return (
     <View style={{
       flexDirection: 'row',
@@ -2404,10 +2461,10 @@ function LocationLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
       paddingHorizontal: 12,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: colors.mediaOverlayScrim,
       minWidth: 100 }} accessibilityLabel={`Location, ${payload.placeName}`} accessibilityRole="link">
-      <Ionicons name="location-outline" size={IconGrammar.metadata} color="#fff" aria-hidden={true} />
-      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: '#fff' }} numberOfLines={1}>
+      <Ionicons name="location-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: colors.scrimTextPrimary }} numberOfLines={1}>
         {payload.placeName}
       </Text>
     </View>
@@ -2437,6 +2494,7 @@ function HashtagLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 // ── Time layer content ─────────────────────────────────────────────
 function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'time' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
   const date = new Date(payload.displayTime);
   const timeStr = payload.format === 'time'
     ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
@@ -2451,7 +2509,7 @@ function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tim
       paddingHorizontal: 12,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
+      backgroundColor: payload.backgroundColor ?? colors.mediaOverlayScrim,
       minWidth: 80 }} accessibilityLabel={`Time, ${timeStr}`} accessibilityRole="text">
       <Ionicons name="time-outline" size={IconGrammar.metadata} color={payload.textColor} aria-hidden={true} />
       <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
@@ -2464,6 +2522,7 @@ function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tim
 // ── Weather layer content ──────────────────────────────────────────
 function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'weather' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
   return (
     <View style={{
       flexDirection: 'row',
@@ -2472,7 +2531,7 @@ function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       paddingHorizontal: 14,
       paddingVertical: 10,
       borderRadius: Radius.md,
-      backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
+      backgroundColor: payload.backgroundColor ?? colors.mediaOverlayScrim,
       minWidth: 120 }} accessibilityLabel={`Weather, ${payload.temperature}° ${payload.condition}${payload.locationName ? `, ${payload.locationName}` : ''}`} accessibilityRole="text">
       <Text style={{ fontSize: TypographyV2.priceList.size }}>{payload.emoji}</Text>
       <View style={{ gap: 1 }}>
@@ -2490,61 +2549,111 @@ function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
 }
 
 // ── Selection handles ──────────────────────────────────────────────
-// 20px visible handles with shadow, 44pt invisible touch targets,
-// spring scale-in animation, and a rotation handle above top-center.
+// 11pt square handles, white fill, 1pt brand border, no shadow.
+// 44pt hit area via hitSlop. Rotation handle above top-center
+// connected by a 1pt brand line (16pt length).
+//
+// Each handle owns its own press-scale SharedValue so simultaneous
+// multi-touch on two corners does not cross-talk (AGENTS.md §4 —
+// one system, not many). Haptic fires on touch-down (selection) and
+// again on commit (light) per Design.md interaction-physics.
+//
+// Resize is 1:1: the new scale is derived from the actual
+// finger-to-centre distance ratio, not a fixed multiplier, so the
+// corner tracks the finger exactly. Rotation is 1:1: translationX
+// maps directly to degrees; 15° snap is applied only on commit.
 function SelectionHandles({
   handleScaleSV,
   colors,
   layerLocked,
   scaleSV,
   rotationSV,
-  onScaleChange,
-  onRotationChange,
+  layerWidth,
+  layerHeight,
   onCommit }: {
   handleScaleSV: ReturnType<typeof useSharedValue<number>>;
   colors: ReturnType<typeof useAppTheme>['colors'];
   layerLocked: boolean;
   scaleSV: ReturnType<typeof useSharedValue<number>>;
   rotationSV: ReturnType<typeof useSharedValue<number>>;
-  onScaleChange: (scale: number) => void;
-  onRotationChange: (rotation: number) => void;
+  /** Rendered layer width in pixels (base, before scale). */
+  layerWidth: number;
+  /** Rendered layer height in pixels (base, before scale). */
+  layerHeight: number;
   onCommit: () => void;
 }) {
   const handleColor = layerLocked ? colors.warning : colors.brand;
+  const haptic = useHaptic();
+  const { spring } = useMotionConfig();
   const startScale = useSharedValue(1);
   const startRotation = useSharedValue(0);
+
+  // Per-handle press-scale shared values — one per handle so they
+  // never share state (fixes the single-SharedValue tell).
+  const touchTL = useSharedValue(1);
+  const touchTR = useSharedValue(1);
+  const touchBL = useSharedValue(1);
+  const touchBR = useSharedValue(1);
+  const touchRot = useSharedValue(1);
 
   const animatedHandleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: handleScaleSV.value }] }));
 
-  // ── Corner handle: drag to resize (scale) ──
-  // The handle is at a corner. Dragging away from center = scale up,
-  // dragging toward center = scale down. We use the Y component of
-  // the drag (in the layer's rotated space) as the primary axis.
-  const cornerPan = useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(!layerLocked)
-        .minDistance(3)
-        .onStart(() => {
-          startScale.value = scaleSV.value;
-        })
-        .onUpdate((e) => {
-          // Use absolute translation distance for scale change
-          // Positive Y (drag down/away) = scale up
-          const scaleDelta = 1 + (e.translationY * 0.005);
-          const newScale = Math.max(0.2, Math.min(5, startScale.value * scaleDelta));
-          scaleSV.value = newScale;
-          runOnJS(onScaleChange)(Math.round(newScale * 100) / 100);
-        })
-        .onEnd(() => {
-          runOnJS(onCommit)();
-        }),
-    [layerLocked, scaleSV, startScale, onScaleChange, onCommit]
-  );
+  const touchStyleTL = useAnimatedStyle(() => ({ transform: [{ scale: touchTL.value }] }));
+  const touchStyleTR = useAnimatedStyle(() => ({ transform: [{ scale: touchTR.value }] }));
+  const touchStyleBL = useAnimatedStyle(() => ({ transform: [{ scale: touchBL.value }] }));
+  const touchStyleBR = useAnimatedStyle(() => ({ transform: [{ scale: touchBR.value }] }));
+  const touchStyleRot = useAnimatedStyle(() => ({ transform: [{ scale: touchRot.value }] }));
 
-  // ── Rotation handle: drag to rotate ──
-  // The handle is above the top-center. Dragging left/right rotates.
+  // Per-corner resize gestures. Each corner knows its sign multipliers so
+  // dragging away from the layer centre enlarges and dragging toward the
+  // centre shrinks. Scale is computed from the actual finger-to-centre
+  // distance ratio for true 1:1 tracking (AGENTS.md §4 — direct-drag).
+  //   top-left:     -X / -Y  (centre is bottom-right; drag up-left enlarges)
+  //   top-right:    +X / -Y  (centre is bottom-left;  drag up-right enlarges)
+  //   bottom-left:  -X / +Y  (centre is top-right;    drag down-left enlarges)
+  //   bottom-right: +X / +Y  (centre is top-left;     drag down-right enlarges)
+  const makeCornerPan = (signX: number, signY: number, touchSV: SharedValue<number>) =>
+    useMemo(
+      () =>
+        Gesture.Pan()
+          .enabled(!layerLocked)
+          .minDistance(3)
+          .onStart(() => {
+            startScale.value = scaleSV.value;
+            touchSV.value = withSpring(1.15, spring.press);
+            runOnJS(haptic.selection)();
+          })
+          .onUpdate((e) => {
+            // 1:1 resize: compare the new finger-to-centre distance to
+            // the initial distance. The corner stays under the finger.
+            const halfW = (layerWidth * startScale.value) / 2;
+            const halfH = (layerHeight * startScale.value) / 2;
+            const d0 = Math.sqrt(halfW * halfW + halfH * halfH);
+            if (d0 === 0) return;
+            const cornerX = halfW * signX + e.translationX;
+            const cornerY = halfH * signY + e.translationY;
+            const d1 = Math.sqrt(cornerX * cornerX + cornerY * cornerY);
+            const newScale = Math.max(0.2, Math.min(5, startScale.value * (d1 / d0)));
+            scaleSV.value = newScale;
+          })
+          .onEnd(() => {
+            touchSV.value = withSpring(1, spring.press);
+            runOnJS(haptic.light)();
+            runOnJS(onCommit)();
+          }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [layerLocked, scaleSV, startScale, onCommit, layerWidth, layerHeight, touchSV]
+    );
+
+  const cornerPanTL = makeCornerPan(-1, -1, touchTL);
+  const cornerPanTR = makeCornerPan(1, -1, touchTR);
+  const cornerPanBL = makeCornerPan(-1, 1, touchBL);
+  const cornerPanBR = makeCornerPan(1, 1, touchBR);
+
+  // Rotation: 1:1 finger tracking — translationX maps directly to
+  // degrees. The 15° snap is applied only on commit (in onCommit →
+  // handleTransformCommit), not during the live drag.
   const rotationPan = useMemo(
     () =>
       Gesture.Pan()
@@ -2552,84 +2661,68 @@ function SelectionHandles({
         .minDistance(3)
         .onStart(() => {
           startRotation.value = rotationSV.value;
+          touchRot.value = withSpring(1.15, spring.press);
+          runOnJS(haptic.selection)();
         })
         .onUpdate((e) => {
-          // Convert drag translation to rotation degrees
-          // 1px of horizontal drag = ~0.5 degrees
-          const rotationDelta = e.translationX * 0.5;
-          const newRotation = normaliseDegrees(startRotation.value + rotationDelta);
+          const newRotation = normaliseDegrees(startRotation.value + e.translationX);
           rotationSV.value = newRotation;
-          runOnJS(onRotationChange)(Math.round(newRotation));
         })
         .onEnd(() => {
+          touchRot.value = withSpring(1, spring.press);
+          runOnJS(haptic.light)();
           runOnJS(onCommit)();
         }),
-    [layerLocked, rotationSV, startRotation, onRotationChange, onCommit]
+    [layerLocked, rotationSV, startRotation, onCommit, touchRot, haptic, spring]
   );
+
+  const handleSize = 11;
+  const halfHandle = handleSize / 2;
+  const handleHitSlop = { top: 17, bottom: 17, left: 17, right: 17 };
 
   const handleBase: ViewStyle = {
     position: 'absolute',
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: handleColor,
-    ...Elevation.modal };
-
-  // Invisible hit zone — 44pt for touch compliance
-  const hitZone: ViewStyle = {
-    position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full };
+    width: handleSize,
+    height: handleSize,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.scrimTextPrimary,
+    borderWidth: Stroke.standard,
+    borderColor: handleColor };
 
   return (
     <Reanimated.View style={[StyleSheet.absoluteFill, animatedHandleStyle]} accessibilityLabel="Layer selection handles" accessibilityRole="adjustable">
-      {/* Corner handles — 20px visible, 44pt hit zone, draggable */}
-      {/* Top-left */}
-      <GestureDetector gesture={cornerPan}>
-        <Reanimated.View style={[hitZone, { top: -22, left: -22 }]} accessibilityLabel="Resize handle, top left" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer">
-          <View style={[handleBase, { top: 12, left: 12 }]} pointerEvents="none" />
-        </Reanimated.View>
+      <GestureDetector gesture={cornerPanTL}>
+        <Reanimated.View style={[handleBase, { top: -halfHandle, left: -halfHandle }, touchStyleTL]} hitSlop={handleHitSlop} accessibilityLabel="Resize handle, top left" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer" />
       </GestureDetector>
-      {/* Top-right */}
-      <GestureDetector gesture={cornerPan}>
-        <Reanimated.View style={[hitZone, { top: -22, right: -22 }]} accessibilityLabel="Resize handle, top right" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer">
-          <View style={[handleBase, { top: 12, right: 12 }]} pointerEvents="none" />
-        </Reanimated.View>
+      <GestureDetector gesture={cornerPanTR}>
+        <Reanimated.View style={[handleBase, { top: -halfHandle, right: -halfHandle }, touchStyleTR]} hitSlop={handleHitSlop} accessibilityLabel="Resize handle, top right" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer" />
       </GestureDetector>
-      {/* Bottom-left */}
-      <GestureDetector gesture={cornerPan}>
-        <Reanimated.View style={[hitZone, { bottom: -22, left: -22 }]} accessibilityLabel="Resize handle, bottom left" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer">
-          <View style={[handleBase, { bottom: 12, left: 12 }]} pointerEvents="none" />
-        </Reanimated.View>
+      <GestureDetector gesture={cornerPanBL}>
+        <Reanimated.View style={[handleBase, { bottom: -halfHandle, left: -halfHandle }, touchStyleBL]} hitSlop={handleHitSlop} accessibilityLabel="Resize handle, bottom left" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer" />
       </GestureDetector>
-      {/* Bottom-right */}
-      <GestureDetector gesture={cornerPan}>
-        <Reanimated.View style={[hitZone, { bottom: -22, right: -22 }]} accessibilityLabel="Resize handle, bottom right" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer">
-          <View style={[handleBase, { bottom: 12, right: 12 }]} pointerEvents="none" />
-        </Reanimated.View>
+      <GestureDetector gesture={cornerPanBR}>
+        <Reanimated.View style={[handleBase, { bottom: -halfHandle, right: -halfHandle }, touchStyleBR]} hitSlop={handleHitSlop} accessibilityLabel="Resize handle, bottom right" accessibilityRole="adjustable" accessibilityHint="Drag to resize the layer" />
       </GestureDetector>
 
-      {/* Rotation handle — above top-center, connected by a line */}
       <View
         style={{
           position: 'absolute',
-          top: -28,
+          top: -16,
           left: '50%',
-          marginLeft: -1,
-          width: 2,
-          height: 18,
+          marginLeft: -0.5,
+          width: Stroke.standard,
+          height: 16,
           backgroundColor: handleColor }}
         pointerEvents="none"
       />
       <GestureDetector gesture={rotationPan}>
-        <Reanimated.View style={[hitZone, { top: -50, left: '50%', marginLeft: -22 }]} accessibilityLabel="Rotation handle" accessibilityRole="adjustable" accessibilityHint="Drag to rotate the layer">
-          <View style={[handleBase, { top: 12, left: 12 }]} pointerEvents="none">
-            <Ionicons name="refresh" size={IconGrammar.badge} color={handleColor} style={{ textAlign: 'center', lineHeight: 16 }} aria-hidden={true} />
-          </View>
-        </Reanimated.View>
+        <Reanimated.View
+          style={[handleBase, { top: -16 - halfHandle, left: '50%', marginLeft: -halfHandle }, touchStyleRot]}
+          hitSlop={handleHitSlop}
+          accessibilityLabel="Rotation handle"
+          accessibilityRole="adjustable"
+          accessibilityHint="Drag to rotate the layer"
+        />
       </GestureDetector>
     </Reanimated.View>
   );
@@ -2649,53 +2742,35 @@ function AlignmentGuides({
 }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Center-line guides — appear only when the layer's center is within
-          8pt of canvas center (Canva/Figma/Instagram Stories pattern).
-          1pt guide line with colors.brand at 50% opacity. */}
       {centerGuideVisible && (
         <>
-          {/* Horizontal centre line — 1px, brand color at 50% opacity */}
           <View style={{
             position: 'absolute',
             left: 0,
             right: 0,
-            top: canvasHeight / 2 - 0.5,
-            height: 1,
+            top: canvasHeight / 2 - Stroke.hairline / 2,
+            height: Stroke.hairline,
             backgroundColor: colors.brand,
-            opacity: 0.5 }} />
-          {/* Vertical centre line */}
+            opacity: 0.4 }} />
           <View style={{
             position: 'absolute',
             top: 0,
             bottom: 0,
-            left: canvasWidth / 2 - 0.5,
-            width: 1,
+            left: canvasWidth / 2 - Stroke.hairline / 2,
+            width: Stroke.hairline,
             backgroundColor: colors.brand,
-            opacity: 0.5 }} />
-          {/* Center dot at intersection */}
-          <View style={{
-            position: 'absolute',
-            left: canvasWidth / 2 - 3,
-            top: canvasHeight / 2 - 3,
-            width: 6,
-            height: 6,
-            borderRadius: Radius.full,
-            backgroundColor: colors.brand,
-            opacity: 0.6 }} />
+            opacity: 0.4 }} />
         </>
       )}
-      {/* Safe-zone edges — 1px dashed, muted at 25% opacity */}
       <View style={{ position: 'absolute', left: 0, right: 0, top: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
       <View style={{ position: 'absolute', top: 0, bottom: 0, left: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
       <View style={{ position: 'absolute', top: 0, bottom: 0, right: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
-      {/* Smart guides — vertical */}
       {(smartGuides?.vertical ?? []).map((x, i) => (
-        <View key={`v${i}`} style={{ position: 'absolute', top: 0, bottom: 0, left: x, width: 1, backgroundColor: colors.brand, opacity: 0.7 }} />
+        <View key={`v${i}`} style={{ position: 'absolute', top: 0, bottom: 0, left: x, width: Stroke.hairline, backgroundColor: colors.brand, opacity: 0.4 }} />
       ))}
-      {/* Smart guides — horizontal */}
       {(smartGuides?.horizontal ?? []).map((y, i) => (
-        <View key={`h${i}`} style={{ position: 'absolute', left: 0, right: 0, top: y, height: 1, backgroundColor: colors.brand, opacity: 0.7 }} />
+        <View key={`h${i}`} style={{ position: 'absolute', left: 0, right: 0, top: y, height: Stroke.hairline, backgroundColor: colors.brand, opacity: 0.4 }} />
       ))}
     </View>
   );
@@ -2712,22 +2787,31 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     overflow: 'hidden' },
-  // Empty state — premium designed surface
   emptyState: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Space.sm },
-  emptyStateIconWrap: {
-    marginBottom: Space.xs },
+    paddingHorizontal: Space.xl },
   emptyStateTitle: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    textAlign: 'center' },
+  multiSelectBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    width: 16,
+    height: 16,
+    borderRadius: Radius.full,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center' },
+  multiSelectBadgeText: {
+    fontSize: 10,
+    lineHeight: 12,
     fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.screenTitle.size,
-    color: 'rgba(255,255,255,0.85)' },
-  emptyStateSubtitle: {
-    fontFamily: TypographyV2.screenTitle.fontFamily,
-    fontSize: TypographyV2.body.size,
-    color: 'rgba(255,255,255,0.4)',
     textAlign: 'center' },
   // Locked badge
   lockedBadge: {
@@ -2745,7 +2829,6 @@ const mediaStyles = StyleSheet.create({
     position: 'absolute',
     top: Space.xs,
     left: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: Radius.sm,
     paddingHorizontal: Space.xs,
     paddingVertical: 2 } });
@@ -2764,322 +2847,157 @@ const textStyles = StyleSheet.create({
     textAlign: 'center',
     flexWrap: 'wrap' } });
 
-function createProductStyles(colors: ThemeColors) {
+function createOverlayStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-    gap: 2,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4 },
-  title: {
-    color: colors.scrimTextPrimary,
-    fontFamily: TypographyV2.body.fontFamily,
-    fontSize: TypographyV2.meta.size },
-  price: {
-    color: colors.brand,
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontSize: TypographyV2.body.size },
-  soldPrice: {
-    color: colors.danger },
-  deletedPrice: {
-    color: colors.textMuted },
-  imageContainer: {
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    width: '100%',
-    height: '100%' },
-  thumbnail: {
-    width: '100%',
-    height: '100%',
-    position: 'absolute' },
-  imageOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: Space.xs,
-    paddingVertical: Space.xs,
-    gap: 1 },
-  imageTitle: {
-    color: '#fff',
-    fontFamily: TypographyV2.body.fontFamily,
-    fontSize: TypographyV2.meta.size },
-  imagePrice: {
-    color: colors.brand,
-    fontFamily: TypographyV2.body.fontFamily,
-    fontSize: TypographyV2.meta.size },
-  soldBadge: {
-    position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    backgroundColor: colors.danger,
-    borderRadius: Radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2 },
-  soldBadgeText: {
-    color: '#fff',
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontSize: TypographyV2.meta.size },
-  hotspotContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.smMd,
-    paddingVertical: 6,
-    ...Elevation.modal },
-  hotspotDot: {
-    width: 7,
-    height: 7,
-    borderRadius: Radius.full,
-    backgroundColor: '#fff',
-    borderWidth: Stroke.standard,
-    borderColor: colors.brand },
-  hotspotLabel: {
-    color: '#fff',
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontSize: TypographyV2.meta.size,
-    flex: 1 },
-  hotspotPrice: {
-    color: colors.brand,
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontSize: TypographyV2.meta.size } });
-}
-
-function createMentionStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    container: {
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      borderRadius: Radius.full,
-      paddingHorizontal: Space.smMd,
-      paddingVertical: Space.xs,
+    overlayPill: {
+      backgroundColor: colors.surface,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.sm,
       justifyContent: 'center',
-      alignItems: 'center' },
-    text: {
-      color: colors.scrimTextPrimary,
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.body.size } });
-}
-
-function createLookStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    container: {
+      alignItems: 'center',
+    },
+    overlayRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      borderRadius: Radius.full,
-      paddingHorizontal: Space.sm + 2,
-      paddingVertical: Space.xs,
-      justifyContent: 'center' },
-    text: {
-      color: colors.scrimTextPrimary,
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.meta.size } });
-}
-
-function createVoteStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    container: {
-      backgroundColor: 'rgba(0,0,0,0.75)',
-      borderRadius: Radius.lg,
-      paddingHorizontal: Space.md + 2,
-      paddingVertical: Space.sm + 2,
-      gap: 8,
-      minWidth: 160,
-      justifyContent: 'center',
-      alignItems: 'center' },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      flexWrap: 'wrap',
-      justifyContent: 'center' },
-    question: {
-      color: colors.scrimTextPrimary,
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.body.size,
-      textAlign: 'center',
-      flexShrink: 1 },
-    timerBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      backgroundColor: 'rgba(255,255,255,0.2)',
-      borderRadius: Radius.md,
-      paddingHorizontal: 6,
-      paddingVertical: 2 },
-    timerText: {
-      color: colors.scrimTextPrimary,
+    },
+    overlayLabel: {
+      color: colors.textPrimary,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontSize: TypographyV2.meta.size,
+    },
+    overlayBody: {
+      color: colors.textPrimary,
       fontFamily: TypographyV2.body.fontFamily,
-      fontSize: TypographyV2.meta.size },
-    optionsRow: {
-      flexDirection: 'row',
-      gap: 6,
-      flexWrap: 'wrap',
-      justifyContent: 'center' },
-    option: {
-      backgroundColor: 'rgba(255,255,255,0.18)',
-      borderRadius: Radius.sm,
+      fontSize: TypographyV2.body.size,
+    },
+    overlayBodySemibold: {
+      color: colors.textPrimary,
+      fontFamily: FontFamily.semibold,
+      fontSize: TypographyV2.body.size,
+    },
+    overlayAccent: {
+      color: colors.brand,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontSize: TypographyV2.body.size,
+    },
+    overlayMuted: {
+      color: colors.textMuted,
+    },
+    overlayOption: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       alignItems: 'center',
       minWidth: 60,
       flex: 1,
-      maxWidth: '48%' },
-    optionFirst: {
-      // Both options equal weight — no visual hierarchy difference
+      maxWidth: '48%',
     },
-    optionText: {
-      color: colors.scrimTextPrimary,
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.meta.size + 1 } });
-}
-
-function createQuizStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    container: {
-      backgroundColor: 'rgba(0,0,0,0.78)',
-      borderRadius: Radius.lg,
-      paddingHorizontal: Space.md + 2,
-      paddingVertical: Space.sm + 2,
-      gap: 10,
-      minWidth: 180 },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6 },
-    emoji: {
-      fontSize: TypographyV2.sectionTitle.size },
-    question: {
-      color: colors.scrimTextPrimary,
-      fontFamily: TypographyV2.sectionTitle.fontFamily,
-      fontSize: TypographyV2.body.size,
-      flex: 1 },
-    optionsCol: {
-      gap: 6 },
-    option: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: 'rgba(255,255,255,0.12)',
-      borderRadius: Radius.sm,
-      paddingVertical: Space.sm,
-      paddingHorizontal: Space.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'rgba(255,255,255,0.08)' },
-    optionCorrect: {
-      backgroundColor: 'rgba(201,164,106,0.25)',
-      borderColor: 'rgba(201,164,106,0.6)' },
-    optionText: {
-      color: colors.scrimTextPrimary,
+    overlayOptionCorrect: {
+      backgroundColor: colors.successSubtle,
+      borderColor: colors.successBorder,
+    },
+    overlayOptionText: {
+      color: colors.textPrimary,
       fontFamily: TypographyV2.body.fontFamily,
       fontSize: TypographyV2.meta.size + 1,
-      flex: 1 },
-    optionTextCorrect: {
-      color: colors.antiqueGold,
-      fontFamily: TypographyV2.meta.fontFamily },
-    correctBadge: {
+      flex: 1,
+    },
+    overlayOptionTextCorrect: {
+      color: colors.success,
+      fontFamily: TypographyV2.meta.fontFamily,
+    },
+    overlayCorrectBadge: {
       width: 18,
       height: 18,
       borderRadius: Radius.full,
-      backgroundColor: colors.antiqueGold,
+      backgroundColor: colors.success,
       justifyContent: 'center',
-      alignItems: 'center' } });
-}
-
-function createQuestionStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    container: {
-      borderRadius: Radius.lg,
-      paddingHorizontal: Space.md + 2,
-      paddingVertical: Space.sm + 2,
-      minWidth: 180,
-      maxWidth: '100%' },
-    prompt: {
-      color: colors.scrimTextPrimary,
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.bodyStrong.size,
-      marginBottom: Space.sm },
-    inputAffordance: {
+      alignItems: 'center',
+    },
+    overlayTimerBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.md,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    overlayInputAffordance: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      backgroundColor: 'rgba(255,255,255,0.12)',
+      backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.md,
       paddingHorizontal: Space.sm + 2,
-      paddingVertical: Space.sm },
-    placeholder: {
-      flex: 1,
-      color: 'rgba(255,255,255,0.55)',
-      fontFamily: TypographyV2.bodyStrong.fontFamily,
-      fontSize: TypographyV2.meta.size },
-    sendHint: {
+      paddingVertical: Space.sm,
+    },
+    overlaySendHint: {
       width: 18,
       height: 18,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.15)',
+      backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
-      alignItems: 'center' } });
-}
-
-function createSliderStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    container: {
-      backgroundColor: 'rgba(0,0,0,0.78)',
-      borderRadius: Radius.lg,
-      paddingHorizontal: Space.md + 2,
-      paddingVertical: Space.sm + 2,
-      minWidth: 200,
-      maxWidth: '100%' },
-    question: {
-      color: colors.scrimTextPrimary,
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.body.size,
-      marginBottom: 10,
-      textAlign: 'center' },
-    sliderRow: {
-      flexDirection: 'row',
       alignItems: 'center',
-      gap: 10 },
-    emoji: {
-      fontSize: TypographyV2.display.size },
-    track: {
+    },
+    overlayTrack: {
       flex: 1,
       height: 6,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.15)',
-      justifyContent: 'center' },
-    trackFill: {
-      position: 'absolute',
-      left: 0,
-      top: 0,
-      bottom: 0,
-      width: '50%',
-      borderRadius: Radius.full },
-    thumb: {
+      backgroundColor: colors.surfaceAlt,
+      justifyContent: 'center',
+    },
+    overlayThumb: {
       width: 14,
       height: 14,
       borderRadius: Radius.full,
-      backgroundColor: colors.scrimTextPrimary,
+      backgroundColor: colors.textPrimary,
       borderWidth: 2,
       position: 'absolute',
       left: '50%',
-      marginLeft: -7 },
-    endLabel: {
-      color: 'rgba(255,255,255,0.7)',
-      fontFamily: TypographyV2.display.fontFamily,
-      fontSize: TypographyV2.meta.size } });
+      marginLeft: -7,
+    },
+  });
 }
+
+const productImageStyles = StyleSheet.create({
+  imageContainer: {
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    width: '100%',
+    height: '100%',
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: Space.xs,
+    paddingVertical: Space.xs,
+    gap: 1,
+  },
+  soldBadge: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+});
 
 const countdownStyles = StyleSheet.create({
   container: {

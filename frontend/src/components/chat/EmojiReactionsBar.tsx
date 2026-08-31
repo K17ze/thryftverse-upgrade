@@ -5,6 +5,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography , Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { Caption } from '../ui/Text';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 export type EmojiReaction = {
   emoji: string;
@@ -31,6 +32,7 @@ export function EmojiReactionsBar({
   onReact,
   style }: EmojiReactionsBarProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [expanded, setExpanded] = React.useState(false);
 
@@ -52,7 +54,7 @@ export function EmojiReactionsBar({
         onPress={() => onReact(emoji)}
         accessibilityRole="button"
         accessibilityState={{ selected: isActive }}
-        accessibilityLabel={`React with ${emoji}`}
+        accessibilityLabel={t('conversation.reactWith', { emoji })}
         activeOpacity={0.7}
         scaleValue={0.9}
         hapticFeedback="light"

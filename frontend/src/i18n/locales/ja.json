@@ -1,0 +1,1683 @@
+{
+  "common": {
+    "buttons": {
+      "save": "保存",
+      "cancel": "キャンセル",
+      "delete": "削除",
+      "edit": "編集",
+      "share": "共有",
+      "retry": "再試行",
+      "close": "閉じる",
+      "done": "完了",
+      "continue": "続行",
+      "clearAll": "すべて消去",
+      "clearFilters": "フィルターを消去",
+      "browseAll": "すべて見る",
+      "refresh": "更新",
+      "follow": "フォロー",
+      "unfollow": "フォロー解除",
+      "message": "メッセージ",
+      "buy": "購入",
+      "bid": "入札",
+      "sell": "出品",
+      "ok": "OK",
+      "confirm": "確認"
+    },
+    "states": {
+      "loading": "読み込み中...",
+      "loadingMore": "さらに読み込み中...",
+      "noResults": "結果なし",
+      "somethingWentWrong": "エラーが発生しました",
+      "youAreOffline": "オフラインです",
+      "retry": "再試行",
+      "searching": "検索中..."
+    },
+    "navigation": {
+      "back": "戻る",
+      "home": "ホーム",
+      "search": "検索",
+      "profile": "プロフィール",
+      "settings": "設定"
+    },
+    "actions": {
+      "follow": "フォロー",
+      "unfollow": "フォロー解除",
+      "message": "メッセージ",
+      "buy": "購入",
+      "bid": "入札",
+      "sell": "出品"
+    },
+    "trust": {
+      "verified": "認証済み",
+      "responseTime": "応答時間",
+      "reviews": "レビュー",
+      "followers": "フォロワー",
+      "following": "フォロー中"
+    },
+    "misc": {
+      "items": "件",
+      "on": "オン",
+      "off": "オフ",
+      "none": "なし",
+      "notSignedIn": "サインインしていません"
+    }
+  },
+  "home": {
+    "brandTitle": "Thryftverse",
+    "tabs": {
+      "foryou": "おすすめ",
+      "following": "フォロー中"
+    },
+    "looks": {
+      "shopLabel": "ショッピングできるルック",
+      "itemsCount": "{count} 件"
+    },
+    "poster": {
+      "fallback": "ポスター"
+    },
+    "newListings": {
+      "bannerSingular": "{count} 件の新着ドロップが公開済み",
+      "bannerPlural": "{count} 件の新着ドロップが公開済み",
+      "badgeNew": "新着 {count}"
+    },
+    "sync": {
+      "unavailableCached": "同期は利用できません。キャッシュされたアイテムを表示しています。"
+    },
+    "empty": {
+      "followingNoNewTitle": "新着ドロップはまだありません",
+      "followingNoNewSubtitle": "引っ張って更新してください。",
+      "followingNoSellersTitle": "セラーをフォローするとドロップが表示されます",
+      "followingNoSellersSubtitle": "セラーのプロフィールでフォローしてフィードを作成しましょう。",
+      "followingDiscoverSellers": "セラーを見つける",
+      "followingBrowseAll": "すべて見る",
+      "forYouNoDropsTitle": "まだ公開中のドロップはありません",
+      "forYouNoDropsSubtitle": "引っ張って更新するかカテゴリーを閲覧してください。"
+    },
+    "footer": {
+      "reachedEnd": "最後まで表示しました"
+    },
+    "peek": {
+      "closeButton": "閉じる",
+      "viewListing": "出品を見る"
+    }
+  },
+  "search": {
+    "placeholder": "アイテム、セラー、スタイルを検索",
+    "scope": {
+      "items": "アイテム",
+      "people": "ユーザー"
+    },
+    "resultCount": {
+      "singular": "{count} 件の結果",
+      "plural": "{count} 件の結果"
+    },
+    "sort": {
+      "title": "並び順",
+      "recommended": "おすすめ",
+      "newest": "新着順",
+      "priceLowToHigh": "価格: 安い順",
+      "priceHighToLow": "価格: 高い順",
+      "mostLiked": "いいねが多い順"
+    },
+    "sections": {
+      "discover": "発見",
+      "recent": "最近",
+      "recentSearches": "最近の検索",
+      "savedSearches": "保存した検索",
+      "browseCategories": "カテゴリーを見る",
+      "categories": "カテゴリー",
+      "trending": "人気の検索"
+    },
+    "suggestion": {
+      "brand": "ブランド",
+      "category": "カテゴリー",
+      "item": "アイテム",
+      "search": "検索"
+    },
+    "typeahead": {
+      "searchFor": "「{query}」を検索",
+      "viewAllResults": "{query} のすべての結果を見る",
+      "suggestionsUnavailable": "サジェストは利用できません。検索ボタンを押して続行してください。",
+      "noCloseSuggestions": "近いサジェストはありません。検索ボタンを押してすべての一致を表示してください。",
+      "showingLocalMatches": "この端末で利用可能な一致を表示しています"
+    },
+    "savedSearch": {
+      "alertsOn": "アラートオン",
+      "alertsOff": "アラートオフ",
+      "newMatches": "· 新着 {count}"
+    },
+    "status": {
+      "refreshingIndex": "インデックスを更新中",
+      "liveIndex": "ライブインデックス",
+      "offlineIndex": "オフラインインデックス",
+      "cachedIndex": "キャッシュインデックス"
+    },
+    "errors": {
+      "searchUnavailable": "検索は利用できません",
+      "retrySearch": "検索を再試行",
+      "peopleSearchUnavailable": "ユーザー検索は利用できません",
+      "searchIndexDelayed": "検索インデックスが遅延しています。キャッシュされた結果を表示しています。",
+      "noPeopleFound": "「{query}」に一致するユーザーは見つかりませんでした",
+      "tryDifferentName": "別の名前またはユーザー名を試してください。",
+      "noMatches": "「{query}」に一致する結果はありません",
+      "noMatchesWithFilters": "これらのフィルターでは「{query}」に一致する結果はありません",
+      "searchingIndex": "インデックスを検索しています…",
+      "tryClearingFilters": "フィルターを消去するか検索範囲を広げてみてください。",
+      "tryBroadened": "{suggestions} を試す — またはすべてのカテゴリーを見る。",
+      "noPicksWithFilters": "現在のフィルターに一致するおすすめはありません。調整または消去してください。",
+      "noPicksNoResults": "まだランキング結果がありません。より短いキーワードを試してください。"
+    },
+    "noResults": {
+      "browseByCategory": "カテゴリーから見る"
+    },
+    "follow": {
+      "following": "フォロー中",
+      "follow": "フォロー"
+    }
+  },
+  "settings": {
+    "header": {
+      "title": "設定"
+    },
+    "search": {
+      "placeholder": "設定を検索",
+      "results": "結果",
+      "allSettings": "すべての設定",
+      "noMatching": "一致する設定はありません"
+    },
+    "verification": {
+      "promptTitle": "本人確認を行ってください",
+      "promptSubtitle": "認証バッジを取得して出品機能を解放しましょう",
+      "verified": "認証済み",
+      "getBadge": "認証バッジを取得",
+      "trustedSeller": "信頼できるセラー",
+      "idVerified": "ID認証済み"
+    },
+    "health": {
+      "verified": "認証済み",
+      "twoFA": "2FA",
+      "biometric": "生体認証",
+      "payment": "支払い",
+      "address": "住所",
+      "emailConfirmed": "メール確認済み"
+    },
+    "sections": {
+      "yourAccount": "アカウント",
+      "buyingSelling": "購入・出品",
+      "notifications": "通知",
+      "experience": "エクスペリエンス",
+      "connectedServices": "連携サービス",
+      "helpLegal": "ヘルプ・法的情報",
+      "advanced": "詳細設定",
+      "account": "アカウント"
+    },
+    "rows": {
+      "verification": "本人確認",
+      "changePassword": "パスワードを変更",
+      "twoFAEnabled": "2FA有効",
+      "passwordOnly": "パスワードのみ",
+      "biometricLock": "生体認証ロック",
+      "biometricNotAvailable": "この端末では利用できません",
+      "biometricEnabled": "Face ID、Touch ID、指紋認証で機密操作を保護",
+      "biometricDisabled": "無効 — 機密画面はパスワードのみ",
+      "connectedAccounts": "連携アカウント",
+      "connectedAccountsSubtitle": "Google、Appleサインイン",
+      "devicesSessions": "端末とセッション",
+      "accountControl": "アカウント管理",
+      "accountControlSubtitle": "セキュリティ、セッション、パスワード",
+      "downloadData": "データをダウンロード",
+      "downloadDataSubtitle": "アカウントデータをエクスポート",
+      "privacySafety": "プライバシーと安全性",
+      "privacySafetySubtitle": "表示設定、ブロックしたユーザー",
+      "chatPrivacy": "チャットのプライバシー",
+      "chatPrivacySubtitle": "メッセージを送信できるユーザー",
+      "dataPrivacy": "データとプライバシー",
+      "dataPrivacySubtitle": "プライバシー制御とデータ保持",
+      "blockedUsers": "ブロックしたユーザー",
+      "blockedCount": "{{count}} 件ブロック中",
+      "savedAddresses": "保存した住所",
+      "oneSaved": "1 件保存済み",
+      "noneSaved": "保存なし",
+      "paymentMethods": "支払い方法",
+      "savedCollections": "保存・コレクション",
+      "payoutAccount": "支払先アカウント",
+      "payoutAccountSubtitle": "残高とウォレット",
+      "payoutHistory": "支払履歴",
+      "shippingPreferences": "配送設定",
+      "priceAlerts": "価格アラート",
+      "priceAlertsSubtitle": "価格しきい値で通知",
+      "autoInvestPlans": "自動投資プラン",
+      "autoInvestPlansSubtitle": "定期的な購入スケジュール",
+      "taxDocuments": "税務書類",
+      "taxDocumentsSubtitle": "年次明細書と損益計算",
+      "resolutionCentre": "解決センター",
+      "resolutionCentreSubtitle": "紛争と解決",
+      "enableNotifications": "通知を有効化",
+      "permissionUnknown": "権限不明",
+      "permissionAllowed": "許可済み",
+      "permissionNotAllowed": "許可されていません",
+      "notificationPreferences": "通知設定",
+      "emailPreferences": "メール設定",
+      "theme": "テーマ",
+      "currencyDisplay": "通貨表示",
+      "localCurrency": "ローカル通貨",
+      "language": "言語",
+      "contentPreferences": "コンテンツ設定",
+      "contentPreferencesSubtitle": "フィードとレコメンド",
+      "recommendations": "レコメンド",
+      "recommendationsSubtitle": "写真の補正、タイトルと価格の提案",
+      "yourFeed": "あなたのフィード",
+      "yourFeedSubtitle": "レコメンドと透明性",
+      "sustainability": "サステナビリティ",
+      "sustainabilitySubtitle": "目標、配送、影響",
+      "accessibility": "アクセシビリティ",
+      "accessibilitySubtitle": "文字サイズ、モーション、コントラスト",
+      "searchHistory": "検索履歴",
+      "searchHistorySubtitle": "最近の検索を消去",
+      "dataSharing": "データ共有",
+      "dataSharingSubtitle": "分析とパーソナライズ",
+      "agents": "エージェント",
+      "agentsSubtitle": "エージェント権限の閲覧と管理",
+      "connections": "接続",
+      "connectionsSubtitle": "プロバイダーキーとエンドポイント",
+      "yourAgents": "あなたのエージェント",
+      "yourAgentsSubtitle": "作成したエージェント",
+      "helpCentre": "ヘルプセンター",
+      "termsOfService": "利用規約",
+      "privacyPolicy": "プライバシーポリシー",
+      "aboutThryftverse": "Thryftverseについて",
+      "runtimeSmokeTest": "ランタイムスモークテスト",
+      "runtimeSmokeTestSubtitle": "ローカルランタイムの診断チェック",
+      "deleteAccount": "アカウントを削除",
+      "deleteAccountSubtitle": "アカウントを完全に消去",
+      "editProfileAccount": "プロフィールとアカウントを編集",
+      "biometricLogin": "生体認証ログイン",
+      "biometricLoginEnabled": "アプリ起動時にFace ID、Touch ID、指紋認証を要求",
+      "biometricLoginDisabled": "無効 — アプリが直接アカウントを開きます",
+      "notificationCategories": "通知カテゴリー",
+      "notificationPreferencesSubtitle": "おやすみ時間、プレビュー",
+      "featureFlags": "機能フラグ",
+      "featureFlagsSubtitle": "QA用の現在のフラグ値",
+      "autoTranslate": "メッセージを自動翻訳",
+      "autoTranslateEnabled": "外国語メッセージが自動翻訳されました",
+      "autoTranslateDisabled": "タップして外国語メッセージを手動翻訳"
+    },
+    "toast": {
+      "themeApplying": "{{theme}} テーマを適用しています…",
+      "pushEnabled": "プッシュ通知が有効になりました",
+      "pushDenied": "プッシュ通知が拒否されました。端末の設定で有効にしてください。",
+      "pushUpdateFailed": "プッシュ通知の権限を更新できませんでした。",
+      "pushManageDeviceSettings": "端末の設定でプッシュ通知を管理してください。",
+      "searchHistoryCleared": "検索履歴を消去しました",
+      "searchHistoryClearFailed": "検索履歴を消去できませんでした",
+      "unableOpenLink": "リンクを開けませんでした。しばらくしてからもう一度お試しください。"
+    },
+    "notificationSummary": "{{enabled}}/{{total}} カテゴリー",
+    "accessibility": {
+      "editProfileAccount": "プロフィールとアカウントを編集",
+      "editProfileAccountHint": "プロフィール、非公開情報、セキュリティ、アカウント編集画面を開きます",
+      "verifyIdentity": "本人確認",
+      "verifyIdentityHint": "本人確認画面を開きます",
+      "deleteAccountHint": "アカウント削除フローを開きます"
+    },
+    "picker": {
+      "currencyTitle": "ローカル通貨を選択",
+      "themeTitle": "テーマモード",
+      "themeSystem": "システム",
+      "themeLight": "ライト",
+      "themeDark": "ダーク"
+    }
+  },
+  "profile": {
+    "userProfile": "{{name}}さんのプロフィール"
+  },
+  "listing": {
+    "create": {
+      "title": "出品",
+      "createListing": "出品を作成",
+      "editTitle": "出品を編集",
+      "listingTitle": "タイトル",
+      "description": "説明",
+      "price": "価格",
+      "category": "カテゴリー",
+      "condition": "状態",
+      "size": "サイズ",
+      "brand": "ブランド",
+      "photos": "写真",
+      "publish": "公開",
+      "saveDraft": "下書きを保存",
+      "saved": "保存済み",
+      "details": "詳細",
+      "priceAndCondition": "価格と状態",
+      "required": "必須",
+      "optional": "任意",
+      "addPhotosTitle": "写真を追加して始めましょう",
+      "addPhotosSubtitle": "複数の角度から明るい写真が早く売れます。",
+      "photoTips": "写真のヒント",
+      "photoTipsMin": "最低3枚の写真を推奨",
+      "photoTipLighting": "良い照明",
+      "photoTipAngles": "すべての角度を表示",
+      "photoTipBackground": "自然な背景",
+      "titlePlaceholder": "例: ヴィンテージ Levi's 501 デニムジャケット",
+      "descriptionHelper": "買い手がこのアイテムを見つけやすくなるよう詳細を追加",
+      "suggestedDetails": "おすすめの詳細",
+      "applyToEmptyFields": "空欄に適用",
+      "startingBid": "開始価格",
+      "reservePriceOptional": "最低落札価格（任意）",
+      "duration": "期間",
+      "totalValuation": "評価額合計",
+      "originalPriceHelper": "価値を示すために元の価格を追加",
+      "readyToPublish": "公開準備完了",
+      "bulkList": "一括出品",
+      "inventory": "在庫",
+      "hub": "ハブ",
+      "tapToSet": "タップして設定"
+    },
+    "detail": {
+      "addToCart": "カートに追加",
+      "buyNow": "今すぐ購入",
+      "makeOffer": "オファーを作成",
+      "seller": "セラー",
+      "itemCondition": "状態",
+      "itemSize": "サイズ",
+      "itemBrand": "ブランド",
+      "postedOn": "{{date}} に投稿",
+      "addedToWishlist": "ウィッシュリストに追加しました",
+      "priceDropAlertsEnabled": "このアイテムの値下げアラートが有効です",
+      "priceDropAlertsDisabled": "値下げアラートは無効です",
+      "couldNotUpdatePriceAlert": "価格アラートを更新できませんでした。もう一度お試しください。",
+      "browseSimilar": "類似品を見る",
+      "manageListing": "出品を管理"
+    }
+  },
+  "messaging": {
+    "compose": {
+      "placeholder": "メッセージ...",
+      "send": "送信",
+      "attach": "添付",
+      "attachPhoto": "写真",
+      "attachCamera": "カメラ",
+      "inputAccessibility": "メッセージ入力",
+      "dismissSafetyWarning": "安全警告を閉じる",
+      "dismissCautionWarning": "注意警告を閉じる",
+      "removeAttachment": "添付を削除",
+      "addAttachment": "添付を追加",
+      "openCamera": "カメラを開く",
+      "quickReply": "クイック返信: {{label}}"
+    },
+    "conversation": {
+      "title": "メッセージ",
+      "empty": "まだメッセージはありません",
+      "startChatting": "下のメッセージを送信して始めましょう。",
+      "startConversation": "会話を始める",
+      "typing": "{{name}} が入力中...",
+      "onlineNow": "今すぐオンライン",
+      "newMessages": "新着メッセージ",
+      "undo": "元に戻す",
+      "message": "メッセージ",
+      "mediaPress": "メディアプレス",
+      "messageSent": "メッセージを送信しました",
+      "sending": "送信中…",
+      "draft": "下書き",
+      "ai": "AI",
+      "retryDraft": "タップして再試行",
+      "sendDraft": "送信",
+      "memberCount": "{{count}} 人のメンバー",
+      "loadError": "メッセージを読み込めませんでした。接続を確認して再試行してください。",
+      "offlineMessage": "オフラインです。再接続時にメッセージが送信されます。",
+      "copied": "コピーしました",
+      "reportSubmitted": "報告を送信しました。ありがとうございます。",
+      "reportFailed": "報告の送信に失敗しました。もう一度お試しください。",
+      "exitSelectionMode": "選択モードを終了",
+      "exitSelectionModeHint": "メッセージ選択ツールバーを閉じます",
+      "deleteSelected": "選択したメッセージを削除",
+      "deleteSelectedHint": "この会話から選択したメッセージを完全に削除します",
+      "undoMessageDeletion": "メッセージの削除を元に戻す",
+      "reactWith": "{{emoji}} でリアクション",
+      "openLink": "{{domain}} へのリンクを開く",
+      "typingIndicator": "入力中..."
+    },
+    "inbox": {
+      "primary": "メイン",
+      "buying": "購入",
+      "selling": "出品",
+      "tabBadge": "{{label}} タブ{{plural}}",
+      "newBadge": "、新着 {{count}}",
+      "openConversation": "{{title}} を開く",
+      "performAction": "{{action}} {{title}}",
+      "performSecondaryAction": "{{action}} {{title}}",
+      "linkedListing": "関連出品: {{title}}、{{price}}、{{availability}}",
+      "listingHint": "出品詳細ページを開きます",
+      "scrollToBottom": "一番下までスクロール{{unread}}",
+      "scrollToBottomHint": "最新のメッセージまでスクロールします",
+      "unread": "、未読 {{count}}"
+    },
+    "requests": {
+      "title": "メッセージリクエスト",
+      "noRequests": "メッセージリクエストはありません",
+      "noRequestsSubtitle": "フォローしていないユーザーからのメッセージはここに表示されます。",
+      "acceptMessageRequest": "メッセージリクエストを承認",
+      "deleteMessageRequest": "メッセージリクエストを削除",
+      "deleteConfirmationTitle": "リクエストを削除しますか？",
+      "deleteConfirmationMessage": "リクエストが削除されます。後で再度メッセージを送信することは可能です。",
+      "blockConfirmationTitle": "{{name}} をブロックしますか？",
+      "blockConfirmationMessage": "このユーザーはあなたにメッセージを送ったりプロフィールを見たりできなくなります。リクエストは削除されます。",
+      "accepted": "リクエストを承認しました",
+      "acceptError": "このリクエストを承認できませんでした。接続を確認して再試行してください。",
+      "deleted": "リクエストを削除しました",
+      "deleteError": "このリクエストを削除できませんでした。接続を確認して再試行してください。",
+      "blockError": "このアカウントをブロックできませんでした。接続を確認して再試行してください。",
+      "reportError": "このアカウントはここでは報告できません。",
+      "blocked": "{{name}} をブロックしました"
+    },
+    "archived": {
+      "title": "アーカイブされた会話",
+      "subtitle": "復元された会話は受信トレイに戻ります",
+      "noArchived": "アーカイブされた会話はありません",
+      "noArchivedSubtitle": "アーカイブした会話は削除せずに受信トレイから非表示になります。",
+      "clearAllConversations": "すべてのアーカイブ会話を消去",
+      "removeConfirmationTitle": "受信トレイから削除しますか？",
+      "removeConfirmationMessage": "「{{title}}」がアーカイブ会話から削除されます。",
+      "clearAllConfirmationTitle": "すべてのアーカイブを消去しますか？",
+      "clearAllConfirmationMessage": "すべてのアーカイブ会話が完全に削除されます。",
+      "restored": "会話を受信トレイに復元しました",
+      "restoreError": "この会話を復元できませんでした。接続を確認して再試行してください。",
+      "removed": "会話を削除しました",
+      "removeError": "この会話を削除できませんでした。接続を確認して再試行してください。",
+      "cleared": "アーカイブを消去しました",
+      "clearError": "{{deleted}} 件削除 · {{failed}} 件失敗"
+    },
+    "muted": {
+      "title": "ミュート中の会話",
+      "subtitle": "これらのチャットの通知は一時停止しています",
+      "noMuted": "ミュート中の会話はありません",
+      "noMutedSubtitle": "ミュートした会話はありません。ミュートした会話はここに表示されます。",
+      "unmute": "ミュート解除",
+      "unmuteError": "この会話のミュートを解除できませんでした。接続を確認して再試行してください。"
+    },
+    "sharedMedia": {
+      "title": "共有メディア",
+      "noMedia": "まだ共有メディアはありません",
+      "noMediaSubtitle": "この会話で共有された写真や動画がここに表示されます。",
+      "videoThumbnail": "動画のサムネイル",
+      "deleteSelected": "選択したメディアを削除",
+      "summary": "写真 {{photoCount}} 件{{photoPlural}} · 動画 {{videoCount}} 件{{videoPlural}}",
+      "selectItem": "{{action}} {{type}}",
+      "select": "選択",
+      "deselect": "選択解除",
+      "photo": "写真",
+      "video": "動画",
+      "selectedCount": "{{count}} 件選択中",
+      "removeSelectedHint": "選択した {{count}} 件{{plural}}を削除します",
+      "filter": "{{label}} フィルター"
+    },
+    "attachments": {
+      "reviewTitle": "添付を確認",
+      "cancelAttachment": "添付をキャンセル",
+      "captionPlaceholder": "キャプションを追加...",
+      "captionAccessibility": "添付のキャプション",
+      "sendAttachment": "添付を送信",
+      "actionSheetTitle": "添付",
+      "actionSheetSubtitle": "このチャットで写真や動画を共有",
+      "photoAndVideo": "写真と動画",
+      "chooseFromLibrary": "ライブラリから選択",
+      "camera": "カメラ",
+      "takePhotoOrVideo": "新しい写真または動画を撮影",
+      "makeOffer": "オファーを作成",
+      "product": "商品",
+      "priceQuote": "価格見積もり",
+      "shareListing": "出品を共有",
+      "orderStatus": "注文ステータス",
+      "payment": "支払い",
+      "agent": "エージェント"
+    },
+    "offers": {
+      "declineOffer": "オファーを辞退",
+      "counterOffer": "カウンターオファー",
+      "acceptOffer": "オファーを承認",
+      "declined": "辞退済み",
+      "accepted": "承認済み",
+      "expired": "期限切れ",
+      "waitingForResponse": "返信待ち",
+      "pass": "パス",
+      "counter": "カウンター",
+      "accept": "承認",
+      "verified": "認証済み",
+      "verifiedSystemUpdate": "認証システムの更新",
+      "counterRound": "カウンター #{{round}}",
+      "expiresIn": "{{time}} 後に期限切れ"
+    },
+    "agentPicker": {
+      "title": "AIエージェントを追加",
+      "sheet": "AIエージェント追加シート",
+      "connect": "このチャットでサポートするアシスタントを接続",
+      "demoNotice": "デモアシスタントはモック返信を提案します",
+      "noAgents": "利用可能なエージェントはありません",
+      "noAgentsBody": "エージェント画面からエージェントを作成して始めましょう。",
+      "loading": "デプロイ済みエージェントを読み込み中…",
+      "loadError": "エージェントを読み込めませんでした",
+      "loadErrorBody": "サーバーに接続できませんでした。引っ張って再試行してください。",
+      "noAgentsDeployed": "デプロイされたエージェントはありません",
+      "noAgentsDeployedBody": "エージェント画面からこの会話にエージェントをインストールしてください。",
+      "addAssistant": "アシスタントを追加",
+      "addAssistantDescription": "このチャットにAIアシスタントをデプロイ",
+      "addAgent": "{{name}} エージェントを追加",
+      "alreadyAdded": "{{name}} は追加済みです",
+      "openManagement": "エージェント管理を開く",
+      "activeOne": "{{name}} がアクティブです。タップしてエージェントを管理。",
+      "activeMany": "{{count}} 件のエージェントがアクティブです。タップしてエージェントを管理。",
+      "activeShortOne": "{{name}} アクティブ",
+      "activeShortMany": "{{count}} 件のエージェントがアクティブ",
+      "retryDraft": "エージェントの下書き送信を再試行",
+      "sendDraft": "エージェントの下書きを送信"
+    },
+    "suggestedReplies": {
+      "title": "返信候補",
+      "titleFrom": "{{agentName}} からの返信候補",
+      "use": "返信候補を使用: {{reply}}",
+      "fill": "この返信でメッセージ入力欄を埋めます",
+      "dismiss": "返信候補を閉じる",
+      "dismissHint": "この会話の返信候補を非表示にします",
+      "manage": "返信を管理"
+    },
+    "voice": {
+      "notAvailable": "ボイスメッセージは利用できません",
+      "notSupportedHint": "このビルドでは音声録音はサポートされていません",
+      "micPermission": "マイクの権限が拒否されました。タップして権限をリクエストしてください。",
+      "deleteRecording": "録音を削除してやり直す",
+      "readyToSend": "送信準備完了",
+      "sendVoice": "ボイスメッセージを送信",
+      "sendVoiceHint": "録音を送信します。元に戻せません。",
+      "stopRecording": "録音を停止して確認",
+      "stopRecordingHint": "タップして録音を終了します。送信前に確認できます。",
+      "cancelRecording": "録音をキャンセルして削除",
+      "recordVoice": "ボイスメッセージを録音",
+      "recordVoiceHint": "タップして録音を開始します。停止をタップして送信前に確認してください。",
+      "voiceMessage": "ボイスメッセージ、長さ {{duration}}{{state}}",
+      "playbackSpeed": "再生速度 {{rate}} 倍",
+      "playHint": "ダブルタップで再生または一時停止。アクションでシーク、速度変更、文字起こしを要求できます。",
+      "loadError": "音声を読み込めませんでした"
+    },
+    "transcription": {
+      "show": "このボイスメッセージの文字起こしを表示",
+      "showHint": "自動文字起こしをリクエストします。テキストは推定であり、送信者の実際の言葉ではありません。",
+      "title": "文字起こし",
+      "notAvailable": "この音声形式では文字起こしは利用できません",
+      "close": "文字起こしを閉じる",
+      "failed": "文字起こしに失敗しました",
+      "temporarilyUnavailable": "一時的に利用できません",
+      "retryTranscription": "文字起こしを再試行",
+      "requesting": "文字起こしをリクエスト中…",
+      "transcribing": "音声を文字起こし中…",
+      "empty": "（空の文字起こし）",
+      "derivedLabel": "自動文字起こし",
+      "accurate": "文字起こしを正確とマーク",
+      "inaccurate": "文字起こしを不正確とマーク",
+      "loadError": "文字起こしを読み込めませんでした"
+    },
+    "orders": {
+      "placed": "注文を確定しました",
+      "placedBody": "セラーに通知されました。",
+      "paymentConfirmed": "支払いが確認されました",
+      "paymentConfirmedBody": "お支払いが処理されました。",
+      "shipped": "注文が発送されました",
+      "shippedBody": "荷物が発送されました。",
+      "inTransit": "配送中",
+      "inTransitBody": "荷物は配送中です。",
+      "delivered": "配達完了",
+      "deliveredBody": "配達が確認されました。",
+      "cancelled": "注文がキャンセルされました",
+      "cancelledBody": "この注文はキャンセルされました。",
+      "refunded": "返金されました",
+      "refundedBody": "お支払いが返金されました。",
+      "orderPreview": "{{title}}。{{subtitle}}。{{orderId}}。{{timestamp}}。タップして注文詳細を表示。",
+      "viewDetails": "詳細を表示",
+      "dispatchItem": "商品を発送",
+      "trackParcel": "荷物を追跡",
+      "checkItem": "商品を確認",
+      "viewOrder": "注文を表示",
+      "shipBy": "{{date}} までに発送",
+      "eta": "到着予定 {{window}}",
+      "etaWindow": "{{min}}〜{{max}} 日",
+      "etaDay": "{{count}} 日",
+      "orderStatusAccessibility": "注文 {{status}}{{deadline}}{{cta}}"
+    },
+    "safety": {
+      "title": "決済はThryftVerse内で行いましょう",
+      "body": "プラットフォーム外の決済は買い手保護の対象外です。正当な取引の場合は、アプリ内で完了して保護を受けましょう。",
+      "dismiss": "警告を閉じる",
+      "reportConversation": "この会話を報告"
+    },
+    "search": {
+      "placeholder": "チャット内を検索",
+      "inConversation": "会話内を検索",
+      "previousResult": "前の結果",
+      "nextResult": "次の結果",
+      "closeSearch": "検索を閉じる",
+      "browseResults": "ブラウズで結果を表示",
+      "browseResultsHint": "一致したフィルターを適用してブラウズ画面を開きます",
+      "refine": "検索を絞り込む: {{suggestion}}",
+      "refineHint": "この絞り込みを検索に追加します",
+      "searchFor": "{{suggestion}} を検索",
+      "startQueryHint": "このクエリで会話型検索を開始します",
+      "queryInput": "検索クエリ入力",
+      "queryInputHint": "探したいものを自然な言葉で入力してください",
+      "sendQuery": "検索クエリを送信",
+      "sendQueryHint": "クエリを送信して会話型検索を開始します",
+      "retry": "検索を再試行",
+      "retryHint": "最後の検索クエリを再送信します"
+    },
+    "common": {
+      "cancel": "キャンセル",
+      "goBack": "戻る",
+      "verifiedUser": "認証済みユーザー",
+      "retry": "再試行",
+      "delete": "削除",
+      "block": "ブロック",
+      "report": "報告",
+      "remove": "削除",
+      "clearAll": "すべて消去",
+      "restore": "復元",
+      "blockWithName": "{{name}} をブロック",
+      "reportWithName": "{{name}} を報告"
+    },
+    "messageActions": {
+      "dismissReply": "返信を閉じる",
+      "scrollToOriginal": "元のメッセージまでスクロールします",
+      "quotedReply": "{{sender}} からの引用返信"
+    },
+    "translation": {
+      "translate": "翻訳",
+      "showOriginal": "原文を表示",
+      "translating": "翻訳中...",
+      "translationFailed": "翻訳できません",
+      "translatedFrom": "{{language}}から翻訳"
+    }
+  },
+  "commerce": {
+    "checkout": {
+      "title": "チェックアウト",
+      "subtotal": "小計",
+      "shipping": "配送",
+      "tax": "税金",
+      "total": "合計",
+      "payNow": "今すぐ支払う",
+      "paymentMethod": "支払い方法",
+      "deliveryAddress": "お届け先",
+      "orderPlaced": "注文が確定しました",
+      "orderFailed": "注文に失敗しました",
+      "signInToCheckout": "チェックアウトにはサインインしてください",
+      "signIn": "サインイン",
+      "cannotPurchaseOwnListing": "自分の出品は購入できません",
+      "cannotBuyOwnItem": "自分が出品した商品は購入できません。",
+      "itemUnavailable": "商品は利用できません",
+      "listingNoLongerPurchasable": "この出品は購入できなくなりました。",
+      "goBack": "戻る",
+      "delivery": "配送",
+      "noAddress": "住所なし",
+      "change": "変更",
+      "add": "追加",
+      "noPaymentMethod": "支払い方法なし",
+      "requiredForDelivery": "配送に必要です",
+      "needsSavingBeforePayment": "支払い前に保存が必要です",
+      "shippingNotAvailable": "お住まいの地域では配送できません",
+      "cardsUnavailableRegion": "お住まいの地域ではカードをご利用いただけません",
+      "securePayment": "安全な支払い · カード情報は暗号化されています",
+      "useWalletBalance": "ウォレット残高を使用",
+      "available": "利用可能",
+      "retryPayment": "支払いを再試行",
+      "tryAgain": "もう一度試す",
+      "addAddress": "住所を追加",
+      "addPayment": "支払い方法を追加",
+      "item": "商品",
+      "buyerProtection": "買い手保護",
+      "walletApplied": "ウォレットを適用しました",
+      "viewFullBreakdown": "詳細を見る",
+      "fullBreakdown": "詳細内訳",
+      "payWithApplePay": "Apple Payで支払う",
+      "payWithGooglePay": "Google Payで支払う",
+      "payWithCard": "カードで支払う",
+      "processing": "処理中",
+      "waitingForConfirmation": "確認待ち",
+      "savingWithWallet": "ウォレット残高で{{amount}}節約",
+      "shippingQuoteUnavailable": "配送見積もりを取得できません — 標準配送で進めます。",
+      "addDeliveryAddressToContinue": "続行するにはお届け先を追加してください。",
+      "addPaymentMethodToContinue": "続行するには支払い方法を追加してください。",
+      "estimated": "見積もり",
+      "tracking": "追跡",
+      "closeCheckout": "チェックアウトを閉じる",
+      "paymentInProgress": "支払い処理中",
+      "paymentInProgressBody": "離脱後も支払い確認が完了する場合があります。もう一度試す前に注文履歴をご確認ください。",
+      "stay": "留まる",
+      "leave": "離脱する"
+    },
+    "offer": {
+      "makeOffer": "オファーを作成",
+      "offerAmount": "オファー金額",
+      "submitOffer": "オファーを送信",
+      "offerAccepted": "オファーが承認されました",
+      "offerDeclined": "オファーが辞退されました",
+      "offerExpired": "オファーの有効期限が切れました"
+    },
+    "bid": {
+      "placeBid": "入札する",
+      "currentBid": "現在の入札",
+      "yourBid": "あなたの入札",
+      "bidPlaced": "入札しました",
+      "outbid": "他の方に上回られました",
+      "winning": "最高額"
+    },
+    "wallet": {
+      "title": "ウォレット",
+      "balance": "残高",
+      "spendableNow": "今すぐ利用可能",
+      "withdraw": "出金",
+      "withdrawAmount": "出金額",
+      "withdrawSuccess": "出金をリクエストしました",
+      "withdrawFailed": "出金に失敗しました",
+      "addMoney": "資金を追加",
+      "transactionHistory": "取引履歴",
+      "convert": "換金",
+      "recentActivity": "最近のアクティビティ",
+      "seeAll": "すべて見る",
+      "noBalanceYet": "まだ1ZEはありません",
+      "addMoneyToStart": "Co-Ownユニットの取引を始めるには資金を追加してください。",
+      "authenticateToView": "ウォレットを表示するには認証してください",
+      "showBalance": "残高を表示",
+      "hideBalance": "残高を非表示",
+      "balanceHidden": "残高は非表示です",
+      "reservedForOrders": "注文用に予約済み",
+      "redemptionPending": "償還保留中",
+      "otherHolds": "その他の保留",
+      "pendingDeposit": "入金保留中",
+      "unsettledSaleProceeds": "未決済の売上",
+      "withdrawable": "出金可能",
+      "sellerEarnings": "販売者収益",
+      "safeguarded": "保護済み",
+      "safeguardingPending": "保護保留中",
+      "evidence": "エビデンス",
+      "terms": "規約",
+      "activity": "アクティビティ"
+    },
+    "order": {
+      "title": "注文",
+      "orderNumber": "注文 #{{number}}",
+      "statusPending": "保留中",
+      "statusProcessing": "処理中",
+      "statusShipped": "発送済み",
+      "statusDelivered": "配達完了",
+      "statusCancelled": "キャンセル済み",
+      "statusRefunded": "返金済み"
+    }
+  },
+  "myProfile": {
+    "cover": {
+      "uploadFailed": "カバーのアップロードに失敗しました",
+      "retry": "再試行",
+      "cancel": "キャンセル"
+    },
+    "utility": {
+      "orders": "注文",
+      "analytics": "アナリティクス",
+      "closet": "クローゼット",
+      "wallet": "ウォレット",
+      "auctions": "オークション",
+      "coOwn": "Co-Own",
+      "sellerHub": "セラーハブ",
+      "itemsCount": "{{count}}件の商品",
+      "assetsCount": "{{count}}件のアセット"
+    },
+    "notSignedIn": {
+      "subtitle": "プロフィール、出品、ウォレットを表示するにはサインインしてください。",
+      "signIn": "サインイン"
+    },
+    "holiday": {
+      "title": "ホリデーモードがオンです",
+      "subtitle": "ショップは一時停止中です。タップして管理します。"
+    },
+    "tabs": {
+      "shop": "ショップ",
+      "looks": "ルックス",
+      "about": "概要",
+      "reviews": "レビュー"
+    },
+    "listings": {
+      "emptyTitle": "最初の商品を出品",
+      "emptyBody": "商品を撮影し、準備ができたら公開してください。",
+      "startSelling": "販売を始める",
+      "bringOverListings": "既存の出品を持ち込む",
+      "viewAll": "すべて見る",
+      "sold": "売約済",
+      "listingsCount": "{{count}}件の出品"
+    },
+    "looks": {
+      "errorTitle": "ルックを読み込めませんでした",
+      "errorSubtitle": "接続を確認してもう一度お試しください。",
+      "tryAgain": "もう一度試す",
+      "emptyTitle": "まだルックがありません",
+      "emptySubtitle": "最初のルックを作成してあなたのスタイルを披露しましょう。",
+      "createLook": "ルックを作成"
+    },
+    "about": {
+      "coOwnPortfolio": "CO-OWNポートフォリオ",
+      "viewAll": "すべて見る",
+      "unit": "ユニット",
+      "units": "ユニット",
+      "website": "ウェブサイト",
+      "shopPolicies": "ショップポリシー",
+      "payments": "支払い",
+      "paymentsValue": "買い手保護付きの安全なチェックアウト",
+      "shipping": "配送",
+      "shippingSeller": "販売者{{label}}。発送時に追跡情報が提供されます。",
+      "shippingDefault": "発送時に追跡情報が提供されます。",
+      "returns": "返品",
+      "returnsValue": "商品が説明と異なる場合、返品を受け付けます。",
+      "responseRate": "返信率",
+      "response": "返信",
+      "responseSeller": "販売者は通常{{label}}以内に返信します。",
+      "responseDefault": "販売者は迅速な返信を心がけています。",
+      "noDetails": "追加の詳細はありません。"
+    },
+    "completion": {
+      "title": "プロフィールを完成させましょう",
+      "progress": "{{percent}}% · {{done}}/{{total}}"
+    },
+    "growth": {
+      "title": "Thryftverseで成長する",
+      "listFirstItemTitle": "最初の商品を出品",
+      "listFirstItemSub": "商品を撮影して公開し、販売を始めましょう。",
+      "growAudienceTitle": "オーディエンスを成長させる",
+      "growAudienceSub": "プロフィールを共有し、コンテンツを作成してフォロワーを獲得しましょう。"
+    },
+    "toast": {
+      "coverUpdated": "カバーを更新しました",
+      "coverUploadFailed": "カバーのアップロードに失敗しました",
+      "avatarUpdated": "アバターを更新しました",
+      "avatarUploadFailed": "アバターのアップロードに失敗しました",
+      "portfolioLoadFailed": "ポートフォリオを読み込めません"
+    },
+    "accessibility": {
+      "orders": "注文",
+      "creatorAnalytics": "クリエイターアナリティクス",
+      "closet": "クローゼット",
+      "wallet": "ウォレット",
+      "browseAuctions": "オークションを閲覧",
+      "browseCoOwnMarket": "Co-Own市場を閲覧",
+      "sellerHub": "セラーハブ",
+      "openSettings": "設定を開く",
+      "openSettingsHint": "設定を開きます",
+      "shareProfile": "プロフィールを共有",
+      "shareProfileHint": "システムの共有シートを開いてプロフィールを共有します",
+      "retryCoverUpload": "カバーのアップロードを再試行",
+      "cancelCoverChange": "カバーの変更をキャンセル",
+      "uploadingCover": "プロフィールカバーをアップロード中",
+      "changeCover": "プロフィールカバーを変更",
+      "holidayMode": "ホリデーモードがオンです — タップして管理",
+      "importListingsHint": "eBayやファイルからカタログインポートを開始",
+      "loadingLooks": "ルックを読み込み中",
+      "viewCoOwnPortfolio": "Co-Ownポートフォリオを表示",
+      "viewCoOwnPortfolioHint": "Co-Own保有ハブを開きます",
+      "dismissCompletion": "プロフィール完了プロンプトを閉じる",
+      "dismissGrowth": "成長プロンプトを閉じる",
+      "listFirstItemHint": "販売フローを開いて最初の出品を作成",
+      "growAudienceHint": "クリエイターアナリティクスを開いてオーディエンス成長ツールを使用"
+    },
+    "completionCta": {
+      "addName": "名前を追加",
+      "addBio": "自己紹介を追加",
+      "addPhoto": "写真を追加",
+      "addCover": "カバーを追加",
+      "editProfile": "プロフィールを編集"
+    },
+    "share": {
+      "message": "Thryftverseで@{{username}}をチェックしよう！ https://thryftverse.com/@{{username}}",
+      "title": "Thryftverseの{{name}}"
+    }
+  },
+  "galleria": {
+    "editorial": {
+      "eyebrow": "エディトリアル"
+    },
+    "collections": {
+      "eyebrow": "キュレーションコレクション",
+      "curatedBy": "{{curator}}によるキュレーション"
+    },
+    "assets": {
+      "eyebrow": "注目アセット",
+      "title": "Co-Ownハイライト"
+    },
+    "editorialList": {
+      "eyebrow": "エディトリアル",
+      "title": "ギャラリアからのストーリー"
+    },
+    "creativeTools": {
+      "eyebrow": "クリエイティブツール",
+      "title": "あなただけのものに",
+      "posterStudio": "ポスタースタジオ",
+      "posterStudioSub": "ポスター、ルック、ムードボードコラージュを作成"
+    },
+    "demo": {
+      "content": "デモコンテンツ"
+    },
+    "offline": {
+      "banner": "オフライン — キャッシュされたギャラリアコンテンツを表示中"
+    },
+    "error": {
+      "title": "ギャラリアは利用できません",
+      "retry": "再試行",
+      "loadFailed": "ギャラリアを読み込めませんでした。もう一度お試しください。"
+    },
+    "empty": {
+      "title": "ギャラリアはキュレーション中です",
+      "subtitle": "キュレーターが新しいコレクションとエディトリアルを準備しています。またすぐにご確認ください。",
+      "refresh": "更新"
+    },
+    "accessibility": {
+      "loadingCollections": "キュレーションコレクションを読み込み中",
+      "collectionsRail": "キュレーションコレクションレール",
+      "openPosterStudio": "ポスタースタジオを開く",
+      "posterStudioHint": "ポスター、ルック、ムードボードコラージュを作成",
+      "editorial": "エディトリアル: {{title}}",
+      "collection": "コレクション: {{title}}",
+      "collectionHint": "コレクションの詳細を開きます",
+      "featuredCollection": "注目コレクション: {{title}}",
+      "asset": "{{title}}、評価額 {{value}}",
+      "assetHint": "アセットの詳細を開きます"
+    }
+  },
+  "agentLedger": {
+    "header": {
+      "title": "エージェント実行",
+      "subtitle": "サーバーベースの実行記録"
+    },
+    "status": {
+      "succeeded": "成功",
+      "failed": "失敗",
+      "running": "実行中",
+      "queued": "キュー済み",
+      "cancelled": "キャンセル済み",
+      "timedOut": "タイムアウト",
+      "unknown": "不明",
+      "awaitingApproval": "承認待ち",
+      "awaitingInput": "入力待ち"
+    },
+    "error": {
+      "title": "実行記録を読み込めませんでした",
+      "retry": "再試行",
+      "loadFailed": "実行記録の読み込みに失敗しました"
+    },
+    "empty": {
+      "title": "まだエージェント実行がありません",
+      "body": "エージェントがメンション、コマンド、スケジュールで実行されると、ステータス、トークン使用量、タイミングとともにここに表示されます。"
+    },
+    "footer": {
+      "note": "以前表示されていたローカルアクティビティログは、サーバーベースの実行記録に置き換えられました。"
+    },
+    "approvals": {
+      "title": "保留中の承認",
+      "approving": "承認中…",
+      "approve": "承認",
+      "approveAction": "{{botName}}からのリクエストを承認",
+      "rejecting": "拒否中…",
+      "reject": "拒否",
+      "rejectAction": "{{botName}}からのリクエストを拒否",
+      "errorApproveTitle": "承認できませんでした",
+      "errorApproveMessage": "リクエストを承認できませんでした。",
+      "errorRejectTitle": "拒否できませんでした",
+      "errorRejectMessage": "リクエストを拒否できませんでした。"
+    },
+    "cancel": {
+      "cancelling": "キャンセル中…",
+      "cancel": "キャンセル",
+      "cancelAction": "{{botName}}の実行をキャンセル",
+      "confirmTitle": "エージェント実行をキャンセル",
+      "confirmMessage": "{{botName}}の実行をキャンセルしますか？",
+      "confirmLabel": "実行をキャンセル",
+      "errorTitle": "キャンセルできませんでした",
+      "errorMessage": "実行をキャンセルできませんでした。"
+    },
+    "tools": {
+      "search": "検索: {{searchQuery}}",
+      "listing": "出品: {{listingId}}",
+      "priceHistory": "価格履歴: {{searchQuery}}",
+      "readMessages": "{{count}}件のメッセージを読取り"
+    },
+    "time": {
+      "justNow": "たった今",
+      "minutesAgo": "{{count}}分前",
+      "hoursAgo": "{{count}}時間前",
+      "daysAgo": "{{count}}日前"
+    },
+    "tokens": {
+      "usage": "{{input}}入力 · {{output}}出力"
+    }
+  },
+  "liveStreamViewer": {
+    "lotStatus": {
+      "comingUp": "まもなく登場",
+      "openForBidding": "入札受付中",
+      "closingSoon": "まもなく終了！",
+      "sold": "£{{price}}で落札",
+      "passed": "パス（最低価格に達しません）",
+      "cancelled": "キャンセル"
+    },
+    "toast": {
+      "couldNotSend": "メッセージを送信できませんでした",
+      "bidFailed": "入札に失敗しました",
+      "bidNotAccepted": "入札は受理されませんでした",
+      "stillChecking": "確認中です — 入札が完了している可能性があります",
+      "purchaseComplete": "購入完了 — 受信トレイをご確認ください",
+      "couldNotPurchase": "購入を完了できませんでした",
+      "followDemoUnavailable": "デモモードではフォローできません",
+      "followUnavailable": "フォローできません",
+      "unfollowed": "フォロー解除しました",
+      "following": "フォロー中",
+      "followError": "フォロー状態を更新できませんでした",
+      "checkoutError": "チェックアウトを開始できませんでした。もう一度お試しください。"
+    },
+    "share": {
+      "message": "ThryftVerseで{{sellerName}}のライブ配信を見る",
+      "defaultSeller": "このセラー"
+    },
+    "connecting": {
+      "title": "配信に接続中",
+      "subtitle": "リアルタイム接続を確立しています"
+    },
+    "error": {
+      "title": "配信に接続できませんでした",
+      "subtitle": "配信が終了したか、接続が切断された可能性があります。",
+      "reconnect": "再接続",
+      "goBack": "戻る"
+    },
+    "ended": {
+      "title": "配信終了",
+      "subtitle": "ご視聴ありがとうございました",
+      "viewers": "視聴者数",
+      "lotsSold": "落札数",
+      "totalSales": "総売上",
+      "done": "完了"
+    },
+    "demo": {
+      "label": "デモ",
+      "stream": "デモ配信"
+    },
+    "video": {
+      "connecting": "配信に接続中..."
+    },
+    "seller": {
+      "following": "フォロー中",
+      "follow": "フォロー"
+    },
+    "live": {
+      "label": "ライブ"
+    },
+    "chat": {
+      "seller": "セラー",
+      "placeholder": "メッセージを送信..."
+    },
+    "product": {
+      "bids": "入札"
+    },
+    "bid": {
+      "placeBid": "入札",
+      "buyNow": "購入",
+      "buyNowFull": "今すぐ購入",
+      "completeCheckout": "チェックアウトを完了"
+    },
+    "bidSheet": {
+      "title": "入札する",
+      "currentBid": "現在の入札",
+      "minNextBid": "最低入札額",
+      "cancel": "キャンセル",
+      "close": "閉じる"
+    },
+    "unknown": {
+      "title": "入札ステータス不明",
+      "subtitle": "入札が完了している可能性があります。結果を確認できませんでした。",
+      "checkResult": "結果を確認",
+      "dismiss": "閉じる"
+    }
+  },
+  "liveShopping": {
+    "live": {
+      "label": "ライブ",
+      "demo": "デモ"
+    },
+    "header": {
+      "title": "ライブ"
+    },
+    "sections": {
+      "liveNow": "配信中",
+      "comingUp": "まもなく開始",
+      "pastEvents": "過去のイベント",
+      "streaming": "{{count}}件配信中",
+      "scheduled": "{{count}}件予定",
+      "replays": "{{count}}件のリプレイ",
+      "replay_one": "{{count}}件のリプレイ",
+      "replay_other": "{{count}}件のリプレイ"
+    },
+    "featured": {
+      "currentBid": "現在の入札"
+    },
+    "replay": {
+      "justEnded": "終了したばかり",
+      "hoursAgo": "{{count}}時間前",
+      "daysAgo": "{{count}}日前"
+    },
+    "upcoming": {
+      "waiting": "待機中",
+      "notified": "通知済み",
+      "notifyMe": "通知を受け取る",
+      "startingSoon": "まもなく開始"
+    },
+    "scheduled": {
+      "inMinutes": "あと{{minutes}}分 · {{time}}",
+      "inHours": "あと{{hours}}時間{{minutes}}分 · {{time}}",
+      "inDays": "{{day}} · {{time}}"
+    },
+    "noLive": {
+      "text": "現在配信中のセッションはありません"
+    },
+    "error": {
+      "title": "ライブセッションを読み込めませんでした",
+      "retry": "再試行",
+      "subtitle": "接続を確認してもう一度お試しください。",
+      "loadFailed": "ライブセッションの読み込みに失敗しました"
+    },
+    "empty": {
+      "title": "現在ライブセッションはありません",
+      "subtitle": "またすぐにご確認ください。またはセラーハブからご自身のセッションを開始してください。",
+      "goToSellerHub": "セラーハブへ移動"
+    }
+  },
+  "conversationalSearch": {
+    "header": {
+      "title": "ThryftVerseに質問"
+    },
+    "demo": {
+      "banner": "キーワードマッチング — 説明文からフィルターを抽出します。"
+    },
+    "offline": {
+      "banner": "オフラインです。接続して検索してください。"
+    },
+    "empty": {
+      "greetingTitle": "今日は何をお探しですか？",
+      "greetingSubtitle": "ご自身の言葉で説明してください。",
+      "suggestionsLabel": "こちらをお試しください"
+    },
+    "matched": {
+      "label": "マッチしたキーワード"
+    },
+    "actions": {
+      "viewResults": "結果を表示",
+      "refine": "絞り込む"
+    },
+    "error": {
+      "retry": "再試行",
+      "offline": "オフラインです。接続して検索してください。",
+      "generic": "エラーが発生しました。もう一度お試しください。"
+    },
+    "input": {
+      "placeholder": "お探しのものを説明してください…"
+    },
+    "browseTitle": "検索結果",
+    "filters": {
+      "brand": "ブランド: {{value}}",
+      "category": "カテゴリー: {{value}}",
+      "size": "サイズ: {{value}}",
+      "condition": "状態: {{value}}",
+      "colour": "カラー: {{value}}",
+      "style": "スタイル: {{value}}",
+      "priceLabel": "価格: ",
+      "priceUnder": "{{value}}以下",
+      "priceOver": "{{value}}以上",
+      "sustainableOnly": "サステナブルのみ"
+    },
+    "trust": {
+      "matchedKeywords": "マッチしたキーワード: {{keywords}}",
+      "noMatch": "キーワードにマッチしませんでした — 一般的な回答を表示しています"
+    }
+  },
+  "aiAgent": {
+    "header": {
+      "title": "エージェントスタジオ",
+      "subtitle": "エージェント、接続、キーを管理"
+    },
+    "demo": {
+      "banner": "キーは形式のみ検証されます — プロバイダーにライブリクエストは送信されません。"
+    },
+    "sections": {
+      "yourAgents": "あなたのエージェント",
+      "serverConnections": "サーバー接続",
+      "deviceLocalKeys": "デバイスローカルキー"
+    },
+    "status": {
+      "agents": " エージェント",
+      "connections": "接続",
+      "pendingApprovals": "{{count}}件の承認待ち",
+      "viewPending": "{{count}}件の承認待ちを表示",
+      "subtitleNone": "エージェントを作成し、プロバイダーに接続して開始してください",
+      "subtitleNoAgents": "プロバイダーに接続してから、最初のエージェントを作成してください",
+      "subtitleNoConnections": "エージェント実行を有効にするにはサーバー側でプロバイダーに接続してください",
+      "subtitleReady": "エージェントは接続済みのサーバー側キーで実行されます"
+    },
+    "agentStatus": {
+      "draft": "下書き",
+      "disabled": "無効",
+      "setupNeeded": "セットアップが必要",
+      "published": "公開済み"
+    },
+    "serverConnections": {
+      "hint": "キーは検証され、サーバー上に暗号化して保存されます。エージェント実行を有効にします。",
+      "connectServerSide": "サーバー側で接続",
+      "connectServerSideSub": "キーは検証され、サーバー上に暗号化して保存されます。",
+      "empty": "サーバー接続はまだありません。エージェントを有効にするにはプロバイダーに接続してください。"
+    },
+    "deviceLocal": {
+      "note": "検出専用 — 実行には使用されません",
+      "expandedNote": "デバイスローカルキーはモデル検出にのみ使用されます。エージェント実行はサーバー接続で有効になります。"
+    },
+    "agents": {
+      "empty": "エージェントはまだありません。専門分野、境界、コンテキストを与えるために作成してください。",
+      "create": "エージェントを作成",
+      "pauseAll": "すべてのエージェントを一時停止",
+      "noSessionsRunning": "実行中のエージェントセッションはありません",
+      "sessionsRunning": "{{count}}件のエージェントセッションが実行中",
+      "activity": "エージェントアクティビティ",
+      "activitySub": "エージェントのアクションと承認のローカルログ"
+    },
+    "connect": {
+      "cancel": "キャンセル",
+      "verifySave": "検証して保存",
+      "verifying": "検証中…",
+      "apiKey": "APIキー",
+      "labelOptional": "ラベル（任意）",
+      "baseUrl": "ベースURL（任意、カスタムプロバイダー）"
+    },
+    "confirm": {
+      "title": "この接続を削除しますか？",
+      "body": "この接続を使用するエージェントは、代替接続するまで実行できなくなります。",
+      "cancel": "キャンセル",
+      "remove": "削除",
+      "removing": "削除中…"
+    },
+    "connection": {
+      "reverify": "再検証",
+      "verifying": "検証中…",
+      "remove": "削除",
+      "removing": "削除中…",
+      "verified": "{{time}}に検証済み",
+      "notVerified": "未検証",
+      "modelsCount": "{{count}}モデル",
+      "more": "その他"
+    },
+    "health": {
+      "healthy": "正常",
+      "failed": "失敗",
+      "revoked": "取り消し済み",
+      "expired": "期限切れ",
+      "degraded": "劣化",
+      "unverified": "未検証"
+    },
+    "providerStatus": {
+      "comingSoon": "近日対応",
+      "connected": "接続済み",
+      "invalid": "無効",
+      "notConnected": "未接続"
+    },
+    "provider": {
+      "soon": "近日",
+      "comingSoon": "近日対応 — このデプロイではまだ利用できません。",
+      "modelsAvailable": "{{count}}モデル利用可能",
+      "discoveringModels": "モデルを検出中…",
+      "storedLocally": "ローカルに保存 · {{storage}}",
+      "secureStorage": "セキュアストレージ",
+      "deviceStorage": "デバイストレージ",
+      "disconnect": "切断",
+      "replaceKey": "キーを置換",
+      "noKeySaved": "キーが保存されていません。{{name}}モデルを使用するには接続してください。",
+      "connect": "接続",
+      "availableModels": "利用可能なモデル",
+      "discoveringFrom": "{{name}}からモデルを検出中…",
+      "noModelsReturned": "{{name}}からモデルが返されませんでした。",
+      "modelsAfterConnect": "{{name}}のモデルは接続後に検出されます。",
+      "testing": "テスト中…",
+      "testSave": "テストして保存"
+    },
+    "toast": {
+      "connectionSaved": "接続が検証され、保存されました。",
+      "verifyFailed": "キーを検証できませんでした。キーを確認して再試行してください。",
+      "reverified": "接続が再検証されました。",
+      "reverifyFailed": "再検証に失敗しました。",
+      "removedWithAgents": "削除されました。{{count}}件のエージェントが更新されました。",
+      "connectionRemoved": "接続が削除されました。",
+      "removeFailed": "接続を削除できませんでした。"
+    },
+    "help": {
+      "title": "エージェントにできることとできないこと",
+      "body": "エージェントは接続したプロバイダーキーを使用して返信の下書きや会話の要約を行います。ウォレットへのアクセス、支払いの実行、許可された権限外の操作はできません。サーバー側キーはサーバー上に暗号化して保存され、デバイスローカルキーはこのデバイスから外部に送信されません。各エージェントのアクションは透明性のためアクティビティ台帳に記録されます。"
+    }
+  },
+  "algorithm": {
+    "header": {
+      "title": "あなたのアルゴリズム",
+      "subtitle": "フィードを形作るシグナル"
+    },
+    "demo": {
+      "banner": "デモモードではアルゴリズムデータは例示です。"
+    },
+    "offline": {
+      "banner": "オフラインです。最後に保存したプロフィールを表示しています。"
+    },
+    "summary": {
+      "activeTopics": "アクティブなトピック",
+      "signals": "シグナル",
+      "lastUpdated": "最終更新"
+    },
+    "howItWorks": {
+      "title": "仕組み"
+    },
+    "empty": {
+      "title": "トピックはまだありません",
+      "subtitle": "フィードは一般的な人気に基づいています。おすすめを形作るには、下からトピックを追加してください。"
+    },
+    "topics": {
+      "title": "フィードに影響するトピック",
+      "caption": "トピックをタップして重みを調整または削除してください。",
+      "influenceWeight": "影響度",
+      "removeTopic": "トピックを削除",
+      "lockHint": "信頼と会計のために保持されます。フィードへの影響を一時停止できます。"
+    },
+    "signals": {
+      "title": "最近のシグナル",
+      "caption": "フィードを形作った最新のアクション。"
+    },
+    "addTopic": {
+      "title": "トピックを追加",
+      "caption": "興味のあることを教えてください。",
+      "placeholder": "例: ヴィンテージウォッチ",
+      "addBtn": "トピックを追加"
+    },
+    "error": {
+      "title": "アルゴリズムを読み込めませんでした",
+      "subtitle": "アルゴリズムプロフィールを取得できませんでした。接続を確認して再試行してください。",
+      "retry": "再試行"
+    }
+  },
+  "aiListing": {
+    "header": {
+      "title": "クイックリスト",
+      "subtitle": "写真を撮影 · 確認 · 公開"
+    },
+    "fields": {
+      "title": "タイトル",
+      "description": "説明",
+      "category": "カテゴリー",
+      "brand": "ブランド",
+      "condition": "状態",
+      "price": "価格（GBP）",
+      "tags": "タグ",
+      "materialComposition": "素材構成",
+      "weight": "重量（kg）"
+    },
+    "placeholders": {
+      "title": "例: ヴィンテージ Levi's 501 デニムジャケット",
+      "description": "商品を説明してください…",
+      "selectCategory": "カテゴリーを選択",
+      "brand": "ブランド",
+      "selectCondition": "状態を選択",
+      "price": "0.00",
+      "addTag": "タグを追加",
+      "material": "例: コットン、ポリエステル、ウール...",
+      "weight": "例: 0.45"
+    },
+    "impact": {
+      "helper": "実際の環境影響を計算するために使用されます。任意ですが推奨されます。"
+    },
+    "preview": {
+      "label": "プレビュー",
+      "completeness": "完成度"
+    },
+    "photo": {
+      "cover": "カバー",
+      "enhance": "補正",
+      "camera": "カメラ",
+      "library": "ライブラリ"
+    },
+    "suggestion": {
+      "use": "使用",
+      "suggested": "提案"
+    },
+    "picker": {
+      "selectCategory": "カテゴリーを選択",
+      "selectCondition": "状態を選択"
+    },
+    "empty": {
+      "title": "撮影してリスト",
+      "body": "上に写真を追加すると、タイトル、説明、カテゴリー、価格帯を提案します。公開前にすべてを確認・編集してください。"
+    },
+    "error": {
+      "retry": "再試行"
+    },
+    "toast": {
+      "photoEnhanced": "写真が補正されました",
+      "photoAccessTitle": "写真へのアクセスが必要です",
+      "photoAccessBody": "リスティング写真を追加するには写真へのアクセスが必要です。",
+      "pickFailedTitle": "選択に失敗しました",
+      "pickFailedBody": "写真を選択できませんでした。もう一度お試しください。",
+      "cameraAccessTitle": "カメラへのアクセスが必要です",
+      "cameraAccessBody": "リスティング写真を撮影するにはカメラへのアクセスが必要です。",
+      "captureFailedTitle": "撮影に失敗しました",
+      "captureFailedBody": "写真を撮影できませんでした。もう一度お試しください。",
+      "smartSellSavedPreviewTitle": "スマートセルルが保存されました（プレビュー）",
+      "smartSellSavedPreviewBody": "スマートセルルが完全に利用可能になると設定が有効化されます。"
+    },
+    "publish": {
+      "publishing": "公開中…",
+      "reviewPublish": "確認して公開",
+      "signInToPublish": "リスティングを公開するにはサインインしてください。",
+      "offline": "オフラインのようです。接続を確認して再試行してください。",
+      "missingFields": "公開前に少なくとも1枚の写真、タイトル、価格を追加してください。",
+      "missingCover": "公開前に確認済みのカバー画像が必要です。",
+      "failed": "公開に失敗しました。もう一度お試しください。"
+    },
+    "accessibility": {
+      "selectCategory": "カテゴリーを選択",
+      "opensCategoryPicker": "カテゴリーピッカーを開く",
+      "selectCondition": "状態を選択",
+      "opensConditionPicker": "状態ピッカーを開く",
+      "removeTag": "タグ {{tag}} を削除",
+      "removeTagHint": "このリスティングからタグ {{tag}} を削除",
+      "addTag": "タグを追加",
+      "addTagHint": "このタグをリスティングに追加",
+      "publishListing": "リスティングを公開",
+      "publishListingHint": "リスティングを公開用に送信",
+      "acceptSuggestion": "提案を承認: {{text}}",
+      "acceptSuggestionHint": "この提案をフィールドに適用",
+      "dismissSuggestion": "提案を却下",
+      "dismissSuggestionHint": "適用せずにこの提案を非表示",
+      "removePhoto": "写真を削除",
+      "removePhotoHint": "このリスティングから写真を削除",
+      "enhancePhoto": "写真を補正",
+      "enhancePhotoHint": "このリスティング画像を改善するため写真補正を開く",
+      "takePhotoWithCamera": "カメラで写真を撮影",
+      "takePhotoWithCameraHint": "写真を撮影するためカメラを開く",
+      "pickPhotosFromGallery": "ギャラリーから写真を選択",
+      "pickPhotosFromGalleryHint": "写真を選択するためギャラリーを開く",
+      "loadingSuggestions": "提案を読み込み中",
+      "loadingSuggestionsHint": "提案を生成しています",
+      "dismissError": "エラーを閉じる",
+      "dismissErrorHint": "このエラーメッセージを閉じる",
+      "retryHint": "失敗したアクションを再試行",
+      "closePicker": "ピッカーを閉じる",
+      "closePickerHint": "ピッカーシートを閉じる",
+      "selectOption": "{{option}} を選択",
+      "chooseOption": "選択されたオプションとして {{option}} を選ぶ"
+    }
+  },
+  "report": {
+    "header": {
+      "title": "報告",
+      "reportAccount": "アカウントを報告",
+      "reportGroup": "グループを報告",
+      "reportListing": "リスティングを報告",
+      "subtitle": "報告は機密扱いです"
+    },
+    "received": {
+      "title": "報告を受け付けました",
+      "body": "確認の上、結果をお知らせします。",
+      "reportId": "報告 #{{reportId}}",
+      "receivedAt": "{{time}}に受領",
+      "referenceNote": "今後のサポート対応でこの番号を参照してください。",
+      "blockUser": "このユーザーをブロック",
+      "blockedNote": "このアカウントはブロックされており、あなたに連絡できません。",
+      "done": "完了"
+    },
+    "unavailable": {
+      "title": "報告対象が利用できません",
+      "body": "この報告は有効な参照なしに開かれました。何も送信されていません。",
+      "goBack": "戻る"
+    },
+    "submit": {
+      "label": "報告を送信"
+    },
+    "intro": {
+      "title": "何が起きましたか？",
+      "body": "問題に最も近い理由を選択してください。パスワード、支払い情報、その他の機密情報は含めないでください。"
+    },
+    "details": {
+      "label": "追加詳細（任意）",
+      "placeholder": "何が起きたか説明してください",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "証拠写真（任意）",
+      "camera": "カメラ",
+      "gallery": "ギャラリー",
+      "count": "{{count}}/3枚"
+    },
+    "accessibility": {
+      "blockUser": "このユーザーをブロック",
+      "detailsInput": "報告の追加詳細",
+      "evidencePhoto": "証拠写真 {{index}}",
+      "removeEvidencePhoto": "証拠写真 {{index}} を削除",
+      "takeEvidenceCamera": "カメラで証拠写真を撮影",
+      "chooseEvidenceGallery": "ギャラリーから証拠写真を選択"
+    },
+    "reasons": {
+      "spam": "スパム",
+      "spamDesc": "望まない宣伝、詐欺、または繰り返しのメッセージ",
+      "harassment": "ハラスメント",
+      "harassmentDesc": "脅迫、虐待、または標的とした望まない連絡",
+      "hateSpeech": "ヘイトスピーチ",
+      "hateSpeechDesc": "中傷、非人間化する言葉、または保護されるグループへの攻撃",
+      "counterfeit": "模倣品",
+      "counterfeitDesc": "模倣品や誤解を招く真正性の主張",
+      "prohibited": "禁止品",
+      "prohibitedDesc": "武器、薬物、野生動物、その他の禁止カテゴリー",
+      "offPlatform": "プラットフォーム外の要求",
+      "offPlatformDesc": "ポリシーに反してThryftverse外での取引を求められた",
+      "scam": "詐欺・不正",
+      "scamDesc": "金融詐欺、フィッシング、なりすましの試み",
+      "misinformation": "誤解を招くコンテンツ",
+      "misinformationDesc": "商品に関する虚偽または誤解を招く主張",
+      "privacy": "プライバシー侵害",
+      "privacyDesc": "同意なく個人情報を公開",
+      "impersonation": "なりすまし",
+      "impersonationDesc": "他人になりすます行為",
+      "minorSafety": "未成年者の安全",
+      "minorSafetyDesc": "未成年者を危険に晒すコンテンツや行動",
+      "other": "その他",
+      "otherDesc": "モデレーションチームに何が起きたか伝えてください"
+    },
+    "toast": {
+      "attachUpTo3": "最大3枚まで写真を添付できます。",
+      "offline": "オフラインのようです。接続を確認して再試行してください。",
+      "allowPhotoAccess": "証拠をアップロードするには写真へのアクセスを許可してください。",
+      "allowCameraAccess": "証拠写真を撮影するにはカメラへのアクセスを許可してください。",
+      "photosAttached": "{{count}}枚の写真が添付されました。",
+      "uploadFailed": "写真をアップロードできませんでした。もう一度お試しください。",
+      "singleUploadFailed": "写真をアップロードできませんでした。もう一度お試しください。",
+      "photoAttached": "写真が添付されました。",
+      "reportFailed": "報告を送信できませんでした。接続を確認して再試行してください。",
+      "accountBlocked": "アカウントがブロックされました",
+      "blockFailed": "このアカウントをブロックできませんでした。もう一度お試しください。"
+    }
+  },
+  "appeal": {
+    "header": {
+      "title": "決定に異議申し立て"
+    },
+    "loading": {
+      "title": "決定を読み込み中",
+      "subtitle": "詳細を取得しています。少々お待ちください。"
+    },
+    "error": {
+      "title": "決定を読み込めませんでした",
+      "subtitle": "決定の詳細を取得できませんでした。下をタップして再試行してください。",
+      "tryAgain": "再試行",
+      "goBack": "戻る"
+    },
+    "windowClosed": {
+      "title": "異議申し立て期間が終了しました",
+      "body": "決定は6ヶ月以内に異議申し立てができます。この決定は{{date}}に通知されました。",
+      "goBack": "戻る"
+    },
+    "offline": {
+      "title": "オフラインです",
+      "subtitle": "接続を確認して再試行してください。",
+      "tryAgain": "再試行",
+      "goBack": "戻る"
+    },
+    "submitted": {
+      "title": "異議申し立てが送信されました",
+      "body": "確認の上、結果をお知らせします。",
+      "appealId": "異議申し立て #{{appealId}}",
+      "submittedAt": "{{time}}に送信",
+      "referenceNote": "今後のサポート対応でこの番号を参照してください。",
+      "done": "完了"
+    },
+    "duration": {
+      "permanent": "永久",
+      "until": "{{date}}まで"
+    },
+    "decision": {
+      "noViolation": "違反なし",
+      "restrict": "コンテンツ制限",
+      "escalate": "エスカレーション",
+      "emergencyHold": "緊急保留"
+    },
+    "grounds": {
+      "label": "この決定が誤りだと思う理由は？",
+      "placeholder": "決定を再検討すべき理由を説明してください",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "証拠写真（任意）",
+      "camera": "カメラ",
+      "gallery": "ギャラリー",
+      "count": "{{count}}/3枚"
+    },
+    "accessibility": {
+      "groundsInput": "異議申し立ての理由",
+      "evidencePhoto": "証拠写真 {{index}}",
+      "removeEvidencePhoto": "証拠写真 {{index}} を削除",
+      "takeEvidenceCamera": "カメラで証拠写真を撮影",
+      "chooseEvidenceGallery": "ギャラリーから証拠写真を選択"
+    },
+    "submit": {
+      "label": "異議申し立てを送信"
+    },
+    "toast": {
+      "attachUpTo3": "最大3枚まで写真を添付できます。",
+      "offline": "オフラインのようです。接続を確認して再試行してください。",
+      "allowPhotoAccess": "証拠をアップロードするには写真へのアクセスを許可してください。",
+      "allowCameraAccess": "証拠写真を撮影するにはカメラへのアクセスを許可してください。",
+      "photosAttached": "{{count}}枚の写真が添付されました。",
+      "uploadFailed": "写真をアップロードできませんでした。もう一度お試しください。",
+      "singleUploadFailed": "写真をアップロードできませんでした。もう一度お試しください。",
+      "photoAttached": "写真が添付されました。",
+      "appealFailed": "異議申し立てを送信できませんでした。接続を確認して再試行してください。"
+    }
+  }
+}

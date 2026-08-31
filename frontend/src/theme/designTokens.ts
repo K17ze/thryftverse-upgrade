@@ -56,6 +56,10 @@ export const Radius = {
   chat: 20,
   /** 24px - Navigation docks and genuinely dominant panels only */
   xxl: 24,
+  /** 20px - Sheet top corners (collapses EditorRadius.sheet into Radius). */
+  sheet: 20,
+  /** 18px - Floating rail / dock capsule corners (collapses EditorRadius.rail). */
+  rail: 18,
   /** 999px - Pills, avatars, floating buttons, tags */
   full: 999 } as const;
 
@@ -688,6 +692,13 @@ export interface EditorMaterialSpec {
   hairline: string;
 }
 
+/**
+ * @deprecated Glass material tokens — glass/blur effects are an AI tell on
+ * content chrome per AGENTS.md §4. The `sheet` material is no longer used
+ * by the canonical SheetContainer/GlassSheet (they use solid surfaceElevated
+ * + hairline). The `plate` and `rail` materials still have external consumers
+ * and are kept for backward compatibility; do not add new uses.
+ */
 export const EditorMaterial = {
   /** Editor sheet / tray — glass panel over media (effects, overflow, sticker). */
   sheet: {
@@ -708,7 +719,11 @@ export const EditorMaterial = {
     overlay: 'rgba(0,0,0,0.30)',
     hairline: 'rgba(255,255,255,0.14)' } } as const satisfies Record<string, EditorMaterialSpec>;
 
-/** Role-based radii for editor chrome — replaces ad-hoc Radius.sm/xl usage. */
+/**
+ * @deprecated Role-based radii for editor chrome. Collapses into `Radius`
+ * (Radius.sheet, Radius.rail). Kept for backward compatibility with external
+ * consumers; do not add new uses — use `Radius.sheet` / `Radius.rail` instead.
+ */
 export const EditorRadius = {
   /** Sheet top corners (replaces mixed 16/20). */
   sheet: 20,
@@ -757,18 +772,13 @@ export const Scrim = {
     locations: [0, 1] } } as const;
 
 // ============================================================================
-// OUTFIT BUILDER COLOURS — pastel background swatches for outfit slots
-// Used by OutfitBuilderScreen background picker. The pastels are warm-neutral
-// editorial tones; the dark entry provides a high-contrast backdrop option.
-// ============================================================================
-export const OutfitColors = {
-  pastels: ['#F5F5F0', '#E8E4DF', '#D4C9BE', '#C9D9E8', '#D9D0E1', '#E8D4D4', '#D4E8D6'],
-  dark: '#1A1A1A' } as const;
-
-// ============================================================================
 // COIN GRADIENT — 1ZE coin icon gradient
 // The signature gold gradient for the OnezeCoinIcon component. Replaces
 // hardcoded inline hex values with a single source of truth.
+/**
+ * @deprecated Coin gradient — has one external consumer (OnezeCoinIcon).
+ * Kept for backward compatibility; do not add new uses.
+ */
 // ============================================================================
 export const CoinGradient = {
   start: '#f4d27b',

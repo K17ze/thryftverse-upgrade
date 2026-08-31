@@ -4,6 +4,7 @@ import { Pressable } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, TypeStyles, Radius, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 export type MessagingSegment = 'all' | 'buying' | 'selling' | 'requests';
 
@@ -22,15 +23,16 @@ export function MessagingSegmentRail({
   buyingCount = 0,
   sellingCount = 0 }: MessagingSegmentRailProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Only 3 scopes are visible in the first viewport (Primary, Buying,
   // Selling). Additional classifiers (Requests, Unread, Archived, Groups)
   // are surfaced behind a filter icon in the InboxScreen header.
   const segments: { key: MessagingSegment; label: string; badge?: number }[] = [
-    { key: 'all', label: 'Primary' },
-    { key: 'buying', label: 'Buying', badge: buyingCount > 0 ? buyingCount : undefined },
-    { key: 'selling', label: 'Selling', badge: sellingCount > 0 ? sellingCount : undefined },
+    { key: 'all', label: t('inbox.primary') },
+    { key: 'buying', label: t('inbox.buying'), badge: buyingCount > 0 ? buyingCount : undefined },
+    { key: 'selling', label: t('inbox.selling'), badge: sellingCount > 0 ? sellingCount : undefined },
   ];
 
   return (

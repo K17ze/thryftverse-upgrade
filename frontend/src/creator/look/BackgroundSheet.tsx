@@ -436,7 +436,6 @@ export function BackgroundSheet({
         {/* ── Solid ── */}
         {draft.type === 'color' && (
           <View>
-            <Text style={styles.sectionLabel}>Neutral colours</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -455,29 +454,11 @@ export function BackgroundSheet({
                     <View
                       style={[
                         styles.swatch,
-                        { borderColor: isActive ? colors.brand : colors.border },
+                        isActive && styles.swatchActive,
                       ]}
                     >
                       <View style={[styles.swatchFill, { backgroundColor: sw.value }]} />
-                      {isActive && (
-                        <View style={styles.swatchCheck}>
-                          <Ionicons
-                            name="checkmark"
-                            size={IconGrammar.badge}
-                            color={sw.value === '#ffffff' || sw.value === '#f5f5f5' || sw.value === '#e8e8e8' ? '#000' : '#fff'}
-                          />
-                        </View>
-                      )}
                     </View>
-                    <Text
-                      style={[
-                        styles.swatchLabel,
-                        { color: isActive ? colors.brand : colors.textSecondary },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {sw.label}
-                    </Text>
                   </Pressable>
                 );
               })}
@@ -501,7 +482,6 @@ export function BackgroundSheet({
         {/* ── Gradient ── */}
         {draft.type === 'gradient' && (
           <View>
-            <Text style={styles.sectionLabel}>Presets</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -523,7 +503,7 @@ export function BackgroundSheet({
                     <View
                       style={[
                         styles.swatch,
-                        { borderColor: isActive ? colors.brand : colors.border },
+                        isActive && styles.swatchActive,
                       ]}
                     >
                       <LinearGradient
@@ -532,27 +512,12 @@ export function BackgroundSheet({
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
                       />
-                      {isActive && (
-                        <View style={styles.swatchCheck}>
-                          <Ionicons name="checkmark" size={IconGrammar.badge} color="#fff" />
-                        </View>
-                      )}
                     </View>
-                    <Text
-                      style={[
-                        styles.swatchLabel,
-                        { color: isActive ? colors.brand : colors.textSecondary },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {g.label}
-                    </Text>
                   </Pressable>
                 );
               })}
             </ScrollView>
 
-            <Text style={styles.sectionLabel}>Custom</Text>
             <GradientEditor
               gradient={gradientDef}
               onChange={handleGradientChange}
@@ -795,11 +760,11 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm },
+      height: 44,
+      paddingHorizontal: Space.md },
     title: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.sectionTitle.size },
+      fontFamily: Typography.family.regular,
+      fontSize: 14 },
     closeBtn: {
       width: 36,
       height: 36,
@@ -838,36 +803,23 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: 0.5,
       marginTop: Space.sm,
       marginBottom: Space.xs },
-    // ── Swatches ──
+    // ── Swatches — larger, no labels, brand ring on selected ──
     swatchRow: {
       gap: Space.sm,
-      paddingVertical: Space.xs },
+      paddingVertical: Space.sm },
     swatchWrap: {
-      alignItems: 'center',
-      gap: 6 },
+      alignItems: 'center' },
     swatch: {
-      width: 64,
-      height: 80,
-      borderRadius: Radius.lg,
-      borderWidth: 2,
+      width: 56,
+      height: 56,
+      borderRadius: Radius.md,
       overflow: 'hidden' },
+    swatchActive: {
+      borderWidth: Stroke.emphasis,
+      borderColor: colors.brand },
     swatchFill: {
       width: '100%',
       height: '100%' },
-    swatchCheck: {
-      position: 'absolute',
-      bottom: 6,
-      right: 6,
-      width: 20,
-      height: 20,
-      borderRadius: Radius.full,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      justifyContent: 'center',
-      alignItems: 'center' },
-    swatchLabel: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.meta.size,
-      letterSpacing: 0.1 },
     // ── Custom color picker section ──
     colorPickerSection: {
       marginTop: Space.md },

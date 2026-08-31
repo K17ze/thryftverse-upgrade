@@ -1,25 +1,19 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-  withTiming,
-  withSequence } from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
-import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useCreator } from './CreatorContext';
 import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
-import { withAlpha } from '../components/poster/shared/colorUtils';
-import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { ToolButton, type RailTool } from './dock/ToolButton';
 import type { CreatorLayer } from './composition';
 import type { AssetPickerMode } from './CreatorAssetPicker';
@@ -29,10 +23,6 @@ import type { AssetPickerMode } from './CreatorAssetPicker';
 // Primary tools (Media, Text) get filled icon backgrounds.
 // Secondary tools (stickers) get outline icons only.
 // Groups are separated by subtle dividers, not flat scrolly bars.
-
-interface ToolGroup {
-  tools: RailTool[];
-}
 
 export interface CreatorToolDockProps {
   selectedLayer: CreatorLayer | null;
@@ -77,11 +67,9 @@ export function CreatorToolDock({
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const { spring } = useMotionConfig();
   const isLook = (documentType ?? document.type) === 'look';
   const isPoster = (documentType ?? document.type) === 'poster';
   const [secondaryExpanded, setSecondaryExpanded] = useState(false);
-  const [hoveredTool, setHoveredTool] = useState<string | null>(null);
   const [secondaryWidth, setSecondaryWidth] = useState(0);
 
   // ── Shared values for animations ──────────────────────────────────
@@ -105,37 +93,35 @@ export function CreatorToolDock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Refined context transition: subtle opacity refresh (0.5→1, 150ms) ──
+  // ── Refined context transition: subtle opacity refresh (0.7→1, 120ms) ──
   // When the tool context changes (selection mode vs idle), the tool list
-  // fades briefly then restores — a quiet "refresh" feel without the old
-  // jarring slide. Respects reduceMotion.
+  // fades in quietly — no flicker, no decorative slide.
   useEffect(() => {
     if (prevSelectionModeRef.current === isSelectionMode) return;
     prevSelectionModeRef.current = isSelectionMode;
     if (reduceMotion) {
       toolListOpacity.value = 1;
     } else {
-      toolListOpacity.value = withSequence(
-        withTiming(0.5, { duration: 75 }),
-        withTiming(1, { duration: 150 }),
-      );
+      toolListOpacity.value = 0.7;
+      toolListOpacity.value = withTiming(1, { duration: 120 });
     }
   }, [isSelectionMode, reduceMotion, toolListOpacity]);
 
   // ── Secondary expand/collapse animation ───────────────────────────
-  // Uses the lift spring token — playful but controlled card lift motion.
+  // Timing-based expand/collapse (150ms ease-out) — no spring overshoot
+  // for utility UI per AGENTS.md §4 / Design.md snap physics.
   const toggleSecondary = useCallback(() => {
     setSecondaryExpanded((prev) => {
       const next = !prev;
       if (reduceMotion) {
         secondaryExpandSV.value = next ? 1 : 0;
       } else {
-        secondaryExpandSV.value = withSpring(next ? 1 : 0, spring.lift);
+        secondaryExpandSV.value = withTiming(next ? 1 : 0, { duration: 150 });
       }
       haptic.light();
       return next;
     });
-  }, [reduceMotion, secondaryExpandSV, haptic, spring]);
+  }, [reduceMotion, secondaryExpandSV, haptic]);
 
   // Build contextual tools based on selection state and mode.
   // Poster mode uses an Instagram Stories tool set; Look mode keeps the
@@ -145,9 +131,9 @@ export function CreatorToolDock({
     : buildDefaultTools(isLook, isPoster, onToolPress, onAddPage, onLayoutPresets);
 
   // Split into primary / secondary groups so a divider can separate them.
-  // In selection mode every tool is secondary (no primary flag), so no divider.
-  const primaryTools = tools.filter(t => t.primary);
-  const secondaryTools = tools.filter(t => !t.primary);
+  // In selection mode every tool is secondary (no primary weight), so no divider.
+  const primaryTools = tools.filter(t => t.weight === 'primary');
+  const secondaryTools = tools.filter(t => t.weight !== 'primary');
   const hasDivider = !isSelectionMode && primaryTools.length > 0 && secondaryTools.length > 0;
   // In selection mode, show all tools directly (no expand/collapse needed).
   const showSecondaryToggle = !isSelectionMode && secondaryTools.length > 0;
@@ -166,65 +152,32 @@ export function CreatorToolDock({
     onMore();
   }, [haptic, onMore]);
 
-  const handleLongPressTooltip = useCallback((label: string) => {
-    setHoveredTool(label);
-  }, []);
-
-  // ── Mode-aware visual hierarchy ────────────────────────────────────
-  // Instagram-style: primary tools are larger (46pt) with filled backgrounds
-  // and gradient rings; secondary tools are smaller (40pt), transparent.
-  // Selection mode collapses to a single compact tier (44pt).
-  const primarySize = 46;
-  const secondarySize = 40;
-  const selectionSize = 44;
-  const primaryIconSize = 24;
-  const secondaryIconSize = 22;
-  const selectionIconSize = 22;
-  const toolGap = isSelectionMode ? Space.xs : Space.sm;
+  const toolSize = 44;
+  const toolIconSize = 23;
+  const toolGap = Space.sm;
 
   const labelColor = colors.textSecondary;
-  const dangerIconColor = colors.danger;
-  const dangerLabelColor = colors.danger;
 
-  const getToolBg = (tool: RailTool): string => {
-    if (tool.danger) return 'transparent';
-    if (isSelectionMode) return colors.surface;
-    return tool.primary ? colors.brand : 'transparent';
-  };
-
-  const getToolIconColor = (tool: RailTool): string => {
-    if (tool.danger) return dangerIconColor;
-    if (isSelectionMode) return colors.textPrimary;
-    return tool.primary ? colors.textInverse : colors.textSecondary;
-  };
-
-  const getToolSize = (tool: RailTool): number => {
-    if (isSelectionMode) return selectionSize;
-    return tool.primary ? primarySize : secondarySize;
-  };
-
-  const getToolIconSize = (tool: RailTool): number => {
-    if (isSelectionMode) return selectionIconSize;
-    return tool.primary ? primaryIconSize : secondaryIconSize;
-  };
-
-  // Render a single tool button using the extracted ToolButton component.
   const renderTool = (tool: RailTool) => {
-    const isActive = !!tool.primary && !isSelectionMode && !tool.danger;
+    const isPrimary = tool.weight === 'primary';
+    const bgColor = isPrimary ? colors.brand : 'transparent';
+    const iconColor = isPrimary
+      ? colors.textInverse
+      : tool.danger
+        ? colors.danger
+        : colors.textPrimary;
     return (
       <ToolButton
         key={tool.label}
         tool={tool}
-        isActive={isActive}
-        size={getToolSize(tool)}
-        iconSize={getToolIconSize(tool)}
-        iconColor={getToolIconColor(tool)}
-        bgColor={getToolBg(tool)}
+        size={toolSize}
+        iconSize={toolIconSize}
+        iconColor={iconColor}
+        bgColor={bgColor}
         labelColor={labelColor}
         floating={floating}
         colors={colors}
         onPress={() => handleToolPress(tool)}
-        onLongPressTooltip={handleLongPressTooltip}
       />
     );
   };
@@ -268,7 +221,7 @@ export function CreatorToolDock({
           <>
             {/* Subtle visual separator between primary and secondary groups —
                 a short hairline, not a full divider line. */}
-            <View style={[styles.groupDivider, { backgroundColor: floating ? colors.glassBorder : colors.border }]} />
+            <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
             {/* Expand/collapse toggle for secondary tools — refined chevron
                 with a generous 44pt hit area showing only a 20pt glyph. */}
             <PressScale
@@ -317,24 +270,10 @@ export function CreatorToolDock({
       ]}
     >
       {floating ? (
-        <LiquidGlassBackdrop
-          intensity={60}
-          tint="dark"
-          absoluteFill={false}
-          style={[
-            styles.blurPill,
-            {
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: colors.glassBorder,
-              shadowColor: colors.shadow,
-              shadowOpacity: 0.15,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 6,
-              minHeight: 64,
-              paddingHorizontal: Space.sm },
-          ]}
-        >
+        // Floating dock — transparent background with a 1px top hairline.
+        // No "blur pill" card; the tools float directly over the canvas.
+        <View style={styles.floatingToolWrap}>
+          <View style={[styles.hairlineTop, { backgroundColor: colors.border }]} />
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -344,7 +283,7 @@ export function CreatorToolDock({
               {renderToolList()}
             </Reanimated.View>
           </ScrollView>
-        </LiquidGlassBackdrop>
+        </View>
       ) : (
         <View style={styles.scrollWrap}>
           <ScrollView
@@ -356,17 +295,11 @@ export function CreatorToolDock({
               {renderToolList()}
             </Reanimated.View>
           </ScrollView>
-          {/* Subtle right-edge gradient fade indicating horizontal overflow */}
-          <LinearGradient
-            pointerEvents="none"
-            colors={[withAlpha(colors.surface, 0), colors.surface]}
-            style={styles.fadeRight}
-          />
         </View>
       )}
 
       {/* Primary action — separated from editing tools */}
-      <View style={[styles.actions, { borderLeftColor: floating ? colors.glassBorder : colors.border }]}>
+      <View style={[styles.actions, { borderLeftColor: colors.border }]}>
         <PressScale
           onPress={handleMore}
           style={styles.actionBtn}
@@ -389,12 +322,6 @@ export function CreatorToolDock({
         </PressScale>
       </View>
 
-      {/* Long-press tooltip label — centered below the dock (legacy fallback) */}
-      {hoveredTool ? (
-        <Text style={[styles.hoverLabel, { color: floating ? colors.textInverse : colors.textSecondary }]} numberOfLines={1}>
-          {hoveredTool}
-        </Text>
-      ) : null}
     </Reanimated.View>
   );
 }
@@ -422,8 +349,8 @@ function buildDefaultTools(
     // and Music are preserved behind "more" rather than removed — they
     // are real creator capabilities useful for collage composition.
     return [
-      { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
-      { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
+      { icon: 'images', label: 'Media', action: () => onToolPress('media'), weight: 'primary' as const },
+      { icon: 'text', label: 'Text', action: () => onToolPress('text'), weight: 'primary' as const },
       { icon: 'crop-outline', label: 'Crop', action: () => onToolPress('media') },
       { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
       { icon: 'color-fill-outline', label: 'Background', action: () => onToolPress('shape') },
@@ -446,10 +373,10 @@ function buildDefaultTools(
     // violated Hick's Law and read as an AI-assembled toolbar.
     return [
       // ── Primary (always visible) ──
-      { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
-      { icon: 'happy-outline', label: 'Stickers', action: () => onToolPress('stickers'), primary: true },
-      { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw'), primary: true },
-      { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music'), primary: true },
+      { icon: 'text', label: 'Text', action: () => onToolPress('text'), weight: 'primary' as const },
+      { icon: 'happy-outline', label: 'Stickers', action: () => onToolPress('stickers'), weight: 'primary' as const },
+      { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw'), weight: 'primary' as const },
+      { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music'), weight: 'primary' as const },
       // ── Secondary ──
       // Only Item (product tagging) and Add Page remain at the dock level —
       // they are distinct creative intents, not sticker variants. Everything
@@ -460,9 +387,9 @@ function buildDefaultTools(
   }
   // Fallback (no document type resolved) — keep the legacy Poster set.
   return [
-    { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
-    { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
-    { icon: 'happy-outline', label: 'Stickers', action: () => onToolPress('stickers'), primary: true },
+    { icon: 'images', label: 'Media', action: () => onToolPress('media'), weight: 'primary' as const },
+    { icon: 'text', label: 'Text', action: () => onToolPress('text'), weight: 'primary' as const },
+    { icon: 'happy-outline', label: 'Stickers', action: () => onToolPress('stickers'), weight: 'primary' as const },
     { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
     { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
     ...(onAddPage ? [{ icon: 'add-circle-outline' as const, label: 'Add Page', action: onAddPage }] : []),
@@ -481,9 +408,11 @@ function buildSelectionTools(
 ): RailTool[] {
   const tools: RailTool[] = [];
 
-  // Type-specific primary action — different per mode
+  // Type-specific primary action — different per mode.
+  // The first type-specific edit action is weighted primary so it gets a
+  // filled backplate and leads the selection tool set.
   if (layer.type === 'text') {
-    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'media') {
     if (isLook) {
       // Look media selection: swap, remove background/refine cutout, flip.
@@ -492,7 +421,8 @@ function buildSelectionTools(
       tools.push({
         icon: 'swap-horizontal-outline',
         label: 'Swap',
-        action: () => onEditLayer(layer) });
+        action: () => onEditLayer(layer),
+        weight: 'primary' as const });
       tools.push({
         icon: 'crop-outline',
         label: 'Crop',
@@ -503,43 +433,43 @@ function buildSelectionTools(
         action: () => (onCropLayer ? onCropLayer(layer) : onEditLayer(layer)) });
     } else {
       // Poster media: replace + trim (story-specific)
-      tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer) });
+      tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer), weight: 'primary' as const });
       if (layer.payload && 'mediaType' in layer.payload && layer.payload.mediaType === 'video') {
         tools.push({ icon: 'cut-outline', label: 'Trim', action: () => onEditLayer(layer) });
       }
     }
   } else if (layer.type === 'product') {
-    tools.push({ icon: 'pricetag-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'pricetag-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'mention') {
-    tools.push({ icon: 'person-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'person-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'vote') {
-    tools.push({ icon: 'stats-chart-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'stats-chart-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'quiz') {
-    tools.push({ icon: 'help-circle-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'help-circle-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'question') {
-    tools.push({ icon: 'chatbubble-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'chatbubble-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'emojiSlider') {
-    tools.push({ icon: 'happy-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'happy-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'countdown') {
-    tools.push({ icon: 'time-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'time-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'draw') {
-    tools.push({ icon: 'brush-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'brush-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'gif') {
-    tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'music') {
-    tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'swap-horizontal-outline', label: 'Replace', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'link') {
-    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'location') {
-    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'hashtag') {
-    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'time') {
-    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'weather') {
-    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else {
-    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
+    tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   }
 
   // Layer ordering
@@ -569,25 +499,18 @@ const styles = StyleSheet.create({
   containerFloating: {
     borderTopWidth: 0,
     backgroundColor: 'transparent' },
-  blurPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    marginHorizontal: Space.xs },
-  // Wraps the horizontal ScrollView so a right-edge fade can overlay it.
+  floatingToolWrap: {
+    flexDirection: 'column',
+    paddingHorizontal: Space.sm,
+  },
+  hairlineTop: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: Space.xs,
+  },
   scrollWrap: {
     flex: 1,
-    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center' },
-  // Subtle gradient fade on the right edge signalling horizontal overflow.
-  fadeRight: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: 28 },
   scrollContent: {
     alignItems: 'center',
     paddingHorizontal: Space.xs },
@@ -622,16 +545,6 @@ const styles = StyleSheet.create({
     width: StyleSheet.hairlineWidth,
     height: 20,
     marginHorizontal: Space.xs },
-  // Long-press tooltip label — centered below the dock (legacy fallback).
-  hoverLabel: {
-    position: 'absolute',
-    bottom: 2,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.1 },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -652,5 +565,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center' },
   publishBtnText: {
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     fontSize: TypographyV2.bodyStrong.size } });

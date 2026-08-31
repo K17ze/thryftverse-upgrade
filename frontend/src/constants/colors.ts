@@ -78,11 +78,15 @@ export const DARK_COLORS = {
   commerceTrust: '#4A7AC4',
   commerceTrustSubtle: 'rgba(74,122,196,0.10)',
   discoverySubtle: 'rgba(184,85,102,0.12)',
+  // @deprecated Premium accent — many external consumers remain. Do not add
+  // new uses; creator surfaces should use neutral tokens per AGENTS.md §4.
   bronzeSubtle: 'rgba(138,106,63,0.12)',
 
-  // Premium accent from Design.md proposed-luxury. Used sparingly for
-  // verified status, authenticated value, or curated distinction.
+  // @deprecated Premium accent from Design.md proposed-luxury. Used sparingly
+  // for verified status, authenticated value, or curated distinction. Do not
+  // add new uses; creator surfaces should use neutral tokens per AGENTS.md §4.
   antiqueGold: '#C9A46A',
+  /** @deprecated Premium accent — many external consumers remain. */
   bronze: '#8A6A3F',
   // Text over media scrims — always white regardless of theme
   scrimTextPrimary: '#FFFFFF',
@@ -109,7 +113,10 @@ export const DARK_COLORS = {
   tabBar: '#0A0A0A',
   header: '#0A0A0A',
   shadow: '#000000',
+  // @deprecated Glass/blur surface tokens — many external consumers remain.
+  // Do not add new uses; use surfaceElevated + hairline per AGENTS.md §4.
   glassBg: 'rgba(255,255,255,0.04)',
+  /** @deprecated Glass/blur border — use border (hairline) per AGENTS.md §4. */
   glassBorder: 'rgba(255,255,255,0.08)',
 
   // Outfit builder background swatches — muted darks for dark mode.
@@ -186,10 +193,14 @@ export const LIGHT_COLORS = {
   commerceTrust: '#06489A',
   commerceTrustSubtle: 'rgba(6,72,154,0.08)',
   discoverySubtle: 'rgba(123,14,30,0.10)',
+  // @deprecated Premium accent — many external consumers remain. Do not add
+  // new uses; creator surfaces should use neutral tokens per AGENTS.md §4.
   bronzeSubtle: 'rgba(138,106,63,0.10)',
 
-  // Premium accents — used sparingly.
+  // @deprecated Premium accents — used sparingly. Do not add new uses;
+  // creator surfaces should use neutral tokens per AGENTS.md §4.
   antiqueGold: '#C9A46A',
+  /** @deprecated Premium accent — many external consumers remain. */
   bronze: '#8A6A3F',
   // Text over media scrims — always white regardless of theme
   scrimTextPrimary: '#FFFFFF',
@@ -216,7 +227,10 @@ export const LIGHT_COLORS = {
   tabBar: '#FFFFFF',
   header: '#FFFFFF',
   shadow: '#000000',
+  // @deprecated Glass/blur surface tokens — many external consumers remain.
+  // Do not add new uses; use surfaceElevated + hairline per AGENTS.md §4.
   glassBg: 'rgba(0,0,0,0.04)',
+  /** @deprecated Glass/blur border — use border (hairline) per AGENTS.md §4. */
   glassBorder: 'rgba(0,0,0,0.08)',
 
   // Outfit builder background swatches — warm-paper neutrals for light mode.
@@ -253,9 +267,12 @@ export const LIGHT_COLORS = {
 // - accentGold, accentGoldPress, accentGoldMuted (consolidated)
 // - Multiple border variants
 // - Overlay colors (use opacity on backgrounds instead)
-// - Glass/blur surface colors
 // - Tab bar specific colors (use text hierarchy)
 // - sold, star colors (use text or brand)
+//
+// KEPT (deprecated, many external consumers remain — do not add new uses):
+// - glassBg, glassBorder (glass/blur surface colors — use surfaceElevated + hairline)
+// - antiqueGold, bronze, bronzeSubtle (premium accents — use neutral tokens)
 
 type ThemeColors = {
   [Key in keyof typeof DARK_COLORS]: typeof DARK_COLORS[Key] extends string

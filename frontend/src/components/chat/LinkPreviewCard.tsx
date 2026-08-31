@@ -7,6 +7,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis, Meta } from '../ui/Text';
 import { CachedImage } from '../CachedImage';
 import * as WebBrowser from 'expo-web-browser';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface LinkPreviewData {
   title?: string;
@@ -36,6 +37,7 @@ export function LinkPreviewCard({
   style,
 }: LinkPreviewCardProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [localPreview, setLocalPreview] = useState<LinkPreviewData | undefined>(preview);
 
@@ -66,7 +68,7 @@ export function LinkPreviewCard({
       style={[styles.container, style]}
       onPress={handlePress}
       accessibilityRole="link"
-      accessibilityLabel={`Open link to ${localPreview.domain}`}
+      accessibilityLabel={t('conversation.openLink', { domain: localPreview.domain })}
       activeOpacity={0.7}
       scaleValue={0.98}
       hapticFeedback="light"

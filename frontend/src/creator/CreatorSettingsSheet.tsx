@@ -112,37 +112,34 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
           />
 
           {/* Shared: Accessibility description */}
-          <Text style={styles.sectionLabel}>Accessibility Description</Text>
+          <Text style={styles.sectionLabel}>Alt Text</Text>
           <TextInput
             style={[inputStyle('accessibility'), styles.textArea]}
             value={accessibilityDesc}
             onChangeText={setAccessibilityDesc}
             onFocus={() => setFocusedField('accessibility')}
             onBlur={() => { setFocusedField(null); handleSaveAccessibility(); }}
-            placeholder="Describe this content for screen readers..."
+            placeholder="Describe for screen readers…"
             placeholderTextColor={colors.textMuted}
             multiline
             accessibilityLabel="Accessibility description"
           />
 
-          {/* Shared: Remix attribution */}
+          {/* Shared: Recreate attribution — shows the source composition this
+              look was recreated from. Internal metadata key remains
+              sourceDocumentId; the user-facing label is "Recreate Source". */}
           {document.metadata.sourceDocumentId && (
             <>
-              <Text style={styles.sectionLabel}>Remix Attribution</Text>
+              <Text style={styles.sectionLabel}>Recreate Source</Text>
               <View style={styles.attributionBox}>
                 <Ionicons name="git-branch-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
                 <View style={styles.attributionContent}>
                   <Text style={styles.attributionText}>
-                    Remixed from another {document.type}
+                    Recreated from a {document.type}
                   </Text>
                   <Text style={styles.attributionDetail}>
                     Source: {document.metadata.sourceDocumentId}
                   </Text>
-                  {document.metadata.sourceCreatorId && (
-                    <Text style={styles.attributionDetail}>
-                      Original creator: {document.metadata.sourceCreatorId}
-                    </Text>
-                  )}
                 </View>
               </View>
             </>
@@ -162,14 +159,14 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 />
               </View>
 
-              <Text style={styles.sectionLabel}>Remix Permission</Text>
+              <Text style={styles.sectionLabel}>Recreate Permission</Text>
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>Allow others to remix</Text>
+                <Text style={styles.rowLabel}>Allow recreate</Text>
                 <Switch
                   value={document.metadata.allowRemix ?? false}
                   onValueChange={(v) => updateMetadata({ allowRemix: v })}
                   trackColor={{ false: colors.border, true: colors.brand }}
-                  accessibilityLabel="Allow remix"
+                  accessibilityLabel="Allow recreate"
                 />
               </View>
             </>
@@ -191,7 +188,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
 
               <Text style={styles.sectionLabel}>Allow Replies</Text>
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>Enable replies</Text>
+                <Text style={styles.rowLabel}>Replies</Text>
                 <Switch
                   value={document.metadata.allowReplies ?? true}
                   onValueChange={(v) => updateMetadata({ allowReplies: v })}
@@ -202,7 +199,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
 
               <Text style={styles.sectionLabel}>Allow Reactions</Text>
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>Enable reactions</Text>
+                <Text style={styles.rowLabel}>Reactions</Text>
                 <Switch
                   value={document.metadata.allowReactions ?? true}
                   onValueChange={(v) => updateMetadata({ allowReactions: v })}
@@ -328,7 +325,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
               accessibilityRole="button"
             >
               <Ionicons name="save-outline" size={IconGrammar.metadata} color={colors.surface} />
-              <Text style={styles.saveBtnText}>Save Draft</Text>
+              <Text style={styles.saveBtnText}>Save</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -389,8 +386,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginTop: Space.sm,
     marginBottom: Space.xs },
   input: {

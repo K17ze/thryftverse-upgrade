@@ -94,6 +94,12 @@ export class UploadManager {
   /** In-memory mirror of persisted jobs for synchronous access. */
   private jobsCache: Map<string, UploadJob> = new Map();
   private processing = false;
+  /** Timestamp (ms) of the last progress persist to the job store. Progress
+   *  events fire very frequently; throttling the AsyncStorage write to at
+   *  most once every 500ms avoids a storm of read-modify-write cycles that
+   *  can starve the JS thread on large multipart uploads. The in-memory
+   *  cache is still updated on every event so the UI stays responsive. */
+  private lastProgressPersistMs = 0;
   /** Multipart uploader (lazy-initialised). */
   private multipartUploader: MultipartUploader;
   /** Whether multipart transport is enabled. Defaults to true — the backend
@@ -157,6 +163,7 @@ export class UploadManager {
         await this.persistState(existingJob.id, {
           status: 'queued',
           error: undefined,
+          retries: 0,
         });
         void this.processQueue();
         return existingJob.id;
@@ -171,6 +178,14 @@ export class UploadManager {
 
     // Resolve real file size. Never 0.
     const sizeBytes = await this.resolveFileSize(params.localPath);
+
+    // Pre-validate against the maximum allowed file size. Failing early
+    // here avoids wasting a presign round-trip (and potentially starting a
+    // multipart session) for a file that can never be accepted.
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+    if (sizeBytes > MAX_FILE_SIZE) {
+      throw new Error('File too large. Maximum size is 500MB.');
+    }
 
     const now = Date.now();
     const job: UploadJob = {
@@ -234,12 +249,18 @@ export class UploadManager {
 
   /** Resume a paused or failed job by re-queueing it for processing. */
   async resumeJob(jobId: string): Promise<void> {
+    const current = this.jobsCache.get(jobId);
+    if (current?.session) {
+      const session = { ...current.session, presignedUrls: {} };
+      this.jobsCache.set(jobId, { ...current, session });
+      await this.jobStore.updateJob(jobId, { session });
+    }
     await this.persistState(jobId, { status: 'queued', error: undefined });
     void this.processQueue();
   }
 
   /** Cancel a job: abort any in-flight upload, abort multipart session, and remove from the store. */
-  cancelJob(jobId: string): void {
+  async cancelJob(jobId: string): Promise<void> {
     const controller = this.activeUploads.get(jobId);
     if (controller) {
       controller.abort();
@@ -248,10 +269,10 @@ export class UploadManager {
     // Abort the multipart session if one exists.
     const job = this.jobsCache.get(jobId);
     if (job?.session) {
-      void this.multipartUploader.abort(job.session);
+      await this.multipartUploader.abort(job.session);
     }
     this.jobsCache.delete(jobId);
-    void this.jobStore.removeJob(jobId);
+    await this.jobStore.removeJob(jobId);
   }
 
   /** Retry a failed job: reset retry counter and re-queue. */
@@ -342,6 +363,22 @@ export class UploadManager {
   // ── Internals ─────────────────────────────────────────────────────
 
   /**
+   * Remove all completed/failed jobs for a project from the job store.
+   * Called by the publish sheet after a successful publish so that stale
+   * terminal jobs don't accumulate in AsyncStorage across sessions.
+   * In-progress jobs are left untouched.
+   */
+  async clearProjectJobs(projectId: string): Promise<void> {
+    const jobs = await this.getJobs(projectId);
+    for (const job of jobs) {
+      if (job.status === 'completed' || job.status === 'failed') {
+        this.jobsCache.delete(job.id);
+        await this.jobStore.removeJob(job.id);
+      }
+    }
+  }
+
+  /**
    * Process a single job: emit `jobStarted`, run the upload with retry,
    * and transition to `completed` or `failed`.
    */
@@ -368,6 +405,14 @@ export class UploadManager {
         if (done) this.emit({ type: 'jobComplete', job: done });
         await this.maybeEmitAllComplete(job.projectId);
       } else {
+        // If the job was paused while the upload was in flight (pauseJob
+        // aborted the controller), the catch block below already set the
+        // status to 'paused'. Don't overwrite it with 'failed' here — the
+        // user intentionally paused, not the network failing.
+        const current = this.jobsCache.get(job.id);
+        if (current?.status === 'paused') {
+          return;
+        }
         await this.persistState(job.id, {
           status: 'failed',
           error: result.error ?? 'Unknown upload error',
@@ -376,6 +421,21 @@ export class UploadManager {
         if (failed) {
           this.emit({ type: 'jobFailed', job: failed, error: failed.error ?? 'Unknown upload error' });
         }
+      }
+    } catch (err: unknown) {
+      // pauseJob calls controller.abort() and sets status to 'paused'.
+      // The AbortError surfaces here — check the current job status before
+      // marking it failed. If the user paused, leave the paused status
+      // intact and exit quietly.
+      const current = this.jobsCache.get(job.id);
+      if (current?.status === 'paused') {
+        return;
+      }
+      const message = err instanceof Error ? err.message : 'Unknown upload error';
+      await this.persistState(job.id, { status: 'failed', error: message });
+      const failed = this.jobsCache.get(job.id);
+      if (failed) {
+        this.emit({ type: 'jobFailed', job: failed, error: message });
       }
     } finally {
       this.activeUploads.delete(job.id);
@@ -394,11 +454,16 @@ export class UploadManager {
     signal: AbortSignal,
   ): Promise<UploadAttemptResult> {
     let lastError: string | undefined;
-    for (let attempt = job.retries; attempt < job.maxRetries; attempt++) {
+    // Always loop from 0 to maxRetries. Using job.retries as the start
+    // meant resumed jobs got fewer retries than fresh ones — a job that
+    // had already used 3 of 5 retries would only get 2 more on resume.
+    // The retry counter is persisted below purely for telemetry/resume
+    // visibility, not for controlling the loop bound.
+    for (let attempt = 0; attempt < job.maxRetries; attempt++) {
       if (signal.aborted) {
         return { ok: false, error: 'Aborted' };
       }
-      // Persist retry counter for resume correctness.
+      // Persist retry counter for telemetry / resume visibility.
       await this.persistState(job.id, { retries: attempt });
 
       try {
@@ -565,16 +630,31 @@ export class UploadManager {
           ? Math.min(1, uploadedBytes / session!.totalBytes)
           : 0;
         this.emitProgress(job.id, uploadedBytes, session!.totalBytes);
-        // Persist progress + session state for kill/relaunch resume.
-        void this.persistState(job.id, {
-          progress,
-          session: {
-            ...session!,
-            uploadedBytes,
-          },
-        });
+        // Keep the in-memory session + progress up to date on every event
+        // so the UI is responsive, but throttle the AsyncStorage write to
+        // avoid a storm of read-modify-write cycles on every byte tick.
+        const current = this.jobsCache.get(job.id);
+        if (current) {
+          this.jobsCache.set(job.id, {
+            ...current,
+            progress,
+            session: { ...session!, uploadedBytes },
+            updatedAt: Date.now(),
+          });
+        }
+        const now = Date.now();
+        if (now - this.lastProgressPersistMs >= 500) {
+          this.lastProgressPersistMs = now;
+          void this.persistState(job.id, {
+            progress,
+            session: { ...session!, uploadedBytes },
+          });
+        }
       },
       signal,
+      () => {
+        void this.persistState(job.id, { session: { ...session! } });
+      },
     );
 
     this.emitProgress(job.id, job.sizeBytes, job.sizeBytes);
@@ -724,10 +804,11 @@ export class UploadManager {
       // If even Blob reading fails, we cannot determine the size.
     }
 
-    // Last resort: return 1 so presign validation (sizeBytes > 0) passes.
-    // The actual upload may still fail if the file is unreadable — that
-    // failure will be surfaced honestly via the retry/error path.
-    return 1;
+    // The file size could not be determined. Returning a sentinel value
+    // (e.g. 1) would produce fake progress bars and cause the wrong
+    // transport to be selected (single-PUT instead of multipart for large
+    // files). Fail loudly so the caller can surface a real error.
+    throw new Error('Could not determine file size. The file may be inaccessible.');
   }
 
   /** Pick the next queued job to run, preferring oldest by createdAt. */
@@ -754,8 +835,20 @@ export class UploadManager {
       progress,
     };
     this.emit({ type: 'progress', progress: snapshot });
-    // Persist progress (best-effort — don't block the upload loop).
-    void this.persistState(jobId, { progress });
+    // Always update the in-memory cache so the UI sees the latest value
+    // synchronously. Throttle the AsyncStorage write to at most once every
+    // 500ms — progress events fire on every XHR byte tick and a full
+    // read-modify-write of the job store on each tick starves the JS thread.
+    const current = this.jobsCache.get(jobId);
+    if (current) {
+      this.jobsCache.set(jobId, { ...current, progress, updatedAt: Date.now() });
+    }
+    const now = Date.now();
+    if (now - this.lastProgressPersistMs >= 500) {
+      this.lastProgressPersistMs = now;
+      // Persist progress (best-effort — don't block the upload loop).
+      void this.jobStore.updateJob(jobId, { progress });
+    }
   }
 
   /** Emit `allComplete` when every job for a project is completed. */

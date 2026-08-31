@@ -12,11 +12,8 @@
  * with small labels, plus a dashed content-safe boundary between them.
  */
 import React from 'react';
-import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { FontFamily, IconGrammar, Stroke } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
-import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
+import { Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 export interface SafeZoneOverlayProps {
@@ -30,13 +27,6 @@ export interface SafeZoneOverlayProps {
   style?: ViewStyle;
 }
 
-// Subtle red tint — communicates "avoid placing content here" without
-// dominating the canvas silhouette (AGENTS.md §4 surface budget).
-const RED_TINT_FILL = 'rgba(220,90,90,0.07)';
-const RED_TINT_EDGE = 'rgba(220,90,90,0.42)';
-const RED_TINT_CONTENT_EDGE = 'rgba(220,90,90,0.22)';
-const RED_TINT_LABEL = '#E08585';
-
 export function SafeZoneOverlay({ visible, topHeight, bottomHeight, style }: SafeZoneOverlayProps) {
   const { colors } = useAppTheme();
 
@@ -45,23 +35,13 @@ export function SafeZoneOverlay({ visible, topHeight, bottomHeight, style }: Saf
   return (
     <View style={[styles.overlay, style]} pointerEvents="none">
       {topHeight > 0 && (
-        <View style={[styles.topBand, { top: 0, height: topHeight }]}>
-          <View style={styles.label}>
-            <Ionicons name="scan-outline" size={IconGrammar.badge} color={RED_TINT_LABEL} />
-            <Text style={styles.labelText}>Top chrome</Text>
-          </View>
-        </View>
+        <View style={[styles.topBand, { top: 0, height: topHeight, backgroundColor: colors.brandSubtle, borderBottomColor: colors.brand }]} />
       )}
       {bottomHeight > 0 && (
-        <View style={[styles.bottomBand, { bottom: 0, height: bottomHeight }]}>
-          <View style={styles.label}>
-            <Ionicons name="scan-outline" size={IconGrammar.badge} color={RED_TINT_LABEL} />
-            <Text style={styles.labelText}>Tool dock</Text>
-          </View>
-        </View>
+        <View style={[styles.bottomBand, { bottom: 0, height: bottomHeight, backgroundColor: colors.brandSubtle, borderTopColor: colors.brand }]} />
       )}
       {topHeight > 0 && bottomHeight > 0 && (
-        <View style={[styles.contentBoundary, { top: topHeight, bottom: bottomHeight }]} />
+        <View style={[styles.contentBoundary, { top: topHeight, bottom: bottomHeight, borderColor: colors.brand }]} />
       )}
     </View>
   );
@@ -75,41 +55,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: RED_TINT_FILL,
     borderBottomWidth: 1,
-    borderBottomColor: RED_TINT_EDGE,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 4 },
+    borderStyle: 'dashed' },
   bottomBand: {
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: RED_TINT_FILL,
     borderTopWidth: 1,
-    borderTopColor: RED_TINT_EDGE,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 4 },
+    borderStyle: 'dashed' },
   contentBoundary: {
     position: 'absolute',
     left: 0,
     right: 0,
     borderWidth: Stroke.standard,
-    borderColor: RED_TINT_CONTENT_EDGE,
-    borderStyle: 'dashed' },
-  label: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: RadiusRoleValue.pillAvatar },
-  labelText: {
-    fontFamily: FontFamily.medium,
-    fontSize: TypographyV2.meta.size,
-    color: RED_TINT_LABEL,
-    letterSpacing: 0.3 } });
+    borderStyle: 'dashed' } });

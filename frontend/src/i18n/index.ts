@@ -1810,7 +1810,7 @@ export const EN_TRANSLATIONS = {
   'bulkListing.addToBatch': 'Add to batch',
 } as const;
 
-export type SupportedLocale = 'en' | 'es' | 'fr' | 'de';
+export type SupportedLocale = 'en' | 'es' | 'fr' | 'de' | 'ar' | 'hi' | 'zh' | 'pt' | 'ja' | 'ru' | 'tr' | 'ko' | 'id';
 export type TranslationKey = keyof typeof EN_TRANSLATIONS;
 
 type TranslationParams = Record<string, string | number>;
@@ -2831,6 +2831,17 @@ const LOCALE_TRANSLATIONS: Record<SupportedLocale, Record<TranslationKey, string
   es: { ...EN_TRANSLATIONS, ...ES_TRANSLATION_PATCH },
   fr: { ...EN_TRANSLATIONS, ...FR_TRANSLATION_PATCH },
   de: { ...EN_TRANSLATIONS, ...DE_TRANSLATION_PATCH },
+  // New locales use English fallback for legacy keys; structured namespaces
+  // are loaded from JSON files via localeResources in i18n.ts.
+  ar: EN_TRANSLATIONS,
+  hi: EN_TRANSLATIONS,
+  zh: EN_TRANSLATIONS,
+  pt: EN_TRANSLATIONS,
+  ja: EN_TRANSLATIONS,
+  ru: EN_TRANSLATIONS,
+  tr: EN_TRANSLATIONS,
+  ko: EN_TRANSLATIONS,
+  id: EN_TRANSLATIONS,
 };
 
 const LANGUAGE_TO_LOCALE_MAP: Record<string, SupportedLocale> = {
@@ -2838,6 +2849,15 @@ const LANGUAGE_TO_LOCALE_MAP: Record<string, SupportedLocale> = {
   'Spanish (ES)': 'es',
   'French (FR)': 'fr',
   'German (DE)': 'de',
+  'Arabic (AR)': 'ar',
+  'Hindi (HI)': 'hi',
+  'Chinese (ZH)': 'zh',
+  'Portuguese (PT)': 'pt',
+  'Japanese (JA)': 'ja',
+  'Russian (RU)': 'ru',
+  'Turkish (TR)': 'tr',
+  'Korean (KO)': 'ko',
+  'Indonesian (ID)': 'id',
 };
 
 let activeLocale: SupportedLocale = 'en';
@@ -2884,6 +2904,8 @@ export {
   isRTL,
   setI18nLocale as setI18nLocaleV2,
   getI18nLocale as getI18nLocaleV2,
+  hydratePersistedLocale,
+  LOCALE_STORAGE_KEY,
   useTranslation,
   mapLocaleToLanguageOption,
 } from './i18n';

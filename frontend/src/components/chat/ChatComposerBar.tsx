@@ -14,6 +14,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { VoiceMessageRecorder } from './VoiceMessageRecorder';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface AttachmentPreview {
   uri: string;
@@ -81,6 +82,7 @@ export function ChatComposerBar({
   isVoiceRecording = false,
   onVoiceRecordingChange }: ChatComposerBarProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const inputRef = useRef<TextInput>(null);
   const hasText = value.trim().length > 0;
@@ -103,7 +105,7 @@ export function ChatComposerBar({
             <Pressable
               onPress={onDismissDangerWarning}
               hitSlop={8}
-              accessibilityLabel="Dismiss safety warning"
+              accessibilityLabel={t('compose.dismissSafetyWarning')}
               accessibilityRole="button"
             >
               <Ionicons name="close-circle" size={16} color={colors.textMuted} />
@@ -131,7 +133,7 @@ export function ChatComposerBar({
             <Pressable
               onPress={onDismissCautionWarning}
               hitSlop={8}
-              accessibilityLabel="Dismiss caution warning"
+              accessibilityLabel={t('compose.dismissCautionWarning')}
               accessibilityRole="button"
             >
               <Ionicons name="close-circle" size={16} color={colors.textMuted} />
@@ -152,7 +154,7 @@ export function ChatComposerBar({
                 <Pressable
                   onPress={() => onRemoveAttachment(i)}
                   hitSlop={8}
-                  accessibilityLabel="Remove attachment"
+                  accessibilityLabel={t('compose.removeAttachment')}
                   accessibilityRole="button"
                 >
                   <Ionicons name="close-circle" size={16} color={colors.textMuted} />
@@ -174,7 +176,7 @@ export function ChatComposerBar({
                 pressed && styles.quickReplyChipPressed,
               ]}
               accessibilityRole="button"
-              accessibilityLabel={`Quick reply: ${qr.label}`}
+              accessibilityLabel={t('compose.quickReply', { label: qr.label })}
             >
               <Text style={styles.quickReplyText} numberOfLines={1}>{qr.label}</Text>
             </Pressable>
@@ -190,7 +192,7 @@ export function ChatComposerBar({
             activeOpacity={0.7}
             scaleValue={0.9}
             hapticFeedback="light"
-            accessibilityLabel="Add attachment"
+            accessibilityLabel={t('compose.addAttachment')}
             accessibilityRole="button"
             disabled={disabled || isSending || isVoiceRecording}
           >
@@ -221,7 +223,7 @@ export function ChatComposerBar({
               autoCapitalize="sentences"
               autoCorrect
               textAlignVertical="center"
-              accessibilityLabel="Message input"
+              accessibilityLabel={t('compose.inputAccessibility')}
               accessibilityRole="text"
               onSubmitEditing={canSend ? onSend : undefined}
             />
@@ -258,7 +260,7 @@ export function ChatComposerBar({
             activeOpacity={0.7}
             scaleValue={0.9}
             hapticFeedback="light"
-            accessibilityLabel="Open camera"
+            accessibilityLabel={t('compose.openCamera')}
             accessibilityRole="button"
             disabled={disabled || isSending}
           >

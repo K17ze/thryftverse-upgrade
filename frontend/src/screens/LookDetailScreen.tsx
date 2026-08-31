@@ -304,16 +304,25 @@ export default function LookDetailScreen() {
       sourceMode: 'edit' });
   }, [look, isOwner, navigation, haptic]);
 
-  // Remix — open the creator studio seeded from this look so the user can
-  // fork it into a new composition. Available to everyone (not just owner).
-  const handleRemix = useCallback(() => {
+  // Recreate — open the creator studio seeded from this look so the user can
+  // build their own version from this composition. Fashion-native term for
+  // the fork/derivative action — "recreate this look" is what stylists and
+  // creators say, not "remix" (which reads as video/audio).
+  // Available to everyone (not just owner), but requires authentication.
+  const handleRecreate = useCallback(() => {
     if (!look) return;
+    if (!currentUser?.id) {
+      show('Sign in to recreate looks', 'info');
+      navigation.navigate('Login');
+      return;
+    }
     haptic.light();
+    setOverflowVisible(false);
     navigation.navigate('CreatorStudio', {
       type: 'look',
       sourceDocumentId: look.id,
       sourceMode: 'remix' });
-  }, [look, navigation, haptic]);
+  }, [look, currentUser, navigation, haptic, show]);
 
   // Repost — lightweight re-publish with attribution to the original creator.
   // Creates a new look owned by the reposter that references the source via
@@ -331,6 +340,7 @@ export default function LookDetailScreen() {
       return;
     }
     haptic.medium();
+    setOverflowVisible(false);
     setRepostBusy(true);
     try {
       const res = await repostLookOnApi(look.id);
@@ -347,6 +357,7 @@ export default function LookDetailScreen() {
   const handleReport = useCallback(() => {
     if (!look?.creator?.id) return;
     haptic.light();
+    setOverflowVisible(false);
     navigation.navigate('Report', { type: 'user', targetId: look.creator.id });
   }, [look, navigation, haptic]);
 
@@ -650,59 +661,6 @@ export default function LookDetailScreen() {
           />
         </View>
 
-        {/* Object actions — Repost + Remix + Report, semantically labelled.
-            Repost is the primary distributive action (preserves attribution);
-            Remix is the derivative action (opens creator studio); Report is
-            the safety action. Save and Share live in the social row above. */}
-        <View style={styles.actionRow}>
-          {!isOwner && (
-            <>
-              <AnimatedPressable
-                style={styles.actionBtn}
-                onPress={handleRepost}
-                activeOpacity={0.85}
-                disabled={repostBusy}
-                accessibilityRole="button"
-                accessibilityLabel="Repost this look"
-                accessibilityHint="Re-publishes this look to your profile with attribution to the original creator"
-              >
-                {repostBusy ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                ) : (
-                  <>
-                    <Ionicons name="repeat-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
-                    <Text style={styles.actionBtnLabel}>Repost</Text>
-                  </>
-                )}
-              </AnimatedPressable>
-              <View style={styles.actionDivider} />
-            </>
-          )}
-          <AnimatedPressable
-            style={styles.actionBtn}
-            onPress={handleRemix}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Remix this look"
-            accessibilityHint="Opens the creator studio seeded from this look"
-          >
-            <Ionicons name="swap-horizontal-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
-            <Text style={styles.actionBtnLabel}>Remix</Text>
-          </AnimatedPressable>
-          <View style={styles.actionDivider} />
-          <AnimatedPressable
-            style={styles.actionBtn}
-            onPress={handleReport}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Report this look"
-            accessibilityHint="Reports the creator of this look"
-          >
-            <Ionicons name="flag-outline" size={20} color={colors.danger} aria-hidden={true} />
-            <Text style={[styles.actionBtnLabel, { color: colors.danger }]}>Report</Text>
-          </AnimatedPressable>
-        </View>
-
         {/* Labeled soft seam — a deliberate mode-shift between the detail
             (evaluate this one) and the explore grid (discover among many).
             Research: a hard unbroken scroll erodes choice confidence on
@@ -724,7 +682,7 @@ export default function LookDetailScreen() {
     handleCreatorPress, creatorHandle,
     followerCount, isOwner, isFollowing, handleFollow, followBusy,
     commentCount, currentUser?.id, handleShare, handleCommentPress, handleSignInRequired,
-    handleRepost, repostBusy, handleRemix, handleReport, styles,
+    styles,
     // navigation is used for repost attribution link — must be in deps
     navigation,
   ]);
@@ -897,47 +855,28 @@ export default function LookDetailScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Floating Header — transparent 44pt hit targets; glyph legibility from
-          the text-shadow scrim. No circular chrome. */}
+          the text-shadow scrim. No circular chrome. Back + overflow only.
+          Share lives in the social action rail (LookSocialActions) — not
+          duplicated in the header. The three-dots overflow is shown to ALL
+          users (context-aware contents), matching Instagram/Pinterest/TikTok
+          where every viewer can access secondary actions. */}
       <View style={styles.headerRow}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85} accessibilityLabel="Go back" accessibilityRole="button">
           <Ionicons name="arrow-back" size={24} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
         </AnimatedPressable>
-        <View style={styles.headerActions}>
-          <AnimatedPressable
-            style={styles.headerBtn}
-            onPress={handleShare}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Share look"
-          >
-            <Ionicons name="share-outline" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
-          </AnimatedPressable>
-          {isOwner && (
-            <AnimatedPressable
-              style={styles.headerBtn}
-              onPress={handleEdit}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Edit look"
-            >
-              <Ionicons name="create-outline" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
-            </AnimatedPressable>
-          )}
-          {isOwner && (
-            <AnimatedPressable
-              style={styles.headerBtn}
-              onPress={() => {
-                haptic.light();
-                setOverflowVisible(true);
-              }}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="More look options"
-            >
-              <Ionicons name="ellipsis-horizontal" size={20} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
-            </AnimatedPressable>
-          )}
-        </View>
+        <AnimatedPressable
+          style={styles.headerBtn}
+          onPress={() => {
+            haptic.light();
+            setOverflowVisible(true);
+          }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="More options"
+          accessibilityHint="Open the look options menu"
+        >
+          <Ionicons name="ellipsis-horizontal" size={22} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
+        </AnimatedPressable>
       </View>
 
       {/* Single FlashList scroll surface — the look detail content renders as
@@ -1049,11 +988,16 @@ export default function LookDetailScreen() {
         </Pressable>
       </Modal>
 
-      {/* Owner Overflow Menu */}
+      {/* Overflow Menu — context-aware bottom sheet shown to ALL users.
+          Owner sees: Edit → Delete (destructive, red, separated).
+          Non-owner sees: Recreate → Repost → Report (destructive, red, separated).
+          Anatomy: drag handle, icon+label rows, 48pt targets, hairline dividers
+          between groups, destructive actions last in red. Matches the
+          Instagram/Pinterest/TikTok bottom-sheet overflow pattern. */}
       <Modal
         visible={overflowVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setOverflowVisible(false)}
       >
         <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowVisible(false)} accessibilityRole="button" accessibilityLabel="Close menu">
@@ -1063,25 +1007,76 @@ export default function LookDetailScreen() {
             accessibilityRole="menu"
             accessibilityLabel="Look options menu"
           >
-            <Pressable
-              style={styles.overflowItem}
-              onPress={handleEdit}
-              accessibilityRole="menuitem"
-              accessibilityLabel="Edit look"
-            >
-              <Ionicons name="create-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
-              <Text style={styles.overflowItemText}>Edit look</Text>
-            </Pressable>
-            <View style={styles.overflowDivider} />
-            <Pressable
-              style={styles.overflowItem}
-              onPress={handleDelete}
-              accessibilityRole="menuitem"
-              accessibilityLabel="Delete look"
-            >
-              <Ionicons name="trash-outline" size={20} color={colors.danger} aria-hidden={true} />
-              <Text style={[styles.overflowItemText, { color: colors.danger }]}>Delete look</Text>
-            </Pressable>
+            <View style={styles.overflowHandle} />
+
+            {isOwner ? (
+              <>
+                {/* ── Owner: management actions ── */}
+                <Pressable
+                  style={styles.overflowItem}
+                  onPress={handleEdit}
+                  accessibilityRole="menuitem"
+                  accessibilityLabel="Edit look"
+                >
+                  <Ionicons name="create-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
+                  <Text style={styles.overflowItemText}>Edit look</Text>
+                </Pressable>
+                <View style={styles.overflowDivider} />
+                {/* ── Destructive ── */}
+                <Pressable
+                  style={styles.overflowItem}
+                  onPress={handleDelete}
+                  accessibilityRole="menuitem"
+                  accessibilityLabel="Delete look"
+                >
+                  <Ionicons name="trash-outline" size={20} color={colors.danger} aria-hidden={true} />
+                  <Text style={[styles.overflowItemText, { color: colors.danger }]}>Delete look</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                {/* ── Non-owner: creative + distributive actions ── */}
+                <Pressable
+                  style={styles.overflowItem}
+                  onPress={handleRecreate}
+                  accessibilityRole="menuitem"
+                  accessibilityLabel="Recreate this look"
+                  accessibilityHint="Open the creator studio seeded from this look to build your own version"
+                >
+                  <Ionicons name="color-wand-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
+                  <Text style={styles.overflowItemText}>Recreate this look</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.overflowItem}
+                  onPress={handleRepost}
+                  accessibilityRole="menuitem"
+                  accessibilityLabel="Repost this look"
+                  accessibilityHint="Re-publishes this look to your profile with attribution to the original creator"
+                  disabled={repostBusy}
+                >
+                  {repostBusy ? (
+                    <ActivityIndicator size="small" color={colors.textPrimary} />
+                  ) : (
+                    <Ionicons name="repeat-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
+                  )}
+                  <Text style={[styles.overflowItemText, repostBusy && { color: colors.textMuted }]}>
+                    {repostBusy ? 'Reposting…' : 'Repost'}
+                  </Text>
+                </Pressable>
+                <View style={styles.overflowDivider} />
+                {/* ── Destructive ── */}
+                <Pressable
+                  style={styles.overflowItem}
+                  onPress={handleReport}
+                  accessibilityRole="menuitem"
+                  accessibilityLabel="Report this look"
+                  accessibilityHint="Reports the creator of this look"
+                >
+                  <Ionicons name="flag-outline" size={20} color={colors.danger} aria-hidden={true} />
+                  <Text style={[styles.overflowItemText, { color: colors.danger }]}>Report</Text>
+                </Pressable>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -1127,7 +1122,6 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       height: Control.hit,
       alignItems: 'center',
       justifyContent: 'center' },
-    headerActions: { flexDirection: 'row', gap: Space.xs },
     headerBtn: {
       width: Control.hit,
       height: Control.hit,
@@ -1209,28 +1203,8 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     followBtnTextActive: {
       color: colors.textPrimary },
 
-    // ── Social + actions ──
+    // ── Social actions ──
     socialWrap: { marginTop: Space.md },
-    actionRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: Space.sm,
-      paddingHorizontal: Space.md },
-    actionBtn: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.xs + 2,
-      paddingVertical: Space.sm },
-    actionDivider: {
-      width: StyleSheet.hairlineWidth,
-      height: Space.xl - Space.xs,
-      backgroundColor: colors.border },
-    actionBtnLabel: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      color: colors.textPrimary },
 
     // ── Explore grid loading footer ──
     exploreLoading: {
@@ -1385,26 +1359,37 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textInverse },
 
-    // ── Owner overflow menu ──
+    // ── Overflow menu — flagship bottom sheet anatomy ──
+    // Drag handle, icon+label rows, 48pt targets, hairline dividers,
+    // destructive actions in red. Slide-up animation, tap-outside dismiss.
     overflowBackdrop: {
       flex: 1,
       backgroundColor: colors.overlay,
       justifyContent: 'flex-end' },
     overflowSheet: {
       backgroundColor: colors.surface,
-      borderTopLeftRadius: Radius.xl,
-      borderTopRightRadius: Radius.xl,
+      borderTopLeftRadius: Radius.sheet,
+      borderTopRightRadius: Radius.sheet,
       paddingBottom: Space.lg,
       paddingTop: Space.sm },
+    overflowHandle: {
+      width: Space.xl + Space.sm,
+      height: Space.xxs,
+      borderRadius: Space.xxs,
+      backgroundColor: colors.border,
+      alignSelf: 'center',
+      marginBottom: Space.md },
     overflowItem: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
-      paddingVertical: Space.md,
+      minHeight: 48,
+      paddingVertical: Space.smMd,
       paddingHorizontal: Space.lg },
     overflowItemText: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
+      flex: 1,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary },
     overflowDivider: {
       height: StyleSheet.hairlineWidth,

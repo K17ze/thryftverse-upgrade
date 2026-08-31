@@ -14,6 +14,8 @@ import type { MediaUploadQueue } from '../../services/mediaUploadQueue';
 import type { ListingMode } from '../../components/listing/ListingModeSelector';
 import type { ListingCompletenessResult } from '../../contracts/listingCategoryPolicy';
 import { track, trackFunnelStep } from '../../analytics';
+import { ApiRequestError, classifyNetworkError, isRecord } from '../../lib/apiClient';
+import { OFFLINE_WRITE_QUEUED_CODE } from '../../lib/offlineQueue';
 
 interface ListingPublishPipelineParams {
   listingMode: ListingMode;
@@ -228,8 +230,17 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
         performance.mark('listing:create:complete');
         navigation.replace('CreateAuction', { listingId });
       } catch (e: unknown) {
-        const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to prepare auction. Try again.';
-        setErrorMsg(msg);
+        // Detect the offline-queued case: the listing was NOT created on the
+        // server — it was saved for later replay. Show a truthful message and
+        // stay on the sell screen; do NOT navigate to CreateAuction.
+        const isOfflineQueued =
+          e instanceof ApiRequestError &&
+          isRecord(e.details) &&
+          e.details.code === OFFLINE_WRITE_QUEUED_CODE;
+        const rawMsg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to prepare auction. Try again.';
+        setErrorMsg(isOfflineQueued
+          ? "You're offline. Your listing has been saved and will be published when you reconnect."
+          : rawMsg);
         haptics.error();
       } finally {
         isPublishingRef.current = false;
@@ -354,13 +365,29 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
         photoUri: coverImage,
       });
     } catch (e: unknown) {
-      const isNetworkError = isOffline || (typeof e === 'object' && e !== null && 'code' in e && (e as { code?: string }).code === 'NETWORK_ERROR');
+      // Detect the offline-queued case explicitly: the API client enqueued the
+      // write for later replay but did NOT complete it. This is NOT a success —
+      // the listing was never created on the server — so we must not navigate
+      // to the success screen. Surface a truthful "saved offline" message and
+      // stay on the sell screen so the user knows their work is preserved and
+      // will be published automatically on reconnect.
+      const isOfflineQueued =
+        e instanceof ApiRequestError &&
+        isRecord(e.details) &&
+        e.details.code === OFFLINE_WRITE_QUEUED_CODE;
+      const isNetworkError = isOffline || classifyNetworkError(e) === 'offline';
       const rawMsg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Try again.';
-      const msg = isNetworkError ? 'You appear to be offline. Check your connection and try again.' : rawMsg;
+      const msg = isOfflineQueued
+        ? "You're offline. Your listing has been saved and will be published when you reconnect."
+        : isNetworkError ? 'You appear to be offline. Check your connection and try again.' : rawMsg;
       const hasListing = !!publishedListingIdRef.current;
       const hasMedia = mediaDraftItems.some((m) => m.status === 'uploaded');
       setPublicationStage('failed_recoverable');
-      setErrorMsg(hasListing ? `${msg} -- your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} -- some media uploaded. Tap Publish to retry.` : msg);
+      // For the offline-queued case, the listing was NOT created — don't imply
+      // it was. Show only the truthful saved-offline message.
+      setErrorMsg(isOfflineQueued
+        ? msg
+        : hasListing ? `${msg} -- your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} -- some media uploaded. Tap Publish to retry.` : msg);
       haptics.error();
     } finally {
       isPublishingRef.current = false;

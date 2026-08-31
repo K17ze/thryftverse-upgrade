@@ -1,31 +1,33 @@
 /**
  * CreatorSlider — shared slider using RNGH + Reanimated (NOT PanResponder).
  *
+ * Lightroom/Snapseed 2026 visual language:
+ *   - 2pt track, surfaceAlt background
+ *   - Bidirectional brand fill from neutral (center) to current value
+ *   - 16pt solid brand thumb, no shadow, no border
+ *   - Thumb shrinks to 14pt on press (tactile, 100ms timing — never bounce)
+ *   - Optional neutral tick mark (2pt × 16pt brand) shown when value ≠ neutral
+ *   - Clean track — no step marks
+ *
  * Features:
  *   - Drag thumb to change value
  *   - Tap on track to jump
  *   - Accessibility: increment/decrement for screen reader users
  *   - Haptic at neutral value (0) if `hapticAtNeutral` is true
- *   - Numeric label
  *   - One `onCommit` call on gesture end (for undo history)
  *   - Smooth 60fps via Reanimated worklets (off JS thread)
- *   - Track: 4pt height, 28pt thumb
- *   - Theme-aware colors
  *   - Reduced-motion: instant settle
  *
  * Design references:
- *   - 05_ICONS_BUTTONS_CONTROL_CRAFT.md §2 (CreatorSlider)
- *   - AGENTS.md §17 (No PanResponder — use RNGH)
- *   - AGENTS.md §27.3 (Flagship spring configs — tap for settle)
+ *   - AGENTS.md §4 (anti-AI: restraint, one system)
+ *   - AGENTS.md §17 (No PanResponder — use RNGH; press physics 90-120ms, no bounce)
  *   - AGENTS.md §27.8 (60fps via Reanimated worklets, off JS thread)
- *   - Codebase pattern: ColorSlider.tsx (Gesture.Pan + runOnJS)
  */
 import React, { useCallback } from 'react';
 import {
   View,
   StyleSheet,
   Text,
-  Pressable,
   type LayoutChangeEvent,
   type AccessibilityRole,
 } from 'react-native';
@@ -33,23 +35,26 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { Radius, Space, Stroke, Elevation } from '../../theme/designTokens';
-import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
+import { Radius, Space } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 
 // ── Constants ────────────────────────────────────────────────────────
 
-const TRACK_HEIGHT = 4;
-const THUMB_SIZE = 28;
+const TRACK_HEIGHT = 2;
+const THUMB_SIZE = 16;
+const THUMB_PRESS_SCALE = 14 / 16;
+const NEUTRAL_TICK_WIDTH = 2;
+const NEUTRAL_TICK_HEIGHT = 16;
 const MIN_TOUCH_TARGET = 44;
 const HAPTIC_DEBOUNCE_MS = 80;
+const PRESS_DURATION_MS = 100;
 
 // ── Props ────────────────────────────────────────────────────────────
 
@@ -62,6 +67,14 @@ export interface CreatorSliderProps {
   max?: number;
   /** Step size (default 0.01). Set to 0 or undefined for continuous. */
   step?: number;
+  /**
+   * Neutral origin for the bidirectional fill. The brand fill spans from the
+   * neutral position to the current thumb — the Lightroom/Snapseed pattern
+   * where adjustments read as distance from neutral. Defaults to `min`
+   * (left-anchored fill) so sliders without a natural zero keep legacy
+   * left-to-right fill behaviour.
+   */
+  neutral?: number;
   /** Called continuously during drag with the new value. */
   onValueChange?: (value: number) => void;
   /** Called once on gesture end with the final value (for undo history). */
@@ -70,8 +83,14 @@ export interface CreatorSliderProps {
   label?: string;
   /** Accessibility label for screen readers. */
   accessibilityLabel?: string;
-  /** When true, fires a selection haptic when the value crosses 0. */
+  /** When true, fires a selection haptic when the value crosses neutral. */
   hapticAtNeutral?: boolean;
+  /**
+   * When true, renders a 2pt × 16pt brand tick at the neutral position while
+   * the value is away from neutral — a quiet reference for how far the
+   * adjustment has travelled from zero.
+   */
+  showNeutralTick?: boolean;
   /** When true, the slider is non-interactive and dimmed. */
   disabled?: boolean;
   /** Called when drag state changes (true on drag start, false on release). */
@@ -87,11 +106,13 @@ export function CreatorSlider({
   min = 0,
   max = 1,
   step = 0.01,
+  neutral,
   onValueChange,
   onCommit,
   label,
   accessibilityLabel,
   hapticAtNeutral = false,
+  showNeutralTick = false,
   disabled = false,
   onDragStateChange,
   testID,
@@ -100,8 +121,12 @@ export function CreatorSlider({
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
 
+  const neutralValue = neutral ?? min;
+  const hasBidirectionalFill = neutralValue > min && neutralValue < max;
+
   const widthSV = useSharedValue(0);
   const thumbPos = useSharedValue(0);
+  const thumbScale = useSharedValue(1);
   const lastHapticSV = useSharedValue(0);
   const isDraggingSV = useSharedValue(false);
   const prevWasPositiveSV = useSharedValue(true);
@@ -110,13 +135,20 @@ export function CreatorSlider({
   const [width, setWidth] = React.useState(0);
   const RANGE = max - min;
 
+  const neutralRatio = RANGE > 0 ? (neutralValue - min) / RANGE : 0;
+  const neutralLeft = neutralRatio * width;
+  const showTick =
+    showNeutralTick && hasBidirectionalFill && Math.abs(value - neutralValue) > 0.001;
+
   // Update thumb position when value changes externally (not during drag)
   React.useEffect(() => {
     if (width > 0 && !isDraggingSV.value) {
       const ratio = RANGE > 0 ? (value - min) / RANGE : 0;
       const clampedRatio = Math.max(0, Math.min(1, ratio));
-      const springConfig = reduceMotion ? REDUCED_SPRING : Motion.spring.tap;
-      thumbPos.value = withSpring(clampedRatio * width, springConfig);
+      // Timing-based settle — no overshoot for utility UI.
+      thumbPos.value = reduceMotion
+        ? withTiming(clampedRatio * width, { duration: 0 })
+        : withTiming(clampedRatio * width, { duration: 100 });
     }
     valueSV.value = value;
   }, [value, width, min, RANGE, reduceMotion, thumbPos, isDraggingSV, valueSV]);
@@ -126,6 +158,18 @@ export function CreatorSlider({
     setWidth(w);
     widthSV.value = w;
   }, [widthSV]);
+
+  const setPressed = useCallback(
+    (pressed: boolean) => {
+      'worklet';
+      thumbScale.value = reduceMotion
+        ? pressed
+          ? THUMB_PRESS_SCALE
+          : 1
+        : withTiming(pressed ? THUMB_PRESS_SCALE : 1, { duration: PRESS_DURATION_MS });
+    },
+    [reduceMotion, thumbScale],
+  );
 
   // Worklet: convert x position to value and update thumb
   const updateFromPosition = useCallback(
@@ -172,6 +216,7 @@ export function CreatorSlider({
         .onBegin((e) => {
           'worklet';
           isDraggingSV.value = true;
+          setPressed(true);
           if (onDragStateChange) runOnJS(onDragStateChange)(true);
           updateFromPosition(e.x);
         })
@@ -181,12 +226,14 @@ export function CreatorSlider({
         })
         .onEnd(() => {
           'worklet';
+          setPressed(false);
           const w = widthSV.value;
           if (w > 0) {
-            const springConfig = reduceMotion
-              ? REDUCED_SPRING
-              : Motion.spring.tap;
-            thumbPos.value = withSpring(thumbPos.value, springConfig);
+            // Settle the thumb with timing, not a spring — no overshoot
+            // for utility UI per AGENTS.md §4 / Design.md snap physics.
+            thumbPos.value = reduceMotion
+              ? withTiming(thumbPos.value, { duration: 0 })
+              : withTiming(thumbPos.value, { duration: 100 });
           }
           isDraggingSV.value = false;
           if (onDragStateChange) runOnJS(onDragStateChange)(false);
@@ -196,11 +243,13 @@ export function CreatorSlider({
             if (step && step > 0) {
               finalVal = Math.round(finalVal / step) * step;
             }
+            // Commit haptic — fires on release, not on press-start.
+            runOnJS(haptic.light)();
             runOnJS(onCommit)(finalVal);
           }
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [disabled, reduceMotion, min, RANGE, step, onCommit, onDragStateChange, updateFromPosition],
+    [disabled, reduceMotion, min, RANGE, step, onCommit, onDragStateChange, updateFromPosition, setPressed, haptic],
   );
 
   // Tap gesture — tap on track to jump
@@ -231,13 +280,25 @@ export function CreatorSlider({
   );
 
   const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: thumbPos.value }],
+    transform: [
+      { translateX: thumbPos.value },
+      { scale: thumbScale.value },
+    ],
   }));
 
-  // Fill track (from min to current value)
-  const fillStyle = useAnimatedStyle(() => ({
-    width: thumbPos.value + THUMB_SIZE / 2,
-  }));
+  // Bidirectional fill: brand span from neutral origin to current thumb.
+  // For sliders without an interior neutral, this collapses to the legacy
+  // left-anchored fill (neutral at min).
+  const fillStyle = useAnimatedStyle(() => {
+    const w = widthSV.value;
+    if (w <= 0) return { left: 0, width: 0 };
+    const neutralX = neutralRatio * w;
+    const thumbX = thumbPos.value;
+    if (thumbX >= neutralX) {
+      return { left: neutralX, width: Math.max(0, thumbX - neutralX) };
+    }
+    return { left: thumbX, width: Math.max(0, neutralX - thumbX) };
+  });
 
   // Accessibility: increment/decrement
   const handleAccessibilityIncrement = useCallback(() => {
@@ -301,11 +362,11 @@ export function CreatorSlider({
           <View
             style={[
               styles.track,
-              { backgroundColor: colors.borderSubtle },
+              { backgroundColor: colors.surfaceAlt },
             ]}
           />
 
-          {/* Filled portion */}
+          {/* Bidirectional brand fill (neutral → thumb) */}
           <Reanimated.View
             style={[
               styles.fill,
@@ -315,14 +376,22 @@ export function CreatorSlider({
             pointerEvents="none"
           />
 
+          {/* Neutral tick — quiet reference mark while adjusted away from zero */}
+          {showTick && (
+            <View
+              style={[
+                styles.neutralTick,
+                { left: neutralLeft, backgroundColor: colors.brand },
+              ]}
+              pointerEvents="none"
+            />
+          )}
+
           {/* Thumb */}
           <Reanimated.View
             style={[
               styles.thumb,
-              {
-                backgroundColor: colors.surfaceElevated,
-                borderColor: colors.brand,
-              },
+              { backgroundColor: colors.brand },
               thumbStyle,
             ]}
             pointerEvents="none"
@@ -367,27 +436,34 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   track: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT / 2,
-    overflow: 'hidden',
+    top: (MIN_TOUCH_TARGET - TRACK_HEIGHT) / 2,
   },
   fill: {
     position: 'absolute',
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT / 2,
-    left: 0,
     top: (MIN_TOUCH_TARGET - TRACK_HEIGHT) / 2,
+  },
+  neutralTick: {
+    position: 'absolute',
+    width: NEUTRAL_TICK_WIDTH,
+    height: NEUTRAL_TICK_HEIGHT,
+    borderRadius: NEUTRAL_TICK_WIDTH / 2,
+    marginLeft: -NEUTRAL_TICK_WIDTH / 2,
+    top: (MIN_TOUCH_TARGET - NEUTRAL_TICK_HEIGHT) / 2,
   },
   thumb: {
     position: 'absolute',
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
-    borderWidth: Stroke.standard,
     marginLeft: -THUMB_SIZE / 2,
     top: (MIN_TOUCH_TARGET - THUMB_SIZE) / 2,
-    // Subtle elevation — thumb lifts above the track
-    ...Elevation.modal,
   },
 });
 

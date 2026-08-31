@@ -115,7 +115,7 @@ function CutoutPreviewSkeleton({ width, height }: { width: number; height: numbe
         Removing background…
       </Text>
       <Text style={{ fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs }}>
-        Detecting the subject and generating an alpha mask.
+        Generating alpha mask.
       </Text>
     </View>
   );
@@ -516,29 +516,28 @@ export function CutoutPreviewSheet({
       <View style={{ paddingBottom: Math.max(insets.bottom, Space.md) }}>
         {/* ── Header ── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Cutout
-          </Text>
           <PressScale
             onPress={onClose}
             style={styles.closeBtn}
             accessibilityLabel="Close cutout"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} />
           </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            Cutout
+          </Text>
+          <View style={styles.closeBtn} />
         </View>
 
         {/* ── Body ── */}
         {capability && !capability.brushRefinement && (
           <View style={styles.messageContainer}>
             <Text style={[styles.messageTitle, { color: colors.textPrimary }]}>
-              Cutout is not available on this device
+              Cutout unavailable
             </Text>
             <Text style={[styles.messageBody, { color: colors.textSecondary }]}>
-              Brush-based cutout requires the Skia rendering engine, which
-              is not linked in this build. You can still crop your photo
-              manually.
+              Brush cutout requires Skia, which isn&rsquo;t linked in this build.
             </Text>
           </View>
         )}
@@ -778,8 +777,8 @@ export function CutoutPreviewSheet({
             {/* ── Hint ── */}
             <Text style={[styles.hint, { color: colors.textMuted }]}>
               {brushMode
-                ? `Draw to ${brushMode === 'erase' ? 'erase' : 'keep'} — strokes refine the mask in real time.`
-                : 'Select a brush mode, then draw to erase the background. Hold Compare to see the original.'}
+                ? `Draw to ${brushMode === 'erase' ? 'erase' : 'keep'}.`
+                : 'Select a brush mode, then draw.'}
             </Text>
           </View>
         )}
@@ -789,7 +788,7 @@ export function CutoutPreviewSheet({
           <View style={styles.previewContainer}>
             <CutoutPreviewSkeleton width={previewSize.width} height={previewSize.height} />
             <Text style={[styles.messageBody, { color: colors.textSecondary, textAlign: 'center', marginTop: Space.md }]}>
-              Checking device capabilities…
+              Checking capabilities…
             </Text>
           </View>
         )}
@@ -907,16 +906,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
+    height: 44 },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size },
+    fontSize: 17,
+    textAlign: 'center' },
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm },
+    alignItems: 'center' },
   // ── Message / state container ──
   messageContainer: {
     alignItems: 'center',

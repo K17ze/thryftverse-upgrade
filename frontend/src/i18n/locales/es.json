@@ -19,19 +19,21 @@
       "message": "Mensaje",
       "buy": "Comprar",
       "bid": "Puja",
-      "sell": "Vender"
+      "sell": "Vender",
+      "ok": "Aceptar",
+      "confirm": "Confirmar"
     },
     "states": {
-      "loading": "Cargando\u2026",
-      "loadingMore": "Cargando m\u00e1s\u2026",
+      "loading": "Cargando…",
+      "loadingMore": "Cargando más…",
       "noResults": "Sin resultados",
-      "somethingWentWrong": "Algo sali\u00f3 mal",
-      "youAreOffline": "Est\u00e1s sin conexi\u00f3n",
+      "somethingWentWrong": "Algo salió mal",
+      "youAreOffline": "Estás sin conexión",
       "retry": "Reintentar",
-      "searching": "Buscando\u2026"
+      "searching": "Buscando…"
     },
     "navigation": {
-      "back": "Atr\u00e1s",
+      "back": "Atrás",
       "home": "Inicio",
       "search": "Buscar",
       "profile": "Perfil",
@@ -48,16 +50,16 @@
     "trust": {
       "verified": "Verificado",
       "responseTime": "Tiempo de respuesta",
-      "reviews": "Rese\u00f1as",
+      "reviews": "Reseñas",
       "followers": "Seguidores",
       "following": "Siguiendo"
     },
     "misc": {
-      "items": "art\u00edculos",
+      "items": "artículos",
       "on": "Activado",
       "off": "Desactivado",
       "none": "Ninguno",
-      "notSignedIn": "No has iniciado sesi\u00f3n"
+      "notSignedIn": "No has iniciado sesión"
     }
   },
   "home": {
@@ -68,10 +70,10 @@
     },
     "looks": {
       "shopLabel": "Looks para comprar",
-      "itemsCount": "{count} art\u00edculos"
+      "itemsCount": "{count} artículos"
     },
     "poster": {
-      "fallback": "P\u00f3ster"
+      "fallback": "Póster"
     },
     "newListings": {
       "bannerSingular": "{count} nuevo drop listo",
@@ -79,17 +81,17 @@
       "badgeNew": "{count} nuevo"
     },
     "sync": {
-      "unavailableCached": "La sincronizaci\u00f3n no est\u00e1 disponible. Mostrando art\u00edculos en cach\u00e9."
+      "unavailableCached": "La sincronización no está disponible. Mostrando artículos en caché."
     },
     "empty": {
-      "followingNoNewTitle": "A\u00fan no hay nuevos drops",
+      "followingNoNewTitle": "Aún no hay nuevos drops",
       "followingNoNewSubtitle": "Desliza para actualizar.",
       "followingNoSellersTitle": "Sigue a vendedores para ver sus drops",
       "followingNoSellersSubtitle": "Toca seguir en los perfiles de vendedores para crear tu feed.",
       "followingDiscoverSellers": "Descubrir vendedores",
       "followingBrowseAll": "Explorar todo",
-      "forYouNoDropsTitle": "A\u00fan no hay drops activos",
-      "forYouNoDropsSubtitle": "Desliza para actualizar o explora categor\u00edas."
+      "forYouNoDropsTitle": "Aún no hay drops activos",
+      "forYouNoDropsSubtitle": "Desliza para actualizar o explora categorías."
     },
     "footer": {
       "reachedEnd": "Has llegado al final"
@@ -100,9 +102,9 @@
     }
   },
   "search": {
-    "placeholder": "Buscar art\u00edculos, vendedores, estilos",
+    "placeholder": "Buscar artículos, vendedores, estilos",
     "scope": {
-      "items": "Art\u00edculos",
+      "items": "Artículos",
       "people": "Personas"
     },
     "resultCount": {
@@ -112,61 +114,61 @@
     "sort": {
       "title": "Ordenar por",
       "recommended": "Recomendado",
-      "newest": "M\u00e1s reciente",
+      "newest": "Más reciente",
       "priceLowToHigh": "Precio: de menor a mayor",
       "priceHighToLow": "Precio: de mayor a menor",
-      "mostLiked": "M\u00e1s gustados"
+      "mostLiked": "Más gustados"
     },
     "sections": {
       "discover": "Descubrir",
       "recent": "Reciente",
-      "recentSearches": "B\u00fasquedas recientes",
-      "savedSearches": "B\u00fasquedas guardadas",
-      "browseCategories": "Explorar categor\u00edas",
-      "categories": "Categor\u00edas",
-      "trending": "B\u00fasquedas en tendencia"
+      "recentSearches": "Búsquedas recientes",
+      "savedSearches": "Búsquedas guardadas",
+      "browseCategories": "Explorar categorías",
+      "categories": "Categorías",
+      "trending": "Búsquedas en tendencia"
     },
     "suggestion": {
       "brand": "Marca",
-      "category": "Categor\u00eda",
-      "item": "Art\u00edculo",
+      "category": "Categoría",
+      "item": "Artículo",
       "search": "Buscar"
     },
     "typeahead": {
-      "searchFor": "Buscar \u201c{query}\u201d",
+      "searchFor": "Buscar “{query}”",
       "viewAllResults": "Ver todos los resultados de {query}",
-      "suggestionsUnavailable": "Las sugerencias no est\u00e1n disponibles. Pulsa Buscar para continuar.",
+      "suggestionsUnavailable": "Las sugerencias no están disponibles. Pulsa Buscar para continuar.",
       "noCloseSuggestions": "No hay sugerencias cercanas. Pulsa Buscar para ver todas las coincidencias.",
       "showingLocalMatches": "Mostrando coincidencias disponibles en este dispositivo"
     },
     "savedSearch": {
       "alertsOn": "Alertas activadas",
       "alertsOff": "Alertas desactivadas",
-      "newMatches": "\u00b7 {count} nuevo"
+      "newMatches": "· {count} nuevo"
     },
     "status": {
-      "refreshingIndex": "Actualizando \u00edndice",
-      "liveIndex": "\u00cdndice en vivo",
-      "offlineIndex": "\u00cdndice sin conexi\u00f3n",
-      "cachedIndex": "\u00cdndice en cach\u00e9"
+      "refreshingIndex": "Actualizando índice",
+      "liveIndex": "Índice en vivo",
+      "offlineIndex": "Índice sin conexión",
+      "cachedIndex": "Índice en caché"
     },
     "errors": {
-      "searchUnavailable": "B\u00fasqueda no disponible",
-      "retrySearch": "Reintentar b\u00fasqueda",
-      "peopleSearchUnavailable": "B\u00fasqueda de personas no disponible",
-      "searchIndexDelayed": "El \u00edndice de b\u00fasqueda est\u00e1 retrasado. Mostrando resultados en cach\u00e9.",
-      "noPeopleFound": "No se encontraron personas para \u201c{query}\u201d",
+      "searchUnavailable": "Búsqueda no disponible",
+      "retrySearch": "Reintentar búsqueda",
+      "peopleSearchUnavailable": "Búsqueda de personas no disponible",
+      "searchIndexDelayed": "El índice de búsqueda está retrasado. Mostrando resultados en caché.",
+      "noPeopleFound": "No se encontraron personas para “{query}”",
       "tryDifferentName": "Prueba con un nombre o usuario diferente.",
-      "noMatches": "Sin coincidencias para \u201c{query}\u201d",
-      "noMatchesWithFilters": "Sin coincidencias para \u201c{query}\u201d con estos filtros",
-      "searchingIndex": "Buscando en el \u00edndice\u2026",
-      "tryClearingFilters": "Prueba a borrar tus filtros o ampliar tu b\u00fasqueda.",
-      "tryBroadened": "Prueba {suggestions} \u2014 o explora todas las categor\u00edas.",
-      "noPicksWithFilters": "Ninguna selecci\u00f3n coincide con tus filtros actuales. Ajusta o b\u00f3rralos.",
-      "noPicksNoResults": "A\u00fan no hay resultados clasificados. Prueba una palabra clave m\u00e1s corta."
+      "noMatches": "Sin coincidencias para “{query}”",
+      "noMatchesWithFilters": "Sin coincidencias para “{query}” con estos filtros",
+      "searchingIndex": "Buscando en el índice…",
+      "tryClearingFilters": "Prueba a borrar tus filtros o ampliar tu búsqueda.",
+      "tryBroadened": "Prueba {suggestions} — o explora todas las categorías.",
+      "noPicksWithFilters": "Ninguna selección coincide con tus filtros actuales. Ajusta o bórralos.",
+      "noPicksNoResults": "Aún no hay resultados clasificados. Prueba una palabra clave más corta."
     },
     "noResults": {
-      "browseByCategory": "Explorar por categor\u00eda"
+      "browseByCategory": "Explorar por categoría"
     },
     "follow": {
       "following": "Siguiendo",
@@ -185,16 +187,19 @@
     },
     "verification": {
       "promptTitle": "Verifica tu identidad",
-      "promptSubtitle": "Obt\u00e9n la insignia de verificado y desbloquea las ventas",
+      "promptSubtitle": "Obtén la insignia de verificado y desbloquea las ventas",
       "verified": "Verificado",
-      "getBadge": "Obt\u00e9n la insignia de verificado"
+      "getBadge": "Obtén la insignia de verificado",
+      "trustedSeller": "Vendedor de confianza",
+      "idVerified": "Identidad verificada"
     },
     "health": {
       "verified": "Verificado",
       "twoFA": "2FA",
-      "biometric": "Biom\u00e9trico",
+      "biometric": "Biométrico",
       "payment": "Pago",
-      "address": "Direcci\u00f3n"
+      "address": "Dirección",
+      "emailConfirmed": "Email confirmado"
     },
     "sections": {
       "yourAccount": "Tu cuenta",
@@ -207,45 +212,45 @@
       "account": "Cuenta"
     },
     "rows": {
-      "verification": "Verificaci\u00f3n",
-      "changePassword": "Cambiar contrase\u00f1a",
+      "verification": "Verificación",
+      "changePassword": "Cambiar contraseña",
       "twoFAEnabled": "2FA activado",
-      "passwordOnly": "Solo contrase\u00f1a",
-      "biometricLock": "Bloqueo biom\u00e9trico",
+      "passwordOnly": "Solo contraseña",
+      "biometricLock": "Bloqueo biométrico",
       "biometricNotAvailable": "No disponible en este dispositivo",
       "biometricEnabled": "Face ID, Touch ID y huella para acciones sensibles",
-      "biometricDisabled": "Desactivado \u2014 las pantallas sensibles usan solo contrase\u00f1a",
+      "biometricDisabled": "Desactivado — las pantallas sensibles usan solo contraseña",
       "connectedAccounts": "Cuentas conectadas",
-      "connectedAccountsSubtitle": "Inicio de sesi\u00f3n con Google, Apple",
+      "connectedAccountsSubtitle": "Inicio de sesión con Google, Apple",
       "devicesSessions": "Dispositivos y sesiones",
       "accountControl": "Control de cuenta",
-      "accountControlSubtitle": "Seguridad, sesiones, contrase\u00f1a",
+      "accountControlSubtitle": "Seguridad, sesiones, contraseña",
       "downloadData": "Descargar mis datos",
       "downloadDataSubtitle": "Exporta los datos de tu cuenta",
       "privacySafety": "Privacidad y seguridad",
       "privacySafetySubtitle": "Visibilidad, usuarios bloqueados",
       "chatPrivacy": "Privacidad del chat",
-      "chatPrivacySubtitle": "Qui\u00e9n puede enviarte mensajes",
+      "chatPrivacySubtitle": "Quién puede enviarte mensajes",
       "dataPrivacy": "Datos y privacidad",
-      "dataPrivacySubtitle": "Controles de privacidad y retenci\u00f3n",
+      "dataPrivacySubtitle": "Controles de privacidad y retención",
       "blockedUsers": "Usuarios bloqueados",
       "blockedCount": "{count} bloqueados",
       "savedAddresses": "Direcciones guardadas",
       "oneSaved": "1 guardada",
       "noneSaved": "Ninguna guardada",
-      "paymentMethods": "M\u00e9todos de pago",
+      "paymentMethods": "Métodos de pago",
       "savedCollections": "Guardados y colecciones",
       "payoutAccount": "Cuenta de pagos",
       "payoutAccountSubtitle": "Saldo y billetera",
       "payoutHistory": "Historial de pagos",
-      "shippingPreferences": "Preferencias de env\u00edo",
+      "shippingPreferences": "Preferencias de envío",
       "priceAlerts": "Alertas de precio",
       "priceAlertsSubtitle": "Notificar en umbrales de precio",
-      "autoInvestPlans": "Planes de inversi\u00f3n autom\u00e1tica",
+      "autoInvestPlans": "Planes de inversión automática",
       "autoInvestPlansSubtitle": "Programas de compra recurrente",
       "taxDocuments": "Documentos fiscales",
       "taxDocumentsSubtitle": "Estados anuales y P&G",
-      "resolutionCentre": "Centro de resoluci\u00f3n",
+      "resolutionCentre": "Centro de resolución",
       "resolutionCentreSubtitle": "Disputas y resoluciones",
       "enableNotifications": "Activar notificaciones",
       "permissionUnknown": "Permiso desconocido",
@@ -254,23 +259,23 @@
       "notificationPreferences": "Preferencias de notificaciones",
       "emailPreferences": "Preferencias de email",
       "theme": "Tema",
-      "currencyDisplay": "Visualizaci\u00f3n de moneda",
+      "currencyDisplay": "Visualización de moneda",
       "localCurrency": "Moneda local",
       "language": "Idioma",
       "contentPreferences": "Preferencias de contenido",
       "contentPreferencesSubtitle": "Feed y recomendaciones",
       "recommendations": "Recomendaciones",
-      "recommendationsSubtitle": "Mejora de fotos, sugerencias de t\u00edtulo y precio",
+      "recommendationsSubtitle": "Mejora de fotos, sugerencias de título y precio",
       "yourFeed": "Tu feed",
       "yourFeedSubtitle": "Recomendaciones y transparencia",
       "sustainability": "Sostenibilidad",
-      "sustainabilitySubtitle": "Objetivos, env\u00edo, impacto",
+      "sustainabilitySubtitle": "Objetivos, envío, impacto",
       "accessibility": "Accesibilidad",
-      "accessibilitySubtitle": "Tama\u00f1o de texto, movimiento, contraste",
-      "searchHistory": "Historial de b\u00fasqueda",
-      "searchHistorySubtitle": "Borrar b\u00fasquedas recientes",
+      "accessibilitySubtitle": "Tamaño de texto, movimiento, contraste",
+      "searchHistory": "Historial de búsqueda",
+      "searchHistorySubtitle": "Borrar búsquedas recientes",
       "dataSharing": "Compartir datos",
-      "dataSharingSubtitle": "Anal\u00edtica y personalizacion",
+      "dataSharingSubtitle": "Analítica y personalizacion",
       "agents": "Agentes",
       "agentsSubtitle": "Explorar y gestionar permisos de agentes",
       "connections": "Conexiones",
@@ -278,24 +283,50 @@
       "yourAgents": "Tus agentes",
       "yourAgentsSubtitle": "Agentes que has creado",
       "helpCentre": "Centro de ayuda",
-      "termsOfService": "T\u00e9rminos de servicio",
-      "privacyPolicy": "Pol\u00edtica de privacidad",
+      "termsOfService": "Términos de servicio",
+      "privacyPolicy": "Política de privacidad",
       "aboutThryftverse": "Acerca de Thryftverse",
       "runtimeSmokeTest": "Prueba de runtime",
-      "runtimeSmokeTestSubtitle": "Comprobaciones de diagn\u00f3stico para runtime local",
+      "runtimeSmokeTestSubtitle": "Comprobaciones de diagnóstico para runtime local",
       "deleteAccount": "Eliminar cuenta",
-      "deleteAccountSubtitle": "Borra tu cuenta permanentemente"
+      "deleteAccountSubtitle": "Borra tu cuenta permanentemente",
+      "editProfileAccount": "Editar perfil y cuenta",
+      "biometricLogin": "Inicio de sesión biométrico",
+      "biometricLoginEnabled": "Requerir Face ID, Touch ID o huella al abrir la app",
+      "biometricLoginDisabled": "Desactivado — la app abre directamente a tu cuenta",
+      "notificationCategories": "Categorías de notificaciones",
+      "notificationPreferencesSubtitle": "Horas tranquilas, vista previa",
+      "featureFlags": "Flags de funciones",
+      "featureFlagsSubtitle": "Valores actuales de flags para QA",
+      "autoTranslate": "Traducir mensajes automaticamente",
+      "autoTranslateEnabled": "Mensajes extranjeros traducidos automaticamente",
+      "autoTranslateDisabled": "Toca para traducir mensajes extranjeros manualmente"
     },
     "toast": {
-      "themeApplying": "Aplicando tema {theme}\u2026",
+      "themeApplying": "Aplicando tema {theme}…",
       "pushEnabled": "Notificaciones push activadas",
-      "pushDenied": "Se denegaron las notificaciones push. Act\u00edvalas en los ajustes del dispositivo.",
+      "pushDenied": "Se denegaron las notificaciones push. Actívalas en los ajustes del dispositivo.",
       "pushUpdateFailed": "No se pudo actualizar el permiso de notificaciones push.",
       "pushManageDeviceSettings": "Gestiona las notificaciones push en los ajustes de tu dispositivo.",
-      "searchHistoryCleared": "Historial de b\u00fasqueda borrado",
-      "searchHistoryClearFailed": "No se pudo borrar el historial de b\u00fasqueda"
+      "searchHistoryCleared": "Historial de búsqueda borrado",
+      "searchHistoryClearFailed": "No se pudo borrar el historial de búsqueda",
+      "unableOpenLink": "No se pudo abrir el enlace. Inténtalo de nuevo en un momento."
     },
-    "notificationSummary": "{enabled}/{total} categor\u00edas"
+    "notificationSummary": "{enabled}/{total} categorías",
+    "accessibility": {
+      "editProfileAccount": "Editar perfil y cuenta",
+      "editProfileAccountHint": "Abre el editor de perfil, detalles privados, seguridad y cuenta",
+      "verifyIdentity": "Verificar identidad",
+      "verifyIdentityHint": "Abre la verificación de identidad",
+      "deleteAccountHint": "Abre el flujo de eliminación de cuenta"
+    },
+    "picker": {
+      "currencyTitle": "Elegir moneda local",
+      "themeTitle": "Modo de tema",
+      "themeSystem": "Sistema",
+      "themeLight": "Claro",
+      "themeDark": "Oscuro"
+    }
   },
   "profile": {
     "userProfile": "Perfil de {name}"
@@ -305,11 +336,11 @@
       "title": "Vender",
       "createListing": "Crear anuncio",
       "editTitle": "Editar anuncio",
-      "listingTitle": "T\u00edtulo",
-      "description": "Descripci\u00f3n",
+      "listingTitle": "Título",
+      "description": "Descripción",
       "price": "Precio",
-      "category": "Categor\u00eda",
-      "condition": "Condici\u00f3n",
+      "category": "Categoría",
+      "condition": "Condición",
       "size": "Talla",
       "brand": "Marca",
       "photos": "Fotos",
@@ -317,25 +348,25 @@
       "saveDraft": "Guardar borrador",
       "saved": "Guardado",
       "details": "Detalles",
-      "priceAndCondition": "Precio y condici\u00f3n",
+      "priceAndCondition": "Precio y condición",
       "required": "Obligatorio",
       "optional": "Opcional",
-      "addPhotosTitle": "A\u00f1ade fotos para empezar",
-      "addPhotosSubtitle": "Fotos bien iluminadas desde varios \u00e1ngulos venden m\u00e1s r\u00e1pido.",
+      "addPhotosTitle": "Añade fotos para empezar",
+      "addPhotosSubtitle": "Fotos bien iluminadas desde varios ángulos venden más rápido.",
       "photoTips": "Consejos de fotos",
-      "photoTipsMin": "M\u00edn. 3 fotos recomendadas",
-      "photoTipLighting": "Buena iluminaci\u00f3n",
-      "photoTipAngles": "Muestra todos los \u00e1ngulos",
+      "photoTipsMin": "Mín. 3 fotos recomendadas",
+      "photoTipLighting": "Buena iluminación",
+      "photoTipAngles": "Muestra todos los ángulos",
       "photoTipBackground": "Fondo natural",
       "titlePlaceholder": "ej. Chaqueta vaquera Levi's 501 Vintage",
-      "descriptionHelper": "A\u00f1ade m\u00e1s detalles para ayudar a los compradores a encontrar este art\u00edculo",
+      "descriptionHelper": "Añade más detalles para ayudar a los compradores a encontrar este artículo",
       "suggestedDetails": "Detalles sugeridos",
-      "applyToEmptyFields": "Aplicar a campos vac\u00edos",
+      "applyToEmptyFields": "Aplicar a campos vacíos",
       "startingBid": "Puja inicial",
       "reservePriceOptional": "Precio de reserva (opcional)",
-      "duration": "Duraci\u00f3n",
-      "totalValuation": "Valoraci\u00f3n total",
-      "originalPriceHelper": "A\u00f1ade el precio original para mostrar el valor",
+      "duration": "Duración",
+      "totalValuation": "Valoración total",
+      "originalPriceHelper": "Añade el precio original para mostrar el valor",
       "readyToPublish": "Listo para publicar",
       "bulkList": "Publicar en lote",
       "inventory": "Inventario",
@@ -343,78 +374,363 @@
       "tapToSet": "Tocar para establecer"
     },
     "detail": {
-      "addToCart": "A\u00f1adir al carrito",
+      "addToCart": "Añadir al carrito",
       "buyNow": "Comprar ahora",
       "makeOffer": "Hacer oferta",
       "seller": "Vendedor",
-      "itemCondition": "Condici\u00f3n",
+      "itemCondition": "Condición",
       "itemSize": "Talla",
       "itemBrand": "Marca",
       "postedOn": "Publicado el {{date}}",
-      "addedToWishlist": "A\u00f1adido a favoritos",
-      "priceDropAlertsEnabled": "Alertas de bajada de precio activadas para este art\u00edculo",
+      "addedToWishlist": "Añadido a favoritos",
+      "priceDropAlertsEnabled": "Alertas de bajada de precio activadas para este artículo",
       "priceDropAlertsDisabled": "Alertas de bajada de precio desactivadas",
-      "couldNotUpdatePriceAlert": "No se pudo actualizar la alerta de precio. Int\u00e9ntalo de nuevo.",
+      "couldNotUpdatePriceAlert": "No se pudo actualizar la alerta de precio. Inténtalo de nuevo.",
       "browseSimilar": "Explorar similares",
       "manageListing": "Gestionar anuncio"
     }
   },
   "messaging": {
     "compose": {
-      "placeholder": "Mensaje\u2026",
+      "placeholder": "Mensaje…",
       "send": "Enviar",
       "attach": "Adjuntar",
       "attachPhoto": "Foto",
-      "attachCamera": "C\u00e1mara"
+      "attachCamera": "Cámara",
+      "inputAccessibility": "Entrada de mensaje",
+      "dismissSafetyWarning": "Descartar aviso de seguridad",
+      "dismissCautionWarning": "Descartar aviso de precaución",
+      "removeAttachment": "Quitar adjunto",
+      "addAttachment": "Añadir adjunto",
+      "openCamera": "Abrir cámara",
+      "quickReply": "Respuesta rápida: {{label}}"
     },
     "conversation": {
       "title": "Mensajes",
-      "empty": "Sin mensajes a\u00fan",
-      "startChatting": "Env\u00eda un mensaje abajo para empezar.",
-      "startConversation": "Iniciar la conversaci\u00f3n",
-      "typing": "{{name}} est\u00e1 escribiendo\u2026",
-      "onlineNow": "En l\u00ednea ahora",
+      "empty": "Sin mensajes aún",
+      "startChatting": "Envía un mensaje abajo para empezar.",
+      "startConversation": "Iniciar la conversación",
+      "typing": "{{name}} está escribiendo…",
+      "onlineNow": "En línea ahora",
       "newMessages": "Mensajes nuevos",
-      "undo": "Deshacer"
+      "undo": "Deshacer",
+      "message": "Mensaje",
+      "mediaPress": "Pulsación de medio",
+      "messageSent": "Mensaje enviado",
+      "sending": "Enviando…",
+      "draft": "Borrador",
+      "ai": "AI",
+      "retryDraft": "Toca para reintentar",
+      "sendDraft": "Enviar",
+      "memberCount": "{{count}} miembros",
+      "loadError": "No se pudieron cargar los mensajes. Comprueba tu conexión e inténtalo de nuevo.",
+      "offlineMessage": "Estás sin conexión. Los mensajes se enviarán cuando te reconectes.",
+      "copied": "Copiado",
+      "reportSubmitted": "Reporte enviado. Gracias.",
+      "reportFailed": "No se pudo enviar el reporte. Inténtalo de nuevo.",
+      "exitSelectionMode": "Salir del modo de selección",
+      "exitSelectionModeHint": "Cierra la barra de selección de mensajes",
+      "deleteSelected": "Eliminar mensajes seleccionados",
+      "deleteSelectedHint": "Elimina permanentemente los mensajes seleccionados de esta conversación",
+      "undoMessageDeletion": "Deshacer eliminación de mensaje",
+      "reactWith": "Reaccionar con {{emoji}}",
+      "openLink": "Abrir enlace a {{domain}}",
+      "typingIndicator": "Escribiendo..."
+    },
+    "inbox": {
+      "primary": "Principal",
+      "buying": "Comprando",
+      "selling": "Vendiendo",
+      "tabBadge": "Pestaña {{label}}{{plural}}",
+      "newBadge": ", {{count}} nuevos",
+      "openConversation": "Abrir {{title}}",
+      "performAction": "{{action}} {{title}}",
+      "performSecondaryAction": "{{action}} {{title}}",
+      "linkedListing": "Anuncio vinculado: {{title}}, {{price}}, {{availability}}",
+      "listingHint": "Abre la página de detalle del anuncio",
+      "scrollToBottom": "Ir al final{{unread}}",
+      "scrollToBottomHint": "Desplaza al último mensaje",
+      "unread": ", {{count}} sin leer"
+    },
+    "requests": {
+      "title": "Solicitudes de mensaje",
+      "noRequests": "Sin solicitudes de mensaje",
+      "noRequestsSubtitle": "Los mensajes de personas que no sigues aparecen aquí.",
+      "acceptMessageRequest": "Aceptar solicitud de mensaje",
+      "deleteMessageRequest": "Eliminar solicitud de mensaje",
+      "deleteConfirmationTitle": "¿Eliminar solicitud?",
+      "deleteConfirmationMessage": "Esto elimina la solicitud. Pueden enviarte otro mensaje más adelante.",
+      "blockConfirmationTitle": "¿Bloquear a {{name}}?",
+      "blockConfirmationMessage": "No podrán enviarte mensajes ni ver tu perfil. La solicitud se eliminará.",
+      "accepted": "Solicitud aceptada",
+      "acceptError": "No se pudo aceptar esta solicitud. Comprueba tu conexión e inténtalo de nuevo.",
+      "deleted": "Solicitud eliminada",
+      "deleteError": "No se pudo eliminar esta solicitud. Comprueba tu conexión e inténtalo de nuevo.",
+      "blockError": "No se pudo bloquear esta cuenta. Comprueba tu conexión e inténtalo de nuevo.",
+      "reportError": "Esta cuenta no se puede reportar aquí.",
+      "blocked": "{{name}} bloqueado"
+    },
+    "archived": {
+      "title": "Conversaciones archivadas",
+      "subtitle": "Las conversaciones restauradas vuelven a tu bandeja de entrada",
+      "noArchived": "Sin conversaciones archivadas",
+      "noArchivedSubtitle": "Las conversaciones que archivas se mantienen fuera de tu bandeja sin eliminarse.",
+      "clearAllConversations": "Borrar todas las conversaciones archivadas",
+      "removeConfirmationTitle": "¿Quitar de la bandeja?",
+      "removeConfirmationMessage": "\"{{title}}\" se eliminará de tus conversaciones archivadas.",
+      "clearAllConfirmationTitle": "¿Borrar todo lo archivado?",
+      "clearAllConfirmationMessage": "Todas las conversaciones archivadas se eliminarán permanentemente.",
+      "restored": "Conversación restaurada a la bandeja",
+      "restoreError": "No se pudo restaurar esta conversación. Comprueba tu conexión e inténtalo de nuevo.",
+      "removed": "Conversación eliminada",
+      "removeError": "No se pudo eliminar esta conversación. Comprueba tu conexión e inténtalo de nuevo.",
+      "cleared": "Archivo borrado",
+      "clearError": "{{deleted}} eliminados · {{failed}} fallidos"
+    },
+    "muted": {
+      "title": "Conversaciones silenciadas",
+      "subtitle": "Las notificaciones están pausadas para estos chats",
+      "noMuted": "Sin conversaciones silenciadas",
+      "noMutedSubtitle": "No has silenciado ningún chat. Las conversaciones silenciadas aparecerán aquí.",
+      "unmute": "Dejar de silenciar",
+      "unmuteError": "No se pudo dejar de silenciar esta conversación. Comprueba tu conexión e inténtalo de nuevo."
+    },
+    "sharedMedia": {
+      "title": "Medios compartidos",
+      "noMedia": "Sin medios compartidos aún",
+      "noMediaSubtitle": "Las fotos y vídeos compartidos en esta conversación aparecerán aquí.",
+      "videoThumbnail": "Miniatura del vídeo",
+      "deleteSelected": "Eliminar medios seleccionados",
+      "summary": "{{photoCount}} foto{{photoPlural}} · {{videoCount}} vídeo{{videoPlural}}",
+      "selectItem": "{{action}} {{type}}",
+      "select": "Seleccionar",
+      "deselect": "Deseleccionar",
+      "photo": "foto",
+      "video": "vídeo",
+      "selectedCount": "{{count}} seleccionados",
+      "removeSelectedHint": "Elimina {{count}} elemento(s) seleccionado(s){{plural}}",
+      "filter": "Filtro {{label}}"
+    },
+    "attachments": {
+      "reviewTitle": "Revisar adjunto",
+      "cancelAttachment": "Cancelar adjunto",
+      "captionPlaceholder": "Añade un pie…",
+      "captionAccessibility": "Pie del adjunto",
+      "sendAttachment": "Enviar adjunto",
+      "actionSheetTitle": "Adjuntar",
+      "actionSheetSubtitle": "Comparte fotos y vídeos en este chat",
+      "photoAndVideo": "Foto y vídeo",
+      "chooseFromLibrary": "Elegir de tu galería",
+      "camera": "Cámara",
+      "takePhotoOrVideo": "Tomar una foto o vídeo nuevo",
+      "makeOffer": "Hacer oferta",
+      "product": "Producto",
+      "priceQuote": "Cotización de precio",
+      "shareListing": "Compartir anuncio",
+      "orderStatus": "Estado del pedido",
+      "payment": "Pago",
+      "agent": "Agente"
+    },
+    "offers": {
+      "declineOffer": "Rechazar oferta",
+      "counterOffer": "Contraoferta",
+      "acceptOffer": "Aceptar oferta",
+      "declined": "Rechazada",
+      "accepted": "Aceptada",
+      "expired": "Expirada",
+      "waitingForResponse": "Esperando respuesta",
+      "pass": "Pasar",
+      "counter": "Contrar",
+      "accept": "Aceptar",
+      "verified": "Verificado",
+      "verifiedSystemUpdate": "Actualización del sistema verificada",
+      "counterRound": "Contraoferta #{{round}}",
+      "expiresIn": "Expira en {{time}}"
+    },
+    "agentPicker": {
+      "title": "Añadir agente AI",
+      "sheet": "Hoja de añadir agente AI",
+      "connect": "Conecta un asistente para ayudar en este chat",
+      "demoNotice": "Los asistentes de demostración sugieren respuestas simuladas",
+      "noAgents": "No hay agentes disponibles",
+      "noAgentsBody": "Crea un agente desde la pantalla de Agentes para empezar.",
+      "loading": "Cargando agentes desplegados…",
+      "loadError": "No se pudieron cargar los agentes",
+      "loadErrorBody": "No pudimos contactar con el servidor. Desliza para intentarlo de nuevo.",
+      "noAgentsDeployed": "No hay agentes desplegados",
+      "noAgentsDeployedBody": "Instala un agente en esta conversación desde la pantalla de Agentes.",
+      "addAssistant": "Añadir asistente",
+      "addAssistantDescription": "Despliega un asistente AI en este chat",
+      "addAgent": "Añadir agente {{name}}",
+      "alreadyAdded": "{{name}} ya añadido",
+      "openManagement": "Abrir gestión de agentes",
+      "activeOne": "{{name}} está activo. Toca para gestionar agentes.",
+      "activeMany": "{{count}} agentes están activos. Toca para gestionar agentes.",
+      "activeShortOne": "{{name}} activo",
+      "activeShortMany": "{{count}} agentes activos",
+      "retryDraft": "Reintentar envío del borrador del agente",
+      "sendDraft": "Enviar borrador del agente"
+    },
+    "suggestedReplies": {
+      "title": "Respuestas sugeridas",
+      "titleFrom": "Respuestas sugeridas de {{agentName}}",
+      "use": "Usar respuesta sugerida: {{reply}}",
+      "fill": "Rellena la entrada de mensaje con esta respuesta",
+      "dismiss": "Descartar respuestas sugeridas",
+      "dismissHint": "Oculta las respuestas sugeridas para esta conversación",
+      "manage": "Gestionar respuestas"
+    },
+    "voice": {
+      "notAvailable": "Los mensajes de voz no están disponibles",
+      "notSupportedHint": "La grabación de audio no es compatible en esta versión",
+      "micPermission": "Permiso de micrófono denegado. Toca para solicitar permiso.",
+      "deleteRecording": "Eliminar grabación y empezar de nuevo",
+      "readyToSend": "Listo para enviar",
+      "sendVoice": "Enviar mensaje de voz",
+      "sendVoiceHint": "Envía la grabación. No se puede deshacer.",
+      "stopRecording": "Detener grabación y revisar",
+      "stopRecordingHint": "Toca para finalizar la grabación. Revisa antes de enviar.",
+      "cancelRecording": "Cancelar grabación y eliminarla",
+      "recordVoice": "Grabar mensaje de voz",
+      "recordVoiceHint": "Toca para empezar a grabar. Toca detener para revisar antes de enviar.",
+      "voiceMessage": "Mensaje de voz, {{duration}} de duración{{state}}",
+      "playbackSpeed": "Velocidad de reproducción {{rate}} veces",
+      "playHint": "Doble toque para reproducir o pausar. Usa las acciones para buscar, cambiar la velocidad o solicitar transcripción.",
+      "loadError": "No se pudo cargar el audio"
+    },
+    "transcription": {
+      "show": "Mostrar transcripción de este mensaje de voz",
+      "showHint": "Solicita una transcripción automática. El texto es derivado, no las palabras del remitente.",
+      "title": "Transcripción",
+      "notAvailable": "Transcripción no disponible para este formato de audio",
+      "close": "Cerrar transcripción",
+      "failed": "Transcripción fallida",
+      "temporarilyUnavailable": "Temporalmente no disponible",
+      "retryTranscription": "Reintentar transcripción",
+      "requesting": "Solicitando transcripción…",
+      "transcribing": "Transcribiendo audio…",
+      "empty": "(transcripción vacía)",
+      "derivedLabel": "Transcrito automáticamente",
+      "accurate": "Marcar transcripción como precisa",
+      "inaccurate": "Marcar transcripción como imprecisa",
+      "loadError": "No se pudo cargar la transcripción"
+    },
+    "orders": {
+      "placed": "Pedido realizado",
+      "placedBody": "Se ha notificado al vendedor.",
+      "paymentConfirmed": "Pago confirmado",
+      "paymentConfirmedBody": "Tu pago ha sido procesado.",
+      "shipped": "Pedido enviado",
+      "shippedBody": "El paquete ha sido despachado.",
+      "inTransit": "En tránsito",
+      "inTransitBody": "Tu paquete está en camino.",
+      "delivered": "Entregado",
+      "deliveredBody": "La entrega ha sido confirmada.",
+      "cancelled": "Pedido cancelado",
+      "cancelledBody": "Este pedido ha sido cancelado.",
+      "refunded": "Reembolsado",
+      "refundedBody": "Tu pago ha sido reembolsado.",
+      "orderPreview": "{{title}}. {{subtitle}}. {{orderId}}. {{timestamp}}. Toca para ver los detalles del pedido.",
+      "viewDetails": "Ver detalles",
+      "dispatchItem": "Despachar artículo",
+      "trackParcel": "Seguir paquete",
+      "checkItem": "Comprobar artículo",
+      "viewOrder": "Ver pedido",
+      "shipBy": "Enviar antes del {{date}}",
+      "eta": "ETA {{window}}",
+      "etaWindow": "{{min}}–{{max}} días",
+      "etaDay": "{{count}} día",
+      "orderStatusAccessibility": "Pedido {{status}}{{deadline}}{{cta}}"
+    },
+    "safety": {
+      "title": "Mantén los pagos en ThryftVerse",
+      "body": "Los pagos fuera de la plataforma no están cubiertos por la Protección al Comprador. Si es una transacción legítima, complétala en la app para estar protegido.",
+      "dismiss": "Descartar aviso",
+      "reportConversation": "Reportar esta conversación"
+    },
+    "search": {
+      "placeholder": "Buscar en el chat",
+      "inConversation": "Buscar en la conversación",
+      "previousResult": "Resultado anterior",
+      "nextResult": "Resultado siguiente",
+      "closeSearch": "Cerrar búsqueda",
+      "browseResults": "Ver resultados en explorar",
+      "browseResultsHint": "Abre la pantalla de explorar con los filtros coincidentes aplicados",
+      "refine": "Refinar búsqueda: {{suggestion}}",
+      "refineHint": "Añade este refinamiento a tu búsqueda",
+      "searchFor": "Buscar {{suggestion}}",
+      "startQueryHint": "Inicia una búsqueda conversacional con esta consulta",
+      "queryInput": "Entrada de consulta de búsqueda",
+      "queryInputHint": "Escribe una descripción en lenguaje natural de lo que quieres encontrar",
+      "sendQuery": "Enviar consulta de búsqueda",
+      "sendQueryHint": "Envía tu consulta e inicia la búsqueda conversacional",
+      "retry": "Reintentar búsqueda",
+      "retryHint": "Reenvía tu última consulta de búsqueda"
+    },
+    "common": {
+      "cancel": "Cancelar",
+      "goBack": "Volver",
+      "verifiedUser": "Usuario verificado",
+      "retry": "Reintentar",
+      "delete": "Eliminar",
+      "block": "Bloquear",
+      "report": "Reportar",
+      "remove": "Quitar",
+      "clearAll": "Borrar todo",
+      "restore": "Restaurar",
+      "blockWithName": "Bloquear a {{name}}",
+      "reportWithName": "Reportar a {{name}}"
+    },
+    "messageActions": {
+      "dismissReply": "Descartar respuesta",
+      "scrollToOriginal": "Desplaza al mensaje original",
+      "quotedReply": "Respuesta citada de {{sender}}"
+    },
+    "translation": {
+      "translate": "Traducir",
+      "showOriginal": "Mostrar original",
+      "translating": "Traduciendo...",
+      "translationFailed": "Traduccion no disponible",
+      "translatedFrom": "Traducido del {{language}}"
     }
   },
   "commerce": {
     "checkout": {
       "title": "Finalizar compra",
       "subtotal": "Subtotal",
-      "shipping": "Env\u00edo",
+      "shipping": "Envío",
       "tax": "Impuesto",
       "total": "Total",
       "payNow": "Pagar ahora",
-      "paymentMethod": "M\u00e9todo de pago",
-      "deliveryAddress": "Direcci\u00f3n de entrega",
+      "paymentMethod": "Método de pago",
+      "deliveryAddress": "Dirección de entrega",
       "orderPlaced": "Pedido realizado",
       "orderFailed": "Pedido fallido",
-      "signInToCheckout": "Inicia sesi\u00f3n para finalizar la compra",
-      "signIn": "Iniciar sesi\u00f3n",
+      "signInToCheckout": "Inicia sesión para finalizar la compra",
+      "signIn": "Iniciar sesión",
       "cannotPurchaseOwnListing": "No puedes comprar tu propio anuncio",
-      "cannotBuyOwnItem": "No puedes comprar un art\u00edculo que pusiste a la venta.",
-      "itemUnavailable": "Art\u00edculo no disponible",
+      "cannotBuyOwnItem": "No puedes comprar un artículo que pusiste a la venta.",
+      "itemUnavailable": "Artículo no disponible",
       "listingNoLongerPurchasable": "Este anuncio ya no se puede comprar.",
       "goBack": "Volver",
       "delivery": "Entrega",
-      "noAddress": "Sin direcci\u00f3n",
+      "noAddress": "Sin dirección",
       "change": "Cambiar",
-      "add": "A\u00f1adir",
-      "noPaymentMethod": "Sin m\u00e9todo de pago",
+      "add": "Añadir",
+      "noPaymentMethod": "Sin método de pago",
       "requiredForDelivery": "Necesario para la entrega",
       "needsSavingBeforePayment": "Guardar antes de pagar",
-      "shippingNotAvailable": "Env\u00edo no disponible para tu regi\u00f3n",
-      "cardsUnavailableRegion": "Tarjetas no disponibles en tu regi\u00f3n",
-      "securePayment": "Pago seguro \u00b7 datos de tarjeta cifrados",
+      "shippingNotAvailable": "Envío no disponible para tu región",
+      "cardsUnavailableRegion": "Tarjetas no disponibles en tu región",
+      "securePayment": "Pago seguro · datos de tarjeta cifrados",
       "useWalletBalance": "Usar saldo de la billetera",
       "available": "disponible",
       "retryPayment": "Reintentar pago",
       "tryAgain": "Intentar de nuevo",
-      "addAddress": "A\u00f1adir direcci\u00f3n",
-      "addPayment": "A\u00f1adir pago",
-      "item": "Art\u00edculo",
-      "buyerProtection": "Protecci\u00f3n del comprador",
+      "addAddress": "Añadir dirección",
+      "addPayment": "Añadir pago",
+      "item": "Artículo",
+      "buyerProtection": "Protección del comprador",
       "walletApplied": "Billetera aplicada",
       "viewFullBreakdown": "Ver desglose completo",
       "fullBreakdown": "Desglose completo",
@@ -422,16 +738,16 @@
       "payWithGooglePay": "Pagar con Google Pay",
       "payWithCard": "Pagar con tarjeta",
       "processing": "Procesando",
-      "waitingForConfirmation": "Esperando confirmaci\u00f3n",
+      "waitingForConfirmation": "Esperando confirmación",
       "savingWithWallet": "Ahorrando {{amount}} con saldo de la billetera",
-      "shippingQuoteUnavailable": "Cotizaci\u00f3n de env\u00edo no disponible \u2014 continuando con env\u00edo est\u00e1ndar.",
-      "addDeliveryAddressToContinue": "A\u00f1ade una direcci\u00f3n de entrega para continuar.",
-      "addPaymentMethodToContinue": "A\u00f1ade un m\u00e9todo de pago para continuar.",
+      "shippingQuoteUnavailable": "Cotización de envío no disponible — continuando con envío estándar.",
+      "addDeliveryAddressToContinue": "Añade una dirección de entrega para continuar.",
+      "addPaymentMethodToContinue": "Añade un método de pago para continuar.",
       "estimated": "Estimado",
       "tracking": "Seguimiento",
       "closeCheckout": "Cerrar checkout",
       "paymentInProgress": "Pago en proceso",
-      "paymentInProgressBody": "La confirmaci\u00f3n del pago puede completarse despu\u00e9s de salir. Revisa tus pedidos antes de intentarlo de nuevo.",
+      "paymentInProgressBody": "La confirmación del pago puede completarse después de salir. Revisa tus pedidos antes de intentarlo de nuevo.",
       "stay": "Quedarse",
       "leave": "Salir"
     },
@@ -459,28 +775,28 @@
       "withdrawAmount": "Cantidad a retirar",
       "withdrawSuccess": "Retiro solicitado",
       "withdrawFailed": "Retiro fallido",
-      "addMoney": "A\u00f1adir dinero",
+      "addMoney": "Añadir dinero",
       "transactionHistory": "Historial de transacciones",
       "convert": "Convertir",
       "recentActivity": "Actividad reciente",
       "seeAll": "Ver todo",
-      "noBalanceYet": "Sin 1ZE a\u00fan",
-      "addMoneyToStart": "A\u00f1ade dinero para empezar a operar unidades Co-Own.",
+      "noBalanceYet": "Sin 1ZE aún",
+      "addMoneyToStart": "Añade dinero para empezar a operar unidades Co-Own.",
       "authenticateToView": "Autentica para ver tu billetera",
       "showBalance": "Mostrar saldo",
       "hideBalance": "Ocultar saldo",
       "balanceHidden": "Saldo oculto",
       "reservedForOrders": "Reservado para pedidos",
-      "redemptionPending": "Redenci\u00f3n pendiente",
+      "redemptionPending": "Redención pendiente",
       "otherHolds": "Otras retenciones",
-      "pendingDeposit": "Dep\u00f3sito pendiente",
+      "pendingDeposit": "Depósito pendiente",
       "unsettledSaleProceeds": "Ingresos de venta no liquidados",
       "withdrawable": "Retirable",
       "sellerEarnings": "Ingresos del vendedor",
       "safeguarded": "Protegido",
-      "safeguardingPending": "Protecci\u00f3n pendiente",
+      "safeguardingPending": "Protección pendiente",
       "evidence": "Evidencia",
-      "terms": "T\u00e9rminos",
+      "terms": "Términos",
       "activity": "Actividad"
     },
     "order": {
@@ -492,6 +808,876 @@
       "statusDelivered": "Entregado",
       "statusCancelled": "Cancelado",
       "statusRefunded": "Reembolsado"
+    }
+  },
+  "myProfile": {
+    "cover": {
+      "uploadFailed": "Error al subir la portada",
+      "retry": "Reintentar",
+      "cancel": "Cancelar"
+    },
+    "utility": {
+      "orders": "Pedidos",
+      "analytics": "Analítica",
+      "closet": "Armario",
+      "wallet": "Billetera",
+      "auctions": "Subastas",
+      "coOwn": "Coproiedad",
+      "sellerHub": "Centro del vendedor",
+      "itemsCount": "{{count}} artículos",
+      "assetsCount": "{{count}} activos"
+    },
+    "notSignedIn": {
+      "subtitle": "Inicia sesión para ver tu perfil, anuncios y billetera.",
+      "signIn": "Iniciar sesión"
+    },
+    "holiday": {
+      "title": "El modo vacaciones está activado",
+      "subtitle": "Tu tienda está pausada. Toca para gestionar."
+    },
+    "tabs": {
+      "shop": "Tienda",
+      "looks": "Looks",
+      "about": "Acerca de",
+      "reviews": "Reseñas"
+    },
+    "listings": {
+      "emptyTitle": "Publica tu primer artículo",
+      "emptyBody": "Fotografía un artículo y publícalo cuando estés listo.",
+      "startSelling": "Empezar a vender",
+      "bringOverListings": "Importa tus anuncios existentes",
+      "viewAll": "Ver todo",
+      "sold": "VENDIDO",
+      "listingsCount": "{{count}} anuncios"
+    },
+    "looks": {
+      "errorTitle": "No se pudieron cargar tus Looks",
+      "errorSubtitle": "Comprueba tu conexión e inténtalo de nuevo.",
+      "tryAgain": "Intentar de nuevo",
+      "emptyTitle": "Aún no hay Looks",
+      "emptySubtitle": "Crea tu primer Look para mostrar tu estilo.",
+      "createLook": "Crear Look"
+    },
+    "about": {
+      "coOwnPortfolio": "PORTAFOLIO DE COPROPIEDAD",
+      "viewAll": "Ver todo",
+      "unit": "unidad",
+      "units": "unidades",
+      "website": "Sitio web",
+      "shopPolicies": "Políticas de la tienda",
+      "payments": "Pagos",
+      "paymentsValue": "Pago seguro con protección al comprador",
+      "shipping": "Envío",
+      "shippingSeller": "El vendedor {{label}}. Seguimiento disponible al enviar.",
+      "shippingDefault": "Seguimiento disponible al enviar.",
+      "returns": "Devoluciones",
+      "returnsValue": "Se aceptan devoluciones de artículos que no coincidan con la descripción.",
+      "responseRate": "Tasa de respuesta",
+      "response": "Respuesta",
+      "responseSeller": "El vendedor suele responder {{label}}.",
+      "responseDefault": "El vendedor intenta responder con prontitud.",
+      "noDetails": "No hay detalles adicionales disponibles."
+    },
+    "completion": {
+      "title": "Completa tu perfil",
+      "progress": "{{percent}}% · {{done}}/{{total}}"
+    },
+    "growth": {
+      "title": "Crece en Thryftverse",
+      "listFirstItemTitle": "Publica tu primer artículo",
+      "listFirstItemSub": "Fotografía y publica un artículo para empezar a vender.",
+      "growAudienceTitle": "Haz crecer tu audiencia",
+      "growAudienceSub": "Comparte tu perfil y crea contenido para atraer seguidores."
+    },
+    "toast": {
+      "coverUpdated": "Portada actualizada",
+      "coverUploadFailed": "Error al subir la portada",
+      "avatarUpdated": "Avatar actualizado",
+      "avatarUploadFailed": "Error al subir el avatar",
+      "portfolioLoadFailed": "No se pudo cargar el portafolio"
+    },
+    "accessibility": {
+      "orders": "Pedidos",
+      "creatorAnalytics": "Analítica del creador",
+      "closet": "Armario",
+      "wallet": "Billetera",
+      "browseAuctions": "Explorar subastas",
+      "browseCoOwnMarket": "Explorar mercado de copropiedad",
+      "sellerHub": "Centro del vendedor",
+      "openSettings": "Abrir ajustes",
+      "openSettingsHint": "Abre los ajustes",
+      "shareProfile": "Compartir perfil",
+      "shareProfileHint": "Abre la hoja de compartir del sistema para compartir tu perfil",
+      "retryCoverUpload": "Reintentar subida de portada",
+      "cancelCoverChange": "Cancelar cambio de portada",
+      "uploadingCover": "Subiendo portada del perfil",
+      "changeCover": "Cambiar portada del perfil",
+      "holidayMode": "El modo vacaciones está activado — toca para gestionar",
+      "importListingsHint": "Inicia una importación de catálogo desde eBay o un archivo",
+      "loadingLooks": "Cargando tus Looks",
+      "viewCoOwnPortfolio": "Ver portafolio de copropiedad",
+      "viewCoOwnPortfolioHint": "Abre tu centro de participaciones de copropiedad",
+      "dismissCompletion": "Descartar aviso de completar perfil",
+      "dismissGrowth": "Descartar avisos de crecimiento",
+      "listFirstItemHint": "Abre el flujo de venta para crear tu primer anuncio",
+      "growAudienceHint": "Abre la analítica del creador con herramientas de crecimiento de audiencia"
+    },
+    "completionCta": {
+      "addName": "Añadir nombre",
+      "addBio": "Añadir biografía",
+      "addPhoto": "Añadir foto",
+      "addCover": "Añadir portada",
+      "editProfile": "Editar perfil"
+    },
+    "share": {
+      "message": "¡Echa un vistazo a @{{username}} en Thryftverse! https://thryftverse.com/@{{username}}",
+      "title": "{{name}} en Thryftverse"
+    }
+  },
+  "galleria": {
+    "editorial": {
+      "eyebrow": "EDITORIAL"
+    },
+    "collections": {
+      "eyebrow": "COLECCIONES CURADAS",
+      "curatedBy": "Curada por {{curator}}"
+    },
+    "assets": {
+      "eyebrow": "ACTIVOS DESTACADOS",
+      "title": "Destacados de copropiedad"
+    },
+    "editorialList": {
+      "eyebrow": "EDITORIAL",
+      "title": "Historias desde la Galleria"
+    },
+    "creativeTools": {
+      "eyebrow": "HERRAMIENTAS CREATIVAS",
+      "title": "Hazlo tuyo",
+      "posterStudio": "Estudio de pósters",
+      "posterStudioSub": "Crea pósters, looks y collages de moodboard"
+    },
+    "demo": {
+      "content": "Contenido de demostración"
+    },
+    "offline": {
+      "banner": "Sin conexión — mostrando contenido en caché de la Galleria"
+    },
+    "error": {
+      "title": "Galleria no disponible",
+      "retry": "Reintentar",
+      "loadFailed": "No pudimos cargar la Galleria. Inténtalo de nuevo."
+    },
+    "empty": {
+      "title": "La Galleria se está curando",
+      "subtitle": "Nuestros curadores están preparando nuevas colecciones y piezas editoriales. Vuelve pronto.",
+      "refresh": "Actualizar"
+    },
+    "accessibility": {
+      "loadingCollections": "Cargando colecciones curadas",
+      "collectionsRail": "Carril de colecciones curadas",
+      "openPosterStudio": "Abrir Estudio de pósters",
+      "posterStudioHint": "Crea pósters, looks y collages de moodboard",
+      "editorial": "Editorial: {{title}}",
+      "collection": "Colección: {{title}}",
+      "collectionHint": "Abre el detalle de la colección",
+      "featuredCollection": "Colección destacada: {{title}}",
+      "asset": "{{title}}, valorado en {{value}}",
+      "assetHint": "Abre el detalle del activo"
+    }
+  },
+  "agentLedger": {
+    "header": {
+      "title": "Ejecuciones de agentes",
+      "subtitle": "Registros de ejecución respaldados por el servidor"
+    },
+    "status": {
+      "succeeded": "Completado",
+      "failed": "Fallido",
+      "running": "En ejecución",
+      "queued": "En cola",
+      "cancelled": "Cancelado",
+      "timedOut": "Tiempo agotado",
+      "unknown": "Desconocido",
+      "awaitingApproval": "Pendiente de aprobación",
+      "awaitingInput": "Pendiente de entrada"
+    },
+    "error": {
+      "title": "No se pudieron cargar las ejecuciones",
+      "retry": "Reintentar",
+      "loadFailed": "Error al cargar las ejecuciones"
+    },
+    "empty": {
+      "title": "Aún no hay ejecuciones de agentes",
+      "body": "Cuando los agentes se ejecutan — mediante menciones, comandos o programaciones — sus ejecuciones aparecen aquí con estado, uso de tokens y tiempos."
+    },
+    "footer": {
+      "note": "El registro de actividad local mostrado anteriormente ha sido reemplazado por registros de ejecución respaldados por el servidor."
+    },
+    "approvals": {
+      "title": "Aprobaciones pendientes",
+      "approving": "Aprobando…",
+      "approve": "Aprobar",
+      "approveAction": "Aprobar solicitud de {{botName}}",
+      "rejecting": "Rechazando…",
+      "reject": "Rechazar",
+      "rejectAction": "Rechazar solicitud de {{botName}}",
+      "errorApproveTitle": "No se pudo aprobar",
+      "errorApproveMessage": "No se pudo aprobar la solicitud.",
+      "errorRejectTitle": "No se pudo rechazar",
+      "errorRejectMessage": "No se pudo rechazar la solicitud."
+    },
+    "cancel": {
+      "cancelling": "Cancelando…",
+      "cancel": "Cancelar",
+      "cancelAction": "Cancelar ejecución de {{botName}}",
+      "confirmTitle": "Cancelar ejecución del agente",
+      "confirmMessage": "¿Cancelar la ejecución de {{botName}}?",
+      "confirmLabel": "Cancelar ejecución",
+      "errorTitle": "No se pudo cancelar",
+      "errorMessage": "No se pudo cancelar la ejecución."
+    },
+    "tools": {
+      "search": "Buscar: {{searchQuery}}",
+      "listing": "Anuncio: {{listingId}}",
+      "priceHistory": "Historial de precios: {{searchQuery}}",
+      "readMessages": "Leer {{count}} mensajes"
+    },
+    "time": {
+      "justNow": "Justo ahora",
+      "minutesAgo": "hace {{count}} min",
+      "hoursAgo": "hace {{count}} h",
+      "daysAgo": "hace {{count}} d"
+    },
+    "tokens": {
+      "usage": "{{input}} entrada · {{output}} salida"
+    }
+  },
+  "liveStreamViewer": {
+    "lotStatus": {
+      "comingUp": "Próximamente",
+      "openForBidding": "Abierto para pujas",
+      "closingSoon": "¡Cerrando pronto!",
+      "sold": "Vendido por £{{price}}",
+      "passed": "Pasado (reserva no alcanzada)",
+      "cancelled": "Cancelado"
+    },
+    "toast": {
+      "couldNotSend": "No se pudo enviar el mensaje",
+      "bidFailed": "Puja fallida",
+      "bidNotAccepted": "La puja no fue aceptada",
+      "stillChecking": "Aún comprobando — es posible que tu puja se haya realizado",
+      "purchaseComplete": "Compra completada — revisa tu bandeja de entrada",
+      "couldNotPurchase": "No se pudo completar la compra",
+      "followDemoUnavailable": "Seguir no disponible en modo demostración",
+      "followUnavailable": "Seguir no disponible",
+      "unfollowed": "Has dejado de seguir",
+      "following": "Siguiendo",
+      "followError": "No se pudo actualizar el estado de seguimiento",
+      "checkoutError": "No se pudo iniciar el pago. Inténtalo de nuevo."
+    },
+    "share": {
+      "message": "Ve la transmisión en directo de {{sellerName}} en ThryftVerse",
+      "defaultSeller": "este vendedor"
+    },
+    "connecting": {
+      "title": "Conectando a la transmisión",
+      "subtitle": "Configurando conexión en tiempo real"
+    },
+    "error": {
+      "title": "No se pudo conectar a la transmisión",
+      "subtitle": "La transmisión puede haber terminado o se ha interrumpido tu conexión.",
+      "reconnect": "Reconectar",
+      "goBack": "Volver"
+    },
+    "ended": {
+      "title": "Transmisión finalizada",
+      "subtitle": "Gracias por ver",
+      "viewers": "Espectadores",
+      "lotsSold": "Lotes vendidos",
+      "totalSales": "Ventas totales",
+      "done": "Listo"
+    },
+    "demo": {
+      "label": "DEMO",
+      "stream": "Transmisión de demostración"
+    },
+    "video": {
+      "connecting": "Conectando a la transmisión…"
+    },
+    "seller": {
+      "following": "Siguiendo",
+      "follow": "Seguir"
+    },
+    "live": {
+      "label": "EN DIRECTO"
+    },
+    "chat": {
+      "seller": "VENDEDOR",
+      "placeholder": "Envía un mensaje…"
+    },
+    "product": {
+      "bids": "pujas"
+    },
+    "bid": {
+      "placeBid": "Pujar",
+      "buyNow": "Comprar",
+      "buyNowFull": "Comprar ahora",
+      "completeCheckout": "Completar pago"
+    },
+    "bidSheet": {
+      "title": "Haz una puja",
+      "currentBid": "Puja actual",
+      "minNextBid": "Puja mínima siguiente",
+      "cancel": "Cancelar",
+      "close": "Cerrar"
+    },
+    "unknown": {
+      "title": "Estado de la puja desconocido",
+      "subtitle": "Es posible que tu puja se haya realizado. No pudimos confirmar el resultado.",
+      "checkResult": "Comprobar resultado",
+      "dismiss": "Descartar"
+    }
+  },
+  "liveShopping": {
+    "live": {
+      "label": "EN DIRECTO",
+      "demo": "DEMO"
+    },
+    "header": {
+      "title": "En directo"
+    },
+    "sections": {
+      "liveNow": "En directo ahora",
+      "comingUp": "Próximamente",
+      "pastEvents": "Eventos pasados",
+      "streaming": "{{count}} transmitiendo",
+      "scheduled": "{{count}} programados",
+      "replays": "{{count}} repeticiones",
+      "replay_one": "{{count}} repetición",
+      "replay_other": "{{count}} repeticiones"
+    },
+    "featured": {
+      "currentBid": "Puja actual"
+    },
+    "replay": {
+      "justEnded": "Recién terminado",
+      "hoursAgo": "hace {{count}} h",
+      "daysAgo": "hace {{count}} d"
+    },
+    "upcoming": {
+      "waiting": "en espera",
+      "notified": "Notificado",
+      "notifyMe": "Avísame",
+      "startingSoon": "Empieza pronto"
+    },
+    "scheduled": {
+      "inMinutes": "En {{minutes}} min · {{time}}",
+      "inHours": "En {{hours}} h {{minutes}} m · {{time}}",
+      "inDays": "{{day}} · {{time}}"
+    },
+    "noLive": {
+      "text": "Nadie está en directo ahora mismo"
+    },
+    "error": {
+      "title": "No se pudieron cargar las sesiones en directo",
+      "retry": "Reintentar",
+      "subtitle": "Comprueba tu conexión e inténtalo de nuevo.",
+      "loadFailed": "Error al cargar las sesiones en directo"
+    },
+    "empty": {
+      "title": "No hay sesiones en directo ahora mismo",
+      "subtitle": "Vuelve pronto, o inicia tu propia sesión desde el Centro del vendedor.",
+      "goToSellerHub": "Ir al Centro del vendedor"
+    }
+  },
+  "conversationalSearch": {
+    "header": {
+      "title": "Pregunta a ThryftVerse"
+    },
+    "demo": {
+      "banner": "Coincidencia por palabras clave — extraemos filtros de tu descripción."
+    },
+    "offline": {
+      "banner": "Estás sin conexión. Reconecta para buscar."
+    },
+    "empty": {
+      "greetingTitle": "¿Qué buscas hoy?",
+      "greetingSubtitle": "Descríbelo con tus propias palabras.",
+      "suggestionsLabel": "Prueba una de estas"
+    },
+    "matched": {
+      "label": "Palabras clave coincidentes"
+    },
+    "actions": {
+      "viewResults": "Ver resultados",
+      "refine": "Refinar"
+    },
+    "error": {
+      "retry": "Reintentar",
+      "offline": "Estás sin conexión. Reconecta para buscar.",
+      "generic": "Algo salió mal. Inténtalo de nuevo."
+    },
+    "input": {
+      "placeholder": "Describe lo que buscas…"
+    },
+    "browseTitle": "Resultados de búsqueda",
+    "filters": {
+      "brand": "Marca: {{value}}",
+      "category": "Categoría: {{value}}",
+      "size": "Talla: {{value}}",
+      "condition": "Condición: {{value}}",
+      "colour": "Color: {{value}}",
+      "style": "Estilo: {{value}}",
+      "priceLabel": "Precio: ",
+      "priceUnder": "menos de {{value}}",
+      "priceOver": "más de {{value}}",
+      "sustainableOnly": "Solo sostenible"
+    },
+    "trust": {
+      "matchedKeywords": "Palabras clave coincidentes: {{keywords}}",
+      "noMatch": "Ninguna palabra clave coincidió — mostrando una respuesta general"
+    }
+  },
+  "aiAgent": {
+    "header": {
+      "title": "Agent Studio",
+      "subtitle": "Gestiona agentes, conexiones y claves"
+    },
+    "demo": {
+      "banner": "Las claves se validan solo por formato — no se envía ninguna petición a ningún proveedor."
+    },
+    "sections": {
+      "yourAgents": "TUS AGENTES",
+      "serverConnections": "CONEXIONES DEL SERVIDOR",
+      "deviceLocalKeys": "CLAVES LOCALES DEL DISPOSITIVO"
+    },
+    "status": {
+      "agents": " agente(s)",
+      "connections": "conexiones",
+      "pendingApprovals": "{{count}} aprobación(es) pendiente(s)",
+      "viewPending": "Ver {{count}} aprobación(es) pendiente(s)",
+      "subtitleNone": "Crea un agente y conecta un proveedor para empezar",
+      "subtitleNoAgents": "Conecta un proveedor y luego crea tu primer agente",
+      "subtitleNoConnections": "Conecta un proveedor en el servidor para potenciar la ejecución del agente",
+      "subtitleReady": "Los agentes se ejecutan con tus claves del servidor conectadas"
+    },
+    "agentStatus": {
+      "draft": "Borrador",
+      "disabled": "Desactivado",
+      "setupNeeded": "Configuración necesaria",
+      "published": "Publicado"
+    },
+    "serverConnections": {
+      "hint": "Claves verificadas y almacenadas cifradas en el servidor. Estas potencian la ejecución del agente.",
+      "connectServerSide": "Conectar en el servidor",
+      "connectServerSideSub": "Las claves se verifican y almacenan cifradas en el servidor.",
+      "empty": "Aún no hay conexiones de servidor. Conecta un proveedor para potenciar tus agentes."
+    },
+    "deviceLocal": {
+      "note": "Solo descubrimiento — no se usa para ejecución",
+      "expandedNote": "Las claves locales del dispositivo se usan solo para el descubrimiento de modelos. Las conexiones del servidor potencian la ejecución del agente."
+    },
+    "agents": {
+      "empty": "Aún no hay agentes. Crea uno para darle una especialidad, límites y contexto.",
+      "create": "Crear agente",
+      "pauseAll": "Pausar todos los agentes",
+      "noSessionsRunning": "No hay sesiones de agente en ejecución",
+      "sessionsRunning": "{{count}} sesión(es) de agente en ejecución",
+      "activity": "Actividad del agente",
+      "activitySub": "Registro local de acciones y aprobaciones del agente"
+    },
+    "connect": {
+      "cancel": "Cancelar",
+      "verifySave": "Verificar y guardar",
+      "verifying": "Verificando…",
+      "apiKey": "Clave API",
+      "labelOptional": "Etiqueta (opcional)",
+      "baseUrl": "URL base (opcional, proveedores personalizados)"
+    },
+    "confirm": {
+      "title": "¿Eliminar esta conexión?",
+      "body": "Los agentes que usan esta conexión ya no podrán ejecutarse hasta que conectes un reemplazo.",
+      "cancel": "Cancelar",
+      "remove": "Eliminar",
+      "removing": "Eliminando…"
+    },
+    "connection": {
+      "reverify": "Volver a verificar",
+      "verifying": "Verificando…",
+      "remove": "Eliminar",
+      "removing": "Eliminando…",
+      "verified": "Verificado {{time}}",
+      "notVerified": "Aún no verificado",
+      "modelsCount": "{{count}} modelo(s)",
+      "more": "más"
+    },
+    "health": {
+      "healthy": "Saludable",
+      "failed": "Fallido",
+      "revoked": "Revocado",
+      "expired": "Expirado",
+      "degraded": "Degradado",
+      "unverified": "No verificado"
+    },
+    "providerStatus": {
+      "comingSoon": "Próximamente",
+      "connected": "Conectado",
+      "invalid": "Inválido",
+      "notConnected": "No conectado"
+    },
+    "provider": {
+      "soon": "Pronto",
+      "comingSoon": "Próximamente — aún no disponible en este despliegue.",
+      "modelsAvailable": "{{count}} modelo(s) disponible(s)",
+      "discoveringModels": "Descubriendo modelos…",
+      "storedLocally": "Almacenado localmente · {{storage}}",
+      "secureStorage": "Almacenamiento seguro",
+      "deviceStorage": "Almacenamiento del dispositivo",
+      "disconnect": "Desconectar",
+      "replaceKey": "Reemplazar clave",
+      "noKeySaved": "Sin clave guardada. Conéctate para usar los modelos de {{name}}.",
+      "connect": "Conectar",
+      "availableModels": "Modelos disponibles",
+      "discoveringFrom": "Descubriendo modelos de {{name}}…",
+      "noModelsReturned": "{{name}} no devolvió modelos.",
+      "modelsAfterConnect": "Los modelos se descubren de {{name}} después de conectarte.",
+      "testing": "Probando…",
+      "testSave": "Probar y guardar"
+    },
+    "toast": {
+      "connectionSaved": "Conexión verificada y guardada.",
+      "verifyFailed": "No se pudo verificar la clave. Comprueba la clave e inténtalo de nuevo.",
+      "reverified": "Conexión verificada de nuevo.",
+      "reverifyFailed": "Error al volver a verificar.",
+      "removedWithAgents": "Eliminado. {{count}} agente(s) actualizado(s).",
+      "connectionRemoved": "Conexión eliminada.",
+      "removeFailed": "No se pudo eliminar la conexión."
+    },
+    "help": {
+      "title": "Lo que los agentes pueden y no pueden hacer",
+      "body": "Los agentes redactan respuestas y resumen conversaciones usando las claves de proveedor que conectas. No pueden acceder a tu billetera, realizar pagos ni actuar fuera de los permisos que concedas. Las claves del servidor se almacenan cifradas en el servidor; las claves locales del dispositivo nunca salen de este dispositivo. Cada acción del agente se registra en el libro de actividad para mayor transparencia."
+    }
+  },
+  "algorithm": {
+    "header": {
+      "title": "Tu algoritmo",
+      "subtitle": "Las señales que dan forma a tu feed"
+    },
+    "demo": {
+      "banner": "Los datos del algoritmo son ilustrativos en modo demostración."
+    },
+    "offline": {
+      "banner": "Estás sin conexión. Mostrando el último perfil guardado."
+    },
+    "summary": {
+      "activeTopics": "Temas activos",
+      "signals": "Señales",
+      "lastUpdated": "Última actualización"
+    },
+    "howItWorks": {
+      "title": "Cómo funciona"
+    },
+    "empty": {
+      "title": "Aún no hay temas",
+      "subtitle": "Tu feed se basa en la popularidad general. Añade un tema abajo para empezar a dar forma a tus recomendaciones."
+    },
+    "topics": {
+      "title": "Temas que influyen en tu feed",
+      "caption": "Toca un tema para ajustar su peso o eliminarlo.",
+      "influenceWeight": "Peso de influencia",
+      "removeTopic": "Eliminar tema",
+      "lockHint": "Mantenido por confianza y contabilidad. Puedes pausar su influencia en tu feed."
+    },
+    "signals": {
+      "title": "Señales recientes",
+      "caption": "Las últimas acciones que dieron forma a tu feed."
+    },
+    "addTopic": {
+      "title": "Añadir un tema",
+      "caption": "Dinos qué te interesa.",
+      "placeholder": "ej. Relojes vintage",
+      "addBtn": "Añadir tema"
+    },
+    "error": {
+      "title": "No se pudo cargar tu algoritmo",
+      "subtitle": "No pudimos obtener tu perfil de algoritmo. Comprueba tu conexión e inténtalo de nuevo.",
+      "retry": "Reintentar"
+    }
+  },
+  "aiListing": {
+    "header": {
+      "title": "Publicación rápida",
+      "subtitle": "Haz fotos · revisa · publica"
+    },
+    "fields": {
+      "title": "Título",
+      "description": "Descripción",
+      "category": "Categoría",
+      "brand": "Marca",
+      "condition": "Condición",
+      "price": "Precio (GBP)",
+      "tags": "Etiquetas",
+      "materialComposition": "Composición del material",
+      "weight": "Peso (kg)"
+    },
+    "placeholders": {
+      "title": "ej. Chaqueta vaquera Levi's 501 Vintage",
+      "description": "Describe tu artículo…",
+      "selectCategory": "Selecciona categoría",
+      "brand": "Marca",
+      "selectCondition": "Selecciona condición",
+      "price": "0,00",
+      "addTag": "Añadir etiqueta",
+      "material": "ej. algodón, poliéster, lana…",
+      "weight": "ej. 0,45"
+    },
+    "impact": {
+      "helper": "Se usa para calcular el impacto ambiental real. Opcional pero recomendado."
+    },
+    "preview": {
+      "label": "Vista previa",
+      "completeness": "Completitud"
+    },
+    "photo": {
+      "cover": "Portada",
+      "enhance": "Mejorar",
+      "camera": "Cámara",
+      "library": "Galería"
+    },
+    "suggestion": {
+      "use": "Usar",
+      "suggested": "Sugerido"
+    },
+    "picker": {
+      "selectCategory": "Selecciona categoría",
+      "selectCondition": "Selecciona condición"
+    },
+    "empty": {
+      "title": "Haz una foto para publicar",
+      "body": "Añade fotos arriba y sugeriremos un título, descripción, categoría y rango de precio. Revisa y edita todo antes de publicar."
+    },
+    "error": {
+      "retry": "Reintentar"
+    },
+    "toast": {
+      "photoEnhanced": "Foto mejorada",
+      "photoAccessTitle": "Se necesita acceso a las fotos",
+      "photoAccessBody": "Se requiere acceso a las fotos para añadir fotos al anuncio.",
+      "pickFailedTitle": "Error al seleccionar",
+      "pickFailedBody": "No se pudieron seleccionar fotos. Inténtalo de nuevo.",
+      "cameraAccessTitle": "Se necesita acceso a la cámara",
+      "cameraAccessBody": "Se requiere acceso a la cámara para tomar fotos del anuncio.",
+      "captureFailedTitle": "Error al capturar",
+      "captureFailedBody": "No se pudo tomar una foto. Inténtalo de nuevo.",
+      "smartSellSavedPreviewTitle": "Smart Sell guardado (vista previa)",
+      "smartSellSavedPreviewBody": "Tus ajustes se activarán cuando Smart Sell esté completamente disponible."
+    },
+    "publish": {
+      "publishing": "Publicando…",
+      "reviewPublish": "Revisar y publicar",
+      "signInToPublish": "Inicia sesión para publicar un anuncio.",
+      "offline": "Parece que estás sin conexión. Comprueba tu conexión e inténtalo de nuevo.",
+      "missingFields": "Añade al menos una foto, un título y un precio antes de publicar.",
+      "missingCover": "Se requiere una imagen de portada verificada antes de publicar.",
+      "failed": "Error al publicar. Inténtalo de nuevo."
+    },
+    "accessibility": {
+      "selectCategory": "Selecciona categoría",
+      "opensCategoryPicker": "Abre el selector de categoría",
+      "selectCondition": "Selecciona condición",
+      "opensConditionPicker": "Abre el selector de condición",
+      "removeTag": "Eliminar etiqueta {{tag}}",
+      "removeTagHint": "Elimina la etiqueta {{tag}} de este anuncio",
+      "addTag": "Añadir etiqueta",
+      "addTagHint": "Añade esta etiqueta al anuncio",
+      "publishListing": "Publicar anuncio",
+      "publishListingHint": "Envía tu anuncio para publicarlo",
+      "acceptSuggestion": "Aceptar sugerencia: {{text}}",
+      "acceptSuggestionHint": "Aplica esta sugerencia al campo",
+      "dismissSuggestion": "Descartar sugerencia",
+      "dismissSuggestionHint": "Oculta esta sugerencia sin aplicarla",
+      "removePhoto": "Eliminar foto",
+      "removePhotoHint": "Elimina esta foto del anuncio",
+      "enhancePhoto": "Mejorar foto",
+      "enhancePhotoHint": "Abre la mejora de fotos para mejorar esta imagen del anuncio",
+      "takePhotoWithCamera": "Tomar una foto con la cámara",
+      "takePhotoWithCameraHint": "Abre la cámara para capturar una foto",
+      "pickPhotosFromGallery": "Seleccionar fotos de la galería",
+      "pickPhotosFromGalleryHint": "Abre la galería para seleccionar fotos",
+      "loadingSuggestions": "Cargando sugerencias",
+      "loadingSuggestionsHint": "Las sugerencias se están generando",
+      "dismissError": "Descartar error",
+      "dismissErrorHint": "Descarta este mensaje de error",
+      "retryHint": "Reintentar la acción fallida",
+      "closePicker": "Cerrar selector",
+      "closePickerHint": "Cierra la hoja del selector",
+      "selectOption": "Seleccionar {{option}}",
+      "chooseOption": "Elegir {{option}} como opción seleccionada"
+    }
+  },
+  "report": {
+    "header": {
+      "title": "Reportar",
+      "reportAccount": "Reportar cuenta",
+      "reportGroup": "Reportar grupo",
+      "reportListing": "Reportar anuncio",
+      "subtitle": "Los reportes son confidenciales"
+    },
+    "received": {
+      "title": "Reporte recibido",
+      "body": "Lo revisaremos y te comunicaremos el resultado.",
+      "reportId": "Reporte #{{reportId}}",
+      "receivedAt": "Recibido el {{time}}",
+      "referenceNote": "Referencia este número en futuros contactos de soporte.",
+      "blockUser": "Bloquear a este usuario",
+      "blockedNote": "Esta cuenta está bloqueada y no puede contactarte.",
+      "done": "Listo"
+    },
+    "unavailable": {
+      "title": "Objetivo del reporte no disponible",
+      "body": "Este reporte se abrió sin una referencia válida. No se ha enviado nada.",
+      "goBack": "Volver"
+    },
+    "submit": {
+      "label": "Enviar reporte"
+    },
+    "intro": {
+      "title": "¿Qué ha pasado?",
+      "body": "Elige el motivo que mejor describa el problema. No incluyas contraseñas, datos de pago u otra información sensible."
+    },
+    "details": {
+      "label": "Detalles adicionales (opcional)",
+      "placeholder": "Describe lo que ha pasado",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "Fotos de evidencia (opcional)",
+      "camera": "Cámara",
+      "gallery": "Galería",
+      "count": "{{count}}/3 fotos"
+    },
+    "accessibility": {
+      "blockUser": "Bloquear a este usuario",
+      "detailsInput": "Detalles adicionales del reporte",
+      "evidencePhoto": "Foto de evidencia {{index}}",
+      "removeEvidencePhoto": "Eliminar foto de evidencia {{index}}",
+      "takeEvidenceCamera": "Tomar foto de evidencia con la cámara",
+      "chooseEvidenceGallery": "Elegir fotos de evidencia de la galería"
+    },
+    "reasons": {
+      "spam": "Spam",
+      "spamDesc": "Promoción no deseada, estafas o mensajes repetitivos",
+      "harassment": "Acoso",
+      "harassmentDesc": "Contacto amenazante, abusivo o no deseado y dirigido",
+      "hateSpeech": "Discurso de odio",
+      "hateSpeechDesc": "Insultos, lenguaje deshumanizante o ataques a grupos protegidos",
+      "counterfeit": "Artículo falso",
+      "counterfeitDesc": "Mercancía falsificada o afirmaciones engañosas sobre autenticidad",
+      "prohibited": "Artículo prohibido",
+      "prohibitedDesc": "Armas, drogas, vida silvestre u otras categorías prohibidas",
+      "offPlatform": "Solicitud fuera de la plataforma",
+      "offPlatformDesc": "Petición de transaccionar fuera de Thryftverse, contra la política",
+      "scam": "Estafa o fraude",
+      "scamDesc": "Intento de fraude financiero, phishing o suplantación de identidad",
+      "misinformation": "Contenido engañoso",
+      "misinformationDesc": "Afirmaciones falsas o engañosas sobre un artículo",
+      "privacy": "Violación de privacidad",
+      "privacyDesc": "Información privada compartida sin consentimiento",
+      "impersonation": "Suplantación de identidad",
+      "impersonationDesc": "Fingir ser otra persona",
+      "minorSafety": "Seguridad de menores",
+      "minorSafetyDesc": "Contenido o comportamiento que ponga en peligro a menores",
+      "other": "Otra cosa",
+      "otherDesc": "Cuéntale al equipo de moderación qué ha pasado"
+    },
+    "toast": {
+      "attachUpTo3": "Adjunta hasta 3 fotos.",
+      "offline": "Parece que estás sin conexión. Comprueba tu conexión e inténtalo de nuevo.",
+      "allowPhotoAccess": "Permite el acceso a las fotos para subir evidencia.",
+      "allowCameraAccess": "Permite el acceso a la cámara para tomar fotos de evidencia.",
+      "photosAttached": "{{count}} foto(s) adjuntada(s).",
+      "uploadFailed": "No se pudieron subir las foto(s). Inténtalo de nuevo.",
+      "singleUploadFailed": "No se pudo subir la foto. Inténtalo de nuevo.",
+      "photoAttached": "Foto adjuntada.",
+      "reportFailed": "No se pudo enviar el reporte. Comprueba tu conexión e inténtalo de nuevo.",
+      "accountBlocked": "Cuenta bloqueada",
+      "blockFailed": "No se pudo bloquear esta cuenta. Inténtalo de nuevo."
+    }
+  },
+  "appeal": {
+    "header": {
+      "title": "Apelar decisión"
+    },
+    "loading": {
+      "title": "Cargando decisión",
+      "subtitle": "Un momento mientras recuperamos los detalles."
+    },
+    "error": {
+      "title": "No se pudo cargar la decisión",
+      "subtitle": "No pudimos recuperar los detalles de la decisión. Toca abajo para intentarlo de nuevo.",
+      "tryAgain": "Intentar de nuevo",
+      "goBack": "Volver"
+    },
+    "windowClosed": {
+      "title": "Plazo de apelación cerrado",
+      "body": "Las decisiones pueden apelarse en un plazo de 6 meses. Esta decisión se comunicó el {{date}}.",
+      "goBack": "Volver"
+    },
+    "offline": {
+      "title": "Estás sin conexión",
+      "subtitle": "Comprueba tu conexión e inténtalo de nuevo.",
+      "tryAgain": "Intentar de nuevo",
+      "goBack": "Volver"
+    },
+    "submitted": {
+      "title": "Apelación enviada",
+      "body": "Lo revisaremos y te comunicaremos el resultado.",
+      "appealId": "Apelación #{{appealId}}",
+      "submittedAt": "Enviada el {{time}}",
+      "referenceNote": "Referencia este número en futuros contactos de soporte.",
+      "done": "Listo"
+    },
+    "duration": {
+      "permanent": "Permanente",
+      "until": "Hasta el {{date}}"
+    },
+    "decision": {
+      "noViolation": "Sin infracción",
+      "restrict": "Contenido restringido",
+      "escalate": "Escalado",
+      "emergencyHold": "Retención de emergencia"
+    },
+    "grounds": {
+      "label": "¿Por qué crees que esta decisión fue incorrecta?",
+      "placeholder": "Explica por qué debería reconsiderarse la decisión",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "Fotos de evidencia (opcional)",
+      "camera": "Cámara",
+      "gallery": "Galería",
+      "count": "{{count}}/3 fotos"
+    },
+    "accessibility": {
+      "groundsInput": "Motivos de la apelación",
+      "evidencePhoto": "Foto de evidencia {{index}}",
+      "removeEvidencePhoto": "Eliminar foto de evidencia {{index}}",
+      "takeEvidenceCamera": "Tomar foto de evidencia con la cámara",
+      "chooseEvidenceGallery": "Elegir fotos de evidencia de la galería"
+    },
+    "submit": {
+      "label": "Enviar apelación"
+    },
+    "toast": {
+      "attachUpTo3": "Adjunta hasta 3 fotos.",
+      "offline": "Parece que estás sin conexión. Comprueba tu conexión e inténtalo de nuevo.",
+      "allowPhotoAccess": "Permite el acceso a las fotos para subir evidencia.",
+      "allowCameraAccess": "Permite el acceso a la cámara para tomar fotos de evidencia.",
+      "photosAttached": "{{count}} foto(s) adjuntada(s).",
+      "uploadFailed": "No se pudieron subir las foto(s). Inténtalo de nuevo.",
+      "singleUploadFailed": "No se pudo subir la foto. Inténtalo de nuevo.",
+      "photoAttached": "Foto adjuntada.",
+      "appealFailed": "No se pudo enviar la apelación. Comprueba tu conexión e inténtalo de nuevo."
     }
   }
 }

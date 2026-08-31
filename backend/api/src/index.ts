@@ -303,6 +303,7 @@ import { registerStreamingRoutes } from './routes/streaming.js';
 import { registerLiveLotEngineRoutes } from './routes/liveLotEngine.js';
 import { registerSecureProfilesRoutes } from './routes/secureProfiles.js';
 import { registerSecureMessagesRoutes } from './routes/secureMessages.js';
+import { registerChatTranslateRoutes } from './routes/chatTranslate.js';
 import { registerAdminAuditRoutes } from './routes/adminAudit.js';
 import { registerRetentionRoutes } from './routes/retention.js';
 import { registerOpsConsoleRoutes } from './routes/opsConsole.js';
@@ -592,8 +593,21 @@ void app.register(rateLimit, {
 // default). This prevents a single compromised account from exhausting
 // API capacity even if it rotates across many IP addresses. The hook is
 // invoked after authentication so request.authUser is available.
+//
+// The INCR + EXPIRE pair is executed atomically via a Lua script. This is
+// critical: a non-atomic INCR followed by a separate EXPIRE can leave the
+// counter without a TTL if the process crashes between the two calls,
+// permanently rate-limiting the user until manual intervention. The Lua
+// script guarantees the TTL is set on the first increment and never lost.
 const USER_RATE_LIMIT_MAX = Number(process.env.USER_RATE_LIMIT_MAX) || 200;
 const USER_RATE_LIMIT_WINDOW = Number(process.env.USER_RATE_LIMIT_WINDOW) || 60;
+const RATE_LIMIT_SCRIPT = `
+  local current = redis.call('INCR', KEYS[1])
+  if current == 1 then
+    redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1]))
+  end
+  return current
+`;
 const userRateLimitHook = async (request: FastifyRequest, reply: FastifyReply) => {
   const userId = request.authUser?.userId;
   if (!userId) return; // Only applies to authenticated requests
@@ -602,10 +616,7 @@ const userRateLimitHook = async (request: FastifyRequest, reply: FastifyReply) =
   const limit = USER_RATE_LIMIT_MAX;
   const window = USER_RATE_LIMIT_WINDOW;
 
-  const current = await redis.incr(key);
-  if (current === 1) {
-    await redis.expire(key, window);
-  }
+  const current = Number(await redis.eval(RATE_LIMIT_SCRIPT, 1, key, window));
   if (current > limit) {
     reply.code(429).send({ error: 'Rate limit exceeded', retryAfter: window });
   }
@@ -1575,8 +1586,12 @@ function statusCodeForApiError(code: string): number {
     return 401;
   }
 
-  if (code === 'FORBIDDEN_USER_CONTEXT') {
+  if (code === 'FORBIDDEN_USER_CONTEXT' || code === 'FORBIDDEN_OWNERSHIP') {
     return 403;
+  }
+
+  if (code === 'FILE_TOO_LARGE') {
+    return 413;
   }
 
   if (code === 'ORDER_ACCESS_DENIED' || code === 'REFUND_REQUIRES_OPERATOR') {
@@ -18359,7 +18374,7 @@ app.post('/listings', {
   const payload = bodySchema.parse(request.body);
   if (payload.sellerId !== actorUserId) {
     reply.code(403);
-    return { ok: false, error: 'Seller identity must match the authenticated user' };
+    return { ok: false, error: 'Cannot create listings for another seller', code: 'FORBIDDEN_OWNERSHIP' };
   }
   if (payload.imageUrl && !payload.coverFinalizationId) {
     reply.code(422);
@@ -20267,12 +20282,12 @@ app.post('/listing-images', async (request, reply) => {
     if (!listing.rowCount) {
       await client.query('ROLLBACK');
       reply.code(404);
-      return { ok: false, error: 'Listing not found' };
+      return { ok: false, error: 'Listing not found', code: 'LISTING_NOT_FOUND' };
     }
     if (listing.rows[0].seller_id !== actorUserId) {
       await client.query('ROLLBACK');
       reply.code(403);
-      return { ok: false, error: 'Only the seller can attach listing media' };
+      return { ok: false, error: 'Cannot attach media to another seller\'s listing', code: 'FORBIDDEN_OWNERSHIP' };
     }
     if (!['draft', 'active'].includes(listing.rows[0].status)) {
       await client.query('ROLLBACK');
@@ -20562,6 +20577,9 @@ registerImporterExtractionRoutes({ app, db, readDb });
 registerExtractionIntelligenceRoutes({ app, db, readDb });
 
 // registerSecureMessagesRoutes({ app, db, ensureUserExists, queueUserNotification });
+
+// AI-powered chat message translation (WhatsApp/Instagram inline translate pattern)
+registerChatTranslateRoutes({ app, db, ensureUserExists, redisClient: redis });
 
 app.post('/chat/dm', async (request, reply) => {
   const bodySchema = z.object({

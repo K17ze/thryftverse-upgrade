@@ -15,6 +15,7 @@ import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import type { SuggestedReply, SuggestedReplyType } from '../../services/chatAgentsApi';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface SuggestedRepliesBarProps {
   suggestions: SuggestedReply[];
@@ -36,6 +37,7 @@ export function SuggestedRepliesBar({
   onSelect,
   agentName }: SuggestedRepliesBarProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   if (suggestions.length === 0) return null;
@@ -47,7 +49,7 @@ export function SuggestedRepliesBar({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         accessibilityLabel={
-          agentName ? `Suggested replies from ${agentName}` : 'Suggested replies'
+          agentName ? t('suggestedReplies.titleFrom', { agentName }) : t('suggestedReplies.title')
         }
       >
         {suggestions.map((reply, index) => {
@@ -63,8 +65,8 @@ export function SuggestedRepliesBar({
               onPress={() => onSelect(reply)}
               hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
               accessibilityRole="button"
-              accessibilityLabel={`Use suggested reply: ${reply.text}`}
-              accessibilityHint="Fills the message input with this reply"
+              accessibilityLabel={t('suggestedReplies.use', { reply: reply.text })}
+              accessibilityHint={t('suggestedReplies.fill')}
             >
               <Ionicons name={iconName} size={13} color={colors.textMuted} />
               <Text style={[styles.pillText, { color: colors.textPrimary }]} numberOfLines={1}>

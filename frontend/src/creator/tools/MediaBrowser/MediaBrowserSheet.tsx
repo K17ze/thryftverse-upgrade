@@ -265,7 +265,7 @@ function MediaGridItem({
         />
         {asset.mediaType === 'video' && (
           <View style={styles.mediaGridVideoBadge}>
-            <Ionicons name="play" size={IconGrammar.badge} color="#fff" />
+            <Ionicons name="play" size={IconGrammar.badge} color={colors.scrimTextPrimary} />
             {asset.durationMs != null && (
               <Text style={styles.mediaGridDuration}>
                 {formatDuration(asset.durationMs)}
@@ -387,7 +387,7 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
   if (!asset) return null;
   return (
     <Modal visible={!!asset} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={previewStyles.backdrop} onPress={onClose} accessibilityRole="image">
+      <Pressable style={[previewStyles.backdrop, { backgroundColor: colors.mediaOverlayScrim }]} onPress={onClose} accessibilityRole="image">
         <View style={previewStyles.content}>
           <Image
             source={{ uri: asset.uri }}
@@ -396,16 +396,16 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
             transition={150}
           />
           {asset.mediaType === 'video' && asset.durationMs != null && (
-            <View style={previewStyles.durationBadge}>
-              <Ionicons name="play" size={IconGrammar.badge} color="#fff" />
-              <Text style={previewStyles.durationText}>
+            <View style={[previewStyles.durationBadge, { backgroundColor: colors.mediaOverlayScrim }]}>
+              <Ionicons name="play" size={IconGrammar.badge} color={colors.scrimTextPrimary} />
+              <Text style={[previewStyles.durationText, { color: colors.scrimTextPrimary }]}>
                 {formatDuration(asset.durationMs)}
               </Text>
             </View>
           )}
         </View>
-        <Pressable style={previewStyles.closeBtn} onPress={onClose} hitSlop={12} accessibilityLabel="Close preview" accessibilityRole="button">
-          <Ionicons name="close" size={IconGrammar.hero} color="#fff" />
+        <Pressable style={[previewStyles.closeBtn, { backgroundColor: colors.scrimTextTertiary }]} onPress={onClose} hitSlop={12} accessibilityLabel="Close preview" accessibilityRole="button">
+          <Ionicons name="close" size={IconGrammar.hero} color={colors.scrimTextPrimary} />
         </Pressable>
       </Pressable>
     </Modal>
@@ -415,7 +415,6 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
 const previewStyles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
     justifyContent: 'center',
     alignItems: 'center' },
   content: {
@@ -431,12 +430,10 @@ const previewStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.full },
   durationText: {
-    color: '#fff',
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
   closeBtn: {
@@ -446,7 +443,6 @@ const previewStyles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center' } });
 
@@ -904,7 +900,7 @@ export function MediaBrowserSheet({
         <PermissionDeniedState
           icon="lock-closed-outline"
           title="Photo access needed"
-          message="Allow access to your photo library to pick media for your creation."
+          message="Allow access to pick media."
           ctaLabel="Open settings"
           onCta={handleOpenSettings}
           colors={colors}
@@ -931,7 +927,7 @@ export function MediaBrowserSheet({
         <PermissionDeniedState
           icon="images-outline"
           title="Access your photos"
-          message="We need access to show your recent photos and videos here."
+          message="Allow access to see your photos."
           ctaLabel="Allow access"
           onCta={() => requestPermission()}
           colors={colors}
@@ -1060,7 +1056,7 @@ export function MediaBrowserSheet({
               >
                 <Ionicons name="images-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
                 <Text style={[styles.limitedBannerText, { color: colors.textSecondary }]}>
-                  Limited access — tap to add more photos
+                  Limited access — tap to manage
                 </Text>
                 <Ionicons name="chevron-forward" size={IconGrammar.badge} color={colors.textMuted} />
               </Pressable>
@@ -1246,12 +1242,12 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 2,
-      backgroundColor: 'rgba(0,0,0,0.45)',
+      backgroundColor: colors.mediaOverlayScrim,
       paddingHorizontal: 6,
       paddingVertical: 2,
       borderRadius: Radius.sm },
     mediaGridDuration: {
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: 0.2 },

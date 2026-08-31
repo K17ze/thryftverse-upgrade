@@ -26,6 +26,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useStore } from '../../store/useStore';
 import { listUserOrders, type CommerceUserOrder } from '../../services/commerceApi';
 import { normaliseOrderStatus, humaniseStatus, isTerminalStatus, needsAction } from '../orders/orderCapabilities';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 // ── Props ─────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ export interface ChatTransactionStripProps {
 
 export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const currentUser = useStore((state) => state.currentUser);
@@ -91,23 +93,23 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
   // ETA for buyer
   const etaWindow = order.fulfilmentSnapshot?.etaMinDays != null && order.fulfilmentSnapshot?.etaMaxDays != null
     ? (order.fulfilmentSnapshot.etaMinDays !== order.fulfilmentSnapshot.etaMaxDays
-        ? `${order.fulfilmentSnapshot.etaMinDays}–${order.fulfilmentSnapshot.etaMaxDays} days`
-        : `${order.fulfilmentSnapshot.etaMinDays} day${order.fulfilmentSnapshot.etaMinDays === 1 ? '' : 's'}`)
+        ? t('orders.etaWindow', { min: order.fulfilmentSnapshot.etaMinDays, max: order.fulfilmentSnapshot.etaMaxDays })
+        : t('orders.etaDay', { count: order.fulfilmentSnapshot.etaMinDays }))
     : null;
 
   // Determine the contextual CTA
   const cta = (() => {
     if (terminal) return null;
     if (isSeller && normalised === 'paid') {
-      return { label: 'Dispatch item', icon: 'cube-outline' as const, screen: 'SellerFulfilment', params: { orderId: order.id } };
+      return { label: t('orders.dispatchItem'), icon: 'cube-outline' as const, screen: 'SellerFulfilment', params: { orderId: order.id } };
     }
     if (!isSeller && (normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery')) {
-      return { label: 'Track parcel', icon: 'navigate-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
+      return { label: t('orders.trackParcel'), icon: 'navigate-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
     }
     if (!isSeller && normalised === 'delivered') {
-      return { label: 'Check item', icon: 'shield-checkmark-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
+      return { label: t('orders.checkItem'), icon: 'shield-checkmark-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
     }
-    return { label: 'View order', icon: 'receipt-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
+    return { label: t('orders.viewOrder'), icon: 'receipt-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
   })();
 
   // Deadline/ETA label
@@ -117,10 +119,10 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
       if (shipByOverdue) return 'Overdue — dispatch now';
       if (shipByDaysLeft === 0) return 'Dispatch today';
       if (shipByDaysLeft === 1) return 'Ship tomorrow';
-      return `Ship by ${new Date(shipByDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+      return t('orders.shipBy', { date: new Date(shipByDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) });
     }
     if (!isSeller && etaWindow && (normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery')) {
-      return `ETA ${etaWindow}`;
+      return t('orders.eta', { window: etaWindow });
     }
     return null;
   })();

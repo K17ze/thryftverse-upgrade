@@ -32,7 +32,7 @@ import Reanimated, {
   runOnJS,
   Easing,
   useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, FontFamily, Control, Stroke, ZIndex, IconGrammar, Elevation } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Control, Stroke, ZIndex, IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -78,7 +78,7 @@ const DEFAULT_ASPECT_RATIOS: AspectRatioPreset[] = [
 
 
 /** Visible handle glyph size (the touch target is larger via hitSlop). */
-const HANDLE_VISIBLE = 14;
+const HANDLE_VISIBLE = 8;
 /** Touch target for handles — 44pt per AGENTS.md §13. */
 const HANDLE_HIT = Control.hit;
 /** Minimum crop region size in normalized coords — prevents collapse. */
@@ -451,114 +451,77 @@ export function InCanvasCropOverlay({
     }
   };
 
-  // Visible handle glyphs — refined L-shaped corner brackets and subtle
-  // rounded edge bars. White with a subtle shadow for visibility over any
-  // underlying content. Stroke.emphasis (2pt) per stroke grammar: handles
-  // are selection/focus indicators.
-  const HANDLE_SHADOW: ViewStyle = {
-    ...Elevation.modal };
-
-  const cornerBracket = (borders: ViewStyle): ViewStyle => ({
+  // Minimal visible handle — small 8pt square, no shadow.
+  // 44pt hit target is provided by the handleWrap positioning.
+  const handleVisible: ViewStyle = {
     width: HANDLE_VISIBLE,
     height: HANDLE_VISIBLE,
-    borderColor: '#fff',
-    ...HANDLE_SHADOW,
-    ...borders });
-
-  const cornerHandleTL: ViewStyle = cornerBracket({
-    borderTopWidth: Stroke.emphasis,
-    borderLeftWidth: Stroke.emphasis,
-    borderTopLeftRadius: 3 });
-  const cornerHandleTR: ViewStyle = cornerBracket({
-    borderTopWidth: Stroke.emphasis,
-    borderRightWidth: Stroke.emphasis,
-    borderTopRightRadius: 3 });
-  const cornerHandleBL: ViewStyle = cornerBracket({
-    borderBottomWidth: Stroke.emphasis,
-    borderLeftWidth: Stroke.emphasis,
-    borderBottomLeftRadius: 3 });
-  const cornerHandleBR: ViewStyle = cornerBracket({
-    borderBottomWidth: Stroke.emphasis,
-    borderRightWidth: Stroke.emphasis,
-    borderBottomRightRadius: 3 });
-
-  // Edge handles — subtle rounded bars (not basic rectangles).
-  const edgeHandleStyle: ViewStyle = {
-    width: HANDLE_VISIBLE + 6,
-    height: 4,
-    borderRadius: Radius.full,
-    backgroundColor: '#fff',
-    ...HANDLE_SHADOW };
-  const edgeHandleStyleV: ViewStyle = {
-    width: 4,
-    height: HANDLE_VISIBLE + 6,
-    borderRadius: Radius.full,
-    backgroundColor: '#fff',
-    ...HANDLE_SHADOW };
+    backgroundColor: colors.scrimTextPrimary,
+  };
 
   return (
     <GestureHandlerRootView style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
       <Reanimated.View style={[StyleSheet.absoluteFill, overlayStyle, { zIndex: ZIndex.overlay }]}>
         {/* ── Dark mask outside crop region (4 pieces) ─────────────── */}
-        <Reanimated.View style={[styles.maskPiece, maskTopStyle, { backgroundColor: MASK_COLOR }]} pointerEvents="none" />
-        <Reanimated.View style={[styles.maskPiece, maskBottomStyle, { backgroundColor: MASK_COLOR }]} pointerEvents="none" />
-        <Reanimated.View style={[styles.maskPiece, maskLeftStyle, { backgroundColor: MASK_COLOR }]} pointerEvents="none" />
-        <Reanimated.View style={[styles.maskPiece, maskRightStyle, { backgroundColor: MASK_COLOR }]} pointerEvents="none" />
+        <Reanimated.View style={[styles.maskPiece, maskTopStyle, { backgroundColor: colors.mediaOverlayScrim }]} pointerEvents="none" />
+        <Reanimated.View style={[styles.maskPiece, maskBottomStyle, { backgroundColor: colors.mediaOverlayScrim }]} pointerEvents="none" />
+        <Reanimated.View style={[styles.maskPiece, maskLeftStyle, { backgroundColor: colors.mediaOverlayScrim }]} pointerEvents="none" />
+        <Reanimated.View style={[styles.maskPiece, maskRightStyle, { backgroundColor: colors.mediaOverlayScrim }]} pointerEvents="none" />
 
         {/* ── Crop frame (border + grid + handles) ─────────────────── */}
-        <Reanimated.View style={[styles.cropFrame, frameStyle]}>
+        <Reanimated.View style={[styles.cropFrame, frameStyle, { borderColor: colors.scrimTextPrimary }]}>
           {/* Rule-of-thirds grid */}
-          <View style={[styles.gridV, { left: '33.333%' }]} pointerEvents="none" />
-          <View style={[styles.gridV, { left: '66.666%' }]} pointerEvents="none" />
-          <View style={[styles.gridH, { top: '33.333%' }]} pointerEvents="none" />
-          <View style={[styles.gridH, { top: '66.666%' }]} pointerEvents="none" />
+          <View style={[styles.gridV, { left: '33.333%', backgroundColor: colors.scrimTextTertiary }]} pointerEvents="none" />
+          <View style={[styles.gridV, { left: '66.666%', backgroundColor: colors.scrimTextTertiary }]} pointerEvents="none" />
+          <View style={[styles.gridH, { top: '33.333%', backgroundColor: colors.scrimTextTertiary }]} pointerEvents="none" />
+          <View style={[styles.gridH, { top: '66.666%', backgroundColor: colors.scrimTextTertiary }]} pointerEvents="none" />
 
           {/* Move gesture area (inside the frame) */}
           <GestureDetector gesture={moveGesture}>
             <View style={StyleSheet.absoluteFill} accessibilityLabel="Move crop region" accessibilityRole="adjustable" />
           </GestureDetector>
 
-          {/* Corner handles — L-shaped brackets */}
+          {/* Corner handles */}
           <GestureDetector gesture={tlGesture}>
             <View style={handleWrap('tl')} accessibilityLabel="Top-left crop handle" accessibilityRole="adjustable">
-              <View style={cornerHandleTL} />
+              <View style={handleVisible} />
             </View>
           </GestureDetector>
           <GestureDetector gesture={trGesture}>
             <View style={handleWrap('tr')} accessibilityLabel="Top-right crop handle" accessibilityRole="adjustable">
-              <View style={cornerHandleTR} />
+              <View style={handleVisible} />
             </View>
           </GestureDetector>
           <GestureDetector gesture={blGesture}>
             <View style={handleWrap('bl')} accessibilityLabel="Bottom-left crop handle" accessibilityRole="adjustable">
-              <View style={cornerHandleBL} />
+              <View style={handleVisible} />
             </View>
           </GestureDetector>
           <GestureDetector gesture={brGesture}>
             <View style={handleWrap('br')} accessibilityLabel="Bottom-right crop handle" accessibilityRole="adjustable">
-              <View style={cornerHandleBR} />
+              <View style={handleVisible} />
             </View>
           </GestureDetector>
 
           {/* Edge handles */}
           <GestureDetector gesture={topGesture}>
             <View style={handleWrap('top')} accessibilityLabel="Top edge crop handle" accessibilityRole="adjustable">
-              <View style={edgeHandleStyle} />
+              <View style={handleVisible} />
             </View>
           </GestureDetector>
           <GestureDetector gesture={bottomGesture}>
             <View style={handleWrap('bottom')} accessibilityLabel="Bottom edge crop handle" accessibilityRole="adjustable">
-              <View style={edgeHandleStyle} />
+              <View style={handleVisible} />
             </View>
           </GestureDetector>
           <GestureDetector gesture={leftGesture}>
             <View style={handleWrap('left')} accessibilityLabel="Left edge crop handle" accessibilityRole="adjustable">
-              <View style={edgeHandleStyleV} />
+              <View style={handleVisible} />
             </View>
           </GestureDetector>
           <GestureDetector gesture={rightGesture}>
             <View style={handleWrap('right')} accessibilityLabel="Right edge crop handle" accessibilityRole="adjustable">
-              <View style={edgeHandleStyleV} />
+              <View style={handleVisible} />
             </View>
           </GestureDetector>
         </Reanimated.View>
@@ -572,7 +535,7 @@ export function InCanvasCropOverlay({
             accessibilityRole="button"
             hitSlop={Space.xs}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color="#fff" />
+            <Ionicons name="close" size={22} color={colors.scrimTextPrimary} />
           </Pressable>
           <Pressable
             onPress={handleConfirm}
@@ -581,7 +544,7 @@ export function InCanvasCropOverlay({
             accessibilityRole="button"
             hitSlop={Space.xs}
           >
-            <Ionicons name="checkmark" size={IconGrammar.standard} color={colors.textInverse} />
+            <Ionicons name="checkmark" size={22} color={colors.textInverse} />
           </Pressable>
         </View>
 
@@ -611,7 +574,7 @@ export function InCanvasCropOverlay({
                   <Text
                     style={[
                       styles.ratioText,
-                      { color: active ? '#fff' : 'rgba(255,255,255,0.55)' },
+                      { color: active ? colors.scrimTextPrimary : colors.scrimTextSecondary },
                     ]}
                   >
                     {preset.label}
@@ -631,9 +594,6 @@ export function InCanvasCropOverlay({
   );
 }
 
-// ── Constants ────────────────────────────────────────────────────────
-const MASK_COLOR = 'rgba(0,0,0,0.55)';
-
 // ── Styles ───────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   maskPiece: {
@@ -642,21 +602,18 @@ const styles = StyleSheet.create({
     right: 0 },
   cropFrame: {
     position: 'absolute',
-    borderWidth: 2,
-    borderColor: '#fff',
+    borderWidth: Stroke.emphasis,
     overflow: 'visible' },
   gridV: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)' },
+    width: 1 },
   gridH: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)' },
+    height: 1 },
   topBar: {
     position: 'absolute',
     left: Space.md,

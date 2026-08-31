@@ -1,19 +1,10 @@
 /**
- * LayoutPreviewRail — a horizontal scrollable rail of layout preview
- * thumbnails for the Look composer.
- *
- * Each item shows a LayoutPreviewRenderer plus a name label. Tap commits
- * to a layout (onSelect); long-press triggers a temporary preview
- * (onPreview) that reverts on release (onPreviewEnd).
- *
- * Per AGENTS.md §4: authored composition, clear hierarchy, restraint.
- * Per AGENTS.md §13/§18: light haptic on select, suppressed under reduced
- * motion.
+ * LayoutPreviewRail — horizontal scrollable rail of layout preview thumbnails.
+ * Tap commits to a layout; long-press triggers a temporary preview.
  */
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
-import { Space, FontSize, FontFamily } from '../../../theme/designTokens';
-import { useAppTheme } from '../../../theme/ThemeContext';
+import { StyleSheet, Pressable, ScrollView } from 'react-native';
+import { Space } from '../../../theme/designTokens';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { LayoutPreviewRenderer } from './LayoutPreviewRenderer';
@@ -41,7 +32,6 @@ export function LayoutPreviewRail({
   onPreview,
   onPreviewEnd,
 }: LayoutPreviewRailProps) {
-  const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
 
@@ -89,15 +79,6 @@ export function LayoutPreviewRail({
               layout={layout}
               selected={isSelected}
             />
-            <Text
-              style={[
-                styles.label,
-                { color: colors.textMuted, fontFamily: FontFamily.regular },
-              ]}
-              numberOfLines={1}
-            >
-              {layout.name}
-            </Text>
           </Pressable>
         );
       })}
@@ -111,16 +92,10 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Space.md,
-    gap: Space.sm,
+    gap: 4,
     alignItems: 'flex-start',
   },
   item: {
     alignItems: 'center',
-  },
-  label: {
-    fontSize: FontSize.micro,
-    lineHeight: FontSize.micro + 4,
-    textAlign: 'center',
-    marginTop: 4,
   },
 });

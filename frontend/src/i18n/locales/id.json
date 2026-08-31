@@ -1,0 +1,1683 @@
+{
+  "common": {
+    "buttons": {
+      "save": "Simpan",
+      "cancel": "Batal",
+      "delete": "Hapus",
+      "edit": "Edit",
+      "share": "Bagikan",
+      "retry": "Coba lagi",
+      "close": "Tutup",
+      "done": "Selesai",
+      "continue": "Lanjutkan",
+      "clearAll": "Hapus semua",
+      "clearFilters": "Hapus filter",
+      "browseAll": "Jelajahi semua",
+      "refresh": "Segarkan",
+      "follow": "Ikuti",
+      "unfollow": "Batal ikuti",
+      "message": "Pesan",
+      "buy": "Beli",
+      "bid": "Tawar",
+      "sell": "Jual",
+      "ok": "OK",
+      "confirm": "Konfirmasi"
+    },
+    "states": {
+      "loading": "Memuat...",
+      "loadingMore": "Memuat lebih banyak...",
+      "noResults": "Tidak ada hasil",
+      "somethingWentWrong": "Terjadi kesalahan",
+      "youAreOffline": "Anda sedang offline",
+      "retry": "Coba lagi",
+      "searching": "Mencari..."
+    },
+    "navigation": {
+      "back": "Kembali",
+      "home": "Beranda",
+      "search": "Cari",
+      "profile": "Profil",
+      "settings": "Pengaturan"
+    },
+    "actions": {
+      "follow": "Ikuti",
+      "unfollow": "Batal ikuti",
+      "message": "Pesan",
+      "buy": "Beli",
+      "bid": "Tawar",
+      "sell": "Jual"
+    },
+    "trust": {
+      "verified": "Terverifikasi",
+      "responseTime": "Waktu respons",
+      "reviews": "Ulasan",
+      "followers": "Pengikut",
+      "following": "Mengikuti"
+    },
+    "misc": {
+      "items": "item",
+      "on": "Aktif",
+      "off": "Nonaktif",
+      "none": "Tidak ada",
+      "notSignedIn": "Belum masuk"
+    }
+  },
+  "home": {
+    "brandTitle": "Thryftverse",
+    "tabs": {
+      "foryou": "Untuk Anda",
+      "following": "Mengikuti"
+    },
+    "looks": {
+      "shopLabel": "Tampilan untuk dibeli",
+      "itemsCount": "{count} item"
+    },
+    "poster": {
+      "fallback": "Poster"
+    },
+    "newListings": {
+      "bannerSingular": "{count} drop baru siap",
+      "bannerPlural": "{count} drop baru siap",
+      "badgeNew": "{count} baru"
+    },
+    "sync": {
+      "unavailableCached": "Sinkronisasi tidak tersedia. Menampilkan item dari cache."
+    },
+    "empty": {
+      "followingNoNewTitle": "Belum ada drop baru",
+      "followingNoNewSubtitle": "Tarik untuk menyegarkan.",
+      "followingNoSellersTitle": "Ikuti penjual untuk melihat drop mereka",
+      "followingNoSellersSubtitle": "Ketuk ikuti pada profil penjual untuk membangun feed Anda.",
+      "followingDiscoverSellers": "Temukan penjual",
+      "followingBrowseAll": "Jelajahi semua",
+      "forYouNoDropsTitle": "Belum ada drop yang aktif",
+      "forYouNoDropsSubtitle": "Tarik untuk menyegarkan atau jelajahi kategori."
+    },
+    "footer": {
+      "reachedEnd": "Anda telah mencapai bagian akhir"
+    },
+    "peek": {
+      "closeButton": "Tutup",
+      "viewListing": "Lihat Listing"
+    }
+  },
+  "search": {
+    "placeholder": "Cari item, penjual, gaya",
+    "scope": {
+      "items": "Item",
+      "people": "Orang"
+    },
+    "resultCount": {
+      "singular": "{count} hasil",
+      "plural": "{count} hasil"
+    },
+    "sort": {
+      "title": "Urutkan berdasarkan",
+      "recommended": "Direkomendasikan",
+      "newest": "Terbaru",
+      "priceLowToHigh": "Harga: Rendah ke Tinggi",
+      "priceHighToLow": "Harga: Tinggi ke Rendah",
+      "mostLiked": "Paling disukai"
+    },
+    "sections": {
+      "discover": "Temukan",
+      "recent": "Terbaru",
+      "recentSearches": "Pencarian terbaru",
+      "savedSearches": "Pencarian tersimpan",
+      "browseCategories": "Jelajahi kategori",
+      "categories": "Kategori",
+      "trending": "Pencarian tren"
+    },
+    "suggestion": {
+      "brand": "Merek",
+      "category": "Kategori",
+      "item": "Item",
+      "search": "Cari"
+    },
+    "typeahead": {
+      "searchFor": "Cari “{query}”",
+      "viewAllResults": "Lihat semua hasil untuk {query}",
+      "suggestionsUnavailable": "Saran tidak tersedia. Tekan Cari untuk melanjutkan.",
+      "noCloseSuggestions": "Tidak ada saran yang cocok. Tekan Cari untuk melihat semua hasil.",
+      "showingLocalMatches": "Menampilkan hasil yang tersedia di perangkat ini"
+    },
+    "savedSearch": {
+      "alertsOn": "Notifikasi aktif",
+      "alertsOff": "Notifikasi nonaktif",
+      "newMatches": "· {count} baru"
+    },
+    "status": {
+      "refreshingIndex": "Menyegarkan indeks",
+      "liveIndex": "Indeks langsung",
+      "offlineIndex": "Indeks offline",
+      "cachedIndex": "Indeks cache"
+    },
+    "errors": {
+      "searchUnavailable": "Pencarian tidak tersedia",
+      "retrySearch": "Coba cari lagi",
+      "peopleSearchUnavailable": "Pencarian orang tidak tersedia",
+      "searchIndexDelayed": "Indeks pencarian tertunda. Menampilkan hasil dari cache.",
+      "noPeopleFound": "Tidak ada orang ditemukan untuk “{query}”",
+      "tryDifferentName": "Coba nama atau nama pengguna lain.",
+      "noMatches": "Tidak ada hasil untuk “{query}”",
+      "noMatchesWithFilters": "Tidak ada hasil untuk “{query}” dengan filter ini",
+      "searchingIndex": "Mencari indeks…",
+      "tryClearingFilters": "Coba hapus filter atau perluas pencarian Anda.",
+      "tryBroadened": "Coba {suggestions} — atau jelajahi semua kategori.",
+      "noPicksWithFilters": "Tidak ada pilihan yang cocok dengan filter saat ini. Sesuaikan atau hapus filter.",
+      "noPicksNoResults": "Belum ada hasil yang diperingkat. Coba kata kunci yang lebih pendek."
+    },
+    "noResults": {
+      "browseByCategory": "Jelajahi berdasarkan kategori"
+    },
+    "follow": {
+      "following": "Mengikuti",
+      "follow": "Ikuti"
+    }
+  },
+  "settings": {
+    "header": {
+      "title": "Pengaturan"
+    },
+    "search": {
+      "placeholder": "Cari pengaturan",
+      "results": "Hasil",
+      "allSettings": "Semua pengaturan",
+      "noMatching": "Tidak ada pengaturan yang cocok"
+    },
+    "verification": {
+      "promptTitle": "Verifikasi identitas Anda",
+      "promptSubtitle": "Dapatkan lencana terverifikasi dan buka fitur jual",
+      "verified": "Terverifikasi",
+      "getBadge": "Dapatkan lencana terverifikasi",
+      "trustedSeller": "Penjual Tepercaya",
+      "idVerified": "ID Terverifikasi"
+    },
+    "health": {
+      "verified": "Terverifikasi",
+      "twoFA": "2FA",
+      "biometric": "Biometrik",
+      "payment": "Pembayaran",
+      "address": "Alamat",
+      "emailConfirmed": "Email dikonfirmasi"
+    },
+    "sections": {
+      "yourAccount": "Akun Anda",
+      "buyingSelling": "Beli & jual",
+      "notifications": "Notifikasi",
+      "experience": "Pengalaman",
+      "connectedServices": "Layanan terhubung",
+      "helpLegal": "Bantuan & hukum",
+      "advanced": "Lanjutan",
+      "account": "Akun"
+    },
+    "rows": {
+      "verification": "Verifikasi",
+      "changePassword": "Ubah kata sandi",
+      "twoFAEnabled": "2FA aktif",
+      "passwordOnly": "Kata sandi saja",
+      "biometricLock": "Kunci biometrik",
+      "biometricNotAvailable": "Tidak tersedia di perangkat ini",
+      "biometricEnabled": "Face ID, Touch ID & sidik jari untuk tindakan sensitif",
+      "biometricDisabled": "Nonaktif — layar sensitif hanya menggunakan kata sandi",
+      "connectedAccounts": "Akun terhubung",
+      "connectedAccountsSubtitle": "Masuk dengan Google, Apple",
+      "devicesSessions": "Perangkat & sesi",
+      "accountControl": "Kontrol akun",
+      "accountControlSubtitle": "Keamanan, sesi, kata sandi",
+      "downloadData": "Unduh data saya",
+      "downloadDataSubtitle": "Ekspor data akun Anda",
+      "privacySafety": "Privasi & keamanan",
+      "privacySafetySubtitle": "Visibilitas, pengguna yang diblokir",
+      "chatPrivacy": "Privasi chat",
+      "chatPrivacySubtitle": "Siapa yang dapat mengirimi Anda pesan",
+      "dataPrivacy": "Data & privasi",
+      "dataPrivacySubtitle": "Kontrol privasi dan retensi",
+      "blockedUsers": "Pengguna diblokir",
+      "blockedCount": "{{count}} diblokir",
+      "savedAddresses": "Alamat tersimpan",
+      "oneSaved": "1 tersimpan",
+      "noneSaved": "Tidak ada yang tersimpan",
+      "paymentMethods": "Metode pembayaran",
+      "savedCollections": "Tersimpan & koleksi",
+      "payoutAccount": "Akun pencairan",
+      "payoutAccountSubtitle": "Saldo dan dompet",
+      "payoutHistory": "Riwayat pencairan",
+      "shippingPreferences": "Preferensi pengiriman",
+      "priceAlerts": "Peringatan harga",
+      "priceAlertsSubtitle": "Beri tahu saat ambang batas harga tercapai",
+      "autoInvestPlans": "Rencana investasi otomatis",
+      "autoInvestPlansSubtitle": "Jadwal pembelian berulang",
+      "taxDocuments": "Dokumen pajak",
+      "taxDocumentsSubtitle": "Laporan tahunan & laba rugi",
+      "resolutionCentre": "Pusat Resolusi",
+      "resolutionCentreSubtitle": "Sengketa dan resolusi",
+      "enableNotifications": "Aktifkan notifikasi",
+      "permissionUnknown": "Izin tidak diketahui",
+      "permissionAllowed": "Diizinkan",
+      "permissionNotAllowed": "Tidak diizinkan",
+      "notificationPreferences": "Preferensi notifikasi",
+      "emailPreferences": "Preferensi email",
+      "theme": "Tema",
+      "currencyDisplay": "Tampilan mata uang",
+      "localCurrency": "Mata uang lokal",
+      "language": "Bahasa",
+      "contentPreferences": "Preferensi konten",
+      "contentPreferencesSubtitle": "Feed dan rekomendasi",
+      "recommendations": "Rekomendasi",
+      "recommendationsSubtitle": "Peningkatan foto, saran judul dan harga",
+      "yourFeed": "Feed Anda",
+      "yourFeedSubtitle": "Rekomendasi dan transparansi",
+      "sustainability": "Keberlanjutan",
+      "sustainabilitySubtitle": "Tujuan, pengiriman, dampak",
+      "accessibility": "Aksesibilitas",
+      "accessibilitySubtitle": "Ukuran teks, gerak, kontras",
+      "searchHistory": "Riwayat pencarian",
+      "searchHistorySubtitle": "Hapus pencarian terbaru",
+      "dataSharing": "Berbagi data",
+      "dataSharingSubtitle": "Analitik dan personalisasi",
+      "agents": "Agen",
+      "agentsSubtitle": "Jelajahi dan kelola izin agen",
+      "connections": "Koneksi",
+      "connectionsSubtitle": "Kunci penyedia dan endpoint",
+      "yourAgents": "Agen Anda",
+      "yourAgentsSubtitle": "Agen yang telah Anda buat",
+      "helpCentre": "Pusat Bantuan",
+      "termsOfService": "Ketentuan Layanan",
+      "privacyPolicy": "Kebijakan Privasi",
+      "aboutThryftverse": "Tentang Thryftverse",
+      "runtimeSmokeTest": "Uji asap runtime",
+      "runtimeSmokeTestSubtitle": "Pemeriksaan diagnostik untuk runtime lokal",
+      "deleteAccount": "Hapus akun",
+      "deleteAccountSubtitle": "Hapus akun Anda secara permanen",
+      "editProfileAccount": "Edit profil & akun",
+      "biometricLogin": "Login biometrik",
+      "biometricLoginEnabled": "Wajibkan Face ID, Touch ID atau sidik jari saat membuka aplikasi",
+      "biometricLoginDisabled": "Nonaktif — aplikasi langsung membuka akun Anda",
+      "notificationCategories": "Kategori notifikasi",
+      "notificationPreferencesSubtitle": "Jam tenang, pratinjau",
+      "featureFlags": "Fitur flag",
+      "featureFlagsSubtitle": "Nilai flag saat ini untuk QA",
+      "autoTranslate": "Terjemahkan pesan otomatis",
+      "autoTranslateEnabled": "Pesan asing diterjemahkan otomatis",
+      "autoTranslateDisabled": "Ketuk untuk menerjemahkan pesan asing secara manual"
+    },
+    "toast": {
+      "themeApplying": "Menerapkan tema {{theme}}…",
+      "pushEnabled": "Notifikasi push diaktifkan",
+      "pushDenied": "Notifikasi push ditolak. Aktifkan di pengaturan perangkat.",
+      "pushUpdateFailed": "Tidak dapat memperbarui izin notifikasi push.",
+      "pushManageDeviceSettings": "Kelola notifikasi push di pengaturan perangkat Anda.",
+      "searchHistoryCleared": "Riwayat pencarian dihapus",
+      "searchHistoryClearFailed": "Tidak dapat menghapus riwayat pencarian",
+      "unableOpenLink": "Tidak dapat membuka tautan. Coba lagi sebentar."
+    },
+    "notificationSummary": "{enabled}/{total} kategori",
+    "accessibility": {
+      "editProfileAccount": "Edit profil dan akun",
+      "editProfileAccountHint": "Membuka editor profil, detail pribadi, keamanan, dan akun",
+      "verifyIdentity": "Verifikasi identitas",
+      "verifyIdentityHint": "Membuka verifikasi identitas",
+      "deleteAccountHint": "Membuka alur penghapusan akun"
+    },
+    "picker": {
+      "currencyTitle": "Pilih Mata Uang Lokal",
+      "themeTitle": "Mode Tema",
+      "themeSystem": "Sistem",
+      "themeLight": "Terang",
+      "themeDark": "Gelap"
+    }
+  },
+  "profile": {
+    "userProfile": "Profil {name}"
+  },
+  "listing": {
+    "create": {
+      "title": "Jual",
+      "createListing": "Buat listing",
+      "editTitle": "Edit listing",
+      "listingTitle": "Judul",
+      "description": "Deskripsi",
+      "price": "Harga",
+      "category": "Kategori",
+      "condition": "Kondisi",
+      "size": "Ukuran",
+      "brand": "Merek",
+      "photos": "Foto",
+      "publish": "Terbitkan",
+      "saveDraft": "Simpan draf",
+      "saved": "Tersimpan",
+      "details": "Detail",
+      "priceAndCondition": "Harga & kondisi",
+      "required": "Wajib",
+      "optional": "Opsional",
+      "addPhotosTitle": "Tambahkan foto untuk memulai",
+      "addPhotosSubtitle": "Foto dengan pencahayaan baik dari berbagai sudut terjual lebih cepat.",
+      "photoTips": "Tips foto",
+      "photoTipsMin": "Minimal 3 foto direkomendasikan",
+      "photoTipLighting": "Pencahayaan baik",
+      "photoTipAngles": "Tampilkan semua sudut",
+      "photoTipBackground": "Latar alami",
+      "titlePlaceholder": "mis. Jaket Denim Levi's 501 Vintage",
+      "descriptionHelper": "Tambahkan detail untuk membantu pembeli menemukan item ini",
+      "suggestedDetails": "Detail yang disarankan",
+      "applyToEmptyFields": "Terapkan ke bidang kosong",
+      "startingBid": "Tawaran awal",
+      "reservePriceOptional": "Harga cadangan (opsional)",
+      "duration": "Durasi",
+      "totalValuation": "Total penilaian",
+      "originalPriceHelper": "Tambahkan harga asli untuk menunjukkan nilai",
+      "readyToPublish": "Siap terbitkan",
+      "bulkList": "Listing massal",
+      "inventory": "Inventaris",
+      "hub": "Pusat",
+      "tapToSet": "Ketuk untuk atur"
+    },
+    "detail": {
+      "addToCart": "Tambah ke keranjang",
+      "buyNow": "Beli sekarang",
+      "makeOffer": "Buat penawaran",
+      "seller": "Penjual",
+      "itemCondition": "Kondisi",
+      "itemSize": "Ukuran",
+      "itemBrand": "Merek",
+      "postedOn": "Diposting pada {{date}}",
+      "addedToWishlist": "Ditambahkan ke wishlist",
+      "priceDropAlertsEnabled": "Peringatan penurunan harga diaktifkan untuk item ini",
+      "priceDropAlertsDisabled": "Peringatan penurunan harga dinonaktifkan",
+      "couldNotUpdatePriceAlert": "Tidak dapat memperbarui peringatan harga. Coba lagi.",
+      "browseSimilar": "Jelajahi yang serupa",
+      "manageListing": "Kelola listing"
+    }
+  },
+  "messaging": {
+    "compose": {
+      "placeholder": "Pesan...",
+      "send": "Kirim",
+      "attach": "Lampirkan",
+      "attachPhoto": "Foto",
+      "attachCamera": "Kamera",
+      "inputAccessibility": "Input pesan",
+      "dismissSafetyWarning": "Tutup peringatan keamanan",
+      "dismissCautionWarning": "Tutup peringatan perhatian",
+      "removeAttachment": "Hapus lampiran",
+      "addAttachment": "Tambah lampiran",
+      "openCamera": "Buka kamera",
+      "quickReply": "Balasan cepat: {{label}}"
+    },
+    "conversation": {
+      "title": "Pesan",
+      "empty": "Belum ada pesan",
+      "startChatting": "Kirim pesan di bawah untuk memulai.",
+      "startConversation": "Mulai percakapan",
+      "typing": "{{name}} sedang mengetik...",
+      "onlineNow": "Sedang online",
+      "newMessages": "Pesan baru",
+      "undo": "Urungkan",
+      "message": "Pesan",
+      "mediaPress": "Tekan Media",
+      "messageSent": "Pesan terkirim",
+      "sending": "Mengirim…",
+      "draft": "Draf",
+      "ai": "AI",
+      "retryDraft": "Ketuk untuk coba lagi",
+      "sendDraft": "Kirim",
+      "memberCount": "{{count}} anggota",
+      "loadError": "Tidak dapat memuat pesan. Periksa koneksi Anda dan coba lagi.",
+      "offlineMessage": "Anda sedang offline. Pesan akan dikirim saat Anda tersambung kembali.",
+      "copied": "Disalin",
+      "reportSubmitted": "Laporan dikirim. Terima kasih.",
+      "reportFailed": "Gagal mengirim laporan. Silakan coba lagi.",
+      "exitSelectionMode": "Keluar dari mode seleksi",
+      "exitSelectionModeHint": "Menutup toolbar seleksi pesan",
+      "deleteSelected": "Hapus pesan terpilih",
+      "deleteSelectedHint": "Menghapus pesan terpilih dari percakapan ini secara permanen",
+      "undoMessageDeletion": "Urungkan penghapusan pesan",
+      "reactWith": "Beri reaksi dengan {{emoji}}",
+      "openLink": "Buka tautan ke {{domain}}",
+      "typingIndicator": "Mengetik..."
+    },
+    "inbox": {
+      "primary": "Utama",
+      "buying": "Membeli",
+      "selling": "Menjual",
+      "tabBadge": "Tab {{label}}{{plural}}",
+      "newBadge": ", {{count}} baru",
+      "openConversation": "Buka {{title}}",
+      "performAction": "{{action}} {{title}}",
+      "performSecondaryAction": "{{action}} {{title}}",
+      "linkedListing": "Listing terkait: {{title}}, {{price}}, {{availability}}",
+      "listingHint": "Membuka halaman detail listing",
+      "scrollToBottom": "Gulir ke bawah{{unread}}",
+      "scrollToBottomHint": "Menggulir ke pesan terbaru",
+      "unread": ", {{count}} belum dibaca"
+    },
+    "requests": {
+      "title": "Permintaan pesan",
+      "noRequests": "Tidak ada permintaan pesan",
+      "noRequestsSubtitle": "Pesan dari orang yang tidak Anda ikuti akan muncul di sini.",
+      "acceptMessageRequest": "Terima permintaan pesan",
+      "deleteMessageRequest": "Hapus permintaan pesan",
+      "deleteConfirmationTitle": "Hapus permintaan?",
+      "deleteConfirmationMessage": "Ini akan menghapus permintaan. Mereka masih dapat mengirim pesan lain nanti.",
+      "blockConfirmationTitle": "Blokir {{name}}?",
+      "blockConfirmationMessage": "Mereka tidak akan dapat mengirimi Anda pesan atau melihat profil Anda. Permintaan akan dihapus.",
+      "accepted": "Permintaan diterima",
+      "acceptError": "Tidak dapat menerima permintaan ini. Periksa koneksi Anda dan coba lagi.",
+      "deleted": "Permintaan dihapus",
+      "deleteError": "Tidak dapat menghapus permintaan ini. Periksa koneksi Anda dan coba lagi.",
+      "blockError": "Tidak dapat memblokir akun ini. Periksa koneksi Anda dan coba lagi.",
+      "reportError": "Akun ini tidak dapat dilaporkan di sini.",
+      "blocked": "{{name}} diblokir"
+    },
+    "archived": {
+      "title": "Percakapan diarsipkan",
+      "subtitle": "Percakapan yang dipulihkan akan kembali ke kotak masuk Anda",
+      "noArchived": "Tidak ada percakapan diarsipkan",
+      "noArchivedSubtitle": "Percakapan yang Anda arsipkan tetap di luar kotak masuk tanpa dihapus.",
+      "clearAllConversations": "Hapus semua percakapan diarsipkan",
+      "removeConfirmationTitle": "Hapus dari kotak masuk?",
+      "removeConfirmationMessage": "\"{{title}}\" akan dihapus dari percakapan diarsipkan Anda.",
+      "clearAllConfirmationTitle": "Hapus semua yang diarsipkan?",
+      "clearAllConfirmationMessage": "Semua percakapan diarsipkan akan dihapus secara permanen.",
+      "restored": "Percakapan dipulihkan ke kotak masuk",
+      "restoreError": "Tidak dapat memulihkan percakapan ini. Periksa koneksi Anda dan coba lagi.",
+      "removed": "Percakapan dihapus",
+      "removeError": "Tidak dapat menghapus percakapan ini. Periksa koneksi Anda dan coba lagi.",
+      "cleared": "Arsip dihapus",
+      "clearError": "{{deleted}} dihapus · {{failed}} gagal"
+    },
+    "muted": {
+      "title": "Percakapan dibisukan",
+      "subtitle": "Notifikasi dijeda untuk chat ini",
+      "noMuted": "Tidak ada percakapan dibisukan",
+      "noMutedSubtitle": "Anda belum membisukan chat apa pun. Percakapan yang dibisukan akan muncul di sini.",
+      "unmute": "Bunyikan",
+      "unmuteError": "Tidak dapat membunyikan percakapan ini. Periksa koneksi Anda dan coba lagi."
+    },
+    "sharedMedia": {
+      "title": "Media yang dibagikan",
+      "noMedia": "Belum ada media yang dibagikan",
+      "noMediaSubtitle": "Foto dan video yang dibagikan dalam percakapan ini akan muncul di sini.",
+      "videoThumbnail": "Thumbnail video",
+      "deleteSelected": "Hapus media terpilih",
+      "summary": "{{photoCount}} foto{{photoPlural}} · {{videoCount}} video{{videoPlural}}",
+      "selectItem": "{{action}} {{type}}",
+      "select": "Pilih",
+      "deselect": "Batal pilih",
+      "photo": "foto",
+      "video": "video",
+      "selectedCount": "{{count}} dipilih",
+      "removeSelectedHint": "Menghapus {{count}} item terpilih{{plural}}",
+      "filter": "Filter {{label}}"
+    },
+    "attachments": {
+      "reviewTitle": "Tinjau lampiran",
+      "cancelAttachment": "Batalkan lampiran",
+      "captionPlaceholder": "Tambahkan keterangan...",
+      "captionAccessibility": "Keterangan lampiran",
+      "sendAttachment": "Kirim lampiran",
+      "actionSheetTitle": "Lampirkan",
+      "actionSheetSubtitle": "Bagikan foto dan video dalam chat ini",
+      "photoAndVideo": "Foto & Video",
+      "chooseFromLibrary": "Pilih dari pustaka Anda",
+      "camera": "Kamera",
+      "takePhotoOrVideo": "Ambil foto atau video baru",
+      "makeOffer": "Buat Penawaran",
+      "product": "Produk",
+      "priceQuote": "Kutipan Harga",
+      "shareListing": "Bagikan Listing",
+      "orderStatus": "Status Pesanan",
+      "payment": "Pembayaran",
+      "agent": "Agen"
+    },
+    "offers": {
+      "declineOffer": "Tolak penawaran",
+      "counterOffer": "Tawar balik",
+      "acceptOffer": "Terima penawaran",
+      "declined": "Ditolak",
+      "accepted": "Diterima",
+      "expired": "Kedaluwarsa",
+      "waitingForResponse": "Menunggu respons",
+      "pass": "Lewati",
+      "counter": "Tawar balik",
+      "accept": "Terima",
+      "verified": "Terverifikasi",
+      "verifiedSystemUpdate": "Pembaruan sistem terverifikasi",
+      "counterRound": "Tawar balik #{{round}}",
+      "expiresIn": "Berakhir dalam {{time}}"
+    },
+    "agentPicker": {
+      "title": "Tambah Agen AI",
+      "sheet": "Lembar Tambah Agen AI",
+      "connect": "Hubungkan asisten untuk membantu dalam chat ini",
+      "demoNotice": "Asisten demo menyarankan balasan tiruan",
+      "noAgents": "Tidak ada agen tersedia",
+      "noAgentsBody": "Buat agen dari layar Agen untuk memulai.",
+      "loading": "Memuat agen yang dideploy…",
+      "loadError": "Tidak dapat memuat agen",
+      "loadErrorBody": "Tidak dapat menjangkau server. Tarik untuk mencoba lagi.",
+      "noAgentsDeployed": "Tidak ada agen dideploy",
+      "noAgentsDeployedBody": "Pasang agen ke percakapan ini dari layar Agen.",
+      "addAssistant": "Tambah asisten",
+      "addAssistantDescription": "Deploy asisten AI ke chat ini",
+      "addAgent": "Tambah agen {{name}}",
+      "alreadyAdded": "{{name}} sudah ditambahkan",
+      "openManagement": "Buka manajemen agen",
+      "activeOne": "{{name}} aktif. Ketuk untuk kelola agen.",
+      "activeMany": "{{count}} agen aktif. Ketuk untuk kelola agen.",
+      "activeShortOne": "{{name}} aktif",
+      "activeShortMany": "{{count}} agen aktif",
+      "retryDraft": "Coba kirim ulang draf agen",
+      "sendDraft": "Kirim draf agen"
+    },
+    "suggestedReplies": {
+      "title": "Balasan yang disarankan",
+      "titleFrom": "Balasan yang disarankan dari {{agentName}}",
+      "use": "Gunakan balasan yang disarankan: {{reply}}",
+      "fill": "Mengisi input pesan dengan balasan ini",
+      "dismiss": "Tutup balasan yang disarankan",
+      "dismissHint": "Menyembunyikan balasan yang disarankan untuk percakapan ini",
+      "manage": "Kelola balasan"
+    },
+    "voice": {
+      "notAvailable": "Pesan suara tidak tersedia",
+      "notSupportedHint": "Perekaman audio tidak didukung di build ini",
+      "micPermission": "Izin mikrofon ditolak. Ketuk untuk meminta izin.",
+      "deleteRecording": "Hapus rekaman dan mulai ulang",
+      "readyToSend": "Siap dikirim",
+      "sendVoice": "Kirim pesan suara",
+      "sendVoiceHint": "Mengirim rekaman. Tidak dapat diurungkan.",
+      "stopRecording": "Hentikan rekaman dan tinjau",
+      "stopRecordingHint": "Ketuk untuk mengakhiri rekaman. Tinjau sebelum mengirim.",
+      "cancelRecording": "Batalkan rekaman dan hapus",
+      "recordVoice": "Rekam pesan suara",
+      "recordVoiceHint": "Ketuk untuk mulai merekam. Ketuk hentikan untuk meninjau sebelum mengirim.",
+      "voiceMessage": "Pesan suara, durasi {{duration}}{{state}}",
+      "playbackSpeed": "Kecepatan pemutaran {{rate}} kali",
+      "playHint": "Ketuk dua kali untuk putar atau jeda. Gunakan tindakan untuk lompat, ubah kecepatan, atau minta transkrip.",
+      "loadError": "Tidak dapat memuat suara"
+    },
+    "transcription": {
+      "show": "Tampilkan transkrip untuk pesan suara ini",
+      "showHint": "Meminta transkrip otomatis. Teks diturunkan, bukan kata-kata pengirim sendiri.",
+      "title": "Transkrip",
+      "notAvailable": "Transkrip tidak tersedia untuk format audio ini",
+      "close": "Tutup transkrip",
+      "failed": "Transkrip gagal",
+      "temporarilyUnavailable": "Sementara tidak tersedia",
+      "retryTranscription": "Coba transkrip lagi",
+      "requesting": "Meminta transkrip…",
+      "transcribing": "Mentranskrip audio…",
+      "empty": "(transkrip kosong)",
+      "derivedLabel": "Ditranskrip secara otomatis",
+      "accurate": "Tandai transkrip sebagai akurat",
+      "inaccurate": "Tandai transkrip sebagai tidak akurat",
+      "loadError": "Tidak dapat memuat transkrip"
+    },
+    "orders": {
+      "placed": "Pesanan dibuat",
+      "placedBody": "Penjual telah diberi tahu.",
+      "paymentConfirmed": "Pembayaran dikonfirmasi",
+      "paymentConfirmedBody": "Pembayaran Anda telah diproses.",
+      "shipped": "Pesanan dikirim",
+      "shippedBody": "Paket telah dikirim.",
+      "inTransit": "Dalam perjalanan",
+      "inTransitBody": "Paket Anda dalam perjalanan.",
+      "delivered": "Terkirim",
+      "deliveredBody": "Pengiriman telah dikonfirmasi.",
+      "cancelled": "Pesanan dibatalkan",
+      "cancelledBody": "Pesanan ini telah dibatalkan.",
+      "refunded": "Dikembalikan",
+      "refundedBody": "Pembayaran Anda telah dikembalikan.",
+      "orderPreview": "{{title}}. {{subtitle}}. {{orderId}}. {{timestamp}}. Ketuk untuk melihat detail pesanan.",
+      "viewDetails": "Lihat detail",
+      "dispatchItem": "Kirim item",
+      "trackParcel": "Lacak paket",
+      "checkItem": "Periksa item",
+      "viewOrder": "Lihat pesanan",
+      "shipBy": "Kirim sebelum {{date}}",
+      "eta": "ETA {{window}}",
+      "etaWindow": "{{min}}–{{max}} hari",
+      "etaDay": "{{count}} hari",
+      "orderStatusAccessibility": "Pesanan {{status}}{{deadline}}{{cta}}"
+    },
+    "safety": {
+      "title": "Pertahankan pembayaran di ThryftVerse",
+      "body": "Pembayaran di luar platform tidak dilindungi oleh Perlindungan Pembeli. Jika ini transaksi yang sah, selesaikan di aplikasi untuk tetap terlindungi.",
+      "dismiss": "Tutup peringatan",
+      "reportConversation": "Laporkan percakapan ini"
+    },
+    "search": {
+      "placeholder": "Cari dalam chat",
+      "inConversation": "Cari dalam percakapan",
+      "previousResult": "Hasil sebelumnya",
+      "nextResult": "Hasil berikutnya",
+      "closeSearch": "Tutup pencarian",
+      "browseResults": "Lihat hasil di mode jelajah",
+      "browseResultsHint": "Membuka layar jelajah dengan filter yang cocok diterapkan",
+      "refine": "Persempit pencarian: {{suggestion}}",
+      "refineHint": "Menambahkan penyempitan ini ke pencarian Anda",
+      "searchFor": "Cari {{suggestion}}",
+      "startQueryHint": "Memulai pencarian percakapan dengan kueri ini",
+      "queryInput": "Input kueri pencarian",
+      "queryInputHint": "Ketik deskripsi bahasa natural dari apa yang ingin Anda cari",
+      "sendQuery": "Kirim kueri pencarian",
+      "sendQueryHint": "Mengirim kueri Anda dan memulai pencarian percakapan",
+      "retry": "Coba cari lagi",
+      "retryHint": "Mengirim ulang kueri pencarian terakhir Anda"
+    },
+    "common": {
+      "cancel": "Batal",
+      "goBack": "Kembali",
+      "verifiedUser": "Pengguna terverifikasi",
+      "retry": "Coba lagi",
+      "delete": "Hapus",
+      "block": "Blokir",
+      "report": "Laporkan",
+      "remove": "Hapus",
+      "clearAll": "Hapus semua",
+      "restore": "Pulihkan",
+      "blockWithName": "Blokir {{name}}",
+      "reportWithName": "Laporkan {{name}}"
+    },
+    "messageActions": {
+      "dismissReply": "Tutup balasan",
+      "scrollToOriginal": "Menggulir ke pesan asli",
+      "quotedReply": "Balasan kutipan dari {{sender}}"
+    },
+    "translation": {
+      "translate": "Terjemahkan",
+      "showOriginal": "Tampilkan asli",
+      "translating": "Menerjemahkan...",
+      "translationFailed": "Terjemahan tidak tersedia",
+      "translatedFrom": "Diterjemahkan dari {{language}}"
+    }
+  },
+  "commerce": {
+    "checkout": {
+      "title": "Checkout",
+      "subtotal": "Subtotal",
+      "shipping": "Pengiriman",
+      "tax": "Pajak",
+      "total": "Total",
+      "payNow": "Bayar sekarang",
+      "paymentMethod": "Metode pembayaran",
+      "deliveryAddress": "Alamat pengiriman",
+      "orderPlaced": "Pesanan dibuat",
+      "orderFailed": "Pesanan gagal",
+      "signInToCheckout": "Masuk untuk checkout",
+      "signIn": "Masuk",
+      "cannotPurchaseOwnListing": "Tidak dapat membeli listing Anda sendiri",
+      "cannotBuyOwnItem": "Anda tidak dapat membeli barang yang Anda jual.",
+      "itemUnavailable": "Barang tidak tersedia",
+      "listingNoLongerPurchasable": "Listing ini tidak dapat dibeli lagi.",
+      "goBack": "Kembali",
+      "delivery": "Pengiriman",
+      "noAddress": "Tidak ada alamat",
+      "change": "Ubah",
+      "add": "Tambah",
+      "noPaymentMethod": "Tidak ada metode pembayaran",
+      "requiredForDelivery": "Diperlukan untuk pengiriman",
+      "needsSavingBeforePayment": "Perlu disimpan sebelum pembayaran",
+      "shippingNotAvailable": "Pengiriman tidak tersedia untuk wilayah Anda",
+      "cardsUnavailableRegion": "Kartu tidak tersedia di wilayah Anda",
+      "securePayment": "Pembayaran aman · detail kartu dienkripsi",
+      "useWalletBalance": "Gunakan saldo dompet",
+      "available": "tersedia",
+      "retryPayment": "Coba pembayaran lagi",
+      "tryAgain": "Coba lagi",
+      "addAddress": "Tambah alamat",
+      "addPayment": "Tambah pembayaran",
+      "item": "Barang",
+      "buyerProtection": "Perlindungan pembeli",
+      "walletApplied": "Dompet diterapkan",
+      "viewFullBreakdown": "Lihat rincian lengkap",
+      "fullBreakdown": "Rincian lengkap",
+      "payWithApplePay": "Bayar dengan Apple Pay",
+      "payWithGooglePay": "Bayar dengan Google Pay",
+      "payWithCard": "Bayar dengan kartu",
+      "processing": "Memproses",
+      "waitingForConfirmation": "Menunggu konfirmasi",
+      "savingWithWallet": "Hemat {{amount}} dengan saldo dompet",
+      "shippingQuoteUnavailable": "Kuota pengiriman tidak tersedia — melanjutkan dengan pengiriman standar.",
+      "addDeliveryAddressToContinue": "Tambahkan alamat pengiriman untuk melanjutkan.",
+      "addPaymentMethodToContinue": "Tambahkan metode pembayaran untuk melanjutkan.",
+      "estimated": "Estimasi",
+      "tracking": "Pelacakan",
+      "closeCheckout": "Tutup checkout",
+      "paymentInProgress": "Pembayaran sedang berlangsung",
+      "paymentInProgressBody": "Konfirmasi pembayaran mungkin masih selesai setelah Anda keluar. Periksa Pesanan Anda sebelum mencoba lagi.",
+      "stay": "Tetap",
+      "leave": "Keluar"
+    },
+    "offer": {
+      "makeOffer": "Buat penawaran",
+      "offerAmount": "Jumlah penawaran",
+      "submitOffer": "Kirim penawaran",
+      "offerAccepted": "Penawaran diterima",
+      "offerDeclined": "Penawaran ditolak",
+      "offerExpired": "Penawaran kedaluwarsa"
+    },
+    "bid": {
+      "placeBid": "Pasang tawaran",
+      "currentBid": "Tawaran saat ini",
+      "yourBid": "Tawaran Anda",
+      "bidPlaced": "Tawaran dipasang",
+      "outbid": "Anda telah kalah tawaran",
+      "winning": "Menang"
+    },
+    "wallet": {
+      "title": "Dompet",
+      "balance": "Saldo",
+      "spendableNow": "Bisa dibelanjakan sekarang",
+      "withdraw": "Tarik",
+      "withdrawAmount": "Jumlah penarikan",
+      "withdrawSuccess": "Penarikan diminta",
+      "withdrawFailed": "Penarikan gagal",
+      "addMoney": "Tambah uang",
+      "transactionHistory": "Riwayat transaksi",
+      "convert": "Konversi",
+      "recentActivity": "Aktivitas terbaru",
+      "seeAll": "Lihat semua",
+      "noBalanceYet": "Belum ada 1ZE",
+      "addMoneyToStart": "Tambahkan uang untuk mulai memperdagangkan unit Co-Own.",
+      "authenticateToView": "Autentikasi untuk melihat dompet Anda",
+      "showBalance": "Tampilkan saldo",
+      "hideBalance": "Sembunyikan saldo",
+      "balanceHidden": "Saldo disembunyikan",
+      "reservedForOrders": "Dipesan untuk pesanan",
+      "redemptionPending": "Penebusan tertunda",
+      "otherHolds": "Tahanan lainnya",
+      "pendingDeposit": "Deposit tertunda",
+      "unsettledSaleProceeds": "Hasil penjualan belum diselesaikan",
+      "withdrawable": "Dapat ditarik",
+      "sellerEarnings": "Pendapatan penjual",
+      "safeguarded": "Diamankan",
+      "safeguardingPending": "Pengamanan tertunda",
+      "evidence": "Bukti",
+      "terms": "Syarat",
+      "activity": "Aktivitas"
+    },
+    "order": {
+      "title": "Pesanan",
+      "orderNumber": "Pesanan #{{number}}",
+      "statusPending": "Tertunda",
+      "statusProcessing": "Memproses",
+      "statusShipped": "Dikirim",
+      "statusDelivered": "Terkirim",
+      "statusCancelled": "Dibatalkan",
+      "statusRefunded": "Dikembalikan"
+    }
+  },
+  "myProfile": {
+    "cover": {
+      "uploadFailed": "Unggah sampul gagal",
+      "retry": "Coba lagi",
+      "cancel": "Batal"
+    },
+    "utility": {
+      "orders": "Pesanan",
+      "analytics": "Analitik",
+      "closet": "Lemari",
+      "wallet": "Dompet",
+      "auctions": "Lelang",
+      "coOwn": "Kepemilikan bersama",
+      "sellerHub": "Pusat Penjual",
+      "itemsCount": "{{count}} barang",
+      "assetsCount": "{{count}} aset"
+    },
+    "notSignedIn": {
+      "subtitle": "Masuk untuk melihat profil, listing, dan dompet Anda.",
+      "signIn": "Masuk"
+    },
+    "holiday": {
+      "title": "Mode libur aktif",
+      "subtitle": "Toko Anda dijeda. Ketuk untuk mengelola."
+    },
+    "tabs": {
+      "shop": "Toko",
+      "looks": "Looks",
+      "about": "Tentang",
+      "reviews": "Ulasan"
+    },
+    "listings": {
+      "emptyTitle": "Daftarkan barang pertama Anda",
+      "emptyBody": "Foto barang dan publikasikan saat Anda siap.",
+      "startSelling": "Mulai jualan",
+      "bringOverListings": "Pindahkan listing Anda yang sudah ada",
+      "viewAll": "Lihat Semua",
+      "sold": "TERJUAL",
+      "listingsCount": "{{count}} listing"
+    },
+    "looks": {
+      "errorTitle": "Tidak dapat memuat Looks Anda",
+      "errorSubtitle": "Periksa koneksi Anda dan coba lagi.",
+      "tryAgain": "Coba lagi",
+      "emptyTitle": "Belum ada Looks",
+      "emptySubtitle": "Buat Look pertama Anda untuk memamerkan gaya Anda.",
+      "createLook": "Buat Look"
+    },
+    "about": {
+      "coOwnPortfolio": "PORTOFOLIO CO-OWN",
+      "viewAll": "Lihat semua",
+      "unit": "unit",
+      "units": "unit",
+      "website": "Situs web",
+      "shopPolicies": "Kebijakan toko",
+      "payments": "Pembayaran",
+      "paymentsValue": "Checkout aman dengan perlindungan pembeli",
+      "shipping": "Pengiriman",
+      "shippingSeller": "Penjual {{label}}. Pelacakan disediakan saat pengiriman.",
+      "shippingDefault": "Pelacakan disediakan saat pengiriman.",
+      "returns": "Pengembalian",
+      "returnsValue": "Pengembalian diterima untuk barang yang tidak sesuai deskripsi.",
+      "responseRate": "Tingkat respons",
+      "response": "Respons",
+      "responseSeller": "Penjual biasanya membalas {{label}}.",
+      "responseDefault": "Penjual berusaha merespons dengan cepat.",
+      "noDetails": "Tidak ada detail tambahan tersedia."
+    },
+    "completion": {
+      "title": "Lengkapi profil Anda",
+      "progress": "{{percent}}% · {{done}}/{{total}}"
+    },
+    "growth": {
+      "title": "Berkembang di Thryftverse",
+      "listFirstItemTitle": "Daftarkan barang pertama Anda",
+      "listFirstItemSub": "Foto dan publikasikan barang untuk mulai berjualan.",
+      "growAudienceTitle": "Kembangkan audiens Anda",
+      "growAudienceSub": "Bagikan profil Anda dan buat konten untuk menarik pengikut."
+    },
+    "toast": {
+      "coverUpdated": "Sampul diperbarui",
+      "coverUploadFailed": "Unggah sampul gagal",
+      "avatarUpdated": "Avatar diperbarui",
+      "avatarUploadFailed": "Unggah avatar gagal",
+      "portfolioLoadFailed": "Tidak dapat memuat portofolio"
+    },
+    "accessibility": {
+      "orders": "Pesanan",
+      "creatorAnalytics": "Analitik kreator",
+      "closet": "Lemari",
+      "wallet": "Dompet",
+      "browseAuctions": "Jelajahi lelang",
+      "browseCoOwnMarket": "Jelajahi pasar co-own",
+      "sellerHub": "Pusat Penjual",
+      "openSettings": "Buka pengaturan",
+      "openSettingsHint": "Membuka pengaturan",
+      "shareProfile": "Bagikan profil",
+      "shareProfileHint": "Membuka lembar berbagi sistem untuk membagikan profil Anda",
+      "retryCoverUpload": "Coba unggah sampul lagi",
+      "cancelCoverChange": "Batalkan perubahan sampul",
+      "uploadingCover": "Mengunggah sampul profil",
+      "changeCover": "Ubah sampul profil",
+      "holidayMode": "Mode libur aktif — ketuk untuk mengelola",
+      "importListingsHint": "Mulai impor katalog dari eBay atau file",
+      "loadingLooks": "Memuat Looks Anda",
+      "viewCoOwnPortfolio": "Lihat portofolio Co-Own",
+      "viewCoOwnPortfolioHint": "Membuka pusat kepemilikan Co-Own Anda",
+      "dismissCompletion": "Tutup permintaan pelengkapan profil",
+      "dismissGrowth": "Tutup permintaan pertumbuhan",
+      "listFirstItemHint": "Membuka alur jualan untuk membuat listing pertama Anda",
+      "growAudienceHint": "Membuka analitik kreator dengan alat pertumbuhan audiens"
+    },
+    "completionCta": {
+      "addName": "Tambah nama",
+      "addBio": "Tambah bio",
+      "addPhoto": "Tambah foto",
+      "addCover": "Tambah sampul",
+      "editProfile": "Edit profil"
+    },
+    "share": {
+      "message": "Lihat @{{username}} di Thryftverse! https://thryftverse.com/@{{username}}",
+      "title": "{{name}} di Thryftverse"
+    }
+  },
+  "galleria": {
+    "editorial": {
+      "eyebrow": "EDITORIAL"
+    },
+    "collections": {
+      "eyebrow": "KOLEKSI PILIHAN",
+      "curatedBy": "Dikurasi oleh {{curator}}"
+    },
+    "assets": {
+      "eyebrow": "ASET UNGGULAN",
+      "title": "Sorotan Co-Own"
+    },
+    "editorialList": {
+      "eyebrow": "EDITORIAL",
+      "title": "Cerita dari Galleria"
+    },
+    "creativeTools": {
+      "eyebrow": "ALAT KREATIF",
+      "title": "Jadikan milik Anda",
+      "posterStudio": "Studio Poster",
+      "posterStudioSub": "Buat poster, looks & kolase moodboard"
+    },
+    "demo": {
+      "content": "Konten demo"
+    },
+    "offline": {
+      "banner": "Offline — menampilkan konten Galleria yang di-cache"
+    },
+    "error": {
+      "title": "Galleria tidak tersedia",
+      "retry": "Coba lagi",
+      "loadFailed": "Kami tidak dapat memuat Galleria. Coba lagi."
+    },
+    "empty": {
+      "title": "Galleria sedang dikurasi",
+      "subtitle": "Kurator kami sedang menyiapkan koleksi dan artikel editorial baru. Periksa lagi segera.",
+      "refresh": "Segarkan"
+    },
+    "accessibility": {
+      "loadingCollections": "Memuat koleksi pilihan",
+      "collectionsRail": "Rel koleksi pilihan",
+      "openPosterStudio": "Buka Poster Studio",
+      "posterStudioHint": "Buat poster, looks, dan kolase moodboard",
+      "editorial": "Editorial: {{title}}",
+      "collection": "Koleksi: {{title}}",
+      "collectionHint": "Membuka detail koleksi",
+      "featuredCollection": "Koleksi unggulan: {{title}}",
+      "asset": "{{title}}, bernilai {{value}}",
+      "assetHint": "Membuka detail aset"
+    }
+  },
+  "agentLedger": {
+    "header": {
+      "title": "Eksekusi agen",
+      "subtitle": "Catatan eksekusi berbasis server"
+    },
+    "status": {
+      "succeeded": "Berhasil",
+      "failed": "Gagal",
+      "running": "Berjalan",
+      "queued": "Antrian",
+      "cancelled": "Dibatalkan",
+      "timedOut": "Waktu habis",
+      "unknown": "Tidak diketahui",
+      "awaitingApproval": "Menunggu persetujuan",
+      "awaitingInput": "Menunggu masukan"
+    },
+    "error": {
+      "title": "Tidak dapat memuat eksekusi",
+      "retry": "Coba lagi",
+      "loadFailed": "Gagal memuat eksekusi"
+    },
+    "empty": {
+      "title": "Belum ada eksekusi agen",
+      "body": "Saat agen dieksekusi — melalui sebutan, perintah, atau jadwal — eksekusinya muncul di sini dengan status, penggunaan token, dan waktu."
+    },
+    "footer": {
+      "note": "Log aktivitas lokal yang ditampilkan sebelumnya telah diganti dengan catatan eksekusi berbasis server."
+    },
+    "approvals": {
+      "title": "Persetujuan tertunda",
+      "approving": "Menyetujui…",
+      "approve": "Setujui",
+      "approveAction": "Setujui permintaan dari {{botName}}",
+      "rejecting": "Menolak…",
+      "reject": "Tolak",
+      "rejectAction": "Tolak permintaan dari {{botName}}",
+      "errorApproveTitle": "Tidak dapat menyetujui",
+      "errorApproveMessage": "Permintaan tidak dapat disetujui.",
+      "errorRejectTitle": "Tidak dapat menolak",
+      "errorRejectMessage": "Permintaan tidak dapat ditolak."
+    },
+    "cancel": {
+      "cancelling": "Membatalkan…",
+      "cancel": "Batal",
+      "cancelAction": "Batalkan eksekusi untuk {{botName}}",
+      "confirmTitle": "Batalkan eksekusi agen",
+      "confirmMessage": "Batalkan eksekusi untuk {{botName}}?",
+      "confirmLabel": "Batalkan eksekusi",
+      "errorTitle": "Tidak dapat membatalkan",
+      "errorMessage": "Eksekusi tidak dapat dibatalkan."
+    },
+    "tools": {
+      "search": "Cari: {{searchQuery}}",
+      "listing": "Listing: {{listingId}}",
+      "priceHistory": "Riwayat harga: {{searchQuery}}",
+      "readMessages": "Baca {{count}} pesan"
+    },
+    "time": {
+      "justNow": "Baru saja",
+      "minutesAgo": "{{count}} mnt lalu",
+      "hoursAgo": "{{count}} jam lalu",
+      "daysAgo": "{{count}} hr lalu"
+    },
+    "tokens": {
+      "usage": "{{input}} masuk · {{output}} keluar"
+    }
+  },
+  "liveStreamViewer": {
+    "lotStatus": {
+      "comingUp": "Segera",
+      "openForBidding": "Terbuka untuk penawaran",
+      "closingSoon": "Segera ditutup!",
+      "sold": "Terjual seharga £{{price}}",
+      "passed": "Lolos (reserve tidak tercapai)",
+      "cancelled": "Dibatalkan"
+    },
+    "toast": {
+      "couldNotSend": "Tidak dapat mengirim pesan",
+      "bidFailed": "Tawaran gagal",
+      "bidNotAccepted": "Tawaran tidak diterima",
+      "stillChecking": "Masih memeriksa — tawaran Anda mungkin telah dipasang",
+      "purchaseComplete": "Pembelian selesai — periksa kotak masuk Anda",
+      "couldNotPurchase": "Tidak dapat menyelesaikan pembelian",
+      "followDemoUnavailable": "Ikuti tidak tersedia dalam mode demo",
+      "followUnavailable": "Ikuti tidak tersedia",
+      "unfollowed": "Berhenti mengikuti",
+      "following": "Mengikuti",
+      "followError": "Tidak dapat memperbarui status mengikuti",
+      "checkoutError": "Tidak dapat memulai checkout. Silakan coba lagi."
+    },
+    "share": {
+      "message": "Tonton siaran langsung {{sellerName}} di ThryftVerse",
+      "defaultSeller": "penjual ini"
+    },
+    "connecting": {
+      "title": "Menghubungkan ke siaran",
+      "subtitle": "Menyiapkan koneksi real-time"
+    },
+    "error": {
+      "title": "Tidak dapat terhubung ke siaran",
+      "subtitle": "Siaran mungkin telah berakhir atau koneksi Anda terputus.",
+      "reconnect": "Hubungkan kembali",
+      "goBack": "Kembali"
+    },
+    "ended": {
+      "title": "Siaran Berakhir",
+      "subtitle": "Terima kasih telah menonton",
+      "viewers": "Penonton",
+      "lotsSold": "Lot Terjual",
+      "totalSales": "Total Penjualan",
+      "done": "Selesai"
+    },
+    "demo": {
+      "label": "DEMO",
+      "stream": "Siaran demo"
+    },
+    "video": {
+      "connecting": "Menghubungkan ke siaran..."
+    },
+    "seller": {
+      "following": "Mengikuti",
+      "follow": "Ikuti"
+    },
+    "live": {
+      "label": "LANGSUNG"
+    },
+    "chat": {
+      "seller": "PENJUAL",
+      "placeholder": "Kirim pesan..."
+    },
+    "product": {
+      "bids": "tawaran"
+    },
+    "bid": {
+      "placeBid": "Tawar",
+      "buyNow": "Beli",
+      "buyNowFull": "Beli Sekarang",
+      "completeCheckout": "Selesaikan checkout"
+    },
+    "bidSheet": {
+      "title": "Pasang Tawaran",
+      "currentBid": "Tawaran saat ini",
+      "minNextBid": "Tawaran berikutnya minimum",
+      "cancel": "Batal",
+      "close": "Tutup"
+    },
+    "unknown": {
+      "title": "Status tawaran tidak diketahui",
+      "subtitle": "Tawaran Anda mungkin telah dipasang. Kami tidak dapat mengonfirmasi hasilnya.",
+      "checkResult": "Periksa hasil",
+      "dismiss": "Tutup"
+    }
+  },
+  "liveShopping": {
+    "live": {
+      "label": "LANGSUNG",
+      "demo": "DEMO"
+    },
+    "header": {
+      "title": "Langsung"
+    },
+    "sections": {
+      "liveNow": "Siaran langsung sekarang",
+      "comingUp": "Segera",
+      "pastEvents": "Acara Lampau",
+      "streaming": "{{count}} sedang siaran",
+      "scheduled": "{{count}} terjadwal",
+      "replays": "{{count}} tayangan ulang",
+      "replay_one": "{{count}} tayangan ulang",
+      "replay_other": "{{count}} tayangan ulang"
+    },
+    "featured": {
+      "currentBid": "Tawaran saat ini"
+    },
+    "replay": {
+      "justEnded": "Baru berakhir",
+      "hoursAgo": "{{count}} jam lalu",
+      "daysAgo": "{{count}} hr lalu"
+    },
+    "upcoming": {
+      "waiting": "menunggu",
+      "notified": "Diberi tahu",
+      "notifyMe": "Beri tahu saya",
+      "startingSoon": "Segera dimulai"
+    },
+    "scheduled": {
+      "inMinutes": "Dalam {{minutes}} mnt · {{time}}",
+      "inHours": "Dalam {{hours}}jam {{minutes}}m · {{time}}",
+      "inDays": "{{day}} · {{time}}"
+    },
+    "noLive": {
+      "text": "Tidak ada yang siaran sekarang"
+    },
+    "error": {
+      "title": "Tidak dapat memuat sesi langsung",
+      "retry": "Coba lagi",
+      "subtitle": "Periksa koneksi Anda dan coba lagi.",
+      "loadFailed": "Gagal memuat sesi langsung"
+    },
+    "empty": {
+      "title": "Tidak ada sesi langsung sekarang",
+      "subtitle": "Periksa lagi segera, atau mulai sesi Anda sendiri dari Pusat Penjual.",
+      "goToSellerHub": "Ke Pusat Penjual"
+    }
+  },
+  "conversationalSearch": {
+    "header": {
+      "title": "Tanya ThryftVerse"
+    },
+    "demo": {
+      "banner": "Pencocokan kata kunci — kami mengekstrak filter dari deskripsi Anda."
+    },
+    "offline": {
+      "banner": "Anda sedang luring. Hubungkan kembali untuk mencari."
+    },
+    "empty": {
+      "greetingTitle": "Apa yang Anda cari hari ini?",
+      "greetingSubtitle": "Jelaskan dengan kata-kata Anda sendiri.",
+      "suggestionsLabel": "Coba salah satu dari ini"
+    },
+    "matched": {
+      "label": "Kata kunci yang cocok"
+    },
+    "actions": {
+      "viewResults": "Lihat hasil",
+      "refine": "Saring"
+    },
+    "error": {
+      "retry": "Coba lagi",
+      "offline": "Anda sedang luring. Hubungkan kembali untuk mencari.",
+      "generic": "Terjadi kesalahan. Coba lagi."
+    },
+    "input": {
+      "placeholder": "Jelaskan apa yang Anda cari…"
+    },
+    "browseTitle": "Hasil pencarian",
+    "filters": {
+      "brand": "Merek: {{value}}",
+      "category": "Kategori: {{value}}",
+      "size": "Ukuran: {{value}}",
+      "condition": "Kondisi: {{value}}",
+      "colour": "Warna: {{value}}",
+      "style": "Gaya: {{value}}",
+      "priceLabel": "Harga: ",
+      "priceUnder": "di bawah {{value}}",
+      "priceOver": "di atas {{value}}",
+      "sustainableOnly": "Hanya berkelanjutan"
+    },
+    "trust": {
+      "matchedKeywords": "Kata kunci yang cocok: {{keywords}}",
+      "noMatch": "Tidak ada kata kunci yang cocok — menampilkan respons umum"
+    }
+  },
+  "aiAgent": {
+    "header": {
+      "title": "Agent Studio",
+      "subtitle": "Kelola agen, koneksi, dan kunci"
+    },
+    "demo": {
+      "banner": "Kunci divalidasi berdasarkan format saja — tidak ada permintaan langsung yang dikirim ke penyedia mana pun."
+    },
+    "sections": {
+      "yourAgents": "AGEN ANDA",
+      "serverConnections": "KONEKSI SERVER",
+      "deviceLocalKeys": "KUNCI PERANGKAT LOKAL"
+    },
+    "status": {
+      "agents": " agen",
+      "connections": "koneksi",
+      "pendingApprovals": "{{count}} persetujuan tertunda",
+      "viewPending": "Lihat {{count}} persetujuan tertunda",
+      "subtitleNone": "Buat agen dan hubungkan penyedia untuk memulai",
+      "subtitleNoAgents": "Hubungkan penyedia, lalu buat agen pertama Anda",
+      "subtitleNoConnections": "Hubungkan penyedia di sisi server untuk mendukung eksekusi agen",
+      "subtitleReady": "Agen berjalan dengan kunci sisi server yang Anda hubungkan"
+    },
+    "agentStatus": {
+      "draft": "Draf",
+      "disabled": "Dinonaktifkan",
+      "setupNeeded": "Perlu penyiapan",
+      "published": "Dipublikasikan"
+    },
+    "serverConnections": {
+      "hint": "Kunci diverifikasi dan disimpan terenkripsi di server. Ini mendukung eksekusi agen.",
+      "connectServerSide": "Hubungkan sisi server",
+      "connectServerSideSub": "Kunci diverifikasi dan disimpan terenkripsi di server.",
+      "empty": "Belum ada koneksi server. Hubungkan penyedia untuk mendukung agen Anda."
+    },
+    "deviceLocal": {
+      "note": "Hanya untuk penemuan — tidak digunakan untuk eksekusi",
+      "expandedNote": "Kunci perangkat lokal hanya digunakan untuk penemuan model. Koneksi server mendukung eksekusi agen."
+    },
+    "agents": {
+      "empty": "Belum ada agen. Buat satu untuk memberikan spesialisasi, batasan, dan konteks.",
+      "create": "Buat agen",
+      "pauseAll": "Jeda semua agen",
+      "noSessionsRunning": "Tidak ada sesi agen yang berjalan",
+      "sessionsRunning": "{{count}} sesi agen berjalan",
+      "activity": "Aktivitas agen",
+      "activitySub": "Log lokal tindakan dan persetujuan agen"
+    },
+    "connect": {
+      "cancel": "Batal",
+      "verifySave": "Verifikasi & simpan",
+      "verifying": "Memverifikasi…",
+      "apiKey": "Kunci API",
+      "labelOptional": "Label (opsional)",
+      "baseUrl": "URL dasar (opsional, penyedia khusus)"
+    },
+    "confirm": {
+      "title": "Hapus koneksi ini?",
+      "body": "Agen yang menggunakan koneksi ini tidak akan dapat berjalan sampai Anda menghubungkan penggantinya.",
+      "cancel": "Batal",
+      "remove": "Hapus",
+      "removing": "Menghapus…"
+    },
+    "connection": {
+      "reverify": "Verifikasi ulang",
+      "verifying": "Memverifikasi…",
+      "remove": "Hapus",
+      "removing": "Menghapus…",
+      "verified": "Diverifikasi {{time}}",
+      "notVerified": "Belum diverifikasi",
+      "modelsCount": "{{count}} model",
+      "more": "lainnya"
+    },
+    "health": {
+      "healthy": "Sehat",
+      "failed": "Gagal",
+      "revoked": "Dicabut",
+      "expired": "Kedaluwarsa",
+      "degraded": "Menurun",
+      "unverified": "Belum diverifikasi"
+    },
+    "providerStatus": {
+      "comingSoon": "Segera hadir",
+      "connected": "Terhubung",
+      "invalid": "Tidak valid",
+      "notConnected": "Tidak terhubung"
+    },
+    "provider": {
+      "soon": "Segera",
+      "comingSoon": "Segera hadir — belum tersedia di deployment ini.",
+      "modelsAvailable": "{{count}} model tersedia",
+      "discoveringModels": "Menemukan model…",
+      "storedLocally": "Disimpan secara lokal · {{storage}}",
+      "secureStorage": "Penyimpanan aman",
+      "deviceStorage": "Penyimpanan perangkat",
+      "disconnect": "Putuskan",
+      "replaceKey": "Ganti kunci",
+      "noKeySaved": "Tidak ada kunci tersimpan. Hubungkan untuk menggunakan model {{name}}.",
+      "connect": "Hubungkan",
+      "availableModels": "Model tersedia",
+      "discoveringFrom": "Menemukan model dari {{name}}…",
+      "noModelsReturned": "Tidak ada model yang dikembalikan oleh {{name}}.",
+      "modelsAfterConnect": "Model ditemukan dari {{name}} setelah Anda menghubungkan.",
+      "testing": "Menguji…",
+      "testSave": "Uji & simpan"
+    },
+    "toast": {
+      "connectionSaved": "Koneksi diverifikasi dan disimpan.",
+      "verifyFailed": "Tidak dapat memverifikasi kunci. Periksa kunci dan coba lagi.",
+      "reverified": "Koneksi diverifikasi ulang.",
+      "reverifyFailed": "Verifikasi ulang gagal.",
+      "removedWithAgents": "Dihapus. {{count}} agen diperbarui.",
+      "connectionRemoved": "Koneksi dihapus.",
+      "removeFailed": "Tidak dapat menghapus koneksi."
+    },
+    "help": {
+      "title": "Apa yang dapat dan tidak dapat dilakukan agen",
+      "body": "Agen menyusun balasan dan meringkas percakapan menggunakan kunci penyedia yang Anda hubungkan. Mereka tidak dapat mengakses dompet Anda, melakukan pembayaran, atau bertindak di luar izin yang Anda berikan. Kunci sisi server disimpan terenkripsi di server; kunci perangkat lokal tidak pernah meninggalkan perangkat ini. Setiap tindakan agen dicatat di buku besar aktivitas untuk transparansi."
+    }
+  },
+  "algorithm": {
+    "header": {
+      "title": "Algoritma Anda",
+      "subtitle": "Sinyal yang membentuk feed Anda"
+    },
+    "demo": {
+      "banner": "Data algoritma bersifat ilustratif dalam mode demo."
+    },
+    "offline": {
+      "banner": "Anda sedang luring. Menampilkan profil terakhir yang disimpan."
+    },
+    "summary": {
+      "activeTopics": "Topik aktif",
+      "signals": "Sinyal",
+      "lastUpdated": "Terakhir diperbarui"
+    },
+    "howItWorks": {
+      "title": "Cara kerjanya"
+    },
+    "empty": {
+      "title": "Belum ada topik",
+      "subtitle": "Feed Anda didasarkan pada popularitas umum. Tambahkan topik di bawah untuk mulai membentuk rekomendasi Anda."
+    },
+    "topics": {
+      "title": "Topik yang memengaruhi feed Anda",
+      "caption": "Ketuk topik untuk menyesuaikan bobotnya atau menghapusnya.",
+      "influenceWeight": "Bobot pengaruh",
+      "removeTopic": "Hapus topik",
+      "lockHint": "Dipertahankan untuk kepercayaan dan akuntansi. Anda dapat menjeda pengaruhnya pada feed Anda."
+    },
+    "signals": {
+      "title": "Sinyal terbaru",
+      "caption": "Tindakan terbaru yang membentuk feed Anda."
+    },
+    "addTopic": {
+      "title": "Tambahkan topik",
+      "caption": "Beri tahu kami apa yang Anda minati.",
+      "placeholder": "mis. Jam tangan vintage",
+      "addBtn": "Tambahkan topik"
+    },
+    "error": {
+      "title": "Tidak dapat memuat algoritma Anda",
+      "subtitle": "Kami tidak dapat mengambil profil algoritma Anda. Periksa koneksi Anda dan coba lagi.",
+      "retry": "Coba lagi"
+    }
+  },
+  "aiListing": {
+    "header": {
+      "title": "Daftar cepat",
+      "subtitle": "Foto · tinjau · publikasikan"
+    },
+    "fields": {
+      "title": "Judul",
+      "description": "Deskripsi",
+      "category": "Kategori",
+      "brand": "Merek",
+      "condition": "Kondisi",
+      "price": "Harga (GBP)",
+      "tags": "Tag",
+      "materialComposition": "Komposisi material",
+      "weight": "Berat (kg)"
+    },
+    "placeholders": {
+      "title": "mis. Jaket Denim Levi's 501 Vintage",
+      "description": "Jelaskan barang Anda…",
+      "selectCategory": "Pilih kategori",
+      "brand": "Merek",
+      "selectCondition": "Pilih kondisi",
+      "price": "0,00",
+      "addTag": "Tambahkan tag",
+      "material": "mis. katun, poliester, wol...",
+      "weight": "mis. 0,45"
+    },
+    "impact": {
+      "helper": "Digunakan untuk menghitung dampak lingkungan nyata. Opsional tetapi disarankan."
+    },
+    "preview": {
+      "label": "Pratinjau",
+      "completeness": "Kelengkapan"
+    },
+    "photo": {
+      "cover": "Sampul",
+      "enhance": "Tingkatkan",
+      "camera": "Kamera",
+      "library": "Galeri"
+    },
+    "suggestion": {
+      "use": "Gunakan",
+      "suggested": "Disarankan"
+    },
+    "picker": {
+      "selectCategory": "Pilih kategori",
+      "selectCondition": "Pilih kondisi"
+    },
+    "empty": {
+      "title": "Foto untuk membuat daftar",
+      "body": "Tambahkan foto di atas dan kami akan menyarankan judul, deskripsi, kategori, dan rentang harga. Tinjau dan edit semuanya sebelum mempublikasikan."
+    },
+    "error": {
+      "retry": "Coba lagi"
+    },
+    "toast": {
+      "photoEnhanced": "Foto ditingkatkan",
+      "photoAccessTitle": "Akses foto diperlukan",
+      "photoAccessBody": "Akses foto diperlukan untuk menambahkan foto daftar.",
+      "pickFailedTitle": "Pemilihan gagal",
+      "pickFailedBody": "Tidak dapat memilih foto. Coba lagi.",
+      "cameraAccessTitle": "Akses kamera diperlukan",
+      "cameraAccessBody": "Akses kamera diperlukan untuk mengambil foto daftar.",
+      "captureFailedTitle": "Pengambilan gagal",
+      "captureFailedBody": "Tidak dapat mengambil foto. Coba lagi.",
+      "smartSellSavedPreviewTitle": "Smart Sell disimpan (pratinjau)",
+      "smartSellSavedPreviewBody": "Pengaturan Anda akan diaktifkan saat Smart Sell sepenuhnya tersedia."
+    },
+    "publish": {
+      "publishing": "Mempublikasikan…",
+      "reviewPublish": "Tinjau & publikasikan",
+      "signInToPublish": "Masuk untuk mempublikasikan daftar.",
+      "offline": "Anda tampaknya sedang luring. Periksa koneksi Anda dan coba lagi.",
+      "missingFields": "Tambahkan setidaknya satu foto, judul, dan harga sebelum mempublikasikan.",
+      "missingCover": "Gambar sampul yang terverifikasi diperlukan sebelum mempublikasikan.",
+      "failed": "Gagal mempublikasikan. Coba lagi."
+    },
+    "accessibility": {
+      "selectCategory": "Pilih kategori",
+      "opensCategoryPicker": "Membuka pemilih kategori",
+      "selectCondition": "Pilih kondisi",
+      "opensConditionPicker": "Membuka pemilih kondisi",
+      "removeTag": "Hapus tag {{tag}}",
+      "removeTagHint": "Hapus tag {{tag}} dari daftar ini",
+      "addTag": "Tambahkan tag",
+      "addTagHint": "Tambahkan tag ini ke daftar",
+      "publishListing": "Publikasikan daftar",
+      "publishListingHint": "Kirim daftar Anda untuk dipublikasikan",
+      "acceptSuggestion": "Terima saran: {{text}}",
+      "acceptSuggestionHint": "Terapkan saran ini ke kolom",
+      "dismissSuggestion": "Tolak saran",
+      "dismissSuggestionHint": "Sembunyikan saran ini tanpa menerapkannya",
+      "removePhoto": "Hapus foto",
+      "removePhotoHint": "Hapus foto ini dari daftar",
+      "enhancePhoto": "Tingkatkan foto",
+      "enhancePhotoHint": "Membuka peningkatan foto untuk memperbaiki gambar daftar ini",
+      "takePhotoWithCamera": "Ambil foto dengan kamera",
+      "takePhotoWithCameraHint": "Buka kamera untuk mengambil foto",
+      "pickPhotosFromGallery": "Pilih foto dari galeri",
+      "pickPhotosFromGalleryHint": "Buka galeri untuk memilih foto",
+      "loadingSuggestions": "Memuat saran",
+      "loadingSuggestionsHint": "Saran sedang dibuat",
+      "dismissError": "Tutup kesalahan",
+      "dismissErrorHint": "Tutup pesan kesalahan ini",
+      "retryHint": "Coba lagi tindakan yang gagal",
+      "closePicker": "Tutup pemilih",
+      "closePickerHint": "Tutup lembar pemilih",
+      "selectOption": "Pilih {{option}}",
+      "chooseOption": "Pilih {{option}} sebagai opsi yang dipilih"
+    }
+  },
+  "report": {
+    "header": {
+      "title": "Laporkan",
+      "reportAccount": "Laporkan akun",
+      "reportGroup": "Laporkan grup",
+      "reportListing": "Laporkan daftar",
+      "subtitle": "Laporan bersifat rahasia"
+    },
+    "received": {
+      "title": "Laporan diterima",
+      "body": "Kami akan meninjau dan memberi tahu Anda hasilnya.",
+      "reportId": "Laporan #{{reportId}}",
+      "receivedAt": "Diterima pada {{time}}",
+      "referenceNote": "Rujuk nomor ini dalam kontak dukungan di masa mendatang.",
+      "blockUser": "Blokir pengguna ini",
+      "blockedNote": "Akun ini diblokir dan tidak dapat menghubungi Anda.",
+      "done": "Selesai"
+    },
+    "unavailable": {
+      "title": "Target laporan tidak tersedia",
+      "body": "Laporan ini dibuka tanpa referensi yang valid. Tidak ada yang dikirim.",
+      "goBack": "Kembali"
+    },
+    "submit": {
+      "label": "Kirim laporan"
+    },
+    "intro": {
+      "title": "Apa yang terjadi?",
+      "body": "Pilih alasan yang paling mendeskripsikan masalah. Jangan sertakan kata sandi, detail pembayaran, atau informasi sensitif lainnya."
+    },
+    "details": {
+      "label": "Detail tambahan (opsional)",
+      "placeholder": "Jelaskan apa yang terjadi",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "Foto bukti (opsional)",
+      "camera": "Kamera",
+      "gallery": "Galeri",
+      "count": "{{count}}/3 foto"
+    },
+    "accessibility": {
+      "blockUser": "Blokir pengguna ini",
+      "detailsInput": "Detail laporan tambahan",
+      "evidencePhoto": "Foto bukti {{index}}",
+      "removeEvidencePhoto": "Hapus foto bukti {{index}}",
+      "takeEvidenceCamera": "Ambil foto bukti dengan kamera",
+      "chooseEvidenceGallery": "Pilih foto bukti dari galeri"
+    },
+    "reasons": {
+      "spam": "Spam",
+      "spamDesc": "Promosi yang tidak diinginkan, penipuan, atau pesan berulang",
+      "harassment": "Pelecehan",
+      "harassmentDesc": "Ancaman, pelecehan, atau kontak yang tidak diinginkan secara terarah",
+      "hateSpeech": "Ujaran kebencian",
+      "hateSpeechDesc": "Hinaan, bahasa yang merendahkan martabat, atau serangan terhadap kelompok yang dilindungi",
+      "counterfeit": "Barang palsu",
+      "counterfeitDesc": "Barang tiruan atau klaim keaslian yang menyesatkan",
+      "prohibited": "Barang terlarang",
+      "prohibitedDesc": "Senjata, narkoba, satwa liar, atau kategori terlarang lainnya",
+      "offPlatform": "Permintaan di luar platform",
+      "offPlatformDesc": "Diminta untuk bertransaksi di luar Thryftverse, bertentangan dengan kebijakan",
+      "scam": "Penipuan atau pemalsuan",
+      "scamDesc": "Upaya penipuan keuangan, phishing, atau penyamaran",
+      "misinformation": "Konten menyesatkan",
+      "misinformationDesc": "Klaim palsu atau menyesatkan tentang suatu barang",
+      "privacy": "Pelanggaran privasi",
+      "privacyDesc": "Berbagi informasi pribadi tanpa persetujuan",
+      "impersonation": "Penyamaran",
+      "impersonationDesc": "Berpura-pura menjadi orang lain",
+      "minorSafety": "Keamanan anak",
+      "minorSafetyDesc": "Konten atau perilaku yang membahayakan anak di bawah umur",
+      "other": "Hal lain",
+      "otherDesc": "Beri tahu tim moderasi apa yang terjadi"
+    },
+    "toast": {
+      "attachUpTo3": "Lampirkan hingga 3 foto.",
+      "offline": "Anda tampaknya sedang luring. Periksa koneksi Anda dan coba lagi.",
+      "allowPhotoAccess": "Izinkan akses foto untuk mengunggah bukti.",
+      "allowCameraAccess": "Izinkan akses kamera untuk mengambil foto bukti.",
+      "photosAttached": "{{count}} foto dilampirkan.",
+      "uploadFailed": "Tidak dapat mengunggah foto. Coba lagi.",
+      "singleUploadFailed": "Tidak dapat mengunggah foto. Coba lagi.",
+      "photoAttached": "Foto dilampirkan.",
+      "reportFailed": "Laporan tidak dapat dikirim. Periksa koneksi Anda dan coba lagi.",
+      "accountBlocked": "Akun diblokir",
+      "blockFailed": "Tidak dapat memblokir akun ini. Coba lagi."
+    }
+  },
+  "appeal": {
+    "header": {
+      "title": "Ajukan banding"
+    },
+    "loading": {
+      "title": "Memuat keputusan",
+      "subtitle": "Sejenak sambil kami mengambil detailnya."
+    },
+    "error": {
+      "title": "Tidak dapat memuat keputusan",
+      "subtitle": "Kami tidak dapat mengambil detail keputusan. Ketuk di bawah untuk mencoba lagi.",
+      "tryAgain": "Coba lagi",
+      "goBack": "Kembali"
+    },
+    "windowClosed": {
+      "title": "Periode bandang ditutup",
+      "body": "Keputusan dapat diajukan banding dalam 6 bulan. Keputusan ini dikomunikasikan pada {{date}}.",
+      "goBack": "Kembali"
+    },
+    "offline": {
+      "title": "Anda sedang luring",
+      "subtitle": "Periksa koneksi Anda dan coba lagi.",
+      "tryAgain": "Coba lagi",
+      "goBack": "Kembali"
+    },
+    "submitted": {
+      "title": "Banding diajukan",
+      "body": "Kami akan meninjau dan memberi tahu Anda hasilnya.",
+      "appealId": "Banding #{{appealId}}",
+      "submittedAt": "Diajukan pada {{time}}",
+      "referenceNote": "Rujuk nomor ini dalam kontak dukungan di masa mendatang.",
+      "done": "Selesai"
+    },
+    "duration": {
+      "permanent": "Permanen",
+      "until": "Sampai {{date}}"
+    },
+    "decision": {
+      "noViolation": "Tidak ada pelanggaran",
+      "restrict": "Konten dibatasi",
+      "escalate": "Ditingkatkan",
+      "emergencyHold": "Penangguhan darurat"
+    },
+    "grounds": {
+      "label": "Mengapa Anda menganggap keputusan ini salah?",
+      "placeholder": "Jelaskan mengapa keputusan harus ditinjau kembali",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "Foto bukti (opsional)",
+      "camera": "Kamera",
+      "gallery": "Galeri",
+      "count": "{{count}}/3 foto"
+    },
+    "accessibility": {
+      "groundsInput": "Alasan banding",
+      "evidencePhoto": "Foto bukti {{index}}",
+      "removeEvidencePhoto": "Hapus foto bukti {{index}}",
+      "takeEvidenceCamera": "Ambil foto bukti dengan kamera",
+      "chooseEvidenceGallery": "Pilih foto bukti dari galeri"
+    },
+    "submit": {
+      "label": "Ajukan banding"
+    },
+    "toast": {
+      "attachUpTo3": "Lampirkan hingga 3 foto.",
+      "offline": "Anda tampaknya sedang luring. Periksa koneksi Anda dan coba lagi.",
+      "allowPhotoAccess": "Izinkan akses foto untuk mengunggah bukti.",
+      "allowCameraAccess": "Izinkan akses kamera untuk mengambil foto bukti.",
+      "photosAttached": "{{count}} foto dilampirkan.",
+      "uploadFailed": "Tidak dapat mengunggah foto. Coba lagi.",
+      "singleUploadFailed": "Tidak dapat mengunggah foto. Coba lagi.",
+      "photoAttached": "Foto dilampirkan.",
+      "appealFailed": "Banding tidak dapat diajukan. Periksa koneksi Anda dan coba lagi."
+    }
+  }
+}

@@ -7,6 +7,7 @@ import { Space, Radius, TypeStyles, Control, AvatarSize } from '../../theme/desi
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface ChatTopBarProps {
   title: string;
@@ -56,6 +57,7 @@ export function ChatTopBar({
   onNextResult,
   onCloseSearch }: ChatTopBarProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   return (
@@ -68,7 +70,7 @@ export function ChatTopBar({
             activeOpacity={0.6}
             scaleValue={0.92}
             hapticFeedback="light"
-            accessibilityLabel="Close search"
+            accessibilityLabel={t('search.closeSearch')}
             accessibilityRole="button"
           >
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
@@ -79,12 +81,12 @@ export function ChatTopBar({
               style={styles.searchInput}
               value={searchValue}
               onChangeText={onSearchValueChange}
-              placeholder="Search in chat"
+              placeholder={t('search.placeholder')}
               placeholderTextColor={colors.textMuted}
               autoFocus
               autoCapitalize="none"
               autoCorrect={false}
-              accessibilityLabel="Search in conversation"
+              accessibilityLabel={t('search.inConversation')}
             />
           </View>
           {searchResultLabel ? (
@@ -97,7 +99,7 @@ export function ChatTopBar({
                   activeOpacity={0.6}
                   scaleValue={0.92}
                   hapticFeedback="light"
-                  accessibilityLabel="Previous result"
+                  accessibilityLabel={t('search.previousResult')}
                   accessibilityRole="button"
                 >
                   <Ionicons name="chevron-up" size={16} color={colors.textPrimary} />
@@ -110,7 +112,7 @@ export function ChatTopBar({
                   activeOpacity={0.6}
                   scaleValue={0.92}
                   hapticFeedback="light"
-                  accessibilityLabel="Next result"
+                  accessibilityLabel={t('search.nextResult')}
                   accessibilityRole="button"
                 >
                   <Ionicons name="chevron-down" size={16} color={colors.textPrimary} />
@@ -127,7 +129,7 @@ export function ChatTopBar({
             activeOpacity={0.6}
             scaleValue={0.92}
             hapticFeedback="light"
-            accessibilityLabel="Go back"
+            accessibilityLabel={t('common.goBack')}
             accessibilityRole="button"
           >
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
@@ -166,7 +168,7 @@ export function ChatTopBar({
                     size={13}
                     color={colors.brand}
                     style={styles.verifiedBadge}
-                    accessibilityLabel="Verified user"
+                    accessibilityLabel={t('common.verifiedUser')}
                   />
                 ) : null}
               </View>

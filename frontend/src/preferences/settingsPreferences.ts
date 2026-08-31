@@ -4,8 +4,77 @@ import type { Ionicons } from '@expo/vector-icons';
 export const SETTINGS_PREF_STORAGE_KEY = 'thryftverse:settings-pref:v1';
 export const PUSH_NOTIF_PREF_STORAGE_KEY = 'thryftverse:push-notif-pref:v1';
 
-export const LANGUAGE_OPTIONS = ['English (EN)', 'Spanish (ES)', 'French (FR)', 'German (DE)'] as const;
+export const LANGUAGE_OPTIONS = [
+  'English (EN)',
+  'Spanish (ES)',
+  'French (FR)',
+  'German (DE)',
+  'Arabic (AR)',
+  'Hindi (HI)',
+  'Chinese (ZH)',
+  'Portuguese (PT)',
+  'Japanese (JA)',
+  'Russian (RU)',
+  'Turkish (TR)',
+  'Korean (KO)',
+  'Indonesian (ID)',
+] as const;
 export type SupportedLanguageOption = (typeof LANGUAGE_OPTIONS)[number];
+
+/**
+ * Display metadata for each supported locale.
+ * Uses native endonyms (the name of the language in that language)
+ * per flagship i18n UX practice — no flags, no English labels.
+ */
+export interface LocaleDisplayInfo {
+  /** i18next locale code (e.g. 'en', 'es') */
+  locale: string;
+  /** Native endonym — the language name as written in that language */
+  endonym: string;
+  /** English label for accessibility / debugging */
+  englishLabel: string;
+}
+
+export const LOCALE_DISPLAY_INFO: LocaleDisplayInfo[] = [
+  { locale: 'en', endonym: 'English', englishLabel: 'English' },
+  { locale: 'es', endonym: 'Español', englishLabel: 'Spanish' },
+  { locale: 'pt', endonym: 'Português', englishLabel: 'Portuguese' },
+  { locale: 'fr', endonym: 'Français', englishLabel: 'French' },
+  { locale: 'de', endonym: 'Deutsch', englishLabel: 'German' },
+  { locale: 'ar', endonym: 'العربية', englishLabel: 'Arabic' },
+  { locale: 'hi', endonym: 'हिन्दी', englishLabel: 'Hindi' },
+  { locale: 'zh', endonym: '中文', englishLabel: 'Chinese (Mandarin)' },
+  { locale: 'ja', endonym: '日本語', englishLabel: 'Japanese' },
+  { locale: 'ru', endonym: 'Русский', englishLabel: 'Russian' },
+  { locale: 'tr', endonym: 'Türkçe', englishLabel: 'Turkish' },
+  { locale: 'ko', endonym: '한국어', englishLabel: 'Korean' },
+  { locale: 'id', endonym: 'Bahasa Indonesia', englishLabel: 'Indonesian' },
+];
+
+/**
+ * Get the native endonym for a language option.
+ * Returns the option string itself as fallback.
+ */
+export function getLanguageEndonym(languageOption: SupportedLanguageOption): string {
+  const locale = LANGUAGE_OPTION_TO_LOCALE[languageOption] ?? 'en';
+  return LOCALE_DISPLAY_INFO.find((info) => info.locale === locale)?.endonym ?? languageOption;
+}
+
+const LANGUAGE_OPTION_TO_LOCALE: Record<string, string> = {
+  'English (EN)': 'en',
+  'Spanish (ES)': 'es',
+  'French (FR)': 'fr',
+  'German (DE)': 'de',
+  'Arabic (AR)': 'ar',
+  'Hindi (HI)': 'hi',
+  'Chinese (ZH)': 'zh',
+  'Portuguese (PT)': 'pt',
+  'Japanese (JA)': 'ja',
+  'Russian (RU)': 'ru',
+  'Turkish (TR)': 'tr',
+  'Korean (KO)': 'ko',
+  'Indonesian (ID)': 'id',
+};
 
 export interface QuietHoursSettings {
   enabled: boolean;
@@ -68,6 +137,14 @@ export interface SettingsPreferences {
   personalizedAds: boolean;
   recommendationPersonalization: boolean;
   thirdPartySharing: boolean;
+  /**
+   * When true, incoming chat messages detected as being in a foreign
+   * language are automatically translated to the user's locale via the
+   * AI translation endpoint. When false, the user sees a "Translate"
+   * button and must tap it manually. Defaults to false (manual) so
+   * users maintain control over translation until they opt in.
+   */
+  autoTranslateMessages: boolean;
 }
 
 export interface PushNotificationDefinition {
@@ -134,6 +211,7 @@ export const DEFAULT_SETTINGS_PREFERENCES: SettingsPreferences = {
   personalizedAds: false,
   recommendationPersonalization: true,
   thirdPartySharing: false,
+  autoTranslateMessages: false,
 };
 
 export function buildDefaultPushNotificationToggles(keys: readonly string[]): PushNotificationToggles {
@@ -220,6 +298,10 @@ export async function getStoredSettingsPreferences(): Promise<SettingsPreference
         typeof parsed.thirdPartySharing === 'boolean'
           ? parsed.thirdPartySharing
           : DEFAULT_SETTINGS_PREFERENCES.thirdPartySharing,
+      autoTranslateMessages:
+        typeof parsed.autoTranslateMessages === 'boolean'
+          ? parsed.autoTranslateMessages
+          : DEFAULT_SETTINGS_PREFERENCES.autoTranslateMessages,
     };
   } catch {
     return DEFAULT_SETTINGS_PREFERENCES;

@@ -26,7 +26,7 @@
  *   - Horizontal category tab strip
  *   - Grid fills remaining space (FlashList virtualized)
  */
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -36,7 +36,6 @@ import {
   Pressable,
   FlatList,
   useWindowDimensions,
-  Animated,
   type TextStyle,
   type ViewStyle } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
@@ -53,7 +52,6 @@ import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
-import { Motion } from '../../../theme/motionTokens';
 import {
   STICKER_CATEGORIES,
   AUTO_STICKER_CATEGORY,
@@ -97,9 +95,9 @@ export interface StickerBrowserSheetProps {
 // ── Geometry ─────────────────────────────────────────────────────────
 
 const GRID_COLUMNS = 4;
-// Sticker emoji glyph — not a typographic token. Emoji glyphs render at
-// a display size that is independent of the text type scale.
 const STICKER_GLYPH_SIZE = 32;
+const CELL_TOUCH = 72;
+const STICKER_VISIBLE = 48;
 // ── Sheet ────────────────────────────────────────────────────────────
 
 export function StickerBrowserSheet({
@@ -129,41 +127,6 @@ export function StickerBrowserSheet({
   );
   const [query, setQuery] = useState('');
   const searchRef = useRef<TextInput>(null);
-
-  // ── Tab underline animation ─────────────────────────────────────────
-  const tabLayouts = useRef<Array<{ x: number; width: number }>>([]);
-  const underlineLeft = useRef(new Animated.Value(0)).current;
-  const underlineWidth = useRef(new Animated.Value(0)).current;
-
-  const animateUnderlineTo = useCallback(
-    (index: number) => {
-      const layout = tabLayouts.current[index];
-      if (!layout) return;
-      if (reduceMotion) {
-        underlineLeft.setValue(layout.x);
-        underlineWidth.setValue(layout.width);
-      } else {
-        Animated.parallel([
-          Animated.spring(underlineLeft, {
-            toValue: layout.x,
-            useNativeDriver: false, // left/width are not native-driver supported
-            stiffness: Motion.spring.indicator.stiffness,
-            damping: Motion.spring.indicator.damping }),
-          Animated.spring(underlineWidth, {
-            toValue: layout.width,
-            useNativeDriver: false, // left/width are not native-driver supported
-            stiffness: Motion.spring.indicator.stiffness,
-            damping: Motion.spring.indicator.damping }),
-        ]).start();
-      }
-    },
-    [underlineLeft, underlineWidth, reduceMotion],
-  );
-
-  useEffect(() => {
-    const idx = categories.findIndex((c) => c.id === activeCategoryId);
-    if (idx >= 0) animateUnderlineTo(idx);
-  }, [activeCategoryId, categories, animateUnderlineTo]);
 
   // ── Search results (cross-category) ────────────────────────────────
   const searchResults = useMemo<StickerDef[]>(() => {
@@ -252,12 +215,18 @@ export function StickerBrowserSheet({
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
+          <PressScale
+            accessibilityLabel="Close stickers"
+            accessibilityRole="button"
+            onPress={handleClose}
+            style={styles.closeButton}
+          >
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+          </PressScale>
           <Text style={styles.title} numberOfLines={1}>
             Stickers
           </Text>
           <View style={styles.headerActions}>
-            {/* Pin Sticker toggle — activates pin mode (Meta Edits August 2026).
-                Only shown when the parent supports pin binding. 44pt target. */}
             {pinModeSupported && (
               <PressScale
                 accessibilityLabel={pinMode ? 'Cancel pin mode' : 'Pin sticker to media'}
@@ -287,12 +256,12 @@ export function StickerBrowserSheet({
               </PressScale>
             )}
             <PressScale
-              accessibilityLabel="Close stickers"
+              accessibilityLabel="Done"
               accessibilityRole="button"
               onPress={handleClose}
-              style={styles.closeButton}
+              style={styles.doneBtn}
             >
-              <Ionicons name="close" size={Control.icon} color={colors.textPrimary} />
+              <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
             </PressScale>
           </View>
         </View>
@@ -308,7 +277,7 @@ export function StickerBrowserSheet({
           <TextInput
             ref={searchRef}
             style={styles.searchInput}
-            placeholder="Search stickers"
+            placeholder="Search"
             placeholderTextColor={colors.textMuted}
             value={query}
             onChangeText={setQuery}
@@ -342,46 +311,31 @@ export function StickerBrowserSheet({
             contentContainerStyle={styles.tabsContent}
             style={styles.tabs}
           >
-            {categories.map((cat, i) => {
+            {categories.map((cat) => {
               const active = cat.id === activeCategoryId;
               return (
-                <View
+                <PressScale
                   key={cat.id}
-                  onLayout={(e) => {
-                    tabLayouts.current[i] = {
-                      x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width };
-                    if (active) animateUnderlineTo(i);
-                  }}
+                  accessibilityLabel={`${cat.name} category`}
+                  accessibilityRole="button"
+                  onPress={() => handleCategoryTap(cat.id)}
+                  style={[
+                    styles.categoryPill,
+                    active ? styles.categoryPillActive : styles.categoryPillInactive,
+                  ]}
                 >
-                  <PressScale
-                    accessibilityLabel={`${cat.name} category`}
-                    accessibilityRole="button"
-                    onPress={() => handleCategoryTap(cat.id)}
-                    style={styles.tab}
+                  <Text
+                    style={[
+                      styles.categoryPillLabel,
+                      active ? styles.categoryPillLabelActive : styles.categoryPillLabelInactive,
+                    ]}
+                    numberOfLines={1}
                   >
-                    <Ionicons
-                      name={cat.icon}
-                      size={Control.iconCompact}
-                      color={active ? colors.brand : colors.textSecondary}
-                      style={styles.tabIcon}
-                    />
-                    <Text
-                      style={[styles.tabLabel, active && styles.tabLabelActive]}
-                      numberOfLines={1}
-                    >
-                      {cat.name}
-                    </Text>
-                  </PressScale>
-                </View>
+                    {cat.name}
+                  </Text>
+                </PressScale>
               );
             })}
-            <Animated.View
-              style={[
-                styles.tabUnderline,
-                { left: underlineLeft, width: underlineWidth },
-              ]}
-            />
           </ScrollView>
         )}
 
@@ -397,7 +351,7 @@ export function StickerBrowserSheet({
           ) : gridData.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>
-                {isSearching ? 'No stickers match your search' : 'No stickers here'}
+                No stickers
               </Text>
             </View>
           ) : (
@@ -407,7 +361,6 @@ export function StickerBrowserSheet({
               keyExtractor={keyExtractor}
               numColumns={GRID_COLUMNS}
               contentContainerStyle={styles.gridContent}
-              ItemSeparatorComponent={() => <View style={styles.rowSeparator} />}
               showsVerticalScrollIndicator={false}
             />
           )}
@@ -482,10 +435,8 @@ const StickerCell = React.memo(function StickerCell({
 function createStyles(colors: ThemeColors, screenWidth: number) {
   /** Square cell side: screen width minus sheet padding and inter-cell gaps. */
   const CELL_SIZE = Math.floor(
-    (screenWidth - Space.md * 2 - Space.sm * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
+    (screenWidth - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
   );
-  /** 44pt minimum touch target, but never smaller than the visible cell. */
-  const CELL_TOUCH = Math.max(CELL_SIZE, Control.hit);
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -523,6 +474,8 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     pinBtnLabelInactive: {
       color: colors.textSecondary } as TextStyle,
     title: {
+      flex: 1,
+      textAlign: 'center',
       fontFamily: FontFamily.semibold,
       fontSize: TypographyV2.sectionTitle.size,
       lineHeight: TypographyV2.sectionTitle.lineHeight,
@@ -533,15 +486,21 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       height: Control.hit,
       alignItems: 'center',
       justifyContent: 'center' } as ViewStyle,
+    doneBtn: {
+      height: Control.hit,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: Space.xs } as ViewStyle,
+    doneBtnText: {
+      fontFamily: FontFamily.semibold,
+      fontSize: TypographyV2.bodyStrong.size } as TextStyle,
     searchRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.input,
-      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.sm,
       paddingHorizontal: Space.sm,
-      height: 40,
-      borderWidth: Stroke.hairline,
-      borderColor: colors.borderSubtle } as ViewStyle,
+      height: 36 } as ViewStyle,
     searchIcon: {
       marginRight: Space.xs } as TextStyle,
     searchInput: {
@@ -562,46 +521,45 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       marginVertical: Space.sm } as ViewStyle,
     tabsContent: {
       paddingRight: Space.md,
-      gap: Space.sm } as ViewStyle,
-    tab: {
-      flexDirection: 'row',
+      gap: Space.xs } as ViewStyle,
+    categoryPill: {
+      height: 36,
+      paddingHorizontal: Space.md,
       alignItems: 'center',
-      height: Control.hit,
-      paddingHorizontal: Space.smMd } as ViewStyle,
-    tabIcon: {
-      marginRight: Space.xs } as TextStyle,
-    tabLabel: {
+      justifyContent: 'center',
+      borderRadius: Radius.full } as ViewStyle,
+    categoryPillActive: {
+      backgroundColor: colors.brand } as ViewStyle,
+    categoryPillInactive: {
+      backgroundColor: colors.surfaceAlt } as ViewStyle,
+    categoryPillLabel: {
       fontFamily: FontFamily.medium,
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontSize: TypographyV2.captionElevated.size,
+      lineHeight: TypographyV2.captionElevated.lineHeight } as TextStyle,
+    categoryPillLabelActive: {
+      color: colors.textInverse } as TextStyle,
+    categoryPillLabelInactive: {
       color: colors.textSecondary } as TextStyle,
-    tabLabelActive: {
-      color: colors.brand } as TextStyle,
-    tabUnderline: {
-      position: 'absolute',
-      bottom: 0,
-      height: Stroke.emphasis,
-      backgroundColor: colors.brand,
-      borderRadius: Stroke.emphasis } as ViewStyle,
     gridWrap: {
       flex: 1 } as ViewStyle,
     autoRailWrap: {
       flex: 1,
       paddingVertical: Space.sm } as ViewStyle,
     gridContent: {
-      paddingVertical: Space.sm } as ViewStyle,
+      paddingVertical: Space.sm,
+      gap: Space.sm } as ViewStyle,
     rowSeparator: {
-      height: Space.sm } as ViewStyle,
+      height: Space.xs } as ViewStyle,
     cell: {
       width: CELL_SIZE,
       height: CELL_TOUCH,
       alignItems: 'center',
       justifyContent: 'center' } as ViewStyle,
     cellInner: {
+      width: STICKER_VISIBLE,
+      height: STICKER_VISIBLE,
       alignItems: 'center',
-      justifyContent: 'center',
-      flex: 1 } as ViewStyle,
+      justifyContent: 'center' } as ViewStyle,
     emoji: {
       fontSize: STICKER_GLYPH_SIZE,
       lineHeight: 38,
@@ -621,9 +579,9 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       paddingVertical: Space.xl } as ViewStyle,
     emptyText: {
       fontFamily: FontFamily.regular,
-      fontSize: TypographyV2.body.size,
-      lineHeight: TypographyV2.body.lineHeight,
-      color: colors.textSecondary,
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      color: colors.textMuted,
       textAlign: 'center' } as TextStyle });
 }
 

@@ -8,6 +8,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { OrderStatusStepper, OrderStepperStage } from '../orders/OrderStatusStepper';
 import { formatShortDateTime } from '../../utils/dateFormat';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,59 +47,59 @@ interface StateConfig {
   nextStep?: string;
 }
 
-function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConfig {
+function getStateConfig(type: CommerceStateType, colors: ThemeColors, t: (key: string, params?: Record<string, unknown>) => string): StateConfig {
   switch (type) {
     case 'order_placed':
       return {
-        title: 'Order placed',
-        subtitle: 'The seller has been notified.',
+        title: t('orders.placed'),
+        subtitle: t('orders.placedBody'),
         icon: 'receipt-outline',
         iconColor: colors.brand,
         stage: 'placed',
         nextStep: 'Awaiting payment confirmation' };
     case 'payment_confirmed':
       return {
-        title: 'Payment confirmed',
-        subtitle: 'Your payment has been processed.',
+        title: t('orders.paymentConfirmed'),
+        subtitle: t('orders.paymentConfirmedBody'),
         icon: 'checkmark-circle-outline',
         iconColor: colors.success,
         stage: 'paid',
         nextStep: 'Seller preparing for dispatch' };
     case 'order_shipped':
       return {
-        title: 'Order shipped',
-        subtitle: 'The parcel has been dispatched.',
+        title: t('orders.shipped'),
+        subtitle: t('orders.shippedBody'),
         icon: 'cube-outline',
         iconColor: colors.brand,
         stage: 'shipped',
         nextStep: 'In carrier transit' };
     case 'order_in_transit':
       return {
-        title: 'In transit',
-        subtitle: 'Your parcel is on the way.',
+        title: t('orders.inTransit'),
+        subtitle: t('orders.inTransitBody'),
         icon: 'car-outline',
         iconColor: colors.brand,
         stage: 'in_transit',
         nextStep: 'Out for delivery' };
     case 'order_delivered':
       return {
-        title: 'Delivered',
-        subtitle: 'Delivery has been confirmed.',
+        title: t('orders.delivered'),
+        subtitle: t('orders.deliveredBody'),
         icon: 'checkmark-done-circle-outline',
         iconColor: colors.success,
         stage: 'delivered' };
     case 'order_cancelled':
       return {
-        title: 'Order cancelled',
-        subtitle: 'This order has been cancelled.',
+        title: t('orders.cancelled'),
+        subtitle: t('orders.cancelledBody'),
         icon: 'close-circle-outline',
         iconColor: colors.danger,
         isFailure: true,
         failureLabel: 'Cancelled' };
     case 'order_refunded':
       return {
-        title: 'Refunded',
-        subtitle: 'Your payment has been refunded.',
+        title: t('orders.refunded'),
+        subtitle: t('orders.refundedBody'),
         icon: 'cash-outline',
         iconColor: colors.danger,
         isFailure: true,
@@ -119,8 +120,9 @@ export function CommerceStateCard({
   timestamp,
   onPress }: CommerceStateCardProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const config = useMemo(() => getStateConfig(type, colors), [type, colors]);
+  const config = useMemo(() => getStateConfig(type, colors, t), [type, colors, t]);
 
   const formattedTimestamp = useMemo(() => {
     if (!timestamp) return null;
@@ -207,7 +209,7 @@ export function CommerceStateCard({
         <Text style={styles.orderIdText}>
           {orderShortId ? `Order #${orderShortId}` : `Order ${orderId.slice(0, 8)}`}
         </Text>
-        <Text style={styles.viewDetailsText}>View details</Text>
+        <Text style={styles.viewDetailsText}>{t('orders.viewDetails')}</Text>
       </View>
     </AnimatedPressable>
   );

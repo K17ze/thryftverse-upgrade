@@ -111,7 +111,7 @@ export function GreenScreenSheet({
         setConfirmSheet({
           visible: true,
           title: 'Photo access needed',
-          message: 'Allow photo library access to pick a background image.',
+          message: 'Enable access to pick',
           confirmLabel: 'Open Settings',
           variant: 'default',
           onConfirm: () => {
@@ -130,7 +130,7 @@ export function GreenScreenSheet({
     } catch {
       setConfirmSheet({
         visible: true,
-        title: 'Could not open photo library',
+        title: "Couldn't open photos",
         message: 'Please try again.',
         confirmLabel: 'OK',
         variant: 'default',
@@ -157,7 +157,7 @@ export function GreenScreenSheet({
 
   return (
     <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={handleCancel} />
+      <Pressable style={[styles.backdrop, { backgroundColor: colors.mediaOverlayScrim }]} onPress={handleCancel} />
       <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
         {/* Header */}
         <View style={styles.header}>
@@ -176,7 +176,7 @@ export function GreenScreenSheet({
 
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
           {/* Info banner — flat, hairline separator */}
-          <View style={styles.infoBanner}>
+          <View style={[styles.infoBanner, { borderBottomColor: colors.borderSubtle }]}>
             <Ionicons
               name="information-circle-outline"
               size={IconGrammar.standard}
@@ -184,8 +184,7 @@ export function GreenScreenSheet({
               style={styles.infoIcon}
             />
             <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              Green screen settings are saved with the capture. The chroma key
-              effect is rendered on the timeline via Skia.
+              Saved with your capture
             </Text>
           </View>
 
@@ -260,7 +259,7 @@ export function GreenScreenSheet({
                   }}
                   style={styles.chip}
                 >
-                  <View style={[styles.colorSwatch, { backgroundColor: preset.value }]} />
+                  <View style={[styles.colorSwatch, { backgroundColor: preset.value, borderColor: colors.borderSubtle }]} />
                   <Text
                     style={[
                       styles.chipText,
@@ -389,7 +388,8 @@ const styles = StyleSheet.create({
     zIndex: 100 },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)' },
+    // backgroundColor applied inline via colors.mediaOverlayScrim (theme token)
+  },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
@@ -423,7 +423,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)' },
+    // borderBottomColor applied inline via colors.borderSubtle (theme token)
+  },
   infoIcon: {
     marginTop: 2 },
   infoText: {
@@ -488,7 +489,8 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: Radius.full,
     borderWidth: Stroke.hairline,
-    borderColor: 'rgba(255,255,255,0.2)' },
+    // borderColor applied inline via colors.borderSubtle (theme token)
+  },
   chipText: {
     fontFamily: FontFamily.medium,
     fontSize: TypographyV2.body.size,

@@ -49,6 +49,7 @@ export type UploadPart = {
   etag?: string; // from S3
   status: 'pending' | 'uploading' | 'completed' | 'failed';
   retries: number;
+  presignedUrlExpiresAt?: number;
 };
 
 /**

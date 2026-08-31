@@ -6,24 +6,25 @@ import {
   Pressable,
   ScrollView,
   TextInput,
-  Switch,
-  LayoutAnimation,
-  Platform,
   AppState,
   ActivityIndicator,
+  Alert,
   type AppStateStatus } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp, RootStackParamList } from '../navigation/types';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withTiming,
   useReducedMotion,
-  Easing } from 'react-native-reanimated';
+  Easing,
+  type SharedValue } from 'react-native-reanimated';
 import { Space, Radius, Typography, Stroke, IconGrammar } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SheetContainer, PressScale } from './CreatorAnimations';
@@ -47,7 +48,7 @@ import {
 import { CreatorAnalytics } from './creatorAnalytics';
 import { uploadAllLocalMedia, hasLocalUris } from './mediaUploadPipeline';
 import { useUploadManager, detectMimeType } from './core/upload';
-import type { UploadJob, UploadJobStatus } from './core/upload';
+import type { UploadJob } from './core/upload';
 import type { CreatorDocument, CreatorLayer } from './composition';
 import { walkMediaReferences, isLocalUri as isLocalUriWalker } from './mediaReferenceWalker';
 import {
@@ -223,40 +224,28 @@ function replaceUriInDoc(
     updatedAt: new Date().toISOString() };
 }
 
-// ── Upload UI helpers ──────────────────────────────────────────────
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function jobStateLabel(state: UploadJobStatus, retries: number): string {
-  switch (state) {
-    case 'queued': return 'Queued';
-    case 'initiating': return 'Preparing';
-    case 'uploading': return retries > 0 ? `Retrying (${retries + 1})` : 'Uploading';
-    case 'paused': return 'Paused';
-    case 'failed': return 'Failed';
-    case 'completed': return 'Done';
-  }
-}
-
-function jobStateIcon(state: UploadJobStatus): string {
-  switch (state) {
-    case 'queued': return 'time-outline';
-    case 'initiating': return 'sync-outline';
-    case 'uploading': return 'cloud-upload-outline';
-    case 'paused': return 'pause-outline';
-    case 'failed': return 'alert-circle-outline';
-    case 'completed': return 'checkmark-circle-outline';
-  }
-}
-
 function isNetworkError(error: string | undefined): boolean {
   if (!error) return false;
   const lower = error.toLowerCase();
   return lower.includes('network') || lower.includes('fetch') || lower.includes('abort') || lower.includes('timeout') || lower.includes('connection');
+}
+
+/**
+ * Map a raw upload error string to a short, human-friendly message.
+ * Raw errors from the upload pipeline (XHR status codes, abort reasons,
+ * network stack messages) are not useful to surface verbatim — they read
+ * as developer diagnostics. This translates the common failure modes
+ * into plain language a user can act on.
+ */
+function humanizeUploadError(error: string | undefined): string {
+  if (!error) return 'Something went wrong. Try again.';
+  const e = error.toLowerCase();
+  if (e.includes('network') || e.includes('fetch')) return 'Check your connection and try again.';
+  if (e.includes('403')) return 'Permission denied. Try again.';
+  if (e.includes('413') || e.includes('too large')) return 'File too large.';
+  if (e.includes('aborted') || e.includes('cancel')) return 'Upload cancelled.';
+  if (e.includes('timeout')) return 'Upload timed out. Try again.';
+  return 'Something went wrong. Try again.';
 }
 
 /**
@@ -265,6 +254,13 @@ function isNetworkError(error: string | undefined): boolean {
  * attempt (retry, re-publish after edit) generates a new ID so the
  * server can distinguish replay from a genuinely new publication.
  */
+function humanizePublishError(error: string): string {
+  if (!error) return 'Something went wrong. Try again.';
+  if (/\b[45]\d{2}\b/.test(error)) return 'Something went wrong. Try again.';
+  if (/error[: ]|exception|abort|failed to fetch|network request failed/i.test(error)) return 'Something went wrong. Try again.';
+  return error;
+}
+
 function generatePublicationAttemptId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `attempt_${crypto.randomUUID()}`;
@@ -305,12 +301,35 @@ function invalidateCachesAfterPublish(documentId: string, creatorId: string | nu
 // confirmation that transitions to the published object. Granular
 // upload stages remain in telemetry/logs, not product chrome.
 
+/**
+ * Discriminated union for the publish sheet's finite state machine.
+ * Each tag carries exactly the data it needs — impossible states (e.g.
+ * "success" without a publishedId, "error" without a message) are
+ * unrepresentable at the type level.
+ */
+type PublishState =
+  | { tag: 'review' }
+  | { tag: 'saving' }
+  | { tag: 'uploading'; progress: number }
+  | { tag: 'processing' }
+  | { tag: 'publishing' }
+  | { tag: 'error'; message: string; canRetry: boolean; canSaveDraft: boolean }
+  | { tag: 'success'; publishedId: string }
+  | { tag: 'scheduled'; dueAt: string }
+  | { tag: 'unknown'; detail: string }
+  | { tag: 'scheduleUnknown'; detail: string }
+  | { tag: 'scheduleFailed'; error: string }
+  | { tag: 'conflict'; message: string };
+
+const REVIEW_STATE: PublishState = { tag: 'review' };
+
 export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPreview }: CreatorPublishSheetProps) {
   const { document, saveDraft } = useCreator();
   const currentUser = useStore((s) => s.currentUser);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { show: showToast } = useToast();
   const reduceMotion = useReducedMotion();
   const { spring } = useMotionConfig();
   // UploadManager hook — provides durable, resumable uploads with real
@@ -318,11 +337,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   // queues local media through this manager instead of the legacy
   // foreground pipeline.
   const uploadManager = useUploadManager(document.id);
-  const [stage, setStage] = useState<'review' | 'saving' | 'uploading' | 'processing' | 'publishing' | 'scheduled' | 'success' | 'error' | 'unknown' | 'scheduleFailed' | 'scheduleUnknown' | 'conflict'>('review');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [publishState, setPublishState] = useState<PublishState>(REVIEW_STATE);
   const [isCheckingResult, setIsCheckingResult] = useState(false);
-  const [publishedId, setPublishedId] = useState('');
-  const [scheduleError, setScheduleError] = useState('');
   // Persisted publication attempt ID — generated once per publish attempt,
   // used as the idempotency key and for unknown-outcome recovery. A new
   // attempt (retry, re-publish after edit) generates a new ID. Persisted
@@ -339,12 +355,11 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   // server at least once in this session.
   const serverDocMetaRef = useRef<CreatorDocumentSaveResult | null>(null);
   const publishGuardRef = useRef(new PublishGuard());
+  const publishAbortRef = useRef<AbortController | null>(null);
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  // Detect video layers in the composition so the processing stage can
-  // show a truthful label: "Preparing video…" vs "Checking media…".
-  const hasVideoMedia = document.pages.some((p) =>
-    p.layers.some((l) => l.type === 'media' && l.payload.mediaType === 'video'));
+  // Convenience accessor — the current tag, for switch-style checks.
+  const stage = publishState.tag;
 
   // ── Smooth progress bar (UI-thread animated) ────────────────────
   // During the upload stage, the bar reflects **real transmitted bytes**
@@ -354,7 +369,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   const progressWidth = useSharedValue(0);
 
   const progressAnimatedStyle = useAnimatedStyle(() => ({
-    width: `${Math.round(progressWidth.value * 100)}%` }));
+    width: `${progressWidth.value * 100}%` }));
 
   // Sync real upload byte progress to the progress bar during upload.
   useEffect(() => {
@@ -385,6 +400,27 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     }
   }, [visible, haptic]);
 
+  // Auto-close the sheet shortly after a successful publish so the user
+  // lands back on the studio without an extra tap. The "View" and "Done"
+  // buttons remain as manual overrides for users who want to act sooner.
+  useEffect(() => {
+    if (stage !== 'success') return;
+    const timer = setTimeout(() => {
+      setPublishState(REVIEW_STATE);
+      onClose();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [stage, onClose]);
+
+  // Clean up completed/failed upload jobs from AsyncStorage after a
+  // successful publish so the store doesn't grow unbounded over time.
+  useEffect(() => {
+    if (stage !== 'success') return;
+    void uploadManager.clearProjectJobs().catch(() => {
+      // Best-effort cleanup — don't block the success flow.
+    });
+  }, [stage, uploadManager]);
+
   // On mount, reconcile any persisted publication attempts from previous
   // sessions. This resolves unknown outcomes (network dropped after the
   // publish request was sent but before the response arrived) by checking
@@ -392,6 +428,24 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   useEffect(() => {
     void reconcilePublicationAttempts();
   }, []);
+
+  // ── AppState listener — warn when backgrounded during upload ────
+  // The OS may suspend the app while an upload is in flight. We do NOT
+  // cancel the upload — the UploadManager persists jobs to AsyncStorage
+  // and resumes them when the app returns to the foreground. We only
+  // surface a quiet toast so the user knows the upload is still pending
+  // and may be paused by the OS. This matches the flagship background-
+  // posting pattern (progress continues, user is informed).
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        if (stage === 'uploading' || stage === 'processing' || stage === 'publishing') {
+          showToast('Paused — keep app open', 'info');
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [stage, showToast]);
 
   const handleClose = useCallback(() => {
     // During upload/publishing, allow dismissing to background — the upload
@@ -403,13 +457,11 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       return;
     }
     haptic.selection();
-    setStage('review');
-    setErrorMessage('');
-    setScheduleError('');
-    progressWidth.value = 0;
+    setPublishState(REVIEW_STATE);
     publishGuardRef.current.reset();
     setPublicationAttemptId('');
     setScheduleAttemptId('');
+    progressWidth.value = 0;
     onClose();
   }, [stage, haptic, onClose, progressWidth]);
 
@@ -417,29 +469,64 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   // their work is being persisted, not silently swallowed.
   const handleSaveDraftWithState = useCallback(async () => {
     haptic.light();
-    setStage('saving');
+    setPublishState({ tag: 'saving' });
     try {
       await saveDraft();
-    } finally {
-      setStage('review');
+      setPublishState(REVIEW_STATE);
+    } catch {
+      setPublishState({ tag: 'error', message: "Couldn't save draft. Try again.", canRetry: false, canSaveDraft: false });
     }
   }, [haptic, saveDraft]);
 
+  // Save as draft from the error state — persists the document and closes
+  // the sheet so the user can return to it later.
+  const handleSaveDraftFromError = useCallback(async () => {
+    haptic.light();
+    try {
+      await saveDraft();
+      progressWidth.value = 0;
+      publishGuardRef.current.reset();
+      setPublicationAttemptId('');
+      setScheduleAttemptId('');
+      setPublishState(REVIEW_STATE);
+      onClose();
+    } catch {
+      setPublishState({ tag: 'error', message: "Couldn't save draft. Try again.", canRetry: false, canSaveDraft: false });
+    }
+  }, [haptic, saveDraft, onClose, progressWidth]);
+
   // Cancel an in-progress upload: abort all active jobs for this document
   // and return to the review stage so the user can adjust and retry.
+  // Shows a confirmation alert first — accidental cancel loses all progress.
   const handleCancelUpload = useCallback(() => {
-    haptic.medium();
-    // Cancel every job the manager holds for this project.
-    for (const job of uploadManager.jobs) {
-      if (job.status === 'queued' || job.status === 'initiating' || job.status === 'uploading') {
-        uploadManager.cancelJob(job.id);
-      }
-    }
-    progressWidth.value = 0;
-    publishGuardRef.current.reset();
-    setPublicationAttemptId('');
-    setScheduleAttemptId('');
-    setStage('review');
+    haptic.light();
+    Alert.alert(
+      'Cancel upload?',
+      'Your upload progress will be lost.',
+      [
+        { text: 'Keep uploading', style: 'cancel' },
+        {
+          text: 'Cancel upload',
+          style: 'destructive',
+          onPress: () => {
+            haptic.medium();
+            void (async () => {
+              for (const job of uploadManager.jobs) {
+                if (job.status === 'queued' || job.status === 'initiating' || job.status === 'uploading') {
+                  await uploadManager.cancelJob(job.id);
+                }
+              }
+              progressWidth.value = 0;
+              publishGuardRef.current.reset();
+              setPublicationAttemptId('');
+              setScheduleAttemptId('');
+              publishAbortRef.current?.abort();
+              setPublishState(REVIEW_STATE);
+            })();
+          },
+        },
+      ],
+    );
   }, [haptic, uploadManager, progressWidth]);
 
   const handlePublish = useCallback(async () => {
@@ -451,6 +538,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
 
     CreatorAnalytics.publishStart(document.type);
     let publicationRequestStarted = false;
+    const abortController = new AbortController();
+    publishAbortRef.current = abortController;
     // Generate a unique attempt ID for this publish attempt. Used as the
     // idempotency key so retried requests replay safely, and for
     // unknown-outcome recovery lookup. A new retry generates a new ID.
@@ -467,7 +556,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
 
       // 2. Upload all local media URIs before publishing
       if (hasLocalUris(document)) {
-        setStage('uploading');
+        setPublishState({ tag: 'uploading', progress: uploadManager.progress });
         // The progress bar starts at 0.15 (upload range start). Real
         // byte progress is synced via the useEffect above — the bar
         // advances only when XMLHttpRequest confirms bytes sent.
@@ -511,7 +600,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           const failedJobs = finalJobs.filter((j) => j.status === 'failed');
           if (failedJobs.length > 0) {
             throw new Error(
-              `Upload failed: ${failedJobs[0].error ?? 'Unknown error'}`,
+              humanizeUploadError(failedJobs[0].error),
             );
           }
 
@@ -553,7 +642,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       // Truthful label: "Preparing video…" when the composition contains
       // video layers, "Checking media…" otherwise. This is the real work
       // of validating uploaded media and saving the canonical document.
-      setStage('processing');
+      setPublishState({ tag: 'processing' });
       progressWidth.value = reduceMotion ? 0.75 : withSpring(0.75, spring.entrance);
 
       const postUploadValidation = validateForPublish(workingDoc);
@@ -607,8 +696,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           if (err instanceof CreatorDocumentConflictError) {
             // Document was edited on another device. Show conflict UI
             // with reload / duplicate options instead of crashing.
-            setStage('conflict');
-            setErrorMessage(err.message);
+            setPublishState({ tag: 'conflict', message: err.message });
             publishGuardRef.current.fail();
             return;
           }
@@ -618,7 +706,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
 
       const serverMeta = serverDocMetaRef.current!;
 
-      setStage('publishing');
+      setPublishState({ tag: 'publishing' });
       const processingFraction = 0.8;
       progressWidth.value = reduceMotion ? processingFraction : withSpring(processingFraction, spring.entrance);
 
@@ -674,7 +762,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
 
         publishGuardRef.current.complete(workingDoc.id);
         progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
-        setStage('scheduled');
+        setPublishState({ tag: 'scheduled', dueAt: workingDoc.metadata.scheduledFor });
         CreatorAnalytics.publishSuccess(workingDoc.type, `scheduled:${workingDoc.id}`);
       } else {
         // Publish now via the orchestrator.
@@ -710,14 +798,18 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         });
 
         publishGuardRef.current.complete(workingDoc.id);
-        setPublishedId(targetId);
         invalidateCachesAfterPublish(workingDoc.id, currentUser?.id ?? null);
         progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
-        setStage('success');
+        setPublishState({ tag: 'success', publishedId: targetId });
         CreatorAnalytics.publishSuccess(workingDoc.type, targetId);
       }
     } catch (err: unknown) {
       publishGuardRef.current.fail();
+
+      if (abortController.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+        setPublishState(REVIEW_STATE);
+        return;
+      }
 
       // Detect stale-document conflicts from the publication endpoint (409
       // with DOCUMENT_VERSION_CONFLICT or DOCUMENT_HASH_CONFLICT). The
@@ -732,11 +824,11 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           conflictCode === 'DOCUMENT_VERSION_CONFLICT'
           || conflictCode === 'DOCUMENT_HASH_CONFLICT'
         ) {
-          setStage('conflict');
-          setErrorMessage(
-            details?.error
+          setPublishState({
+            tag: 'conflict',
+            message: details?.error
               ?? 'The document was edited on another device. Reload the latest version or duplicate your changes.',
-          );
+          });
           if (publicationRequestStarted && attemptId) {
             void updatePublicationAttemptState(attemptId, {
               state: 'failed',
@@ -753,7 +845,6 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       }
 
       const errorMessage = err instanceof Error ? err.message : 'Publishing failed';
-      setErrorMessage(errorMessage);
       // Once a write has left the device, a dropped response is ambiguous:
       // the backend may have committed it. Never call that failure or success.
       const isUnknown = publicationRequestStarted && isNetworkError(errorMessage);
@@ -762,9 +853,9 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       // "Check publish result") and analytics can separate the two.
       const isSchedule = !!document.metadata.scheduledFor;
       if (isUnknown) {
-        setStage(isSchedule ? 'scheduleUnknown' : 'unknown');
+        setPublishState({ tag: isSchedule ? 'scheduleUnknown' : 'unknown', detail: errorMessage });
       } else {
-        setStage('error');
+        setPublishState({ tag: 'error', message: errorMessage, canRetry: true, canSaveDraft: true });
       }
       // Update the persisted attempt: definitive failure → 'failed',
       // network error → leave as 'sending' (becomes 'unknown' after
@@ -788,13 +879,11 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       }
       CreatorAnalytics.publishError(document.type, err instanceof Error ? err.message : 'Unknown error');
     }
-  }, [document, editingLookId, reduceMotion, spring.entrance, spring.success, uploadManager, currentUser]);
+  }, [document, editingLookId, reduceMotion, spring.entrance, spring.success, uploadManager, currentUser, haptic]);
 
   const handleRetry = useCallback(() => {
     haptic.medium();
-    setStage('review');
-    setErrorMessage('');
-    setScheduleError('');
+    setPublishState(REVIEW_STATE);
     progressWidth.value = 0;
     publishGuardRef.current.reset();
     // Clear the attempt ID so handlePublish generates a fresh one.
@@ -807,7 +896,6 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     const targetId = editingLookId ?? document.id;
     haptic.medium();
     setIsCheckingResult(true);
-    setErrorMessage('');
     try {
       // First, try the authoritative publication lookup by idempotency key.
       // The orchestrator's creator_publications row is the source of truth —
@@ -823,7 +911,6 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       const publication = await lookupPublicationByKey(document.id, attemptId);
       if (publication && publication.ok) {
         publishGuardRef.current.complete(publication.targetId);
-        setPublishedId(publication.targetId);
         invalidateCachesAfterPublish(publication.targetId, currentUser?.id ?? null);
         // Update the persisted attempt to committed.
         void updatePublicationAttemptState(attemptId, {
@@ -832,7 +919,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           lastCheckedAt: new Date().toISOString(),
         });
         progressWidth.value = 1;
-        setStage('success');
+        setPublishState({ tag: 'success', publishedId: publication.targetId });
         CreatorAnalytics.publishSuccess(document.type, publication.targetId);
         return;
       }
@@ -854,15 +941,13 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         await fetchPosterStoryById(targetId);
       }
       publishGuardRef.current.complete(targetId);
-      setPublishedId(targetId);
       // Invalidate caches — the publication was confirmed via check-result.
       invalidateCachesAfterPublish(targetId, currentUser?.id ?? null);
       progressWidth.value = 1;
-      setStage('success');
+      setPublishState({ tag: 'success', publishedId: targetId });
       CreatorAnalytics.publishSuccess(document.type, targetId);
     } catch {
-      setErrorMessage('No confirmed result yet. It is safe to check again; the same publication key prevents duplicates.');
-      setStage('unknown');
+      setPublishState({ tag: 'unknown', detail: 'No result yet. Check again.' });
     } finally {
       setIsCheckingResult(false);
     }
@@ -875,7 +960,6 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   const handleCheckSchedule = useCallback(async () => {
     haptic.medium();
     setIsCheckingResult(true);
-    setErrorMessage('');
     try {
       // Use the in-memory schedule attempt ID, or fall back to the
       // persisted store (for recovery after unmount/process death).
@@ -884,8 +968,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         const pending = await getPendingAttemptForDocument(document.id);
         // Only consider schedule-type attempts for schedule reconciliation.
         if (pending?.commandType !== 'schedule') {
-          setErrorMessage('No schedule attempt found. It is safe to retry scheduling.');
-          setStage('scheduleFailed');
+          setPublishState({ tag: 'scheduleFailed', error: "Couldn't connect. Try again." });
           return;
         }
         attemptId = pending.attemptId;
@@ -901,7 +984,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           lastCheckedAt: new Date().toISOString(),
         });
         progressWidth.value = 1;
-        setStage('scheduled');
+        setPublishState({ tag: 'scheduled', dueAt: document.metadata.scheduledFor ?? '' });
         CreatorAnalytics.publishSuccess(document.type, `scheduled:${document.id}`);
         return;
       }
@@ -913,15 +996,13 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         failureCode: 'NOT_FOUND',
         lastCheckedAt: new Date().toISOString(),
       });
-      setErrorMessage('No confirmed schedule yet. It is safe to retry scheduling.');
-      setStage('scheduleFailed');
+      setPublishState({ tag: 'scheduleFailed', error: 'No schedule yet. Check again.' });
     } catch {
-      setErrorMessage('Could not reach the server to check the schedule. Try again.');
-      setStage('scheduleUnknown');
+      setPublishState({ tag: 'scheduleUnknown', detail: "Couldn't connect. Try again." });
     } finally {
       setIsCheckingResult(false);
     }
-  }, [document.id, document.type, haptic, progressWidth, scheduleAttemptId]);
+  }, [document.id, document.type, haptic, progressWidth, scheduleAttemptId, document.metadata.scheduledFor]);
 
   // Retry scheduling after a failure. With the new server-owned schedule,
   // this re-creates the schedule row (the old row was cancelled on retry).
@@ -929,12 +1010,11 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
     if (!document.metadata.scheduledFor) return;
     const serverMeta = serverDocMetaRef.current;
     if (!serverMeta) {
-      setScheduleError('Document metadata is not available. Save the document first.');
-      setStage('scheduleFailed');
+      setPublishState({ tag: 'scheduleFailed', error: 'Document metadata is not available. Save the document first.' });
       return;
     }
     haptic.medium();
-    setStage('publishing');
+    setPublishState({ tag: 'publishing' });
     progressWidth.value = reduceMotion ? 0.8 : withSpring(0.8, spring.entrance);
     let scheduleRequestStarted = false;
     const schedAttemptId = generatePublicationAttemptId();
@@ -973,19 +1053,16 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       });
 
       progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
-      setScheduleError('');
-      setStage('scheduled');
+      setPublishState({ tag: 'scheduled', dueAt: document.metadata.scheduledFor });
       CreatorAnalytics.publishSuccess(document.type, `scheduled:${document.id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Scheduling failed';
       const isUnknown = scheduleRequestStarted && isNetworkError(msg);
       if (isUnknown) {
-        setScheduleError(msg);
-        setStage('scheduleUnknown');
+        setPublishState({ tag: 'scheduleUnknown', detail: msg });
         CreatorAnalytics.scheduleUnknown(document.type);
       } else {
-        setScheduleError(msg);
-        setStage('scheduleFailed');
+        setPublishState({ tag: 'scheduleFailed', error: msg });
         void updatePublicationAttemptState(schedAttemptId, {
           state: 'failed',
           failureCode: err instanceof Error ? err.name : 'UNKNOWN',
@@ -999,17 +1076,25 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   // Accept that the content was published immediately (skip scheduling).
   const handleAcceptImmediate = useCallback(() => {
     haptic.selection();
-    setScheduleError('');
-    setStage('success');
+    setPublishState({ tag: 'success', publishedId: '' });
   }, [haptic]);
 
   if (!visible && stage === 'review') return null;
 
+  // Extract state-specific data for the render.
+  const errorMessage = publishState.tag === 'error' ? publishState.message
+    : publishState.tag === 'conflict' ? publishState.message
+    : publishState.tag === 'unknown' ? publishState.detail
+    : publishState.tag === 'scheduleUnknown' ? publishState.detail
+    : '';
+  const publishedId = publishState.tag === 'success' ? publishState.publishedId : '';
+  const scheduleError = publishState.tag === 'scheduleFailed' ? publishState.error : '';
+
   return (
     <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.85}>
         <View style={styles.header}>
-          <Text style={styles.title}>Publish</Text>
-          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close publish" accessibilityHint="Closes the publish sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={styles.title}>Share</Text>
+          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close share" accessibilityHint="Closes the share sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
           </PressScale>
         </View>
@@ -1028,65 +1113,66 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         {(stage === 'uploading' || stage === 'processing' || stage === 'publishing') && (
           <SharingStateView
             colors={colors}
-            styles={styles}
-            reduceMotion={reduceMotion}
-            springCfg={spring.entrance}
+            stage={stage}
             progressAnimatedStyle={progressAnimatedStyle}
             progressWidth={progressWidth}
-            stage={stage}
-            uploadedBytes={uploadManager.uploadedBytes}
-            totalBytes={uploadManager.totalBytes}
-            uploadedCount={uploadManager.jobs.filter((j) => j.status === 'completed').length}
-            totalCount={uploadManager.jobs.length}
-            processingLabel={hasVideoMedia ? 'Preparing video…' : 'Checking media…'}
             onCancel={stage === 'uploading' ? handleCancelUpload : undefined}
           />
         )}
 
         {stage === 'success' && (
-          <QuietSuccessView
+          <SuccessView
             colors={colors}
             reduceMotion={reduceMotion}
-            springCfg={spring.success}
-            publishedId={publishedId}
-            documentType={document.type}
-            onView={() => {
+            onDone={() => {
               haptic.selection();
               onClose();
-              setStage('review');
+              setPublishState(REVIEW_STATE);
+            }}
+            onView={publishedId ? () => {
+              haptic.selection();
+              onClose();
+              setPublishState(REVIEW_STATE);
               if (document.type === 'look') {
                 navigation.replace('LookDetail', { lookId: publishedId });
               } else {
                 navigation.replace('PosterViewer', { storyId: publishedId });
               }
-            }}
-            onCreateNew={() => {
-              haptic.selection();
-              onClose();
-              setStage('review');
-              navigation.navigate('CreatorStudio', { type: document.type });
-            }}
+            } : undefined}
           />
         )}
 
         {stage === 'scheduled' && (
-          <ScheduledView
+          <ConfirmationView
             colors={colors}
             reduceMotion={reduceMotion}
-            springCfg={spring.success}
-            scheduledFor={document.metadata.scheduledFor}
-            documentType={document.type}
-            onView={() => {
-              haptic.selection();
-              onClose();
-              setStage('review');
-              navigation.navigate('CreatorStudio', { type: document.type });
+            icon="time-outline"
+            iconColor={colors.brand}
+            title="Scheduled"
+            body={publishState.dueAt
+              ? `${document.type === 'look' ? 'Your look will go live' : 'Your story will go live'}\n${formatScheduledDate(publishState.dueAt)}`
+              : (document.type === 'look' ? 'Your look is scheduled' : 'Your story is scheduled')}
+            primaryAction={{
+              label: 'New',
+              onPress: () => {
+                haptic.selection();
+                onClose();
+                setPublishState(REVIEW_STATE);
+                navigation.navigate('CreatorStudio', { type: document.type });
+              },
+              accessibilityLabel: 'Create new post',
+              accessibilityHint: 'Starts a new creation in the studio',
             }}
-            onCreateNew={() => {
-              haptic.selection();
-              onClose();
-              setStage('review');
-              navigation.navigate('CreatorStudio', { type: document.type });
+            secondaryAction={{
+              label: 'Done',
+              onPress: () => {
+                haptic.selection();
+                onClose();
+                setPublishState(REVIEW_STATE);
+                navigation.navigate('CreatorStudio', { type: document.type });
+              },
+              accessibilityLabel: 'Back to studio',
+              accessibilityHint: 'Returns to the creator studio',
             }}
           />
         )}
@@ -1094,11 +1180,10 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         {stage === 'error' && (
           <ErrorStateView
             colors={colors}
-            styles={styles}
             reduceMotion={reduceMotion}
-            springCfg={spring.entrance}
             errorMessage={errorMessage}
             onRetry={handleRetry}
+            onSaveDraft={handleSaveDraftFromError}
             haptic={haptic}
           />
         )}
@@ -1107,7 +1192,6 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           <UnknownOutcomeView
             colors={colors}
             reduceMotion={reduceMotion}
-            springCfg={spring.entrance}
             detail={errorMessage}
             isChecking={isCheckingResult}
             onCheck={handleCheckPublishResult}
@@ -1118,7 +1202,6 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           <UnknownOutcomeView
             colors={colors}
             reduceMotion={reduceMotion}
-            springCfg={spring.entrance}
             detail={errorMessage}
             isChecking={isCheckingResult}
             onCheck={handleCheckSchedule}
@@ -1130,21 +1213,18 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
           <ConflictStateView
             colors={colors}
             reduceMotion={reduceMotion}
-            springCfg={spring.entrance}
             errorMessage={errorMessage}
             onReload={() => {
               haptic.selection();
               serverDocMetaRef.current = null;
-              setStage('review');
-              setErrorMessage('');
+              setPublishState(REVIEW_STATE);
               progressWidth.value = 0;
               publishGuardRef.current.reset();
             }}
             onDuplicate={() => {
               haptic.selection();
               serverDocMetaRef.current = null;
-              setStage('review');
-              setErrorMessage('');
+              setPublishState(REVIEW_STATE);
               progressWidth.value = 0;
               publishGuardRef.current.reset();
             }}
@@ -1154,16 +1234,14 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         {stage === 'scheduleFailed' && (
           <ScheduleFailedView
             colors={colors}
-            styles={styles}
             reduceMotion={reduceMotion}
-            springCfg={spring.entrance}
             scheduleError={scheduleError}
             onRetrySchedule={handleRetrySchedule}
             onAcceptImmediate={handleAcceptImmediate}
             onView={() => {
               haptic.selection();
               onClose();
-              setStage('review');
+              setPublishState(REVIEW_STATE);
               if (document.type === 'look') {
                 navigation.replace('LookDetail', { lookId: publishedId });
               } else {
@@ -1176,63 +1254,39 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
   );
 }
 
-// ── Sharing state — single quiet progress indicator ───────────────
-// Shows real byte progress during upload (actual transmitted bytes /
-// total bytes via XMLHttpRequest.onprogress) and a quiet "Publishing…"
-// label during the server publish step. No fake stage theatre.
+// ── Sharing state — real progress bar with percentage ──────────────
+// During upload, a Reanimated progress bar reflects real transmitted
+// bytes. During processing/publishing, the bar holds at its last
+// position. A percentage label sits alongside so the user has a numeric
+// anchor without a web-style "50%" theatre.
 interface SharingStateViewProps {
   colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-  reduceMotion: boolean;
-  springCfg: { damping: number; stiffness: number; mass: number };
+  stage: 'uploading' | 'processing' | 'publishing';
   progressAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
-  progressWidth: ReturnType<typeof useSharedValue<number>>;
-  stage: 'saving' | 'uploading' | 'processing' | 'publishing';
-  uploadedBytes: number;
-  totalBytes: number;
-  /** Completed upload job count for "Uploading X of Y…" label. */
-  uploadedCount?: number;
-  /** Total upload job count for "Uploading X of Y…" label. */
-  totalCount?: number;
-  /** Truthful label for the processing stage. */
-  processingLabel?: string;
+  progressWidth: SharedValue<number>;
   onCancel?: () => void;
 }
 
 function SharingStateView({
   colors,
-  styles,
-  progressAnimatedStyle,
   stage,
-  uploadedBytes,
-  totalBytes,
-  uploadedCount = 0,
-  totalCount = 0,
-  processingLabel = 'Checking media…',
+  progressAnimatedStyle,
+  progressWidth,
   onCancel }: SharingStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
-  const showByteProgress = stage === 'uploading' && totalBytes > 0;
   const showCancel = stage === 'uploading' && !!onCancel;
-  const showItemCount = stage === 'uploading' && totalCount > 1;
-  const current_item = Math.min(uploadedCount + 1, totalCount);
+  const percentLabel = useMemo(() => {
+    const pct = Math.round(progressWidth.value * 100);
+    return `${Math.min(100, Math.max(0, pct))}%`;
+  }, [progressWidth.value]);
   return (
-    <View style={localStyles.centerState}>
-      <Text style={localStyles.centerStateTitle}>
-        {stage === 'saving' ? 'Saving draft…'
-          : stage === 'uploading' ? (showItemCount ? `Uploading ${current_item} of ${totalCount}…` : 'Uploading…')
-          : stage === 'processing' ? processingLabel
-          : 'Publishing…'}
+    <View style={localStyles.progressState}>
+      <View style={localStyles.progressBarTrack} accessibilityRole="progressbar">
+        <Reanimated.View style={[localStyles.progressBarFill, progressAnimatedStyle]} />
+      </View>
+      <Text style={localStyles.progressLabel}>
+        {stage === 'uploading' ? `Uploading… ${percentLabel}` : 'Sharing…'}
       </Text>
-      {stage !== 'saving' && (
-        <View style={localStyles.progressBarTrack}>
-          <Reanimated.View style={[localStyles.progressBarFill, progressAnimatedStyle]} />
-        </View>
-      )}
-      {showByteProgress && (
-        <Text style={localStyles.progressByteLabel}>
-          {formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}
-        </Text>
-      )}
       {showCancel && (
         <Pressable
           onPress={onCancel}
@@ -1242,7 +1296,6 @@ function SharingStateView({
           accessibilityRole="button"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="close-circle-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />
           <Text style={localStyles.cancelUploadText}>Cancel</Text>
         </Pressable>
       )}
@@ -1253,20 +1306,19 @@ function SharingStateView({
 // ── Error State View with spring entrance and retry ────────────────
 interface ErrorStateViewProps {
   colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
   reduceMotion: boolean;
-  springCfg: { damping: number; stiffness: number; mass: number };
   errorMessage: string;
   onRetry: () => void;
+  onSaveDraft: () => void;
   haptic: ReturnType<typeof useHaptic>;
 }
 
 function ErrorStateView({
   colors,
   reduceMotion,
-  springCfg,
   errorMessage,
-  onRetry }: ErrorStateViewProps) {
+  onRetry,
+  onSaveDraft }: ErrorStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const opacity = useSharedValue(0);
 
@@ -1276,18 +1328,16 @@ function ErrorStateView({
     } else {
       opacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
     }
-  }, [reduceMotion, springCfg, opacity]);
+  }, [reduceMotion, opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value }));
 
   return (
     <Reanimated.View style={[localStyles.centerState, animatedStyle]}>
-      <View style={localStyles.errorCircle}>
-        <Ionicons name="warning" size={IconGrammar.hero} color={colors.danger} aria-hidden={true} />
-      </View>
-      <Text style={localStyles.centerStateTitle}>Couldn't publish</Text>
-      <Text style={localStyles.centerStateText}>{errorMessage}</Text>
+      <Ionicons name="alert-circle-outline" size={24} color={colors.danger} aria-hidden={true} />
+      <Text style={localStyles.errorTitle}>Couldn't publish</Text>
+      <Text style={localStyles.errorDetail}>{humanizePublishError(errorMessage)}</Text>
       <PressScale
         onPress={onRetry}
         style={localStyles.retryBtn}
@@ -1296,9 +1346,80 @@ function ErrorStateView({
         scale={0.95}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
-        <Ionicons name="refresh-outline" size={IconGrammar.metadata} color={colors.textInverse} style={{ marginRight: 6 }} aria-hidden={true} />
         <Text style={localStyles.retryBtnText}>Retry</Text>
       </PressScale>
+      <Pressable
+        onPress={onSaveDraft}
+        style={localStyles.saveDraftLink}
+        accessibilityLabel="Save as draft"
+        accessibilityHint="Saves the current creation as a draft and closes the sheet"
+        accessibilityRole="button"
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Text style={localStyles.saveDraftLinkText}>Save as draft</Text>
+      </Pressable>
+    </Reanimated.View>
+  );
+}
+
+// ── Success state — minimal and confident ──────────────────────────
+// A checkmark inside a 72pt success-tinted circle with a spring scale
+// entrance, "Shared" in 20pt bold, and one full-width "Done" button.
+interface SuccessViewProps {
+  colors: ThemeColors;
+  reduceMotion: boolean;
+  onDone: () => void;
+  onView?: () => void;
+}
+
+function SuccessView({
+  colors,
+  reduceMotion,
+  onDone,
+  onView }: SuccessViewProps) {
+  const localStyles = useMemo(() => createStyles(colors), [colors]);
+  const contentOpacity = useSharedValue(reduceMotion ? 1 : 0);
+  const iconScale = useSharedValue(reduceMotion ? 1 : 0.7);
+
+  useEffect(() => {
+    contentOpacity.value = reduceMotion
+      ? 1
+      : withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+    iconScale.value = reduceMotion
+      ? 1
+      : withSpring(1, Motion.spring.settle);
+  }, [reduceMotion, contentOpacity, iconScale]);
+
+  const contentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value }));
+  const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: iconScale.value }] }));
+
+  return (
+    <Reanimated.View style={[localStyles.centerState, contentStyle]}>
+      <Reanimated.View style={[localStyles.successCircle, iconStyle]}>
+        <Ionicons name="checkmark" size={IconGrammar.hero} color={colors.success} aria-hidden={true} />
+      </Reanimated.View>
+      <Text style={localStyles.successTitle}>Shared</Text>
+      <PressScale
+        onPress={onDone}
+        style={localStyles.doneBtn}
+        accessibilityLabel="Done"
+        accessibilityHint="Closes the publish sheet"
+        scale={0.97}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Text style={localStyles.doneBtnText}>Done</Text>
+      </PressScale>
+      {onView && (
+        <Pressable
+          onPress={onView}
+          style={localStyles.viewLink}
+          accessibilityLabel="View post"
+          accessibilityHint="Opens the published content"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={localStyles.viewLinkText}>View</Text>
+        </Pressable>
+      )}
     </Reanimated.View>
   );
 }
@@ -1306,7 +1427,6 @@ function ErrorStateView({
 interface UnknownOutcomeViewProps {
   colors: ThemeColors;
   reduceMotion: boolean;
-  springCfg: { damping: number; stiffness: number; mass: number };
   detail: string;
   isChecking: boolean;
   onCheck: () => void;
@@ -1317,7 +1437,6 @@ interface UnknownOutcomeViewProps {
 function UnknownOutcomeView({
   colors,
   reduceMotion,
-  springCfg,
   detail,
   isChecking,
   onCheck,
@@ -1329,7 +1448,7 @@ function UnknownOutcomeView({
     opacity.value = reduceMotion
       ? 1
       : withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
-  }, [opacity, reduceMotion, springCfg]);
+  }, [opacity, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
@@ -1344,7 +1463,7 @@ function UnknownOutcomeView({
       </View>
       <Text style={localStyles.centerStateTitle}>Result unknown</Text>
       <Text style={localStyles.centerStateText}>
-        The connection dropped after publishing started. Your post may already be live.
+        Connection lost. Your post may be live.
       </Text>
       {detail ? <Text style={localStyles.unknownDetail}>{detail}</Text> : null}
       <PressScale
@@ -1370,7 +1489,6 @@ function UnknownOutcomeView({
 interface ConflictStateViewProps {
   colors: ThemeColors;
   reduceMotion: boolean;
-  springCfg: { damping: number; stiffness: number; mass: number };
   errorMessage: string;
   onReload: () => void;
   onDuplicate: () => void;
@@ -1379,7 +1497,6 @@ interface ConflictStateViewProps {
 function ConflictStateView({
   colors,
   reduceMotion,
-  springCfg,
   errorMessage,
   onReload,
   onDuplicate }: ConflictStateViewProps) {
@@ -1390,7 +1507,7 @@ function ConflictStateView({
     opacity.value = reduceMotion
       ? 1
       : withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
-  }, [opacity, reduceMotion, springCfg]);
+  }, [opacity, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
@@ -1401,7 +1518,7 @@ function ConflictStateView({
       </View>
       <Text style={localStyles.centerStateTitle}>Document was edited elsewhere</Text>
       <Text style={localStyles.centerStateText}>
-        {errorMessage || 'The document changed on another device. Reload the latest version or duplicate your changes.'}
+        {errorMessage || 'Changed on another device. Reload or duplicate.'}
       </Text>
       <View style={localStyles.successBtnGroup}>
         <PressScale
@@ -1436,9 +1553,7 @@ function ConflictStateView({
 // retry the schedule, or accept the immediate publication.
 interface ScheduleFailedViewProps {
   colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
   reduceMotion: boolean;
-  springCfg: { damping: number; stiffness: number; mass: number };
   scheduleError: string;
   onRetrySchedule: () => void;
   onAcceptImmediate: () => void;
@@ -1447,9 +1562,7 @@ interface ScheduleFailedViewProps {
 
 function ScheduleFailedView({
   colors,
-  styles,
   reduceMotion,
-  springCfg,
   scheduleError,
   onRetrySchedule,
   onAcceptImmediate,
@@ -1463,7 +1576,7 @@ function ScheduleFailedView({
     } else {
       opacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
     }
-  }, [reduceMotion, springCfg, opacity]);
+  }, [reduceMotion, opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value }));
@@ -1516,79 +1629,11 @@ function ScheduleFailedView({
   );
 }
 
-// ── Quiet success — continuity over ceremony ──────────────────────
-// Replaces the former confetti celebration. A small check, a single
-// line of confirmation, and a primary action that transitions to the
-// published object. No confetti, no oversized icon, no multi-step
+// ── Confirmation — shared success & scheduled states ──────────────
+// One quiet confirmation surface for both "Published" and "Scheduled"
+// outcomes. A single hero icon, a one-line body, and a primary +
+// secondary action. No confetti, no oversized icon, no multi-step
 // entrance choreography.
-interface QuietSuccessViewProps {
-  colors: ThemeColors;
-  reduceMotion: boolean;
-  springCfg: { damping: number; stiffness: number; mass: number };
-  publishedId: string;
-  documentType: 'look' | 'poster';
-  onView: () => void;
-  onCreateNew: () => void;
-}
-
-function QuietSuccessView({
-  colors,
-  reduceMotion,
-  springCfg,
-  documentType,
-  onView,
-  onCreateNew }: QuietSuccessViewProps) {
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const contentOpacity = useSharedValue(reduceMotion ? 1 : 0);
-
-  useEffect(() => {
-    if (reduceMotion) {
-      contentOpacity.value = 1;
-    } else {
-      contentOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
-    }
-  }, [reduceMotion, contentOpacity, springCfg]);
-
-  const contentStyle = useAnimatedStyle(() => ({
-    opacity: contentOpacity.value }));
-
-  return (
-    <Reanimated.View style={[styles.centerState, contentStyle]}>
-      <Ionicons name="checkmark-circle" size={IconGrammar.hero} color={colors.success} aria-hidden={true} />
-      <Text style={styles.successTitle}>Published</Text>
-      <Text style={styles.centerStateText}>
-        {documentType === 'look' ? 'Your look is live' : 'Your story is live'}
-      </Text>
-      <View style={styles.successBtnGroup}>
-        <PressScale
-          onPress={onView}
-          style={styles.viewBtn}
-          accessibilityLabel="View published content"
-          accessibilityHint="Opens the published look or poster"
-          scale={0.97}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Text style={styles.viewBtnText}>View</Text>
-        </PressScale>
-        <PressScale
-          onPress={onCreateNew}
-          style={styles.createBtn}
-          accessibilityLabel="Create new post"
-          accessibilityHint="Starts a new creation in the studio"
-          scale={0.97}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Text style={styles.createBtnText}>New</Text>
-        </PressScale>
-      </View>
-    </Reanimated.View>
-  );
-}
-
-// ── Scheduled confirmation — truthful date/time, not "Shared" ──────
-// When content is scheduled (not published immediately), the confirmation
-// must show the actual scheduled date/time with timezone so the creator
-// knows exactly when it will go live. No generic "Shared" label.
 function formatScheduledDate(isoString: string): string {
   const date = new Date(isoString);
   return date.toLocaleString(undefined, {
@@ -1601,24 +1646,33 @@ function formatScheduledDate(isoString: string): string {
   });
 }
 
-interface ScheduledViewProps {
-  colors: ThemeColors;
-  reduceMotion: boolean;
-  springCfg: { damping: number; stiffness: number; mass: number };
-  scheduledFor?: string;
-  documentType: 'look' | 'poster';
-  onView: () => void;
-  onCreateNew: () => void;
+interface ConfirmationAction {
+  label: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+  accessibilityHint: string;
 }
 
-function ScheduledView({
+interface ConfirmationViewProps {
+  colors: ThemeColors;
+  reduceMotion: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  title: string;
+  body: string;
+  primaryAction: ConfirmationAction;
+  secondaryAction: ConfirmationAction;
+}
+
+function ConfirmationView({
   colors,
   reduceMotion,
-  springCfg,
-  scheduledFor,
-  documentType,
-  onView,
-  onCreateNew }: ScheduledViewProps) {
+  icon,
+  iconColor,
+  title,
+  body,
+  primaryAction,
+  secondaryAction }: ConfirmationViewProps) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const contentOpacity = useSharedValue(reduceMotion ? 1 : 0);
 
@@ -1626,45 +1680,35 @@ function ScheduledView({
     contentOpacity.value = reduceMotion
       ? 1
       : withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
-  }, [reduceMotion, contentOpacity, springCfg]);
+  }, [reduceMotion, contentOpacity]);
 
   const contentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value }));
 
-  const dateLabel = scheduledFor ? formatScheduledDate(scheduledFor) : '';
-
   return (
     <Reanimated.View style={[styles.centerState, contentStyle]}>
-      <Ionicons name="time-outline" size={IconGrammar.hero} color={colors.brand} aria-hidden={true} />
-      <Text style={styles.successTitle}>Scheduled</Text>
-      {dateLabel ? (
-        <Text style={styles.centerStateText}>
-          {documentType === 'look' ? 'Your look will go live' : 'Your story will go live'}{'\n'}{dateLabel}
-        </Text>
-      ) : (
-        <Text style={styles.centerStateText}>
-          {documentType === 'look' ? 'Your look is scheduled' : 'Your story is scheduled'}
-        </Text>
-      )}
+      <Ionicons name={icon} size={IconGrammar.hero} color={iconColor} aria-hidden={true} />
+      <Text style={styles.successTitle}>{title}</Text>
+      <Text style={styles.centerStateText}>{body}</Text>
       <View style={styles.successBtnGroup}>
         <PressScale
-          onPress={onCreateNew}
+          onPress={primaryAction.onPress}
           style={styles.viewBtn}
-          accessibilityLabel="Create new post"
-          accessibilityHint="Starts a new creation in the studio"
+          accessibilityLabel={primaryAction.accessibilityLabel}
+          accessibilityHint={primaryAction.accessibilityHint}
           scale={0.97}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Text style={styles.viewBtnText}>New</Text>
+          <Text style={styles.viewBtnText}>{primaryAction.label}</Text>
         </PressScale>
         <PressScale
-          onPress={onView}
+          onPress={secondaryAction.onPress}
           style={styles.createBtn}
-          accessibilityLabel="Back to studio"
-          accessibilityHint="Returns to the creator studio"
+          accessibilityLabel={secondaryAction.accessibilityLabel}
+          accessibilityHint={secondaryAction.accessibilityHint}
           scale={0.97}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Text style={styles.createBtnText}>Done</Text>
+          <Text style={styles.createBtnText}>{secondaryAction.label}</Text>
         </PressScale>
       </View>
     </Reanimated.View>
@@ -1689,42 +1733,20 @@ function PublishReview({
   const { isOffline } = useConnectivity();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isMultiPage = document.pages.length > 1;
-  const coverThumbSize = 80;
-  const coverThumbHeight = 100;
-  const coverPage = document.pages[0];
+  const coverThumbSize = 96;
+  const coverThumbHeight = 120;
+  const coverPreviewWidth = 160;
+  const coverPreviewHeight = 200;
   const [coverPageIndex, setCoverPageIndex] = useState(0);
+  const coverPage = document.pages[coverPageIndex] ?? document.pages[0];
   const [captionError, setCaptionError] = useState('');
   const [captionBlurred, setCaptionBlurred] = useState(false);
-  const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
 
-  // ── Audience selector segmented control ─────────────────────────
-  // Close Friends is not shown until a real audience graph, authorization
-  // query, delivery filter, and viewer behavior exist. Old drafts using
-  // that value are silently closed to private by the serializers.
   const audienceOptions = [
-    { key: 'public' as const, label: 'Public', icon: 'globe-outline' as const },
-    { key: 'private' as const, label: 'Private', icon: 'lock-closed-outline' as const },
+    { key: 'public' as const, label: 'Public' },
+    { key: 'private' as const, label: 'Private' },
   ];
-  const activeAudienceIndex = audienceOptions.findIndex((o) => o.key === document.metadata.visibility);
 
-  // Segmented control spring slide indicator
-  const segmentTranslateX = useSharedValue(activeAudienceIndex);
-  const segmentWidth = useSharedValue(0);
-
-  useEffect(() => {
-    if (reduceMotion) {
-      segmentTranslateX.value = activeAudienceIndex;
-    } else {
-      segmentTranslateX.value = withSpring(activeAudienceIndex, Motion.spring.indicator);
-    }
-  }, [activeAudienceIndex, reduceMotion, segmentTranslateX]);
-
-  const segmentIndicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: segmentTranslateX.value * segmentWidth.value }] }));
-
-  // ── Caption validation ──────────────────────────────────────────
-  // Caption is optional for looks but recommended; for posters with no media,
-  // a caption helps. We show a soft warning, not a hard block.
   const captionErrorOpacity = useSharedValue(0);
   const captionErrorTranslateY = useSharedValue(-8);
 
@@ -1749,10 +1771,9 @@ function PublishReview({
 
   const handleCaptionBlur = useCallback(() => {
     setCaptionBlurred(true);
-    // Validate after state update
     setTimeout(() => {
       if (document.metadata.caption.trim().length === 0 && document.type === 'poster') {
-        setCaptionError('Add a caption to help your audience discover this poster');
+        setCaptionError('Add a caption');
         haptic.warning();
       } else {
         setCaptionError('');
@@ -1763,85 +1784,66 @@ function PublishReview({
   const handlePublishWithValidation = useCallback(() => {
     if (document.type === 'poster' && document.metadata.caption.trim().length === 0) {
       setCaptionBlurred(true);
-      setCaptionError('Add a caption to help your audience discover this poster');
+      setCaptionError('Add a caption');
       haptic.warning();
       return;
     }
     setCaptionError('');
-    // Inject the selected cover page index into the document metadata
-    // so the publish pipeline and backend can use it as the poster cover.
     if (coverPageIndex > 0 && document.pages.length > 1) {
-      document.metadata.coverPageIndex = coverPageIndex;
+      updateMetadata({ coverPageIndex });
     }
     onPublish();
-  }, [document.type, document.metadata.caption, onPublish, haptic, coverPageIndex, document.pages.length, document.metadata]);
+  }, [document.type, document.metadata.caption, onPublish, haptic, coverPageIndex, document.pages.length, updateMetadata]);
 
-  // ── Save as draft with navigation ───────────────────────────────
   const handleSaveDraft = useCallback(async () => {
     haptic.light();
     await onSaveDraft();
   }, [haptic, onSaveDraft]);
 
-  const toggleMoreOptions = useCallback(() => {
-    haptic.selection();
-    LayoutAnimation.configureNext(
-      LayoutAnimation.create(200, LayoutAnimation.Types.easeOut, LayoutAnimation.Properties.opacity),
-    );
-    setMoreOptionsOpen((v) => !v);
-  }, [haptic]);
-
-  const publishDisabled = isOffline || !!document.metadata.scheduledFor;
+  const publishDisabled = isOffline;
 
   return (
     <View style={styles.reviewBody}>
       <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* ── Cover thumbnail + caption — the dominant object ──
-            A single tappable cover sits at top-left; the caption fills
-            the remaining width as the primary writing surface. No label
-            needed — the placeholder is the label. */}
-        <View style={styles.composerRow}>
-          <Pressable
-            onPress={onOpenPreview}
-            disabled={!onOpenPreview}
-            style={styles.coverThumb}
-            accessibilityLabel="Preview composition"
-            accessibilityHint="Opens the full-screen preview"
-            accessibilityRole="button"
-          >
-            <CreatorCanvas
-              document={document}
-              page={coverPage}
-              canvasWidth={coverThumbSize}
-              canvasHeight={coverThumbHeight}
-              mode="preview"
-            />
-            {isMultiPage && (
-              <View style={styles.pageCountBadge}>
-                <Text style={styles.pageCountText}>{document.pages.length}</Text>
-              </View>
-            )}
-          </Pressable>
-          <View style={styles.captionColumn}>
-            <TextInput
-              style={styles.captionInput}
-              placeholder="Write a caption..."
-              placeholderTextColor={colors.textMuted}
-              value={document.metadata.caption}
-              onChangeText={(v) => {
-                updateMetadata({ caption: v });
-                if (captionError && v.trim().length > 0) {
-                  setCaptionError('');
-                }
-              }}
-              onBlur={handleCaptionBlur}
-              multiline
-              maxLength={2200}
-              accessibilityLabel="Caption"
-            />
-            <Text style={styles.captionCount}>{document.metadata.caption.length}/2,200</Text>
-          </View>
-        </View>
-        {/* Inline caption error with spring appearance */}
+        <Pressable
+          onPress={onOpenPreview}
+          disabled={!onOpenPreview}
+          style={styles.coverPreview}
+          accessibilityLabel="Preview composition"
+          accessibilityHint="Opens the full-screen preview"
+          accessibilityRole="button"
+        >
+          <CreatorCanvas
+            document={document}
+            page={coverPage}
+            canvasWidth={coverPreviewWidth}
+            canvasHeight={coverPreviewHeight}
+            mode="preview"
+          />
+          {isMultiPage && (
+            <View style={styles.pageCountBadge}>
+              <Text style={styles.pageCountText}>{document.pages.length}</Text>
+            </View>
+          )}
+        </Pressable>
+
+        <TextInput
+          style={styles.captionInput}
+          placeholder="Write a caption…"
+          placeholderTextColor={colors.textMuted}
+          value={document.metadata.caption}
+          onChangeText={(v) => {
+            updateMetadata({ caption: v });
+            if (captionError && v.trim().length > 0) {
+              setCaptionError('');
+            }
+          }}
+          onBlur={handleCaptionBlur}
+          multiline
+          maxLength={2200}
+          accessibilityLabel="Caption"
+        />
+        <Text style={styles.captionCount}>{document.metadata.caption.length}/2,200</Text>
         {captionError !== '' && (
           <Reanimated.View style={[styles.captionErrorWrap, captionErrorStyle]}>
             <Ionicons name="alert-circle-outline" size={IconGrammar.metadata} color={colors.danger} aria-hidden={true} />
@@ -1849,166 +1851,110 @@ function PublishReview({
           </Reanimated.View>
         )}
 
-        {/* ── Audience segmented control — self-labeling via icons ── */}
-        <View
-          style={styles.audienceSegmented}
-          onLayout={(e) => { segmentWidth.value = e.nativeEvent.layout.width / audienceOptions.length; }}
-        >
-          <Reanimated.View
-            style={[
-              styles.audienceSegmentIndicator,
-              { width: `${100 / audienceOptions.length}%` },
-              segmentIndicatorStyle,
-            ]}
-            pointerEvents="none"
-          />
+        <View style={styles.audienceSegment} accessibilityRole="radiogroup" accessibilityLabel="Audience visibility">
           {audienceOptions.map((opt) => {
             const isActive = document.metadata.visibility === opt.key;
             return (
               <Pressable
                 key={opt.key}
                 onPress={() => { haptic.light(); updateMetadata({ visibility: opt.key }); }}
-                style={styles.audienceSegmentItem}
+                style={[styles.audienceSegmentBtn, isActive && styles.audienceSegmentBtnActive]}
                 accessibilityLabel={`Audience ${opt.label}`}
                 accessibilityHint={`Sets visibility to ${opt.label}`}
-                accessibilityRole="button"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isActive }}
               >
-                <Ionicons name={opt.icon} size={IconGrammar.metadata} color={isActive ? colors.textInverse : colors.textSecondary} aria-hidden={true} />
-                <Text style={[styles.audienceSegmentText, isActive && styles.audienceSegmentTextActive]}>{opt.label}</Text>
+                {isActive && (
+                  <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.textInverse} aria-hidden={true} />
+                )}
+                <Text style={[styles.audienceSegmentText, isActive && styles.audienceSegmentTextActive]}>
+                  {opt.label}
+                </Text>
               </Pressable>
             );
           })}
         </View>
 
-        {/* ── More options disclosure — collapsed by default ──
-            Contains interaction toggles, cover selection, and the
-            schedule warning. Secondary concerns that should not
-            clutter the publish decision. */}
-        <Pressable
-          onPress={toggleMoreOptions}
-          style={styles.disclosureHeader}
-          accessibilityLabel={moreOptionsOpen ? 'Collapse more options' : 'Expand more options'}
-          accessibilityHint="Shows cover selection and interaction settings"
-          accessibilityRole="button"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.disclosureHeaderText}>More options</Text>
-          <Ionicons
-            name={moreOptionsOpen ? 'chevron-up-outline' : 'chevron-down-outline'}
-            size={IconGrammar.metadata}
-            color={colors.textSecondary}
-            aria-hidden={true}
-          />
-        </Pressable>
-        {moreOptionsOpen && (
-          <View style={styles.disclosureBody}>
-            {/* Interaction toggles — poster only */}
-            {document.type === 'poster' && (
-              <>
-                <View style={styles.toggleRow}>
-                  <Text style={styles.toggleLabel}>Allow replies</Text>
-                  <Switch
-                    value={document.metadata.allowReplies}
-                    onValueChange={(v) => { haptic.selection(); updateMetadata({ allowReplies: v }); }}
-                    trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-                    thumbColor={document.metadata.allowReplies ? colors.textInverse : colors.textMuted}
-                    accessibilityLabel="Allow replies"
-                    accessibilityHint="Toggles whether viewers can reply to this poster"
-                  />
-                </View>
-                <View style={styles.toggleRow}>
-                  <Text style={styles.toggleLabel}>Allow reactions</Text>
-                  <Switch
-                    value={document.metadata.allowReactions}
-                    onValueChange={(v) => { haptic.selection(); updateMetadata({ allowReactions: v }); }}
-                    trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-                    thumbColor={document.metadata.allowReactions ? colors.textInverse : colors.textMuted}
-                    accessibilityLabel="Allow reactions"
-                    accessibilityHint="Toggles whether viewers can react to this poster"
-                  />
-                </View>
-              </>
-            )}
-
-            {/* Cover selection — for multi-page stories */}
-            {isMultiPage && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.coverScroll} contentContainerStyle={styles.coverContainer}>
-                {document.pages.map((page, i) => (
-                  <Pressable
-                    key={page.id}
-                    onPress={() => { haptic.selection(); setCoverPageIndex(i); }}
-                    style={[styles.coverThumbWrap, coverPageIndex === i && styles.coverThumbActive]}
-                    accessibilityLabel={`Set page ${i + 1} as cover`}
-                    accessibilityHint="Sets this page as the story cover"
-                    accessibilityRole="button"
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  >
-                    <CreatorCanvas
-                      document={document}
-                      page={page}
-                      canvasWidth={coverThumbSize}
-                      canvasHeight={coverThumbHeight}
-                      mode="preview"
-                    />
-                    {coverPageIndex === i && (
-                      <View style={styles.coverBadge}>
-                        <Ionicons name="checkmark" size={IconGrammar.badge} color={colors.textInverse} aria-hidden={true} />
-                      </View>
-                    )}
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Scheduling remains fail-closed until publishing and scheduling are
-                one atomic server operation. Old drafts can clear stale metadata;
-                new drafts are not shown a control that publishes immediately. */}
-            {document.metadata.scheduledFor && (
-              <View style={styles.scheduleDateTime}>
-                <Ionicons name="alert-circle-outline" size={IconGrammar.metadata} color={colors.warning} aria-hidden={true} />
-                <Text style={styles.scheduleDateTimeText}>
-                  Scheduling is unavailable. Clear it to publish now.
-                </Text>
-                <Pressable
-                  onPress={() => { haptic.light(); updateMetadata({ scheduledFor: undefined }); }}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  accessibilityLabel="Clear schedule"
-                  accessibilityHint="Removes the scheduled date and switches to publish now"
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.textMuted} aria-hidden={true} />
-                </Pressable>
-              </View>
-            )}
+        {document.type === 'poster' && (
+          <View style={styles.interactionRow}>
+            <Pressable
+              onPress={() => { haptic.selection(); updateMetadata({ allowReplies: !document.metadata.allowReplies }); }}
+              style={[styles.interactionPill, document.metadata.allowReplies && styles.interactionPillActive]}
+              accessibilityLabel="Allow replies"
+              accessibilityHint="Toggles whether viewers can reply to this poster"
+              accessibilityRole="switch"
+              accessibilityState={{ checked: document.metadata.allowReplies }}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Ionicons name={document.metadata.allowReplies ? 'chatbubble' : 'chatbubble-outline'} size={IconGrammar.metadata} color={document.metadata.allowReplies ? colors.textInverse : colors.textSecondary} aria-hidden={true} />
+              <Text style={[styles.interactionPillText, document.metadata.allowReplies && styles.interactionPillTextActive]}>Replies</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { haptic.selection(); updateMetadata({ allowReactions: !document.metadata.allowReactions }); }}
+              style={[styles.interactionPill, document.metadata.allowReactions && styles.interactionPillActive]}
+              accessibilityLabel="Allow reactions"
+              accessibilityHint="Toggles whether viewers can react to this poster"
+              accessibilityRole="switch"
+              accessibilityState={{ checked: document.metadata.allowReactions }}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Ionicons name={document.metadata.allowReactions ? 'heart' : 'heart-outline'} size={IconGrammar.metadata} color={document.metadata.allowReactions ? colors.textInverse : colors.textSecondary} aria-hidden={true} />
+              <Text style={[styles.interactionPillText, document.metadata.allowReactions && styles.interactionPillTextActive]}>Reactions</Text>
+            </Pressable>
           </View>
         )}
 
-        {/* Offline banner — prevents failed publish attempts. Save draft
-            remains available because drafts are stored locally. */}
+        {isMultiPage && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.coverScroll} contentContainerStyle={styles.coverContainer}>
+            {document.pages.map((page, i) => (
+              <Pressable
+                key={page.id}
+                onPress={() => { haptic.selection(); setCoverPageIndex(i); }}
+                style={[styles.coverThumbWrap, coverPageIndex === i && styles.coverThumbActive]}
+                accessibilityLabel={`Set page ${i + 1} as cover`}
+                accessibilityHint="Sets this page as the story cover"
+                accessibilityRole="button"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <CreatorCanvas
+                  document={document}
+                  page={page}
+                  canvasWidth={coverThumbSize}
+                  canvasHeight={coverThumbHeight}
+                  mode="preview"
+                />
+                {coverPageIndex === i && (
+                  <View style={styles.coverBadge}>
+                    <Ionicons name="checkmark" size={IconGrammar.badge} color={colors.textInverse} aria-hidden={true} />
+                  </View>
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+
         {isOffline && (
           <View style={styles.offlineBanner}>
             <Ionicons name="cloud-offline-outline" size={IconGrammar.metadata} color={colors.warning} aria-hidden={true} />
             <Text style={styles.offlineBannerText}>
-              You're offline. Save as draft and publish when you're back online.
+              Offline — save as draft
             </Text>
           </View>
         )}
       </ScrollView>
 
-      {/* ── Sticky bottom: Publish (primary) + Save draft (quiet) ── */}
       <View style={styles.stickyFooter}>
         <PressScale
           onPress={handlePublishWithValidation}
           disabled={publishDisabled}
           style={[styles.publishBtn, publishDisabled ? styles.publishBtnDisabled : {}]}
-          accessibilityLabel={document.metadata.scheduledFor ? 'Clear schedule to publish' : 'Publish now'}
-          accessibilityHint={document.metadata.scheduledFor ? 'Scheduling is unavailable in this build' : 'Publishes the content immediately'}
+          accessibilityLabel="Share"
+          accessibilityHint="Shares the content immediately"
           accessibilityState={{ disabled: publishDisabled }}
           scale={0.97}
           hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
-          <Text style={styles.publishBtnText}>{document.metadata.scheduledFor ? 'Clear schedule first' : 'Publish now'}</Text>
+          <Text style={styles.publishBtnText}>Share</Text>
         </PressScale>
         <Pressable
           onPress={handleSaveDraft}
@@ -2050,50 +1996,12 @@ function createStyles(colors: ThemeColorsType) {
     scrollContent: {
       paddingBottom: Space.xl,
       gap: Space.sm },
-    // ── Subtle section labels ──
-    // Small, muted, regular weight — NOT uppercase eyebrows. These help
-    // the user scan the sheet without adding visual noise.
-    sectionLabel: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      marginBottom: Space.xs },
-    // ── Hairline separator between sections ──
-    sectionSeparator: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-      marginVertical: Space.md },
-    previewContainer: {
-      alignItems: 'center',
-      paddingVertical: Space.sm,
-      gap: Space.md },
-    previewScroll: {
-      marginHorizontal: -Space.md },
-    previewPageWrapper: {
-      marginHorizontal: Space.md,
-      borderRadius: Radius.lg,
-      overflow: 'hidden' },
-    textInput: {
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      borderRadius: Radius.md,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      fontSize: TypographyV2.body.size,
-      color: colors.textPrimary,
-      minHeight: 60 },
-    captionField: {
-      borderBottomWidth: Stroke.hairline,
-      borderBottomColor: colors.border,
-      paddingVertical: Space.sm },
-    captionFieldError: {
-      borderBottomColor: colors.danger },
     captionInput: {
       fontSize: TypographyV2.body.size,
       fontFamily: TypographyV2.body.fontFamily,
       lineHeight: TypographyV2.body.lineHeight,
       color: colors.textPrimary,
-      minHeight: 84,
+      minHeight: 80,
       textAlignVertical: 'top',
       padding: 0 },
     captionCount: {
@@ -2111,55 +2019,51 @@ function createStyles(colors: ThemeColorsType) {
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.meta.size,
       color: colors.danger },
-    toggleRow: {
+    audienceSegment: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: Space.smMd },
-    toggleLabel: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.body.size,
-      color: colors.textPrimary },
-    toggleLabelWrap: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm },
-    cameraRollRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: Space.smMd },
-    // ── Audience segmented control ──
-    audienceSegmented: {
-      flexDirection: 'row',
+      alignSelf: 'center',
+      borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.lg,
-      padding: Space.xs,
-      marginBottom: Space.sm,
-      position: 'relative' },
-    audienceSegmentIndicator: {
-      position: 'absolute',
-      top: Space.xs,
-      bottom: Space.xs,
-      left: Space.xs,
-      width: `${100 / 3}%`,
-      backgroundColor: colors.brand,
-      borderRadius: Radius.md },
-    audienceSegmentItem: {
-      flex: 1,
+      padding: 2 },
+    audienceSegmentBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
       gap: Space.xs,
-      paddingVertical: Space.sm,
-      zIndex: 1 },
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.full,
+      justifyContent: 'center' },
+    audienceSegmentBtnActive: {
+      backgroundColor: colors.brand },
     audienceSegmentText: {
       fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.meta.size,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary },
     audienceSegmentTextActive: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold },
+    interactionRow: {
+      flexDirection: 'row',
+      gap: Space.sm,
+      paddingVertical: Space.xs },
+    interactionPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.full,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border },
+    interactionPillActive: {
+      backgroundColor: colors.brand,
+      borderColor: colors.brand },
+    interactionPillText: {
+      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      color: colors.textSecondary },
+    interactionPillTextActive: {
+      color: colors.textInverse },
     // ── Cover selection ──
     coverScroll: {
       marginHorizontal: -Space.md },
@@ -2168,7 +2072,7 @@ function createStyles(colors: ThemeColorsType) {
       gap: Space.sm,
       paddingBottom: Space.xs },
     coverThumbWrap: {
-      borderRadius: Radius.lg,
+      borderRadius: Radius.md,
       overflow: 'hidden',
       borderWidth: Stroke.emphasis,
       borderColor: 'transparent' },
@@ -2184,45 +2088,13 @@ function createStyles(colors: ThemeColorsType) {
       backgroundColor: colors.brand,
       justifyContent: 'center',
       alignItems: 'center' },
-    scheduleRow: {
-      flexDirection: 'row',
-      gap: Space.sm },
-    schedulePill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.full,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border },
-    schedulePillActive: {
-      borderColor: colors.brand },
-    schedulePillText: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.body.size,
-      color: colors.textSecondary },
-    scheduleDateTime: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm },
-    scheduleDateTimeText: {
-      flex: 1,
-      fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.body.size,
-      color: colors.textPrimary },
-    actionRow: {
-      gap: Space.sm,
-      marginTop: Space.lg },
     draftBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
       height: 44,
-      borderRadius: Radius.md },
+      borderRadius: Radius.full },
     draftBtnText: {
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.body.size,
@@ -2230,7 +2102,7 @@ function createStyles(colors: ThemeColorsType) {
     publishBtn: {
       width: '100%',
       height: 50,
-      borderRadius: Radius.md,
+      borderRadius: Radius.full,
       backgroundColor: colors.brand,
       justifyContent: 'center',
       alignItems: 'center' },
@@ -2271,25 +2143,28 @@ function createStyles(colors: ThemeColorsType) {
       fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
       textAlign: 'center' },
-    // ── Progress bar — calm, thin, full-width ──
+    // ── Upload progress state ──
+    progressState: {
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xl,
+      gap: Space.sm },
+    progressLabel: {
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      color: colors.textPrimary },
     progressBarTrack: {
       width: '100%',
       height: 4,
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
-      overflow: 'hidden',
-      marginTop: Space.sm },
-    progressBarFillContainer: {
+      overflow: 'hidden' },
+    progressBarFill: {
       height: '100%',
       borderRadius: Radius.full,
-      overflow: 'hidden' },
-    progressBarGradient: {
-      flex: 1 },
-    progressByteLabel: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.meta.size,
-      color: colors.textMuted,
-      marginTop: Space.xs },
+      backgroundColor: colors.brand },
     cancelUploadBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -2310,6 +2185,18 @@ function createStyles(colors: ThemeColorsType) {
       backgroundColor: colors.dangerSubtle,
       justifyContent: 'center',
       alignItems: 'center' },
+    errorTitle: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      color: colors.textPrimary },
+    errorDetail: {
+      fontFamily: TypographyV2.body.fontFamily,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      paddingHorizontal: Space.md },
     unknownCircle: {
       width: 72,
       height: 72,
@@ -2326,21 +2213,62 @@ function createStyles(colors: ThemeColorsType) {
     retryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: Space.lg,
-      height: 44,
-      borderRadius: Radius.md,
-      backgroundColor: colors.brand,
       justifyContent: 'center',
+      width: '100%',
+      height: 50,
+      borderRadius: Radius.full,
+      backgroundColor: colors.brand,
       marginTop: Space.sm },
     retryBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.body.size },
+      fontSize: TypographyV2.bodyStrong.size,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
+    saveDraftLink: {
+      paddingVertical: Space.sm,
+      marginTop: Space.xs,
+      alignItems: 'center',
+      justifyContent: 'center' },
+    saveDraftLinkText: {
+      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      color: colors.textSecondary },
     // ── Success state ──
+    successCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: Radius.full,
+      backgroundColor: colors.successSubtle,
+      justifyContent: 'center',
+      alignItems: 'center' },
     successTitle: {
       fontFamily: Typography.family.bold,
-      fontSize: TypographyV2.sectionTitle.size,
+      fontSize: 20,
+      lineHeight: 26,
       color: colors.textPrimary },
+    doneBtn: {
+      width: '100%',
+      height: 52,
+      borderRadius: Radius.full,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: Space.md },
+    doneBtnText: {
+      color: colors.textInverse,
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
+    viewLink: {
+      marginTop: Space.sm,
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.md,
+    },
+    viewLinkText: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      color: colors.brand,
+    },
     successBtnGroup: {
       width: '100%',
       gap: Space.sm,
@@ -2348,7 +2276,7 @@ function createStyles(colors: ThemeColorsType) {
     viewBtn: {
       width: '100%',
       height: 50,
-      borderRadius: Radius.md,
+      borderRadius: Radius.full,
       backgroundColor: colors.brand,
       justifyContent: 'center',
       alignItems: 'center' },
@@ -2364,7 +2292,7 @@ function createStyles(colors: ThemeColorsType) {
       gap: Space.xs,
       width: '100%',
       height: 44,
-      borderRadius: Radius.md,
+      borderRadius: Radius.full,
       borderWidth: Stroke.standard,
       borderColor: colors.brand },
     createBtnText: {
@@ -2381,36 +2309,21 @@ function createStyles(colors: ThemeColorsType) {
     scheduleFailedViewBtn: {
       width: '100%',
       height: 44,
-      borderRadius: Radius.md,
+      borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center' },
     scheduleFailedViewText: {
       color: colors.textSecondary,
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.body.size },
-    // ── Re-authored PublishReview styles ──
-    // Solid fill for progress bar (replaces gradient — a gradient on a
-    // 4px bar is invisible decoration per AGENTS.md §4).
-    progressBarFill: {
-      height: '100%',
-      borderRadius: Radius.full,
-      backgroundColor: colors.brand },
-    // Main review container — fills the sheet, column layout.
     reviewBody: {
       flex: 1 },
-    // Row containing cover thumbnail + caption input side by side.
-    composerRow: {
-      flexDirection: 'row',
-      gap: Space.md,
-      alignItems: 'flex-start',
-      paddingVertical: Space.sm },
-    // Cover thumbnail — single tappable preview, 80×100px.
-    coverThumb: {
-      width: 80,
-      height: 100,
+    coverPreview: {
+      alignSelf: 'center',
+      width: 160,
+      height: 200,
       borderRadius: Radius.md,
       overflow: 'hidden' },
-    // Page count badge on cover — small, top-right.
     pageCountBadge: {
       position: 'absolute',
       top: 4,
@@ -2426,25 +2339,6 @@ function createStyles(colors: ThemeColorsType) {
       fontFamily: Typography.family.semibold,
       fontSize: TypographyV2.meta.size,
       color: colors.textPrimary },
-    // Caption column — fills remaining width next to cover thumb.
-    captionColumn: {
-      flex: 1 },
-    // More options disclosure header — quiet, pressable.
-    disclosureHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: Space.smMd },
-    disclosureHeaderText: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.body.size,
-      color: colors.textSecondary },
-    // Disclosure body — expanded content for toggles, cover selection, schedule.
-    disclosureBody: {
-      paddingTop: Space.xs,
-      paddingBottom: Space.sm,
-      gap: Space.xs },
-    // Sticky footer — publish + save draft at the bottom.
     stickyFooter: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,

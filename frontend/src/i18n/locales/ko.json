@@ -1,0 +1,1683 @@
+{
+  "common": {
+    "buttons": {
+      "save": "저장",
+      "cancel": "취소",
+      "delete": "삭제",
+      "edit": "편집",
+      "share": "공유",
+      "retry": "다시 시도",
+      "close": "닫기",
+      "done": "완료",
+      "continue": "계속",
+      "clearAll": "모두 지우기",
+      "clearFilters": "필터 지우기",
+      "browseAll": "모두 둘러보기",
+      "refresh": "새로고침",
+      "follow": "팔로우",
+      "unfollow": "팔로우 취소",
+      "message": "메시지",
+      "buy": "구매",
+      "bid": "입찰",
+      "sell": "판매",
+      "ok": "확인",
+      "confirm": "확인"
+    },
+    "states": {
+      "loading": "불러오는 중...",
+      "loadingMore": "더 불러오는 중...",
+      "noResults": "결과 없음",
+      "somethingWentWrong": "문제가 발생했습니다",
+      "youAreOffline": "오프라인 상태입니다",
+      "retry": "다시 시도",
+      "searching": "검색 중..."
+    },
+    "navigation": {
+      "back": "뒤로",
+      "home": "홈",
+      "search": "검색",
+      "profile": "프로필",
+      "settings": "설정"
+    },
+    "actions": {
+      "follow": "팔로우",
+      "unfollow": "팔로우 취소",
+      "message": "메시지",
+      "buy": "구매",
+      "bid": "입찰",
+      "sell": "판매"
+    },
+    "trust": {
+      "verified": "인증됨",
+      "responseTime": "응답 시간",
+      "reviews": "리뷰",
+      "followers": "팔로워",
+      "following": "팔로잉"
+    },
+    "misc": {
+      "items": "개",
+      "on": "켜짐",
+      "off": "꺼짐",
+      "none": "없음",
+      "notSignedIn": "로그인되지 않음"
+    }
+  },
+  "home": {
+    "brandTitle": "Thryftverse",
+    "tabs": {
+      "foryou": "추천",
+      "following": "팔로잉"
+    },
+    "looks": {
+      "shopLabel": "쇼핑할 룩",
+      "itemsCount": "{count}개"
+    },
+    "poster": {
+      "fallback": "포스터"
+    },
+    "newListings": {
+      "bannerSingular": "{count}개의 신규 드롭 준비됨",
+      "bannerPlural": "{count}개의 신규 드롭 준비됨",
+      "badgeNew": "{count}개 신규"
+    },
+    "sync": {
+      "unavailableCached": "동기화를 사용할 수 없습니다. 캐시된 항목을 표시합니다."
+    },
+    "empty": {
+      "followingNoNewTitle": "아직 새로운 드롭이 없습니다",
+      "followingNoNewSubtitle": "당겨서 새로고침하세요.",
+      "followingNoSellersTitle": "판매자를 팔로우하면 드롭을 볼 수 있습니다",
+      "followingNoSellersSubtitle": "판매자 프로필에서 팔로우를 눌러 피드를 만들어 보세요.",
+      "followingDiscoverSellers": "판매자 둘러보기",
+      "followingBrowseAll": "모두 둘러보기",
+      "forYouNoDropsTitle": "아직 라이브 드롭이 없습니다",
+      "forYouNoDropsSubtitle": "당겨서 새로고침하거나 카테고리를 둘러보세요."
+    },
+    "footer": {
+      "reachedEnd": "끝에 도달했습니다"
+    },
+    "peek": {
+      "closeButton": "닫기",
+      "viewListing": "리스팅 보기"
+    }
+  },
+  "search": {
+    "placeholder": "상품, 판매자, 스타일 검색",
+    "scope": {
+      "items": "상품",
+      "people": "사람"
+    },
+    "resultCount": {
+      "singular": "{count}개 결과",
+      "plural": "{count}개 결과"
+    },
+    "sort": {
+      "title": "정렬 기준",
+      "recommended": "추천",
+      "newest": "최신순",
+      "priceLowToHigh": "가격: 낮은순",
+      "priceHighToLow": "가격: 높은순",
+      "mostLiked": "좋아요 많은순"
+    },
+    "sections": {
+      "discover": "둘러보기",
+      "recent": "최근",
+      "recentSearches": "최근 검색",
+      "savedSearches": "저장된 검색",
+      "browseCategories": "카테고리 둘러보기",
+      "categories": "카테고리",
+      "trending": "인기 검색어"
+    },
+    "suggestion": {
+      "brand": "브랜드",
+      "category": "카테고리",
+      "item": "상품",
+      "search": "검색"
+    },
+    "typeahead": {
+      "searchFor": "“{query}” 검색",
+      "viewAllResults": "{query}의 모든 결과 보기",
+      "suggestionsUnavailable": "추천 검색어를 사용할 수 없습니다. 계속하려면 검색을 누르세요.",
+      "noCloseSuggestions": "유사한 추천이 없습니다. 모든 결과를 보려면 검색을 누르세요.",
+      "showingLocalMatches": "이 기기에서 사용 가능한 일치 항목을 표시합니다"
+    },
+    "savedSearch": {
+      "alertsOn": "알림 켜짐",
+      "alertsOff": "알림 꺼짐",
+      "newMatches": "· {count}개 신규"
+    },
+    "status": {
+      "refreshingIndex": "인덱스 새로고침 중",
+      "liveIndex": "실시간 인덱스",
+      "offlineIndex": "오프라인 인덱스",
+      "cachedIndex": "캐시된 인덱스"
+    },
+    "errors": {
+      "searchUnavailable": "검색을 사용할 수 없습니다",
+      "retrySearch": "검색 다시 시도",
+      "peopleSearchUnavailable": "사용자 검색을 사용할 수 없습니다",
+      "searchIndexDelayed": "검색 인덱스가 지연되고 있습니다. 캐시된 결과를 표시합니다.",
+      "noPeopleFound": "“{query}”에 해당하는 사용자가 없습니다",
+      "tryDifferentName": "다른 이름이나 사용자명을 입력해 보세요.",
+      "noMatches": "“{query}”에 일치하는 결과가 없습니다",
+      "noMatchesWithFilters": "현재 필터에서 “{query}”에 일치하는 결과가 없습니다",
+      "searchingIndex": "인덱스 검색 중…",
+      "tryClearingFilters": "필터를 지우거나 검색 범위를 넓혀 보세요.",
+      "tryBroadened": "{suggestions} 시도 — 또는 모든 카테고리를 둘러보세요.",
+      "noPicksWithFilters": "현재 필터와 일치하는 추천이 없습니다. 필터를 조정하거나 지워 보세요.",
+      "noPicksNoResults": "아직 순위 결과가 없습니다. 더 짧은 키워드를 시도해 보세요."
+    },
+    "noResults": {
+      "browseByCategory": "카테고리별로 둘러보기"
+    },
+    "follow": {
+      "following": "팔로잉",
+      "follow": "팔로우"
+    }
+  },
+  "settings": {
+    "header": {
+      "title": "설정"
+    },
+    "search": {
+      "placeholder": "설정 검색",
+      "results": "결과",
+      "allSettings": "모든 설정",
+      "noMatching": "일치하는 설정이 없습니다"
+    },
+    "verification": {
+      "promptTitle": "본인 인증",
+      "promptSubtitle": "인증 배지를 받고 판매 기능을 잠금 해제하세요",
+      "verified": "인증됨",
+      "getBadge": "인증 배지 받기",
+      "trustedSeller": "신뢰할 수 있는 판매자",
+      "idVerified": "신원 인증됨"
+    },
+    "health": {
+      "verified": "인증됨",
+      "twoFA": "2단계 인증",
+      "biometric": "생체 인증",
+      "payment": "결제",
+      "address": "주소",
+      "emailConfirmed": "이메일 인증됨"
+    },
+    "sections": {
+      "yourAccount": "내 계정",
+      "buyingSelling": "구매 및 판매",
+      "notifications": "알림",
+      "experience": "경험",
+      "connectedServices": "연결된 서비스",
+      "helpLegal": "도움말 및 법적 정보",
+      "advanced": "고급",
+      "account": "계정"
+    },
+    "rows": {
+      "verification": "인증",
+      "changePassword": "비밀번호 변경",
+      "twoFAEnabled": "2단계 인증 사용 중",
+      "passwordOnly": "비밀번호만",
+      "biometricLock": "생체 인증 잠금",
+      "biometricNotAvailable": "이 기기에서 사용할 수 없습니다",
+      "biometricEnabled": "민감한 작업에 Face ID, Touch ID 및 지문 사용",
+      "biometricDisabled": "사용 안 함 — 민감한 화면은 비밀번호만 사용",
+      "connectedAccounts": "연결된 계정",
+      "connectedAccountsSubtitle": "Google, Apple 로그인",
+      "devicesSessions": "기기 및 세션",
+      "accountControl": "계정 관리",
+      "accountControlSubtitle": "보안, 세션, 비밀번호",
+      "downloadData": "내 데이터 다운로드",
+      "downloadDataSubtitle": "계정 데이터 내보내기",
+      "privacySafety": "개인정보 및 안전",
+      "privacySafetySubtitle": "공개 범위, 차단된 사용자",
+      "chatPrivacy": "채팅 개인정보",
+      "chatPrivacySubtitle": "누가 메시지를 보낼 수 있는지",
+      "dataPrivacy": "데이터 및 개인정보",
+      "dataPrivacySubtitle": "개인정보 보호 설정 및 보존",
+      "blockedUsers": "차단된 사용자",
+      "blockedCount": "{{count}}명 차단됨",
+      "savedAddresses": "저장된 주소",
+      "oneSaved": "1개 저장됨",
+      "noneSaved": "저장된 항목 없음",
+      "paymentMethods": "결제 수단",
+      "savedCollections": "저장 및 컬렉션",
+      "payoutAccount": "정산 계정",
+      "payoutAccountSubtitle": "잔액 및 지갑",
+      "payoutHistory": "정산 내역",
+      "shippingPreferences": "배송 설정",
+      "priceAlerts": "가격 알림",
+      "priceAlertsSubtitle": "가격 임계값 알림",
+      "autoInvestPlans": "자동 투자 계획",
+      "autoInvestPlansSubtitle": "정기 구매 일정",
+      "taxDocuments": "세금 서류",
+      "taxDocumentsSubtitle": "연간 명세서 및 손익",
+      "resolutionCentre": "분쟁 해결 센터",
+      "resolutionCentreSubtitle": "분쟁 및 해결",
+      "enableNotifications": "알림 활성화",
+      "permissionUnknown": "권한 알 수 없음",
+      "permissionAllowed": "허용됨",
+      "permissionNotAllowed": "허용되지 않음",
+      "notificationPreferences": "알림 설정",
+      "emailPreferences": "이메일 설정",
+      "theme": "테마",
+      "currencyDisplay": "통화 표시",
+      "localCurrency": "현지 통화",
+      "language": "언어",
+      "contentPreferences": "콘텐츠 설정",
+      "contentPreferencesSubtitle": "피드 및 추천",
+      "recommendations": "추천",
+      "recommendationsSubtitle": "사진 보정, 제목 및 가격 제안",
+      "yourFeed": "내 피드",
+      "yourFeedSubtitle": "추천 및 투명성",
+      "sustainability": "지속가능성",
+      "sustainabilitySubtitle": "목표, 배송, 영향",
+      "accessibility": "접근성",
+      "accessibilitySubtitle": "글자 크기, 모션, 대비",
+      "searchHistory": "검색 기록",
+      "searchHistorySubtitle": "최근 검색 지우기",
+      "dataSharing": "데이터 공유",
+      "dataSharingSubtitle": "분석 및 맞춤화",
+      "agents": "에이전트",
+      "agentsSubtitle": "에이전트 권한 둘러보기 및 관리",
+      "connections": "연결",
+      "connectionsSubtitle": "제공자 키 및 엔드포인트",
+      "yourAgents": "내 에이전트",
+      "yourAgentsSubtitle": "내가 만든 에이전트",
+      "helpCentre": "도움말 센터",
+      "termsOfService": "이용약관",
+      "privacyPolicy": "개인정보처리방침",
+      "aboutThryftverse": "Thryftverse 소개",
+      "runtimeSmokeTest": "런타임 스모크 테스트",
+      "runtimeSmokeTestSubtitle": "로컬 런타임 진단 검사",
+      "deleteAccount": "계정 삭제",
+      "deleteAccountSubtitle": "계정을 영구적으로 삭제합니다",
+      "editProfileAccount": "프로필 및 계정 편집",
+      "biometricLogin": "생체 인증 로그인",
+      "biometricLoginEnabled": "앱 실행 시 Face ID, Touch ID 또는 지문 요청",
+      "biometricLoginDisabled": "사용 안 함 — 앱이 바로 계정으로 열립니다",
+      "notificationCategories": "알림 카테고리",
+      "notificationPreferencesSubtitle": "방해 금지 시간, 미리보기",
+      "featureFlags": "기능 플래그",
+      "featureFlagsSubtitle": "QA용 현재 플래그 값",
+      "autoTranslate": "메시지 자동 번역",
+      "autoTranslateEnabled": "외국어 메시지가 자동으로 번역됨",
+      "autoTranslateDisabled": "외국어 메시지를 수동으로 번역하려면 탭하세요"
+    },
+    "toast": {
+      "themeApplying": "{{theme}} 테마 적용 중…",
+      "pushEnabled": "푸시 알림이 활성화되었습니다",
+      "pushDenied": "푸시 알림이 거부되었습니다. 기기 설정에서 활성화하세요.",
+      "pushUpdateFailed": "푸시 알림 권한을 업데이트할 수 없습니다.",
+      "pushManageDeviceSettings": "기기 설정에서 푸시 알림을 관리하세요.",
+      "searchHistoryCleared": "검색 기록이 지워졌습니다",
+      "searchHistoryClearFailed": "검색 기록을 지울 수 없습니다",
+      "unableOpenLink": "링크를 열 수 없습니다. 잠시 후 다시 시도하세요."
+    },
+    "notificationSummary": "{enabled}/{total}개 카테고리",
+    "accessibility": {
+      "editProfileAccount": "프로필 및 계정 편집",
+      "editProfileAccountHint": "프로필, 개인 정보, 보안 및 계정 편집기 열기",
+      "verifyIdentity": "본인 인증",
+      "verifyIdentityHint": "본인 인증 열기",
+      "deleteAccountHint": "계정 삭제 흐름 열기"
+    },
+    "picker": {
+      "currencyTitle": "현지 통화 선택",
+      "themeTitle": "테마 모드",
+      "themeSystem": "시스템",
+      "themeLight": "라이트",
+      "themeDark": "다크"
+    }
+  },
+  "profile": {
+    "userProfile": "{name}님의 프로필"
+  },
+  "listing": {
+    "create": {
+      "title": "판매",
+      "createListing": "리스팅 만들기",
+      "editTitle": "리스팅 편집",
+      "listingTitle": "제목",
+      "description": "설명",
+      "price": "가격",
+      "category": "카테고리",
+      "condition": "상태",
+      "size": "사이즈",
+      "brand": "브랜드",
+      "photos": "사진",
+      "publish": "게시",
+      "saveDraft": "임시 저장",
+      "saved": "저장됨",
+      "details": "상세 정보",
+      "priceAndCondition": "가격 및 상태",
+      "required": "필수",
+      "optional": "선택",
+      "addPhotosTitle": "시작하려면 사진을 추가하세요",
+      "addPhotosSubtitle": "조명이 좋은 여러 각도의 사진이 더 빨리 팔립니다.",
+      "photoTips": "사진 팁",
+      "photoTipsMin": "최소 3장 권장",
+      "photoTipLighting": "좋은 조명",
+      "photoTipAngles": "모든 각도 표시",
+      "photoTipBackground": "자연스러운 배경",
+      "titlePlaceholder": "예: 빈티지 리바이스 501 데님 재킷",
+      "descriptionHelper": "구매자가 이 상품을 찾을 수 있도록 더 자세히 설명하세요",
+      "suggestedDetails": "추천 상세 정보",
+      "applyToEmptyFields": "빈 필드에 적용",
+      "startingBid": "시작 입찰가",
+      "reservePriceOptional": "예약가 (선택)",
+      "duration": "기간",
+      "totalValuation": "총 평가액",
+      "originalPriceHelper": "가치를 보여주기 위해 원래 가격을 추가하세요",
+      "readyToPublish": "게시할 준비가 되었습니다",
+      "bulkList": "대량 등록",
+      "inventory": "재고",
+      "hub": "허브",
+      "tapToSet": "탭하여 설정"
+    },
+    "detail": {
+      "addToCart": "장바구니에 추가",
+      "buyNow": "지금 구매",
+      "makeOffer": "제안하기",
+      "seller": "판매자",
+      "itemCondition": "상태",
+      "itemSize": "사이즈",
+      "itemBrand": "브랜드",
+      "postedOn": "{{date}}에 게시됨",
+      "addedToWishlist": "위시리스트에 추가됨",
+      "priceDropAlertsEnabled": "이 상품의 가격 인하 알림이 활성화되었습니다",
+      "priceDropAlertsDisabled": "가격 인하 알림이 비활성화되었습니다",
+      "couldNotUpdatePriceAlert": "가격 알림을 업데이트할 수 없습니다. 다시 시도하세요.",
+      "browseSimilar": "유사한 상품 둘러보기",
+      "manageListing": "리스팅 관리"
+    }
+  },
+  "messaging": {
+    "compose": {
+      "placeholder": "메시지...",
+      "send": "전송",
+      "attach": "첨부",
+      "attachPhoto": "사진",
+      "attachCamera": "카메라",
+      "inputAccessibility": "메시지 입력",
+      "dismissSafetyWarning": "안전 경고 닫기",
+      "dismissCautionWarning": "주의 경고 닫기",
+      "removeAttachment": "첨부 파일 제거",
+      "addAttachment": "첨부 파일 추가",
+      "openCamera": "카메라 열기",
+      "quickReply": "빠른 답장: {{label}}"
+    },
+    "conversation": {
+      "title": "메시지",
+      "empty": "아직 메시지가 없습니다",
+      "startChatting": "시작하려면 아래에 메시지를 보내세요.",
+      "startConversation": "대화 시작",
+      "typing": "{{name}}님이 입력 중...",
+      "onlineNow": "지금 온라인",
+      "newMessages": "새 메시지",
+      "undo": "실행 취소",
+      "message": "메시지",
+      "mediaPress": "미디어 누름",
+      "messageSent": "메시지 전송됨",
+      "sending": "전송 중…",
+      "draft": "임시 보관",
+      "ai": "AI",
+      "retryDraft": "탭하여 다시 시도",
+      "sendDraft": "전송",
+      "memberCount": "{{count}}명",
+      "loadError": "메시지를 불러올 수 없습니다. 연결을 확인하고 다시 시도하세요.",
+      "offlineMessage": "오프라인 상태입니다. 다시 연결되면 메시지가 전송됩니다.",
+      "copied": "복사됨",
+      "reportSubmitted": "신고가 접수되었습니다. 감사합니다.",
+      "reportFailed": "신고 접수에 실패했습니다. 다시 시도해 주세요.",
+      "exitSelectionMode": "선택 모드 종료",
+      "exitSelectionModeHint": "메시지 선택 툴바를 닫습니다",
+      "deleteSelected": "선택한 메시지 삭제",
+      "deleteSelectedHint": "이 대화에서 선택한 메시지를 영구적으로 삭제합니다",
+      "undoMessageDeletion": "메시지 삭제 실행 취소",
+      "reactWith": "{{emoji}}로 반응",
+      "openLink": "{{domain}} 링크 열기",
+      "typingIndicator": "입력 중..."
+    },
+    "inbox": {
+      "primary": "기본",
+      "buying": "구매",
+      "selling": "판매",
+      "tabBadge": "{{label}} 탭{{plural}}",
+      "newBadge": ", {{count}}개 신규",
+      "openConversation": "{{title}} 열기",
+      "performAction": "{{action}} {{title}}",
+      "performSecondaryAction": "{{action}} {{title}}",
+      "linkedListing": "연결된 리스팅: {{title}}, {{price}}, {{availability}}",
+      "listingHint": "리스팅 상세 페이지를 엽니다",
+      "scrollToBottom": "맨 아래로 스크롤{{unread}}",
+      "scrollToBottomHint": "최신 메시지로 스크롤합니다",
+      "unread": ", {{count}}개 안 읽음"
+    },
+    "requests": {
+      "title": "메시지 요청",
+      "noRequests": "메시지 요청이 없습니다",
+      "noRequestsSubtitle": "팔로우하지 않은 사람의 메시지가 여기에 표시됩니다.",
+      "acceptMessageRequest": "메시지 요청 수락",
+      "deleteMessageRequest": "메시지 요청 삭제",
+      "deleteConfirmationTitle": "요청을 삭제하시겠습니까?",
+      "deleteConfirmationMessage": "요청이 삭제됩니다. 상대방은 나중에 다시 메시지를 보낼 수 있습니다.",
+      "blockConfirmationTitle": "{{name}}님을 차단하시겠습니까?",
+      "blockConfirmationMessage": "상대방은 메시지를 보내거나 회원님의 프로필을 볼 수 없게 됩니다. 요청은 삭제됩니다.",
+      "accepted": "요청 수락됨",
+      "acceptError": "이 요청을 수락할 수 없습니다. 연결을 확인하고 다시 시도하세요.",
+      "deleted": "요청 삭제됨",
+      "deleteError": "이 요청을 삭제할 수 없습니다. 연결을 확인하고 다시 시도하세요.",
+      "blockError": "이 계정을 차단할 수 없습니다. 연결을 확인하고 다시 시도하세요.",
+      "reportError": "이 계정은 여기서 신고할 수 없습니다.",
+      "blocked": "{{name}}님 차단됨"
+    },
+    "archived": {
+      "title": "보관된 대화",
+      "subtitle": "복원된 대화는 받은편지함으로 돌아갑니다",
+      "noArchived": "보관된 대화가 없습니다",
+      "noArchivedSubtitle": "보관된 대화는 삭제되지 않고 받은편지함에서 제외됩니다.",
+      "clearAllConversations": "모든 보관 대화 지우기",
+      "removeConfirmationTitle": "받은편지함에서 제거하시겠습니까?",
+      "removeConfirmationMessage": "\"{{title}}\"이(가) 보관된 대화에서 제거됩니다.",
+      "clearAllConfirmationTitle": "모든 보관 대화를 지우시겠습니까?",
+      "clearAllConfirmationMessage": "모든 보관된 대화가 영구적으로 삭제됩니다.",
+      "restored": "대화가 받은편지함으로 복원됨",
+      "restoreError": "이 대화를 복원할 수 없습니다. 연결을 확인하고 다시 시도하세요.",
+      "removed": "대화 제거됨",
+      "removeError": "이 대화를 삭제할 수 없습니다. 연결을 확인하고 다시 시도하세요.",
+      "cleared": "보관함 비워짐",
+      "clearError": "{{deleted}}개 삭제됨 · {{failed}}개 실패"
+    },
+    "muted": {
+      "title": "알림이 꺼진 대화",
+      "subtitle": "이 채팅의 알림이 일시 중지됩니다",
+      "noMuted": "알림이 꺼진 대화가 없습니다",
+      "noMutedSubtitle": "알림을 끈 채팅이 없습니다. 알림을 끈 대화가 여기에 표시됩니다.",
+      "unmute": "알림 켜기",
+      "unmuteError": "이 대화의 알림을 켤 수 없습니다. 연결을 확인하고 다시 시도하세요."
+    },
+    "sharedMedia": {
+      "title": "공유된 미디어",
+      "noMedia": "아직 공유된 미디어가 없습니다",
+      "noMediaSubtitle": "이 대화에서 공유된 사진과 동영상이 여기에 표시됩니다.",
+      "videoThumbnail": "동영상 썸네일",
+      "deleteSelected": "선택한 미디어 삭제",
+      "summary": "사진 {{photoCount}}장{{photoPlural}} · 동영상 {{videoCount}}개{{videoPlural}}",
+      "selectItem": "{{action}} {{type}}",
+      "select": "선택",
+      "deselect": "선택 해제",
+      "photo": "사진",
+      "video": "동영상",
+      "selectedCount": "{{count}}개 선택됨",
+      "removeSelectedHint": "선택한 {{count}}개 항목 제거{{plural}}",
+      "filter": "{{label}} 필터"
+    },
+    "attachments": {
+      "reviewTitle": "첨부 파일 검토",
+      "cancelAttachment": "첨부 취소",
+      "captionPlaceholder": "캡션 추가...",
+      "captionAccessibility": "첨부 파일 캡션",
+      "sendAttachment": "첨부 파일 전송",
+      "actionSheetTitle": "첨부",
+      "actionSheetSubtitle": "이 채팅에서 사진과 동영상 공유",
+      "photoAndVideo": "사진 및 동영상",
+      "chooseFromLibrary": "라이브러리에서 선택",
+      "camera": "카메라",
+      "takePhotoOrVideo": "새 사진 또는 동영상 촬영",
+      "makeOffer": "제안하기",
+      "product": "상품",
+      "priceQuote": "가격 견적",
+      "shareListing": "리스팅 공유",
+      "orderStatus": "주문 상태",
+      "payment": "결제",
+      "agent": "에이전트"
+    },
+    "offers": {
+      "declineOffer": "제안 거절",
+      "counterOffer": "카운터 제안",
+      "acceptOffer": "제안 수락",
+      "declined": "거절됨",
+      "accepted": "수락됨",
+      "expired": "만료됨",
+      "waitingForResponse": "응답 대기 중",
+      "pass": "통과",
+      "counter": "카운터",
+      "accept": "수락",
+      "verified": "인증됨",
+      "verifiedSystemUpdate": "인증 시스템 업데이트",
+      "counterRound": "카운터 #{{round}}",
+      "expiresIn": "{{time}} 후 만료"
+    },
+    "agentPicker": {
+      "title": "AI 에이전트 추가",
+      "sheet": "AI 에이전트 추가 시트",
+      "connect": "이 채팅에서 도움을 줄 어시스턴트 연결",
+      "demoNotice": "데모 어시스턴트는 모의 답장을 제안합니다",
+      "noAgents": "사용 가능한 에이전트가 없습니다",
+      "noAgentsBody": "에이전트 화면에서 에이전트를 만들어 시작하세요.",
+      "loading": "배포된 에이전트 불러오는 중…",
+      "loadError": "에이전트를 불러올 수 없습니다",
+      "loadErrorBody": "서버에 연결할 수 없습니다. 당겨서 다시 시도하세요.",
+      "noAgentsDeployed": "배포된 에이전트가 없습니다",
+      "noAgentsDeployedBody": "에이전트 화면에서 이 대화에 에이전트를 설치하세요.",
+      "addAssistant": "어시스턴트 추가",
+      "addAssistantDescription": "이 채팅에 AI 어시스턴트 배포",
+      "addAgent": "{{name}} 에이전트 추가",
+      "alreadyAdded": "{{name}} 이미 추가됨",
+      "openManagement": "에이전트 관리 열기",
+      "activeOne": "{{name}} 활성 중. 탭하여 에이전트를 관리하세요.",
+      "activeMany": "{{count}}개 에이전트 활성 중. 탭하여 에이전트를 관리하세요.",
+      "activeShortOne": "{{name}} 활성",
+      "activeShortMany": "{{count}}개 에이전트 활성",
+      "retryDraft": "에이전트 임시 보관 메시지 다시 전송",
+      "sendDraft": "에이전트 임시 보관 메시지 전송"
+    },
+    "suggestedReplies": {
+      "title": "추천 답장",
+      "titleFrom": "{{agentName}}의 추천 답장",
+      "use": "추천 답장 사용: {{reply}}",
+      "fill": "이 답장으로 메시지 입력을 채웁니다",
+      "dismiss": "추천 답장 닫기",
+      "dismissHint": "이 대화의 추천 답장을 숨깁니다",
+      "manage": "답장 관리"
+    },
+    "voice": {
+      "notAvailable": "음성 메시지를 사용할 수 없습니다",
+      "notSupportedHint": "이 빌드에서는 오디오 녹음이 지원되지 않습니다",
+      "micPermission": "마이크 권한이 거부되었습니다. 탭하여 권한을 요청하세요.",
+      "deleteRecording": "녹음 삭제하고 다시 시작",
+      "readyToSend": "전송 준비됨",
+      "sendVoice": "음성 메시지 전송",
+      "sendVoiceHint": "녹음을 전송합니다. 취소할 수 없습니다.",
+      "stopRecording": "녹음 중지 및 검토",
+      "stopRecordingHint": "탭하여 녹음을 종료하세요. 전송 전에 검토하세요.",
+      "cancelRecording": "녹음 취소 및 삭제",
+      "recordVoice": "음성 메시지 녹음",
+      "recordVoiceHint": "탭하여 녹음을 시작하세요. 전송 전에 중지하여 검토하세요.",
+      "voiceMessage": "음성 메시지, {{duration}} 길이{{state}}",
+      "playbackSpeed": "재생 속도 {{rate}}배",
+      "playHint": "두 번 탭하여 재생 또는 일시 정지하세요. 이동, 속도 변경 또는 전사 요청 작업을 사용하세요.",
+      "loadError": "음성을 불러올 수 없습니다"
+    },
+    "transcription": {
+      "show": "이 음성 메시지의 전사 표시",
+      "showHint": "자동 전사를 요청합니다. 이 텍스트는 파생된 것으로, 발신자의 실제 단어가 아닙니다.",
+      "title": "전사",
+      "notAvailable": "이 오디오 형식은 전사할 수 없습니다",
+      "close": "전사 닫기",
+      "failed": "전사 실패",
+      "temporarilyUnavailable": "일시적으로 사용할 수 없음",
+      "retryTranscription": "전사 다시 시도",
+      "requesting": "전사 요청 중…",
+      "transcribing": "오디오 전사 중…",
+      "empty": "(빈 전사)",
+      "derivedLabel": "자동 전사됨",
+      "accurate": "전사를 정확함으로 표시",
+      "inaccurate": "전사를 부정확함으로 표시",
+      "loadError": "전사를 불러올 수 없습니다"
+    },
+    "orders": {
+      "placed": "주문 완료",
+      "placedBody": "판매자에게 알림이 전송되었습니다.",
+      "paymentConfirmed": "결제 확인됨",
+      "paymentConfirmedBody": "결제가 처리되었습니다.",
+      "shipped": "주문 발송됨",
+      "shippedBody": "소포가 발송되었습니다.",
+      "inTransit": "배송 중",
+      "inTransitBody": "소포가 배송 중입니다.",
+      "delivered": "배송 완료",
+      "deliveredBody": "배송이 확인되었습니다.",
+      "cancelled": "주문 취소됨",
+      "cancelledBody": "이 주문이 취소되었습니다.",
+      "refunded": "환불됨",
+      "refundedBody": "결제금이 환불되었습니다.",
+      "orderPreview": "{{title}}. {{subtitle}}. {{orderId}}. {{timestamp}}. 탭하여 주문 상세를 보세요.",
+      "viewDetails": "상세 보기",
+      "dispatchItem": "상품 발송",
+      "trackParcel": "소포 추적",
+      "checkItem": "상품 확인",
+      "viewOrder": "주문 보기",
+      "shipBy": "{{date}}까지 발송",
+      "eta": "예정 {{window}}",
+      "etaWindow": "{{min}}–{{max}}일",
+      "etaDay": "{{count}}일",
+      "orderStatusAccessibility": "주문 {{status}}{{deadline}}{{cta}}"
+    },
+    "safety": {
+      "title": "ThryftVerse 내에서 결제하세요",
+      "body": "플랫폼 외 결제는 구매자 보호의 적용을 받지 않습니다. 정상적인 거래라면 보호를 받을 수 있도록 앱 내에서 완료하세요.",
+      "dismiss": "경고 닫기",
+      "reportConversation": "이 대화 신고"
+    },
+    "search": {
+      "placeholder": "채팅에서 검색",
+      "inConversation": "대화에서 검색",
+      "previousResult": "이전 결과",
+      "nextResult": "다음 결과",
+      "closeSearch": "검색 닫기",
+      "browseResults": "둘러보기에서 결과 보기",
+      "browseResultsHint": "일치하는 필터를 적용하여 둘러보기 화면을 엽니다",
+      "refine": "검색 세분화: {{suggestion}}",
+      "refineHint": "이 세분화를 검색에 추가합니다",
+      "searchFor": "{{suggestion}} 검색",
+      "startQueryHint": "이 쿼리로 대화형 검색을 시작합니다",
+      "queryInput": "검색 쿼리 입력",
+      "queryInputHint": "찾고자 하는 항목을 자연어로 입력하세요",
+      "sendQuery": "검색 쿼리 전송",
+      "sendQueryHint": "쿼리를 전송하고 대화형 검색을 시작합니다",
+      "retry": "검색 다시 시도",
+      "retryHint": "마지막 검색 쿼리를 다시 전송합니다"
+    },
+    "common": {
+      "cancel": "취소",
+      "goBack": "뒤로 가기",
+      "verifiedUser": "인증된 사용자",
+      "retry": "다시 시도",
+      "delete": "삭제",
+      "block": "차단",
+      "report": "신고",
+      "remove": "제거",
+      "clearAll": "모두 지우기",
+      "restore": "복원",
+      "blockWithName": "{{name}} 차단",
+      "reportWithName": "{{name}} 신고"
+    },
+    "messageActions": {
+      "dismissReply": "답장 닫기",
+      "scrollToOriginal": "원본 메시지로 스크롤",
+      "quotedReply": "{{sender}}님의 인용 답장"
+    },
+    "translation": {
+      "translate": "번역",
+      "showOriginal": "원문 보기",
+      "translating": "번역 중...",
+      "translationFailed": "번역을 사용할 수 없습니다",
+      "translatedFrom": "{{language}}에서 번역"
+    }
+  },
+  "commerce": {
+    "checkout": {
+      "title": "결제",
+      "subtotal": "소계",
+      "shipping": "배송비",
+      "tax": "세금",
+      "total": "총액",
+      "payNow": "지금 결제",
+      "paymentMethod": "결제 수단",
+      "deliveryAddress": "배송 주소",
+      "orderPlaced": "주문 완료",
+      "orderFailed": "주문 실패",
+      "signInToCheckout": "결제하려면 로그인하세요",
+      "signIn": "로그인",
+      "cannotPurchaseOwnListing": "본인의 상품은 구매할 수 없습니다",
+      "cannotBuyOwnItem": "판매 등록한 상품은 직접 구매할 수 없습니다.",
+      "itemUnavailable": "상품을 사용할 수 없습니다",
+      "listingNoLongerPurchasable": "이 상품은 더 이상 구매할 수 없습니다.",
+      "goBack": "뒤로",
+      "delivery": "배송",
+      "noAddress": "주소 없음",
+      "change": "변경",
+      "add": "추가",
+      "noPaymentMethod": "결제 수단 없음",
+      "requiredForDelivery": "배송에 필요",
+      "needsSavingBeforePayment": "결제 전 저장 필요",
+      "shippingNotAvailable": "해당 지역은 배송 불가능합니다",
+      "cardsUnavailableRegion": "해당 지역은 카드 결제가 불가능합니다",
+      "securePayment": "안전 결제 · 카드 정보 암호화",
+      "useWalletBalance": "지갑 잔액 사용",
+      "available": "사용 가능",
+      "retryPayment": "결제 재시도",
+      "tryAgain": "다시 시도",
+      "addAddress": "주소 추가",
+      "addPayment": "결제 수단 추가",
+      "item": "상품",
+      "buyerProtection": "구매자 보호",
+      "walletApplied": "지갑 적용됨",
+      "viewFullBreakdown": "전체 내역 보기",
+      "fullBreakdown": "전체 내역",
+      "payWithApplePay": "Apple Pay로 결제",
+      "payWithGooglePay": "Google Pay로 결제",
+      "payWithCard": "카드로 결제",
+      "processing": "처리 중",
+      "waitingForConfirmation": "확인 대기 중",
+      "savingWithWallet": "지갑 잔액으로 {{amount}} 절약",
+      "shippingQuoteUnavailable": "배송 견적 불가 — 기본 배송으로 진행합니다.",
+      "addDeliveryAddressToContinue": "계속하려면 배송 주소를 추가하세요.",
+      "addPaymentMethodToContinue": "계속하려면 결제 수단을 추가하세요.",
+      "estimated": "예상",
+      "tracking": "배송 조회",
+      "closeCheckout": "결제 닫기",
+      "paymentInProgress": "결제 진행 중",
+      "paymentInProgressBody": "페이지를 벗어나도 결제 확인이 완료될 수 있습니다. 다시 시도하기 전에 주문 내역을 확인하세요.",
+      "stay": "머무르기",
+      "leave": "나가기"
+    },
+    "offer": {
+      "makeOffer": "제안하기",
+      "offerAmount": "제안 금액",
+      "submitOffer": "제안 보내기",
+      "offerAccepted": "제안 수락됨",
+      "offerDeclined": "제안 거절됨",
+      "offerExpired": "제안 만료됨"
+    },
+    "bid": {
+      "placeBid": "입찰하기",
+      "currentBid": "현재 입찰가",
+      "yourBid": "내 입찰가",
+      "bidPlaced": "입찰 완료",
+      "outbid": "경쟁 입찰에 밀렸습니다",
+      "winning": "선두"
+    },
+    "wallet": {
+      "title": "지갑",
+      "balance": "잔액",
+      "spendableNow": "지금 사용 가능",
+      "withdraw": "출금",
+      "withdrawAmount": "출금 금액",
+      "withdrawSuccess": "출금 요청됨",
+      "withdrawFailed": "출금 실패",
+      "addMoney": "충전",
+      "transactionHistory": "거래 내역",
+      "convert": "환전",
+      "recentActivity": "최근 활동",
+      "seeAll": "전체 보기",
+      "noBalanceYet": "아직 1ZE가 없습니다",
+      "addMoneyToStart": "Co-Own 유닛 거래를 시작하려면 충전하세요.",
+      "authenticateToView": "지갑을 보려면 인증하세요",
+      "showBalance": "잔액 표시",
+      "hideBalance": "잔액 숨기기",
+      "balanceHidden": "잔액 숨김",
+      "reservedForOrders": "주문에 예약됨",
+      "redemptionPending": "청구 대기 중",
+      "otherHolds": "기타 보류",
+      "pendingDeposit": "입금 대기 중",
+      "unsettledSaleProceeds": "정산되지 않은 판매 대금",
+      "withdrawable": "출금 가능",
+      "sellerEarnings": "판매자 수익",
+      "safeguarded": "보호됨",
+      "safeguardingPending": "보호 대기 중",
+      "evidence": "증거",
+      "terms": "약관",
+      "activity": "활동"
+    },
+    "order": {
+      "title": "주문",
+      "orderNumber": "주문 #{{number}}",
+      "statusPending": "대기 중",
+      "statusProcessing": "처리 중",
+      "statusShipped": "배송 중",
+      "statusDelivered": "배송 완료",
+      "statusCancelled": "취소됨",
+      "statusRefunded": "환불됨"
+    }
+  },
+  "myProfile": {
+    "cover": {
+      "uploadFailed": "커버 업로드 실패",
+      "retry": "재시도",
+      "cancel": "취소"
+    },
+    "utility": {
+      "orders": "주문",
+      "analytics": "분석",
+      "closet": "옷장",
+      "wallet": "지갑",
+      "auctions": "경매",
+      "coOwn": "공동소유",
+      "sellerHub": "판매자 허브",
+      "itemsCount": "상품 {{count}}개",
+      "assetsCount": "자산 {{count}}개"
+    },
+    "notSignedIn": {
+      "subtitle": "프로필, 상품, 지갑을 보려면 로그인하세요.",
+      "signIn": "로그인"
+    },
+    "holiday": {
+      "title": "휴일 모드 켜짐",
+      "subtitle": "쇼핑이 일시 중지되었습니다. 관리하려면 탭하세요."
+    },
+    "tabs": {
+      "shop": "샵",
+      "looks": "룩",
+      "about": "소개",
+      "reviews": "리뷰"
+    },
+    "listings": {
+      "emptyTitle": "첫 상품 등록하기",
+      "emptyBody": "상품을 촬영하고 준비되면 등록하세요.",
+      "startSelling": "판매 시작",
+      "bringOverListings": "기존 상품 가져오기",
+      "viewAll": "전체 보기",
+      "sold": "판매완료",
+      "listingsCount": "상품 {{count}}개"
+    },
+    "looks": {
+      "errorTitle": "룩을 불러올 수 없습니다",
+      "errorSubtitle": "연결을 확인하고 다시 시도하세요.",
+      "tryAgain": "다시 시도",
+      "emptyTitle": "아직 룩이 없습니다",
+      "emptySubtitle": "첫 룩을 만들어 나만의 스타일을 보여주세요.",
+      "createLook": "룩 만들기"
+    },
+    "about": {
+      "coOwnPortfolio": "공동소유 포트폴리오",
+      "viewAll": "전체 보기",
+      "unit": "유닛",
+      "units": "유닛",
+      "website": "웹사이트",
+      "shopPolicies": "샵 정책",
+      "payments": "결제",
+      "paymentsValue": "구매자 보호와 함께 안전 결제",
+      "shipping": "배송",
+      "shippingSeller": "판매자 {{label}}. 발송 시 배송 조회 제공.",
+      "shippingDefault": "발송 시 배송 조회 제공.",
+      "returns": "반품",
+      "returnsValue": "상품 설명과 다른 경우 반품 가능.",
+      "responseRate": "응답률",
+      "response": "응답",
+      "responseSeller": "판매자는 보통 {{label}}에 답변합니다.",
+      "responseDefault": "판매자는 신속하게 응답합니다.",
+      "noDetails": "추가 정보가 없습니다."
+    },
+    "completion": {
+      "title": "프로필 완성하기",
+      "progress": "{{percent}}% · {{done}}/{{total}}"
+    },
+    "growth": {
+      "title": "Thryftverse에서 성장하기",
+      "listFirstItemTitle": "첫 상품 등록하기",
+      "listFirstItemSub": "상품을 촬영하고 등록하여 판매를 시작하세요.",
+      "growAudienceTitle": "팬층 키우기",
+      "growAudienceSub": "프로필을 공유하고 콘텐츠를 만들어 팔로워를 모으세요."
+    },
+    "toast": {
+      "coverUpdated": "커버 업데이트됨",
+      "coverUploadFailed": "커버 업로드 실패",
+      "avatarUpdated": "아바타 업데이트됨",
+      "avatarUploadFailed": "아바타 업로드 실패",
+      "portfolioLoadFailed": "포트폴리오를 불러올 수 없습니다"
+    },
+    "accessibility": {
+      "orders": "주문",
+      "creatorAnalytics": "크리에이터 분석",
+      "closet": "옷장",
+      "wallet": "지갑",
+      "browseAuctions": "경매 둘러보기",
+      "browseCoOwnMarket": "공동소유 시장 둘러보기",
+      "sellerHub": "판매자 허브",
+      "openSettings": "설정 열기",
+      "openSettingsHint": "설정을 엽니다",
+      "shareProfile": "프로필 공유",
+      "shareProfileHint": "시스템 공유 시트를 열어 프로필을 공유합니다",
+      "retryCoverUpload": "커버 업로드 재시도",
+      "cancelCoverChange": "커버 변경 취소",
+      "uploadingCover": "프로필 커버 업로드 중",
+      "changeCover": "프로필 커버 변경",
+      "holidayMode": "휴일 모드 켜짐 — 관리하려면 탭하세요",
+      "importListingsHint": "eBay 또는 파일에서 카탈로그 가져오기 시작",
+      "loadingLooks": "룩 불러오는 중",
+      "viewCoOwnPortfolio": "공동소유 포트폴리오 보기",
+      "viewCoOwnPortfolioHint": "공동소유 보유 허브를 엽니다",
+      "dismissCompletion": "프로필 완성 알림 닫기",
+      "dismissGrowth": "성장 알림 닫기",
+      "listFirstItemHint": "첫 상품을 만들기 위해 판매 플로우를 엽니다",
+      "growAudienceHint": "팬층 성장 도구와 함께 크리에이터 분석을 엽니다"
+    },
+    "completionCta": {
+      "addName": "이름 추가",
+      "addBio": "소개 추가",
+      "addPhoto": "사진 추가",
+      "addCover": "커버 추가",
+      "editProfile": "프로필 수정"
+    },
+    "share": {
+      "message": "Thryftverse에서 @{{username}}님을 확인하세요! https://thryftverse.com/@{{username}}",
+      "title": "Thryftverse의 {{name}}님"
+    }
+  },
+  "galleria": {
+    "editorial": {
+      "eyebrow": "에디토리얼"
+    },
+    "collections": {
+      "eyebrow": "엄선 컬렉션",
+      "curatedBy": "{{curator}}님이 엄선"
+    },
+    "assets": {
+      "eyebrow": "추천 자산",
+      "title": "공동소유 하이라이트"
+    },
+    "editorialList": {
+      "eyebrow": "에디토리얼",
+      "title": "갤러리아의 이야기"
+    },
+    "creativeTools": {
+      "eyebrow": "크리에이티브 도구",
+      "title": "나만의 것으로 만들기",
+      "posterStudio": "포스터 스튜디오",
+      "posterStudioSub": "포스터, 룩, 무드보드 콜라주 만들기"
+    },
+    "demo": {
+      "content": "데모 콘텐츠"
+    },
+    "offline": {
+      "banner": "오프라인 — 캐시된 갤러리아 콘텐츠 표시 중"
+    },
+    "error": {
+      "title": "갤러리아를 사용할 수 없습니다",
+      "retry": "재시도",
+      "loadFailed": "갤러리아를 불러올 수 없습니다. 다시 시도하세요."
+    },
+    "empty": {
+      "title": "갤러리아 준비 중",
+      "subtitle": "큐레이터가 새 컬렉션과 에디토리얼을 준비 중입니다. 곧 다시 확인하세요.",
+      "refresh": "새로고침"
+    },
+    "accessibility": {
+      "loadingCollections": "엄선 컬렉션 불러오는 중",
+      "collectionsRail": "엄선 컬렉션 레일",
+      "openPosterStudio": "포스터 스튜디오 열기",
+      "posterStudioHint": "포스터, 룩, 무드보드 콜라주 만들기",
+      "editorial": "에디토리얼: {{title}}",
+      "collection": "컬렉션: {{title}}",
+      "collectionHint": "컬렉션 상세를 엽니다",
+      "featuredCollection": "추천 컬렉션: {{title}}",
+      "asset": "{{title}}, 가치 {{value}}",
+      "assetHint": "자산 상세를 엽니다"
+    }
+  },
+  "agentLedger": {
+    "header": {
+      "title": "에이전트 실행",
+      "subtitle": "서버 기반 실행 기록"
+    },
+    "status": {
+      "succeeded": "성공",
+      "failed": "실패",
+      "running": "실행 중",
+      "queued": "대기 중",
+      "cancelled": "취소됨",
+      "timedOut": "시간 초과",
+      "unknown": "알 수 없음",
+      "awaitingApproval": "승인 대기 중",
+      "awaitingInput": "입력 대기 중"
+    },
+    "error": {
+      "title": "실행 기록을 불러올 수 없습니다",
+      "retry": "재시도",
+      "loadFailed": "실행 기록 불러오기 실패"
+    },
+    "empty": {
+      "title": "아직 에이전트 실행 기록이 없습니다",
+      "body": "에이전트가 멘션, 명령 또는 일정을 통해 실행되면 상태, 토큰 사용량, 시간과 함께 여기에 표시됩니다."
+    },
+    "footer": {
+      "note": "이전에 표시된 로컬 활동 로그가 서버 기반 실행 기록으로 대체되었습니다."
+    },
+    "approvals": {
+      "title": "승인 대기 중",
+      "approving": "승인 중…",
+      "approve": "승인",
+      "approveAction": "{{botName}}의 요청 승인",
+      "rejecting": "거절 중…",
+      "reject": "거절",
+      "rejectAction": "{{botName}}의 요청 거절",
+      "errorApproveTitle": "승인할 수 없습니다",
+      "errorApproveMessage": "요청을 승인할 수 없습니다.",
+      "errorRejectTitle": "거절할 수 없습니다",
+      "errorRejectMessage": "요청을 거절할 수 없습니다."
+    },
+    "cancel": {
+      "cancelling": "취소 중…",
+      "cancel": "취소",
+      "cancelAction": "{{botName}}의 실행 취소",
+      "confirmTitle": "에이전트 실행 취소",
+      "confirmMessage": "{{botName}}의 실행을 취소하시겠습니까?",
+      "confirmLabel": "실행 취소",
+      "errorTitle": "취소할 수 없습니다",
+      "errorMessage": "실행을 취소할 수 없습니다."
+    },
+    "tools": {
+      "search": "검색: {{searchQuery}}",
+      "listing": "상품: {{listingId}}",
+      "priceHistory": "가격 기록: {{searchQuery}}",
+      "readMessages": "메시지 {{count}}개 읽음"
+    },
+    "time": {
+      "justNow": "방금 전",
+      "minutesAgo": "{{count}}분 전",
+      "hoursAgo": "{{count}}시간 전",
+      "daysAgo": "{{count}}일 전"
+    },
+    "tokens": {
+      "usage": "입력 {{input}} · 출력 {{output}}"
+    }
+  },
+  "liveStreamViewer": {
+    "lotStatus": {
+      "comingUp": "진행 예정",
+      "openForBidding": "입찰 진행 중",
+      "closingSoon": "곧 마감!",
+      "sold": "£{{price}}에 낙찰",
+      "passed": "유찰 (최저가 미달)",
+      "cancelled": "취소됨"
+    },
+    "toast": {
+      "couldNotSend": "메시지를 보낼 수 없습니다",
+      "bidFailed": "입찰 실패",
+      "bidNotAccepted": "입찰이 수락되지 않았습니다",
+      "stillChecking": "확인 중 — 입찰이 처리되었을 수 있습니다",
+      "purchaseComplete": "구매 완료 — 받은편지함을 확인하세요",
+      "couldNotPurchase": "구매를 완료할 수 없습니다",
+      "followDemoUnavailable": "데모 모드에서는 팔로우할 수 없습니다",
+      "followUnavailable": "팔로우할 수 없습니다",
+      "unfollowed": "팔로우 취소됨",
+      "following": "팔로잉",
+      "followError": "팔로우 상태를 업데이트할 수 없습니다",
+      "checkoutError": "결제를 시작할 수 없습니다. 다시 시도하세요."
+    },
+    "share": {
+      "message": "ThryftVerse에서 {{sellerName}}님의 라이브 스트림 시청하기",
+      "defaultSeller": "이 판매자"
+    },
+    "connecting": {
+      "title": "스트림 연결 중",
+      "subtitle": "실시간 연결 설정 중"
+    },
+    "error": {
+      "title": "스트림에 연결할 수 없습니다",
+      "subtitle": "스트림이 종료되었거나 연결이 끊겼을 수 있습니다.",
+      "reconnect": "재연결",
+      "goBack": "뒤로"
+    },
+    "ended": {
+      "title": "스트림 종료",
+      "subtitle": "시청해주셔서 감사합니다",
+      "viewers": "시청자",
+      "lotsSold": "낙찰 건수",
+      "totalSales": "총 판매액",
+      "done": "완료"
+    },
+    "demo": {
+      "label": "데모",
+      "stream": "데모 스트림"
+    },
+    "video": {
+      "connecting": "스트림 연결 중..."
+    },
+    "seller": {
+      "following": "팔로잉",
+      "follow": "팔로우"
+    },
+    "live": {
+      "label": "라이브"
+    },
+    "chat": {
+      "seller": "판매자",
+      "placeholder": "메시지 보내기..."
+    },
+    "product": {
+      "bids": "입찰"
+    },
+    "bid": {
+      "placeBid": "입찰",
+      "buyNow": "구매",
+      "buyNowFull": "즉시 구매",
+      "completeCheckout": "결제 완료"
+    },
+    "bidSheet": {
+      "title": "입찰하기",
+      "currentBid": "현재 입찰가",
+      "minNextBid": "최소 다음 입찰가",
+      "cancel": "취소",
+      "close": "닫기"
+    },
+    "unknown": {
+      "title": "입찰 상태 알 수 없음",
+      "subtitle": "입찰이 처리되었을 수 있습니다. 결과를 확인하지 못했습니다.",
+      "checkResult": "결과 확인",
+      "dismiss": "닫기"
+    }
+  },
+  "liveShopping": {
+    "live": {
+      "label": "라이브",
+      "demo": "데모"
+    },
+    "header": {
+      "title": "라이브"
+    },
+    "sections": {
+      "liveNow": "지금 라이브",
+      "comingUp": "진행 예정",
+      "pastEvents": "지난 이벤트",
+      "streaming": "{{count}}개 스트리밍 중",
+      "scheduled": "{{count}}개 예정",
+      "replays": "다시보기 {{count}}개",
+      "replay_one": "다시보기 {{count}}개",
+      "replay_other": "다시보기 {{count}}개"
+    },
+    "featured": {
+      "currentBid": "현재 입찰가"
+    },
+    "replay": {
+      "justEnded": "방금 종료",
+      "hoursAgo": "{{count}}시간 전",
+      "daysAgo": "{{count}}일 전"
+    },
+    "upcoming": {
+      "waiting": "대기 중",
+      "notified": "알림 설정됨",
+      "notifyMe": "알림 받기",
+      "startingSoon": "곧 시작"
+    },
+    "scheduled": {
+      "inMinutes": "{{minutes}}분 후 · {{time}}",
+      "inHours": "{{hours}}시간 {{minutes}}분 후 · {{time}}",
+      "inDays": "{{day}} · {{time}}"
+    },
+    "noLive": {
+      "text": "현재 라이브 중인 판매자가 없습니다"
+    },
+    "error": {
+      "title": "라이브 세션을 불러올 수 없습니다",
+      "retry": "재시도",
+      "subtitle": "연결을 확인하고 다시 시도하세요.",
+      "loadFailed": "라이브 세션 불러오기 실패"
+    },
+    "empty": {
+      "title": "현재 라이브 세션이 없습니다",
+      "subtitle": "곧 다시 확인하거나, 판매자 허브에서 세션을 시작하세요.",
+      "goToSellerHub": "판매자 허브로 이동"
+    }
+  },
+  "conversationalSearch": {
+    "header": {
+      "title": "ThryftVerse에 물어보기"
+    },
+    "demo": {
+      "banner": "키워드 매칭 — 설명에서 필터를 추출합니다."
+    },
+    "offline": {
+      "banner": "오프라인 상태입니다. 다시 연결하여 검색하세요."
+    },
+    "empty": {
+      "greetingTitle": "오늘 어떤 것을 찾고 계신가요?",
+      "greetingSubtitle": "직접 말로 설명해 주세요.",
+      "suggestionsLabel": "이 중 하나를 시도해 보세요"
+    },
+    "matched": {
+      "label": "매칭된 키워드"
+    },
+    "actions": {
+      "viewResults": "결과 보기",
+      "refine": "다듬기"
+    },
+    "error": {
+      "retry": "다시 시도",
+      "offline": "오프라인 상태입니다. 다시 연결하여 검색하세요.",
+      "generic": "문제가 발생했습니다. 다시 시도하세요."
+    },
+    "input": {
+      "placeholder": "찾고 있는 것을 설명해 주세요…"
+    },
+    "browseTitle": "검색 결과",
+    "filters": {
+      "brand": "브랜드: {{value}}",
+      "category": "카테고리: {{value}}",
+      "size": "사이즈: {{value}}",
+      "condition": "상태: {{value}}",
+      "colour": "색상: {{value}}",
+      "style": "스타일: {{value}}",
+      "priceLabel": "가격: ",
+      "priceUnder": "{{value}} 미만",
+      "priceOver": "{{value}} 초과",
+      "sustainableOnly": "지속가능 항목만"
+    },
+    "trust": {
+      "matchedKeywords": "매칭된 키워드: {{keywords}}",
+      "noMatch": "매칭된 키워드가 없습니다 — 일반 응답을 표시합니다"
+    }
+  },
+  "aiAgent": {
+    "header": {
+      "title": "에이전트 스튜디오",
+      "subtitle": "에이전트, 연결 및 키 관리"
+    },
+    "demo": {
+      "banner": "키는 형식으로만 검증됩니다 — 어떤 제공자에게도 실제 요청이 전송되지 않습니다."
+    },
+    "sections": {
+      "yourAgents": "내 에이전트",
+      "serverConnections": "서버 연결",
+      "deviceLocalKeys": "기기 로컬 키"
+    },
+    "status": {
+      "agents": "개 에이전트",
+      "connections": "연결",
+      "pendingApprovals": "{{count}}개 승인 대기 중",
+      "viewPending": "{{count}}개 승인 대기 보기",
+      "subtitleNone": "에이전트를 생성하고 제공자를 연결하여 시작하세요",
+      "subtitleNoAgents": "제공자를 연결한 후 첫 에이전트를 생성하세요",
+      "subtitleNoConnections": "에이전트 실행을 위해 서버 측 제공자를 연결하세요",
+      "subtitleReady": "에이전트는 연결된 서버 측 키에서 실행됩니다"
+    },
+    "agentStatus": {
+      "draft": "초안",
+      "disabled": "비활성화됨",
+      "setupNeeded": "설정 필요",
+      "published": "게시됨"
+    },
+    "serverConnections": {
+      "hint": "키가 검증되어 서버에 암호화되어 저장됩니다. 에이전트 실행에 사용됩니다.",
+      "connectServerSide": "서버 측 연결",
+      "connectServerSideSub": "키가 검증되어 서버에 암호화되어 저장됩니다.",
+      "empty": "아직 서버 연결이 없습니다. 에이전트를 실행하려면 제공자를 연결하세요."
+    },
+    "deviceLocal": {
+      "note": "검색 전용 — 실행에는 사용되지 않음",
+      "expandedNote": "기기 로컬 키는 모델 검색에만 사용됩니다. 서버 연결이 에이전트 실행을 담당합니다."
+    },
+    "agents": {
+      "empty": "아직 에이전트가 없습니다. 전문 분야, 경계 및 컨텍스트를 부여하여 하나를 생성하세요.",
+      "create": "에이전트 생성",
+      "pauseAll": "모든 에이전트 일시정지",
+      "noSessionsRunning": "실행 중인 에이전트 세션이 없습니다",
+      "sessionsRunning": "{{count}}개 에이전트 세션 실행 중",
+      "activity": "에이전트 활동",
+      "activitySub": "에이전트 작업 및 승인의 로컬 로그"
+    },
+    "connect": {
+      "cancel": "취소",
+      "verifySave": "검증 및 저장",
+      "verifying": "검증 중…",
+      "apiKey": "API 키",
+      "labelOptional": "레이블 (선택)",
+      "baseUrl": "기본 URL (선택, 커스텀 제공자)"
+    },
+    "confirm": {
+      "title": "이 연결을 제거하시겠습니까?",
+      "body": "이 연결을 사용하는 에이전트는 대체 연결을 설정하기 전까지 실행할 수 없습니다.",
+      "cancel": "취소",
+      "remove": "제거",
+      "removing": "제거 중…"
+    },
+    "connection": {
+      "reverify": "재검증",
+      "verifying": "검증 중…",
+      "remove": "제거",
+      "removing": "제거 중…",
+      "verified": "{{time}}에 검증됨",
+      "notVerified": "아직 검증되지 않음",
+      "modelsCount": "{{count}}개 모델",
+      "more": "더보기"
+    },
+    "health": {
+      "healthy": "정상",
+      "failed": "실패",
+      "revoked": "취소됨",
+      "expired": "만료됨",
+      "degraded": "저하됨",
+      "unverified": "미검증"
+    },
+    "providerStatus": {
+      "comingSoon": "곧 제공",
+      "connected": "연결됨",
+      "invalid": "유효하지 않음",
+      "notConnected": "연결되지 않음"
+    },
+    "provider": {
+      "soon": "곧",
+      "comingSoon": "곧 제공 — 이 배포에서는 아직 사용할 수 없습니다.",
+      "modelsAvailable": "{{count}}개 모델 사용 가능",
+      "discoveringModels": "모델 검색 중…",
+      "storedLocally": "로컬에 저장됨 · {{storage}}",
+      "secureStorage": "보안 저장",
+      "deviceStorage": "기기 저장",
+      "disconnect": "연결 해제",
+      "replaceKey": "키 교체",
+      "noKeySaved": "저장된 키가 없습니다. {{name}} 모델을 사용하려면 연결하세요.",
+      "connect": "연결",
+      "availableModels": "사용 가능한 모델",
+      "discoveringFrom": "{{name}}에서 모델 검색 중…",
+      "noModelsReturned": "{{name}}에서 반환된 모델이 없습니다.",
+      "modelsAfterConnect": "{{name}}에서 연결 후 모델이 검색됩니다.",
+      "testing": "테스트 중…",
+      "testSave": "테스트 및 저장"
+    },
+    "toast": {
+      "connectionSaved": "연결이 검증되어 저장되었습니다.",
+      "verifyFailed": "키를 검증할 수 없습니다. 키를 확인하고 다시 시도하세요.",
+      "reverified": "연결이 재검증되었습니다.",
+      "reverifyFailed": "재검증에 실패했습니다.",
+      "removedWithAgents": "제거됨. {{count}}개 에이전트가 업데이트되었습니다.",
+      "connectionRemoved": "연결이 제거되었습니다.",
+      "removeFailed": "연결을 제거할 수 없습니다."
+    },
+    "help": {
+      "title": "에이전트가 할 수 있는 일과 할 수 없는 일",
+      "body": "에이전트는 연결한 제공자 키를 사용하여 답변을 작성하고 대화를 요약합니다. 에이전트는 지갑에 접근하거나 결제를 하거나 부여한 권한 밖에서 행동할 수 없습니다. 서버 측 키는 서버에 암호화되어 저장되며, 기기 로컬 키는 이 기기를 떠나지 않습니다. 각 에이전트 작업은 투명성을 위해 활동 원장에 기록됩니다."
+    }
+  },
+  "algorithm": {
+    "header": {
+      "title": "나의 알고리즘",
+      "subtitle": "피드를 형성하는 신호"
+    },
+    "demo": {
+      "banner": "데모 모드에서 알고리즘 데이터는 예시입니다."
+    },
+    "offline": {
+      "banner": "오프라인 상태입니다. 마지막으로 저장된 프로필을 표시합니다."
+    },
+    "summary": {
+      "activeTopics": "활성 주제",
+      "signals": "신호",
+      "lastUpdated": "최근 업데이트"
+    },
+    "howItWorks": {
+      "title": "작동 방식"
+    },
+    "empty": {
+      "title": "아직 주제가 없습니다",
+      "subtitle": "피드가 일반 인기도를 기반으로 합니다. 아래에서 주제를 추가하여 추천을 형성해 보세요."
+    },
+    "topics": {
+      "title": "피드에 영향을 주는 주제",
+      "caption": "주제를 탭하여 가중치를 조정하거나 제거하세요.",
+      "influenceWeight": "영향 가중치",
+      "removeTopic": "주제 제거",
+      "lockHint": "신뢰 및 회계를 위해 유지됩니다. 피드에 대한 영향을 일시정지할 수 있습니다."
+    },
+    "signals": {
+      "title": "최근 신호",
+      "caption": "피드를 형성한 최근 작업입니다."
+    },
+    "addTopic": {
+      "title": "주제 추가",
+      "caption": "관심 있는 것을 알려주세요.",
+      "placeholder": "예: 빈티지 시계",
+      "addBtn": "주제 추가"
+    },
+    "error": {
+      "title": "알고리즘을 불러올 수 없습니다",
+      "subtitle": "알고리즘 프로필을 가져올 수 없습니다. 연결을 확인하고 다시 시도하세요.",
+      "retry": "다시 시도"
+    }
+  },
+  "aiListing": {
+    "header": {
+      "title": "빠른 등록",
+      "subtitle": "사진 촬영 · 검토 · 게시"
+    },
+    "fields": {
+      "title": "제목",
+      "description": "설명",
+      "category": "카테고리",
+      "brand": "브랜드",
+      "condition": "상태",
+      "price": "가격 (GBP)",
+      "tags": "태그",
+      "materialComposition": "소재 구성",
+      "weight": "무게 (kg)"
+    },
+    "placeholders": {
+      "title": "예: 빈티지 리바이스 501 데님 재킷",
+      "description": "상품을 설명하세요…",
+      "selectCategory": "카테고리 선택",
+      "brand": "브랜드",
+      "selectCondition": "상태 선택",
+      "price": "0.00",
+      "addTag": "태그 추가",
+      "material": "예: 면, 폴리에스터, 울...",
+      "weight": "예: 0.45"
+    },
+    "impact": {
+      "helper": "실제 환경 영향을 계산하는 데 사용됩니다. 선택 사항이지만 권장됩니다."
+    },
+    "preview": {
+      "label": "미리보기",
+      "completeness": "완성도"
+    },
+    "photo": {
+      "cover": "표지",
+      "enhance": "향상",
+      "camera": "카메라",
+      "library": "라이브러리"
+    },
+    "suggestion": {
+      "use": "사용",
+      "suggested": "제안됨"
+    },
+    "picker": {
+      "selectCategory": "카테고리 선택",
+      "selectCondition": "상태 선택"
+    },
+    "empty": {
+      "title": "촬영하여 등록",
+      "body": "위에 사진을 추가하면 제목, 설명, 카테고리 및 가격 범위를 제안합니다. 게시하기 전에 모든 것을 검토하고 편집하세요."
+    },
+    "error": {
+      "retry": "다시 시도"
+    },
+    "toast": {
+      "photoEnhanced": "사진이 향상되었습니다",
+      "photoAccessTitle": "사진 접근 필요",
+      "photoAccessBody": "등록 사진을 추가하려면 사진 접근 권한이 필요합니다.",
+      "pickFailedTitle": "선택 실패",
+      "pickFailedBody": "사진을 선택할 수 없습니다. 다시 시도하세요.",
+      "cameraAccessTitle": "카메라 접근 필요",
+      "cameraAccessBody": "등록 사진을 촬영하려면 카메라 접근 권한이 필요합니다.",
+      "captureFailedTitle": "촬영 실패",
+      "captureFailedBody": "사진을 촬영할 수 없습니다. 다시 시도하세요.",
+      "smartSellSavedPreviewTitle": "스마트 셀 저장됨 (미리보기)",
+      "smartSellSavedPreviewBody": "스마트 셀이 완전히 사용 가능해지면 설정이 활성화됩니다."
+    },
+    "publish": {
+      "publishing": "게시 중…",
+      "reviewPublish": "검토 및 게시",
+      "signInToPublish": "등록을 게시하려면 로그인하세요.",
+      "offline": "오프라인 상태인 것 같습니다. 연결을 확인하고 다시 시도하세요.",
+      "missingFields": "게시하기 전에 최소 한 장의 사진, 제목 및 가격을 추가하세요.",
+      "missingCover": "게시하기 전에 검증된 표지 이미지가 필요합니다.",
+      "failed": "게시에 실패했습니다. 다시 시도하세요."
+    },
+    "accessibility": {
+      "selectCategory": "카테고리 선택",
+      "opensCategoryPicker": "카테고리 선택기 열기",
+      "selectCondition": "상태 선택",
+      "opensConditionPicker": "상태 선택기 열기",
+      "removeTag": "태그 {{tag}} 제거",
+      "removeTagHint": "이 등록에서 태그 {{tag}} 제거",
+      "addTag": "태그 추가",
+      "addTagHint": "이 태그를 등록에 추가",
+      "publishListing": "등록 게시",
+      "publishListingHint": "게시를 위해 등록 제출",
+      "acceptSuggestion": "제안 수락: {{text}}",
+      "acceptSuggestionHint": "이 제안을 필드에 적용",
+      "dismissSuggestion": "제안 닫기",
+      "dismissSuggestionHint": "적용하지 않고 이 제안 숨기기",
+      "removePhoto": "사진 제거",
+      "removePhotoHint": "이 등록에서 사진 제거",
+      "enhancePhoto": "사진 향상",
+      "enhancePhotoHint": "이 등록 이미지를 개선하기 위해 사진 향상 열기",
+      "takePhotoWithCamera": "카메라로 사진 촬영",
+      "takePhotoWithCameraHint": "사진을 촬영하기 위해 카메라 열기",
+      "pickPhotosFromGallery": "갤러리에서 사진 선택",
+      "pickPhotosFromGalleryHint": "사진을 선택하기 위해 갤러리 열기",
+      "loadingSuggestions": "제안 불러오는 중",
+      "loadingSuggestionsHint": "제안이 생성되고 있습니다",
+      "dismissError": "오류 닫기",
+      "dismissErrorHint": "이 오류 메시지 닫기",
+      "retryHint": "실패한 작업 다시 시도",
+      "closePicker": "선택기 닫기",
+      "closePickerHint": "선택기 시트 닫기",
+      "selectOption": "{{option}} 선택",
+      "chooseOption": "선택된 옵션으로 {{option}} 선택"
+    }
+  },
+  "report": {
+    "header": {
+      "title": "신고",
+      "reportAccount": "계정 신고",
+      "reportGroup": "그룹 신고",
+      "reportListing": "등록 신고",
+      "subtitle": "신고는 기밀로 처리됩니다"
+    },
+    "received": {
+      "title": "신고 접수됨",
+      "body": "검토 후 결과를 알려드리겠습니다.",
+      "reportId": "신고 #{{reportId}}",
+      "receivedAt": "{{time}}에 접수됨",
+      "referenceNote": "향후 지원 문의 시 이 번호를 참조하세요.",
+      "blockUser": "이 사용자 차단",
+      "blockedNote": "이 계정은 차단되어 귀하에게 연락할 수 없습니다.",
+      "done": "완료"
+    },
+    "unavailable": {
+      "title": "신고 대상을 사용할 수 없습니다",
+      "body": "이 신고는 유효한 참조 없이 열렸습니다. 제출된 내용이 없습니다.",
+      "goBack": "뒤로 가기"
+    },
+    "submit": {
+      "label": "신고 보내기"
+    },
+    "intro": {
+      "title": "무슨 일이 있었나요?",
+      "body": "문제를 가장 잘 설명하는 이유를 선택하세요. 비밀번호, 결제 정보 또는 기타 민감한 정보를 포함하지 마세요."
+    },
+    "details": {
+      "label": "추가 세부 정보 (선택)",
+      "placeholder": "무슨 일이 있었는지 설명하세요",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "증거 사진 (선택)",
+      "camera": "카메라",
+      "gallery": "갤러리",
+      "count": "{{count}}/3장"
+    },
+    "accessibility": {
+      "blockUser": "이 사용자 차단",
+      "detailsInput": "추가 신고 세부 정보",
+      "evidencePhoto": "증거 사진 {{index}}",
+      "removeEvidencePhoto": "증거 사진 {{index}} 제거",
+      "takeEvidenceCamera": "카메라로 증거 사진 촬영",
+      "chooseEvidenceGallery": "갤러리에서 증거 사진 선택"
+    },
+    "reasons": {
+      "spam": "스팸",
+      "spamDesc": "원치 않는 홍보, 사기 또는 반복 메시지",
+      "harassment": "괴롭힘",
+      "harassmentDesc": "협박, 모욕 또는 표적적 원치 않는 연락",
+      "hateSpeech": "혐오 발언",
+      "hateSpeechDesc": "모욕적 언어, 비인간화 표현 또는 보호 대상 집단에 대한 공격",
+      "counterfeit": "가짜 상품",
+      "counterfeitDesc": "위조 상품 또는 오도하는 정품 주장",
+      "prohibited": "금지된 상품",
+      "prohibitedDesc": "무기, 마약, 야생동물 또는 기타 금지된 카테고리",
+      "offPlatform": "플랫폼 외 요청",
+      "offPlatformDesc": "정책에 위배되어 Thryftverse 외부에서 거래하도록 요청",
+      "scam": "사기 또는 부정행위",
+      "scamDesc": "금융 사기, 피싱 또는 사칭 시도",
+      "misinformation": "오도하는 콘텐츠",
+      "misinformationDesc": "상품에 대한 허위 또는 오도하는 주장",
+      "privacy": "프라이버시 침해",
+      "privacyDesc": "동의 없이 개인정보를 공유",
+      "impersonation": "사칭",
+      "impersonationDesc": "다른 사람인 척 행동",
+      "minorSafety": "미성년자 안전",
+      "minorSafetyDesc": "미성년자를 위험에 빠뜨리는 콘텐츠 또는 행동",
+      "other": "기타",
+      "otherDesc": "운영팀에 무슨 일이 있었는지 알려주세요"
+    },
+    "toast": {
+      "attachUpTo3": "최대 3장까지 사진을 첨부하세요.",
+      "offline": "오프라인 상태인 것 같습니다. 연결을 확인하고 다시 시도하세요.",
+      "allowPhotoAccess": "증거를 업로드하려면 사진 접근을 허용하세요.",
+      "allowCameraAccess": "증거 사진을 촬영하려면 카메라 접근을 허용하세요.",
+      "photosAttached": "{{count}}장의 사진이 첨부되었습니다.",
+      "uploadFailed": "사진을 업로드할 수 없습니다. 다시 시도하세요.",
+      "singleUploadFailed": "사진을 업로드할 수 없습니다. 다시 시도하세요.",
+      "photoAttached": "사진이 첨부되었습니다.",
+      "reportFailed": "신고를 보낼 수 없습니다. 연결을 확인하고 다시 시도하세요.",
+      "accountBlocked": "계정 차단됨",
+      "blockFailed": "이 계정을 차단할 수 없습니다. 다시 시도하세요."
+    }
+  },
+  "appeal": {
+    "header": {
+      "title": "결정에 이의제기"
+    },
+    "loading": {
+      "title": "결정 불러오는 중",
+      "subtitle": "세부 정보를 가져오는 중 잠시만 기다려 주세요."
+    },
+    "error": {
+      "title": "결정을 불러올 수 없습니다",
+      "subtitle": "결정 세부 정보를 가져올 수 없습니다. 아래를 탭하여 다시 시도하세요.",
+      "tryAgain": "다시 시도",
+      "goBack": "뒤로 가기"
+    },
+    "windowClosed": {
+      "title": "이의제기 기간이 종료되었습니다",
+      "body": "결정은 6개월 이내에 이의제기할 수 있습니다. 이 결정은 {{date}}에 통지되었습니다.",
+      "goBack": "뒤로 가기"
+    },
+    "offline": {
+      "title": "오프라인 상태입니다",
+      "subtitle": "연결을 확인하고 다시 시도하세요.",
+      "tryAgain": "다시 시도",
+      "goBack": "뒤로 가기"
+    },
+    "submitted": {
+      "title": "이의제기 접수됨",
+      "body": "검토 후 결과를 알려드리겠습니다.",
+      "appealId": "이의제기 #{{appealId}}",
+      "submittedAt": "{{time}}에 제출됨",
+      "referenceNote": "향후 지원 문의 시 이 번호를 참조하세요.",
+      "done": "완료"
+    },
+    "duration": {
+      "permanent": "영구",
+      "until": "{{date}}까지"
+    },
+    "decision": {
+      "noViolation": "위반 없음",
+      "restrict": "콘텐츠 제한됨",
+      "escalate": "승격됨",
+      "emergencyHold": "긴급 보류"
+    },
+    "grounds": {
+      "label": "이 결정이 잘못되었다고 생각하는 이유는 무엇인가요?",
+      "placeholder": "결정이 재고되어야 하는 이유를 설명하세요",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "증거 사진 (선택)",
+      "camera": "카메라",
+      "gallery": "갤러리",
+      "count": "{{count}}/3장"
+    },
+    "accessibility": {
+      "groundsInput": "이의제기 사유",
+      "evidencePhoto": "증거 사진 {{index}}",
+      "removeEvidencePhoto": "증거 사진 {{index}} 제거",
+      "takeEvidenceCamera": "카메라로 증거 사진 촬영",
+      "chooseEvidenceGallery": "갤러리에서 증거 사진 선택"
+    },
+    "submit": {
+      "label": "이의제기 제출"
+    },
+    "toast": {
+      "attachUpTo3": "최대 3장까지 사진을 첨부하세요.",
+      "offline": "오프라인 상태인 것 같습니다. 연결을 확인하고 다시 시도하세요.",
+      "allowPhotoAccess": "증거를 업로드하려면 사진 접근을 허용하세요.",
+      "allowCameraAccess": "증거 사진을 촬영하려면 카메라 접근을 허용하세요.",
+      "photosAttached": "{{count}}장의 사진이 첨부되었습니다.",
+      "uploadFailed": "사진을 업로드할 수 없습니다. 다시 시도하세요.",
+      "singleUploadFailed": "사진을 업로드할 수 없습니다. 다시 시도하세요.",
+      "photoAttached": "사진이 첨부되었습니다.",
+      "appealFailed": "이의제기를 제출할 수 없습니다. 연결을 확인하고 다시 시도하세요."
+    }
+  }
+}

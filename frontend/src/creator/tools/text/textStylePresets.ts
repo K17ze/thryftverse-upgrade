@@ -170,6 +170,11 @@ export interface TextStyleConfig {
   };
   alignment: 'left' | 'center' | 'right' | 'justify';
   opacity: number;
+  // Typography controls (Instagram Stories parity)
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
   // Legacy effect (backward compat) — migrated to stroke/shadow on load
   textEffect: 'none' | 'shadow' | 'neon' | 'outline' | 'glow';
   textAnimation: 'none' | 'typewriter' | 'bounce' | 'fade' | 'slide';

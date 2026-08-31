@@ -230,7 +230,7 @@ export function CreatorColorPicker({
             accessibilityLabel={`Current color ${currentHex}. Tap to expand color picker.`}
             accessibilityRole="button"
           >
-            <View style={styles.colorWellCheckerboard} />
+            <View />
           </PressScale>
 
           <HexColorField
@@ -335,24 +335,18 @@ export function CreatorColorPicker({
 
         {/* Recents */}
         {recents.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Recent</Text>
-            <RecentColors
-              recents={recents}
-              onPick={handlePickColor}
-            />
-          </View>
+          <RecentColors
+            recents={recents}
+            onPick={handlePickColor}
+          />
         )}
 
         {/* Project palette */}
         {projectPalette.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>In this project</Text>
-            <ProjectPalette
-              palette={projectPalette}
-              onPick={handlePickColor}
-            />
-          </View>
+          <ProjectPalette
+            palette={projectPalette}
+            onPick={handlePickColor}
+          />
         )}
 
         {/* Collapse button */}
@@ -389,15 +383,8 @@ function usePickerStyles(colors: ThemeColors) {
           height: 36,
           borderRadius: Radius.md,
           borderWidth: Stroke.hairline,
-          borderColor: 'rgba(0,0,0,0.1)',
+          borderColor: colors.borderSubtle,
           overflow: 'hidden' },
-        colorWellCheckerboard: {
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(255,255,255,0.1)' },
         compactHexField: {
           flex: 1 },
         compactEyedropper: {},
@@ -417,14 +404,6 @@ function usePickerStyles(colors: ThemeColors) {
           alignItems: 'flex-end' },
         hexField: {
           flex: 1 },
-        section: {
-          gap: Space.xs },
-        sectionLabel: {
-          fontFamily: Typography.family.semibold,
-          fontSize: TypographyV2.label.size,
-          letterSpacing: TypographyV2.label.letterSpacing,
-          color: colors.textSecondary,
-          textTransform: 'uppercase' },
         collapseBtn: {
           width: Control.hit,
           height: Control.hit,
