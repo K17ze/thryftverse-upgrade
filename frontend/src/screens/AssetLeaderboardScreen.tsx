@@ -6,7 +6,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Radius, Control } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -138,7 +138,6 @@ export default function AssetLeaderboardScreen() {
 
   const renderList = (
     title: string,
-    icon: React.ComponentProps<typeof Ionicons>['name'],
     data: Array<LeaderboardAsset & { allocatedPct?: number }>,
     metric: (asset: LeaderboardAsset & { allocatedPct?: number }) => { primary: string; secondary: string },
     sectionIndex: number
@@ -176,7 +175,6 @@ export default function AssetLeaderboardScreen() {
             </View>
             <View style={styles.metricGroup}>
               <Text style={[styles.metric, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.2}>{metricValue.primary}</Text>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{metricValue.secondary}</Text>
             </View>
           </AnimatedPressable>
         );
@@ -190,7 +188,6 @@ export default function AssetLeaderboardScreen() {
         header={
           <FlagshipHeader
             title="Market overview"
-            subtitle="Issued supply and recency"
             onBack={handleBack}
           />
         }
@@ -208,7 +205,6 @@ export default function AssetLeaderboardScreen() {
         header={
           <FlagshipHeader
             title="Market overview"
-            subtitle="Issued supply and recency"
             onBack={handleBack}
           />
         }
@@ -230,7 +226,6 @@ export default function AssetLeaderboardScreen() {
         header={
           <FlagshipHeader
             title="Market overview"
-            subtitle="Issued supply and recency"
             onBack={handleBack}
           />
         }
@@ -276,21 +271,18 @@ export default function AssetLeaderboardScreen() {
       >
         {renderList(
           'Most allocated',
-          'pie-chart-outline',
           topAllocated,
           (asset) => ({ primary: `${Math.round((asset.allocatedPct ?? 0) * 100)}%`, secondary: 'units allocated' }),
           0
         )}
         {renderList(
           'Available supply',
-          'layers-outline',
           mostAvailable,
           (asset) => ({ primary: `${asset.availableUnits}/${asset.totalUnits}`, secondary: 'units available' }),
           1
         )}
         {renderList(
           'New issues',
-          'time-outline',
           newestListings,
           (asset) => ({
             primary: asset.createdAt

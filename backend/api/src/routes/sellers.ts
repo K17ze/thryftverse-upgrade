@@ -470,7 +470,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const [engagementResult, ordersResult, reviewsResult, trustResult] =
       await Promise.all([
         // 1. Listing inventory count + period-scoped engagement from interactions
-        db.query<{
+        readDb.query<{
           total_listings: string | number;
           active_listings: string | number;
           total_views: string | number;
@@ -493,7 +493,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         ),
         // 2. Revenue and items sold from settled order facts (migration 076).
         //    paid_at is the authoritative sale timestamp.
-        db.query<{
+        readDb.query<{
           items_sold: string | number;
           revenue_gbp_minor: string | number;
         }>(
@@ -510,7 +510,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           [sellerId]
         ),
         // 3. Reviews for the period
-        db.query<{
+        readDb.query<{
           avg_rating: string | number | null;
           review_count: string | number;
         }>(
@@ -522,7 +522,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           [sellerId]
         ),
         // 4. Trust projection (response rate, dispatch time)
-        db.query<{
+        readDb.query<{
           response_rate: string | number | null;
           ship_within_days: number | null;
           total_sales: string | number | null;
@@ -540,14 +540,14 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     let refundsGbpMinor: number | null = null;
     let feesGbpMinor: number | null = null;
     let completeness: 'complete' | 'partial' = 'partial';
-    const ledgerCheck = await db.query<{ exists: boolean }>(
+    const ledgerCheck = await readDb.query<{ exists: boolean }>(
       `SELECT to_regclass('public.ledger_accounts') IS NOT NULL
         AND to_regclass('public.ledger_entries') IS NOT NULL AS exists`
     );
     if (ledgerCheck.rows[0]?.exists) {
       completeness = 'complete';
       const [refundsResult, feesResult] = await Promise.all([
-        db.query<{ refunds: string | null }>(
+        readDb.query<{ refunds: string | null }>(
           `
             SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS refunds
             FROM ledger_entries
@@ -562,7 +562,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           `,
           [sellerId]
         ),
-        db.query<{ fees: string | null }>(
+        readDb.query<{ fees: string | null }>(
           `
             SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS fees
             FROM ledger_entries
@@ -643,7 +643,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     // and saves (save) from the interactions table, joined to the seller's
     // listings. The engagement score weights saves > likes > views to
     // reflect intent strength. No non-existent denormalized columns.
-    const result = await db.query<{
+    const result = await readDb.query<{
       id: string;
       title: string;
       price_gbp_minor: number | string;

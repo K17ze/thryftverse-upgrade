@@ -151,7 +151,7 @@ export default function LookDetailScreen() {
         // This feeds the creator analytics v2 event table, which drives
         // the summary/timeline/content-ranking dashboards. Self-views are
         // filtered in the hook.
-        analyticsEvent.view('look', lookId, { surface: 'look_detail' });
+        analyticsEvent.view('look', lookId, { surface: 'look_detail', ownerId: res.look.creatorId });
       } else {
         setLoadError({
           kind: 'not-found',
@@ -292,7 +292,7 @@ export default function LookDetailScreen() {
   const handleShare = useCallback(async () => {
     haptic.light();
     if (look) {
-      analyticsEvent.share('look', look.id, { surface: 'look_detail' });
+      analyticsEvent.share('look', look.id, { surface: 'look_detail', ownerId: look.creatorId });
     }
     try {
       await Share.share({
@@ -441,17 +441,19 @@ export default function LookDetailScreen() {
     const ref = tagToReference(inspectTag, look.id);
     setInspectTag(null);
     if (ref) {
+      analyticsEvent.productClick('look', look.id, { surface: 'look_detail', ownerId: look.creatorId });
       openProductDetail(navigation, ref);
     } else {
       show('This item is no longer available', 'info');
     }
-  }, [inspectTag, look, navigation, show]);
+  }, [inspectTag, look, navigation, show, analyticsEvent]);
 
   const handleCreatorPress = useCallback(() => {
     if (!look?.creator?.id) return;
     haptic.light();
+    analyticsEvent.profileVisit('look', look.id, { surface: 'look_detail', ownerId: look.creatorId });
     navigation.navigate('UserProfile', { userId: look.creator.id });
-  }, [look, navigation, haptic]);
+  }, [look, navigation, haptic, analyticsEvent]);
 
   // Hoisted stable callbacks for LookSocialActions — avoids inline arrows
   // that would break React.memo and cause unnecessary re-renders.
@@ -669,8 +671,8 @@ export default function LookDetailScreen() {
             onCommentPress={handleCommentPress}
             onSharePress={handleShare}
             onSignInRequired={handleSignInRequired}
-            onLikeChange={(liked) => { if (liked) analyticsEvent.like('look', look.id, { surface: 'look_detail' }); }}
-            onSaveChange={(saved) => { if (saved) analyticsEvent.save('look', look.id, { surface: 'look_detail' }); }}
+            onLikeChange={(liked) => { if (liked) analyticsEvent.like('look', look.id, { surface: 'look_detail', ownerId: look.creatorId }); }}
+            onSaveChange={(saved) => { if (saved) analyticsEvent.save('look', look.id, { surface: 'look_detail', ownerId: look.creatorId }); }}
           />
         </View>
 
@@ -922,6 +924,7 @@ export default function LookDetailScreen() {
         visible={commentsVisible}
         onClose={() => setCommentsVisible(false)}
         onCommentCountChange={setCommentCount}
+        onCommentPosted={() => analyticsEvent.comment('look', look.id, { surface: 'look_detail', ownerId: look.creatorId })}
         isAuthenticated={!!currentUser?.id}
         onSignInRequired={() => {
           show('Sign in to comment', 'info');

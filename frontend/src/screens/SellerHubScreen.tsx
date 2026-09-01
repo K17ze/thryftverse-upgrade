@@ -217,7 +217,10 @@ export default function SellerHubScreen() {
   const navigateToTask = (task: SellerHubTask) => {
     haptics.tap();
     const meta = TASK_META[task.type];
-    navigation.navigate(meta.route as any);
+    // Each target route takes no required params, so we navigate without
+    // params. The cast is needed because TS can't prove the param shape
+    // for a union of route keys at compile time.
+    (navigation as unknown as { navigate: (route: keyof RootStackParamList) => void }).navigate(meta.route);
   };
 
   return (
@@ -495,19 +498,19 @@ export default function SellerHubScreen() {
             <View style={styles.newSellerTipRow}>
               <AppIcon name="camera" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
               <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
-                Start with a clear photo — it's the first thing buyers see
+                Clear photos sell.
               </Text>
             </View>
             <View style={styles.newSellerTipRow}>
               <AppIcon name="cash-outline" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
               <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
-                Price competitively — check similar sold items for guidance
+                Price against sold items.
               </Text>
             </View>
             <View style={styles.newSellerTipRow}>
               <AppIcon name="chat" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
               <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
-                Respond quickly to buyer questions to build trust
+                Reply fast to build trust.
               </Text>
             </View>
           </View>
@@ -571,7 +574,6 @@ export default function SellerHubScreen() {
           />
           <FlagshipNavigationRow
             title="Auctions"
-            subtitle="Auction listings"
             icon="hammer"
             onPress={() => navigation.navigate('SellerAuctionCentre')}
             accessibilityLabel="Auctions"
@@ -583,7 +585,6 @@ export default function SellerHubScreen() {
         <FlagshipFormSection variant="flat" title="Account">
           <FlagshipNavigationRow
             title="Payouts"
-            subtitle="Wallet and earnings"
             icon="wallet"
             onPress={() => navigation.navigate('Wallet')}
             accessibilityLabel="Payouts and wallet"
@@ -591,7 +592,7 @@ export default function SellerHubScreen() {
           />
           <FlagshipNavigationRow
             title="Verification"
-            subtitle={isVerified ? 'Verified' : 'ID and seller standards'}
+            subtitle={isVerified ? 'Verified' : 'Required'}
             icon={isVerified ? 'checkmark-circle' : 'profile'}
             iconColor={isVerified ? colors.success : undefined}
             onPress={() => navigation.navigate('Verification')}

@@ -387,17 +387,11 @@ export const registerCreatorAnalyticsRoutes = ({
     }
 
     // ── Viewer kind resolution ──
-    // Authenticated viewers are always tied to their user ID. Anonymous
-    // and pseudonym viewers do not record a viewer_id — they use a
-    // pseudonymous key for deduplication and unique-viewer counting.
-    const viewerKind: ViewerKind = payload.viewer_kind;
-    const viewerId = viewerKind === 'authenticated'
-      ? actorUserId
-      : null;  // anonymous/pseudonym viewers don't record a user ID
-
-    // An authenticated viewer cannot claim to be anonymous — the server
-    // enforces the viewer_kind based on the authentication state.
-    const effectiveViewerKind: ViewerKind = 'authenticated'; // the endpoint requires auth, so always authenticated
+    // The endpoint requires authentication, so the viewer is always
+    // 'authenticated'. The payload's viewer_kind field is ignored — the
+    // server enforces the actual kind based on the auth state.
+    const effectiveViewerKind: ViewerKind = 'authenticated';
+    const viewerId = actorUserId; // authenticated viewers are tied to their user ID
 
     // ── Consent region resolution ──
     // The server resolves the consent region from the request IP if the
@@ -693,7 +687,7 @@ export const registerCreatorAnalyticsRoutes = ({
          AND occurred_at >= $2
          AND occurred_at < $3
        GROUP BY content_type, content_id
-       ORDER BY views DESC
+       ORDER BY (views + likes * 3 + saves * 5 + comments * 4 + shares * 2 + product_clicks * 2) DESC
        LIMIT $4`,
       [actorUserId, current.start, current.endExclusive, limit],
     );

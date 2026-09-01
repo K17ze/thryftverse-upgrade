@@ -49,6 +49,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { usePosterViewerGesture } from '../hooks/usePosterViewerGesture';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useAnalyticsEvent } from '../hooks/useAnalyticsEvent';
 import { Typography, Space, Radius, Control, LetterSpacing, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { Motion } from '../theme/motionTokens';
@@ -94,6 +95,7 @@ export default function PosterViewerScreen() {
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
+  const analyticsEvent = useAnalyticsEvent();
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, SCREEN_WIDTH, SCREEN_HEIGHT), [colors, SCREEN_WIDTH, SCREEN_HEIGHT]);
 
@@ -355,6 +357,20 @@ export default function PosterViewerScreen() {
     recordPosterFrameView(activeFrame.id).catch((err: unknown) => { Sentry.captureException?.(err); });
   }, [activeFrame?.id, activeStory, isOwner, recordedFrames]);
 
+  // Fire creator analytics v2 view event when a new story is viewed.
+  // This feeds the summary/timeline/content-ranking dashboards. Only fires
+  // once per story (not per frame) and skips self-views via ownerId.
+  const recordedStoryIdsRef = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    if (!activeStory || isOwner) return;
+    if (recordedStoryIdsRef.current.has(activeStory.id)) return;
+    recordedStoryIdsRef.current.add(activeStory.id);
+    analyticsEvent.view('poster', activeStory.id, {
+      surface: 'poster_viewer',
+      ownerId: activeStory.creatorId,
+    });
+  }, [activeStory?.id, isOwner, activeStory, analyticsEvent]);
+
   // Fetch shoppable product tags for the active poster story. Tags are
   // scoped to the poster (story), so we refetch whenever the active story
   // changes. The hotspots themselves are only rendered for the current frame.
@@ -455,16 +471,20 @@ export default function PosterViewerScreen() {
   }, [activeFrame?.id, activeFrame?.mediaType, activeFrame?.mediaUrl]);
 
   const handleReaction = React.useCallback(async (reaction: PosterReactionType) => {
-    if (!activeFrame) return;
+    if (!activeFrame || !activeStory) return;
     haptic.light();
     try {
       await setPosterFrameReaction(activeFrame.id, reaction);
+      analyticsEvent.like('poster', activeStory.id, {
+        surface: 'poster_viewer',
+        ownerId: activeStory.creatorId,
+      });
       AccessibilityInfo.announceForAccessibility('Reaction sent');
     } catch {
       haptic.error();
       show('Failed to set reaction', 'error');
     }
-  }, [activeFrame, haptic, show]);
+  }, [activeFrame, activeStory, haptic, show, analyticsEvent]);
 
   // ── Gesture layer (pinch-to-zoom, swipe dismiss, tap zones, heart burst) ──
   // Extracted to usePosterViewerGesture hook — particle physics and gesture
@@ -501,12 +521,16 @@ export default function PosterViewerScreen() {
   };
 
   const handleReply = async (text: string) => {
-    if (!activeFrame) return;
+    if (!activeFrame || !activeStory) return;
     try {
       const replyId = `reply_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`;
       await createPosterReply(activeFrame.id, { id: replyId, body: text });
       haptic.success();
       show('Reply sent', 'success');
+      analyticsEvent.comment('poster', activeStory.id, {
+        surface: 'poster_viewer',
+        ownerId: activeStory.creatorId,
+      });
       AccessibilityInfo.announceForAccessibility('Reply sent');
     } catch {
       haptic.error();
@@ -614,6 +638,12 @@ export default function PosterViewerScreen() {
 
   const handleShare = () => {
     haptic.light();
+    if (activeStory) {
+      analyticsEvent.share('poster', activeStory.id, {
+        surface: 'poster_viewer',
+        ownerId: activeStory.creatorId,
+      });
+    }
     setShareVisible(true);
   };
 
@@ -976,7 +1006,13 @@ export default function PosterViewerScreen() {
         <View style={styles.topMetaRow}>
           <AnimatedPressable
             style={styles.authorBtn}
-            onPress={() => openProfile(navigation, activeStory.creatorId, currentUser?.id)}
+            onPress={() => {
+              analyticsEvent.profileVisit('poster', activeStory.id, {
+                surface: 'poster_viewer',
+                ownerId: activeStory.creatorId,
+              });
+              openProfile(navigation, activeStory.creatorId, currentUser?.id);
+            }}
             activeOpacity={0.85}
             scaleValue={0.97}
             hapticFeedback="light"
@@ -1143,7 +1179,7 @@ export default function PosterViewerScreen() {
                   accessibilityLabel={tag.label}
                   accessibilityRole="button"
                   accessibilityHint="View tagged product"
-                  onPress={() => handleTagPress(tag, activeStory, navigation, haptic, show)}
+                  onPress={() => handleTagPress(tag, activeStory, navigation, haptic, show, analyticsEvent)}
                   style={({ pressed }) => [
                     styles.tagDot,
                     pressed && styles.tagDotPressed,
@@ -1216,7 +1252,14 @@ export default function PosterViewerScreen() {
             onSave={() => {
               haptic.light();
               toggleSavedPosterStory(activeStory.id);
-              show(isSavedPosterStory(activeStory.id) ? 'Removed from saved' : 'Saved', 'info');
+              const isNowSaved = !isSavedPosterStory(activeStory.id);
+              if (isNowSaved) {
+                analyticsEvent.save('poster', activeStory.id, {
+                  surface: 'poster_viewer',
+                  ownerId: activeStory.creatorId,
+                });
+              }
+              show(isNowSaved ? 'Saved' : 'Removed from saved', 'info');
             }}
             isSaved={isSavedPosterStory(activeStory.id)}
           />
@@ -1289,9 +1332,14 @@ function handleTagPress(
   navigation: NativeStackNavigationProp<RootStackParamList>,
   haptic: ReturnType<typeof useHaptic>,
   show: (message: string, type?: 'info' | 'error' | 'success') => void,
+  analyticsEvent: ReturnType<typeof useAnalyticsEvent>,
 ) {
   haptic.selection();
   recordPosterTagClick(activeStory.id, tag.id).catch((err: unknown) => { Sentry.captureException?.(err); });
+  analyticsEvent.productClick('poster', activeStory.id, {
+    surface: 'poster_viewer',
+    ownerId: activeStory.creatorId,
+  });
   if (tag.listingId) {
     (navigation as unknown as { navigate: (route: string, params: Record<string, unknown>) => void })
       .navigate('ItemDetail', { itemId: tag.listingId });

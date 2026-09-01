@@ -128,7 +128,6 @@ export default function SellerEarningsScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Seller earnings"
-          subtitle="Sale proceeds & release schedule"
           onBack={handleBack}
         />
       }

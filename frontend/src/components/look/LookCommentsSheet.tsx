@@ -53,6 +53,8 @@ export interface LookCommentsSheetProps {
   visible: boolean;
   onClose: () => void;
   onCommentCountChange?: (count: number) => void;
+  /** Fired when a comment is successfully posted (for analytics tracking). */
+  onCommentPosted?: () => void;
   isAuthenticated: boolean;
   onSignInRequired?: () => void;
 }
@@ -477,6 +479,7 @@ export function LookCommentsSheet({
   visible,
   onClose,
   onCommentCountChange,
+  onCommentPosted,
   isAuthenticated,
   onSignInRequired,
 }: LookCommentsSheetProps) {
@@ -640,6 +643,7 @@ export function LookCommentsSheet({
           next.delete(tempId);
           return next;
         });
+        onCommentPosted?.();
       } catch {
         // On-row failure marker (never toast-only): the row stays with a
         // "Tap to retry" affordance. Retry reuses the same client id, so a
@@ -654,7 +658,7 @@ export function LookCommentsSheet({
         setIsSending(false);
       }
     },
-    [lookId],
+    [lookId, onCommentPosted],
   );
 
   const handleRetry = useCallback(

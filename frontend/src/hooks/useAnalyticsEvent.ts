@@ -25,6 +25,10 @@ interface LogOptions {
   position?: number;
   impressionId?: string;
   sessionId?: string;
+  /** The content owner's user ID. When provided, events are skipped if the
+   *  current user is the owner — a creator viewing their own content is not
+   *  a meaningful engagement signal for their analytics dashboard. */
+  ownerId?: string;
 }
 
 export interface AnalyticsEventLogger {
@@ -51,6 +55,7 @@ export function useAnalyticsEvent(): AnalyticsEventLogger {
       // Don't log self-views — a creator viewing their own content is not
       // a meaningful engagement signal for their analytics dashboard.
       if (!currentUser?.id) return;
+      if (options?.ownerId && options.ownerId === currentUser.id) return;
 
       const eventId = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
 

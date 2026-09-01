@@ -938,7 +938,8 @@ function createStyles(colors: ThemeColors) {
       lineHeight: TypographyV2.priceHero.lineHeight,
       letterSpacing: TypographyV2.priceHero.letterSpacing,
       fontFamily: FontFamily.bold,
-      color: colors.scrimTextPrimary },
+      color: colors.scrimTextPrimary,
+      fontVariant: ['tabular-nums'] },
     heroDelta: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -959,7 +960,8 @@ function createStyles(colors: ThemeColors) {
     heroDeltaInlineText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
-      color: colors.scrimTextPrimary },
+      color: colors.scrimTextPrimary,
+      fontVariant: ['tabular-nums'] },
     // ── Comparison context ──
     comparisonContext: {
       fontSize: TypographyV2.meta.size,
@@ -1058,7 +1060,7 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xl,
       gap: Space.xxs },
     footerText: {
-      fontSize: TypographyV2.meta.size - 1,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular } });
 }
 
@@ -1100,7 +1102,8 @@ function createContentRowStyles(colors: ThemeColors) {
     metaText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
-      letterSpacing: TypographyV2.meta.letterSpacing },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontVariant: ['tabular-nums'] },
     metaDot: {
       fontSize: TypographyV2.meta.size - 1 } });
 }

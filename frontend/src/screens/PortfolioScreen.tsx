@@ -298,7 +298,6 @@ export default function PortfolioScreen() {
         header={
           <FlagshipHeader
             title="Portfolio"
-            subtitle="Your Co-Own positions"
             onBack={handleBack}
             rightAction={
               <AnimatedPressable
@@ -329,7 +328,6 @@ export default function PortfolioScreen() {
         header={
           <FlagshipHeader
             title="Portfolio"
-            subtitle="Your Co-Own positions"
             onBack={handleBack}
             rightAction={
               <AnimatedPressable
@@ -364,7 +362,6 @@ export default function PortfolioScreen() {
         header={
           <FlagshipHeader
             title="Portfolio"
-            subtitle="Your Co-Own positions"
             onBack={handleBack}
             rightAction={
               <AnimatedPressable
@@ -386,7 +383,7 @@ export default function PortfolioScreen() {
         <CoOwnStateCanvas
           variant="empty"
           title="No positions yet"
-          subtitle="Your Co-Own portfolio will appear here once you purchase units."
+          subtitle="Buy units to start your portfolio."
           actionLabel="Browse items"
           onAction={() => navigation.navigate('CoOwnHub')}
           emptyGraphicVariant="bag"
@@ -756,20 +753,7 @@ export default function PortfolioScreen() {
             {summary.totalRealizedGbp !== 0 && (
               <View style={[styles.realisedCard, { borderBottomColor: colors.border }]}>
                 <View style={styles.realisedHeader}>
-                  {/* TODO: replace dynamic `${...}15` with successSubtle/dangerSubtle token when available */}
-                  <View style={[styles.realisedIcon, { backgroundColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}15` }]}>
-                    <Ionicons
-                      name={summary.totalRealizedGbp >= 0 ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
-                      size={15}
-                      color={summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}
-                    />
-                  </View>
-                  <View style={styles.realisedHeaderText}>
-                    <Text style={[styles.realisedLabel, { color: colors.textMuted }]}>Realised returns</Text>
-                    <Text style={[styles.realisedCaption, { color: colors.textSecondary }]}>
-                      From closed positions
-                    </Text>
-                  </View>
+                  <Text style={[styles.realisedLabel, { color: colors.textMuted }]}>Realised returns</Text>
                   <CoOwnNumericText
                     value={summary.totalRealizedGbp}
                     unit="1ZE"
@@ -803,13 +787,10 @@ export default function PortfolioScreen() {
                 scaleValue={0.98}
                 hapticFeedback="light"
               >
-                <View style={[styles.watchlistIcon, { backgroundColor: colors.brandSubtle }]}>
-                  <Ionicons name="eye-outline" size={15} color={colors.brand} />
-                </View>
                 <View style={styles.watchlistBody}>
                   <Text style={[styles.watchlistTitle, { color: colors.textPrimary }]}>Watchlist</Text>
                   <Text style={[styles.watchlistSub, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {coOwnWatchlist.length} {coOwnWatchlist.length === 1 ? 'asset' : 'assets'} on your radar
+                    {coOwnWatchlist.length} {coOwnWatchlist.length === 1 ? 'asset' : 'assets'} watched
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
@@ -822,7 +803,7 @@ export default function PortfolioScreen() {
                 <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
                 <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Rights are instrument-specific</Text>
               </View>
-              <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Open a position to review its current rights version, safeguarding arrangements, transfer limits and available exit routes.</Text>
+              <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Rights depend on the instrument. Open a position to review.</Text>
             </View>
             </>
             )}
