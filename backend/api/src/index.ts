@@ -24476,6 +24476,7 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
           title: nextTitle,
           description: responsePayload.conversation.description,
           avatar: responsePayload.conversation.avatar,
+          coverPhoto: responsePayload.conversation.coverPhoto,
           updatedAt: responsePayload.conversation.updatedAt,
         },
       });

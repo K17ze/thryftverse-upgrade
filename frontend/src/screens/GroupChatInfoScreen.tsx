@@ -314,6 +314,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
               members={avatarMembers}
               groupPhoto={undefined}
               fallbackInitials={conversation.title || 'Group'}
+              groupId={conversation.id}
               size={120}
             />
             {canManageIdentity && (

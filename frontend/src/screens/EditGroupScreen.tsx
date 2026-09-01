@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -6,14 +6,12 @@ import {
   Text,
   TextInput,
   View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   fetchConversationFromApi,
   leaveGroupOnApi,
   updateConversationOnApi } from '../services/chatApi';
-import { uploadMedia } from '../services/mediaUpload';
 import { classifyNetworkError, parseApiError } from '../lib/apiClient';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -26,7 +24,9 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
+import { GroupMediaSourceSheet, type GroupMediaSource } from '../components/chat/GroupMediaSourceSheet';
 import { useHaptic } from '../hooks/useHaptic';
+import { useGroupMediaUpload } from '../hooks/useGroupMediaUpload';
 import { AppButton } from '../components/ui/AppButton';
 import { Caption, Meta } from '../components/ui/Text';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
@@ -52,13 +52,17 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 
   const [name, setName] = useState(conversation?.title ?? '');
   const [description, setDescription] = useState(conversation?.description ?? '');
-  const [avatar, setAvatar] = useState<string | null>(conversation?.avatar ?? null);
-  const [avatarFinalizationId, setAvatarFinalizationId] = useState<string | null>(null);
-  const [coverPhoto, setCoverPhoto] = useState<string | null>(conversation?.coverPhoto ?? null);
-  const [coverPhotoFinalizationId, setCoverPhotoFinalizationId] = useState<string | null>(null);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [mediaSourceSheet, setMediaSourceSheet] = useState<{ visible: boolean; target: 'avatar' | 'cover' }>({ visible: false, target: 'avatar' });
   const [isSaving, setIsSaving] = useState(false);
+
+  // Flagship media upload — optimistic preview, compression, camera+gallery, retry/revert.
+  const groupMedia = useGroupMediaUpload(conversation?.avatar ?? null, conversation?.coverPhoto ?? null);
+  const isUploadingPhoto = groupMedia.avatar.status === 'uploading';
+  const isUploadingCover = groupMedia.cover.status === 'uploading';
+  const avatar = groupMedia.avatar.confirmedRemote;
+  const avatarFinalizationId = groupMedia.avatar.finalizationId;
+  const coverPhoto = groupMedia.cover.confirmedRemote;
+  const coverPhotoFinalizationId = groupMedia.cover.finalizationId;
   const [isCheckingResult, setIsCheckingResult] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [saveIssue, setSaveIssue] = useState<string | null>(null);
@@ -121,85 +125,41 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     );
   }
 
-  const handlePickGroupPhoto = async () => {
+  const handlePickGroupPhoto = () => {
     if (isUploadingPhoto || isSaving) return;
     haptic.light();
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: false,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.88 });
-      const selected = result.canceled ? null : result.assets[0];
-      if (!selected?.uri) return;
-
-      setIsUploadingPhoto(true);
-      setSaveIssue(null);
-      try {
-        const uploaded = await uploadMedia(selected.uri, 'avatars');
-        setAvatar(uploaded.publicUrl);
-        setAvatarFinalizationId(uploaded.finalizationId);
-        clearPendingSave();
-        haptic.success();
-      } catch (error) {
-        show(parseApiError(error, 'Could not upload the group photo.').message, 'error');
-      } finally {
-        setIsUploadingPhoto(false);
-      }
-    } catch {
-      show('Could not open the photo library.', 'error');
-    }
+    setSaveIssue(null);
+    setMediaSourceSheet({ visible: true, target: 'avatar' });
   };
 
   const handleRemovePhoto = () => {
     haptic.light();
-    setAvatar(null);
-    setAvatarFinalizationId(null);
+    groupMedia.removeAvatar();
     clearPendingSave();
   };
 
-  // Cover photo — wide banner (3:1 aspect), separate from the circular avatar.
-  // Matches WhatsApp/Telegram pattern: cover photo is the group's visual
-  // identity at the top of the info screen, avatar is the small circular
-  // profile picture.
-  const handlePickCoverPhoto = async () => {
+  const handlePickCoverPhoto = () => {
     if (isUploadingCover || isSaving) return;
     haptic.light();
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: false,
-        allowsEditing: true,
-        aspect: [3, 1],
-        quality: 0.88 });
-      const selected = result.canceled ? null : result.assets[0];
-      if (!selected?.uri) return;
-
-      setIsUploadingCover(true);
-      setSaveIssue(null);
-      try {
-        const uploaded = await uploadMedia(selected.uri, 'covers');
-        setCoverPhoto(uploaded.publicUrl);
-        setCoverPhotoFinalizationId(uploaded.finalizationId);
-        clearPendingSave();
-        haptic.success();
-      } catch (error) {
-        show(parseApiError(error, 'Could not upload the cover photo.').message, 'error');
-      } finally {
-        setIsUploadingCover(false);
-      }
-    } catch {
-      show('Could not open the photo library.', 'error');
-    }
+    setSaveIssue(null);
+    setMediaSourceSheet({ visible: true, target: 'cover' });
   };
 
   const handleRemoveCoverPhoto = () => {
     haptic.light();
-    setCoverPhoto(null);
-    setCoverPhotoFinalizationId(null);
+    groupMedia.removeCover();
     clearPendingSave();
   };
+
+  const handleMediaSourceSelect = useCallback((source: GroupMediaSource) => {
+    const target = mediaSourceSheet.target;
+    if (target === 'avatar') {
+      void groupMedia.pickAvatar(source);
+    } else {
+      void groupMedia.pickCover(source);
+    }
+    clearPendingSave();
+  }, [mediaSourceSheet.target, groupMedia]);
 
   const handleSave = async () => {
     const trimmedName = name.trim();
@@ -390,13 +350,13 @@ export default function EditGroupScreen({ navigation, route }: Props) {
             scaleValue={0.99}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel={coverPhoto ? 'Change cover photo' : 'Add cover photo'}
-            accessibilityHint="Opens your photo library to choose a wide cover image"
+            accessibilityLabel={groupMedia.coverDisplayUri ? 'Change cover photo' : 'Add cover photo'}
+            accessibilityHint="Choose a wide cover image from camera or gallery"
             accessibilityState={{ busy: isUploadingCover, disabled: isSaving }}
           >
-            {coverPhoto ? (
+            {groupMedia.coverDisplayUri ? (
               <CachedImage
-                uri={coverPhoto}
+                uri={groupMedia.coverDisplayUri}
                 style={styles.coverImage}
                 contentFit="cover"
                 priority="high"
@@ -418,7 +378,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
               )}
             </View>
           </AnimatedPressable>
-          {coverPhoto ? (
+          {groupMedia.coverDisplayUri ? (
             <View style={styles.coverActions}>
               <AnimatedPressable
                 onPress={handlePickCoverPhoto}
@@ -459,14 +419,15 @@ export default function EditGroupScreen({ navigation, route }: Props) {
             scaleValue={0.98}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel={avatar ? 'Change group photo' : 'Add group photo'}
-            accessibilityHint="Opens your photo library"
+            accessibilityLabel={groupMedia.avatarDisplayUri ? 'Change group photo' : 'Add group photo'}
+            accessibilityHint="Choose from camera or gallery"
             accessibilityState={{ busy: isUploadingPhoto, disabled: isSaving }}
           >
             <GroupAvatarMosaic
               members={mosaicMembers}
-              groupPhoto={avatar}
+              groupPhoto={groupMedia.avatarDisplayUri}
               fallbackInitials={name.trim() || 'Group'}
+              groupId={conversationId}
               size={96}
             />
             <View style={styles.cameraBadge}>
@@ -484,14 +445,14 @@ export default function EditGroupScreen({ navigation, route }: Props) {
             activeOpacity={0.65}
             scaleValue={0.98}
             accessibilityRole="button"
-            accessibilityLabel={avatar ? 'Change group photo' : 'Add group photo'}
+            accessibilityLabel={groupMedia.avatarDisplayUri ? 'Change group photo' : 'Add group photo'}
             accessibilityState={{ busy: isUploadingPhoto, disabled: isSaving }}
           >
             <Text style={styles.photoActionText}>
-              {isUploadingPhoto ? 'Uploading…' : avatar ? 'Change photo' : 'Add group photo'}
+              {isUploadingPhoto ? 'Uploading…' : groupMedia.avatarDisplayUri ? 'Change photo' : 'Add group photo'}
             </Text>
           </AnimatedPressable>
-          {avatar ? (
+          {groupMedia.avatarDisplayUri ? (
             <AnimatedPressable
               style={styles.removePhoto}
               onPress={handleRemovePhoto}
@@ -607,6 +568,12 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         cancelLabel={confirmSheet.cancelLabel ?? 'Cancel'}
         variant={confirmSheet.variant ?? 'danger'}
         onConfirm={confirmSheet.onConfirm}
+      />
+      <GroupMediaSourceSheet
+        visible={mediaSourceSheet.visible}
+        onClose={() => setMediaSourceSheet((prev) => ({ ...prev, visible: false }))}
+        onSelect={handleMediaSourceSelect}
+        title={mediaSourceSheet.target === 'avatar' ? 'Group photo' : 'Cover photo'}
       />
     </FlagshipScreen>
   );

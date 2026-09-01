@@ -20,7 +20,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { useBackendData } from '../context/BackendDataContext';
 import { fetchConversationsFromApi, deleteConversationOnApi } from '../services/chatApi';
-import { useInboxMessageEvent, realtimePayloadToMessage } from '../services/realtimeClient';
+import { useInboxMessageEvent, useInboxGroupIdentityEvent, realtimePayloadToMessage } from '../services/realtimeClient';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption } from '../components/ui/Text';
@@ -36,6 +36,7 @@ import { Space, Control, Stroke, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
+import { colorForId, initialsFromName } from '../utils/avatarColor';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type ConvoItem = Conversation;
 type InboxSegment = MessagingSegment | 'unread' | 'archived' | 'groups';
@@ -196,6 +197,26 @@ export default function InboxScreen() {
         });
       },
       [conversations, currentUser?.id, upsertConversation],
+    ),
+  );
+
+  // Realtime group identity updates — when an admin changes the group name,
+  // avatar, cover, or description, merge it into the inbox store so the row
+  // title and avatar stay current without a manual refetch.
+  useInboxGroupIdentityEvent(
+    useCallback(
+      (payload) => {
+        const existing = conversations.find((c) => c.id === payload.conversationId);
+        if (!existing) return;
+        upsertConversation({
+          ...existing,
+          title: payload.title ?? existing.title,
+          description: payload.description ?? existing.description,
+          avatar: payload.avatar !== undefined ? (payload.avatar ?? undefined) : existing.avatar,
+          coverPhoto: payload.coverPhoto !== undefined ? (payload.coverPhoto ?? undefined) : existing.coverPhoto,
+        });
+      },
+      [conversations, upsertConversation],
     ),
   );
 
@@ -424,10 +445,18 @@ export default function InboxScreen() {
       ? item.participantProfiles?.find((participant) => participant.id === counterpartyId)
       : undefined;
     const avatarEl = isGroup ? (
-      <View style={[styles.groupAvatar, t.groupAvatar]}>
-        <Text style={[styles.groupAvatarText, t.groupAvatarText]}>
-          {item.title?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? 'G'}
-        </Text>
+      <View style={[styles.groupAvatar, t.groupAvatar, !item.avatar && { backgroundColor: colorForId(item.id) }]}>
+        {item.avatar ? (
+          <CachedImage
+            uri={item.avatar}
+            style={styles.groupAvatarImage}
+            contentFit="cover"
+          />
+        ) : (
+          <Text style={[styles.groupAvatarText, t.groupAvatarText, !item.avatar && { color: '#FFFFFF' }]}>
+            {initialsFromName(item.title)}
+          </Text>
+        )}
         {(item.botIds?.length ?? 0) > 0 && (
           <View style={[styles.botIndicator, t.botIndicator]}>
             <Ionicons name="bulb-outline" size={14} color={colors.brand} />
@@ -1073,6 +1102,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'hidden',
+  },
+  groupAvatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   groupAvatarText: {
     fontSize: TypographyV2.sectionTitle.size,

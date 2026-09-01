@@ -45,6 +45,12 @@ export const CHAT_REACTION_REMOVED_EVENT = 'chat.reaction.removed';
 /** P0.7: Read receipt. */
 export const CHAT_MESSAGE_READ_EVENT = 'chat.message.read';
 
+/** Group identity updated — emitted when an admin changes the group name,
+ *  avatar, cover photo, or description. Other participants must merge this
+ *  into their local store so the chat header and info screen stay current
+ *  without a manual refetch. */
+export const CHAT_GROUP_IDENTITY_UPDATED_EVENT = 'chat.group.identity.updated';
+
 // ── Typed payloads ──────────────────────────────────────────────────
 
 /** Payload shape for `chat.message.created`, mirroring the backend. */
@@ -89,6 +95,21 @@ export interface ChatTypingUpdatePayload {
   conversationId: string;
   userId: string;
   isTyping: boolean;
+}
+
+/** Payload shape for `chat.group.identity.updated`. Mirrors the backend
+ *  publish at backend/api/src/index.ts → PATCH /chat/conversations/:id.
+ *  All fields except `conversationId` are optional — only changed fields
+ *  are included by the backend. */
+export interface ChatGroupIdentityUpdatedPayload {
+  conversationId: string;
+  actorUserId: string;
+  changedFields: string[];
+  title?: string | null;
+  description?: string | null;
+  avatar?: string | null;
+  coverPhoto?: string | null;
+  updatedAt: string;
 }
 
 /** Typed envelope for chat message events. */
@@ -287,6 +308,85 @@ export function useInboxMessageEvent(
       const unsubscribe = client.on<ChatMessageCreatedPayload>(topic, (envelope) => {
         if (envelope.type !== CHAT_MESSAGE_EVENT) return;
         handlerRef.current(envelope.payload, envelope as ChatMessageEnvelope);
+      });
+      unsubscribers.push(unsubscribe);
+    }
+    return () => {
+      for (const unsubscribe of unsubscribers) unsubscribe();
+    };
+  }, [client, conversations]);
+}
+
+// ── Group identity event hook (single conversation) ─────────────────
+
+/**
+ * useChatGroupIdentityEvent — subscribe to `chat.group.identity.updated`
+ * events for a single conversation. When an admin changes the group name,
+ * avatar, cover photo, or description, this hook fires so the caller can
+ * merge the update into the local store.
+ */
+export function useChatGroupIdentityEvent(
+  conversationId: string | undefined,
+  handler: (payload: ChatGroupIdentityUpdatedPayload) => void,
+): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const { client } = useRealtime();
+
+  const topic = conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<ChatGroupIdentityUpdatedPayload>(topic, (envelope) => {
+      if (envelope.type !== CHAT_GROUP_IDENTITY_UPDATED_EVENT) return;
+      handlerRef.current(envelope.payload);
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+}
+
+// ── Inbox-wide group identity event hook ────────────────────────────
+
+/**
+ * useInboxGroupIdentityEvent — subscribe to `chat.group.identity.updated`
+ * events across all loaded conversations. This ensures the inbox list,
+ * chat header, and group info screen stay current when any admin changes
+ * the group identity, without requiring a manual refetch.
+ */
+export function useInboxGroupIdentityEvent(
+  handler: (payload: ChatGroupIdentityUpdatedPayload) => void,
+): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const { client } = useRealtime();
+  const conversations = useStore((state) => state.conversations);
+
+  const desiredTopics = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const next = new Set(conversations.map((c) => chatConversationTopic(c.id)));
+    const prev = desiredTopics.current;
+
+    const toAdd = Array.from(next).filter((t) => !prev.has(t));
+    const toRemove = Array.from(prev).filter((t) => !next.has(t));
+
+    if (toAdd.length) client.subscribe(toAdd);
+    if (toRemove.length) client.unsubscribe(toRemove);
+    desiredTopics.current = next;
+  }, [client, conversations]);
+
+  useEffect(() => {
+    const unsubscribers: Array<() => void> = [];
+    for (const topic of desiredTopics.current) {
+      const unsubscribe = client.on<ChatGroupIdentityUpdatedPayload>(topic, (envelope) => {
+        if (envelope.type !== CHAT_GROUP_IDENTITY_UPDATED_EVENT) return;
+        handlerRef.current(envelope.payload);
       });
       unsubscribers.push(unsubscribe);
     }

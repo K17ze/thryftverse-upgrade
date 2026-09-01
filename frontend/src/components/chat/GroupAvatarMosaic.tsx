@@ -12,6 +12,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Radius, Space, Type, TypeStyles } from '../../theme/designTokens';
+import { colorForId } from '../../utils/avatarColor';
 
 export interface MosaicMember {
   id: string;
@@ -26,6 +27,8 @@ interface GroupAvatarMosaicProps {
   groupPhoto?: string | null;
   /** Fallback initials when fewer than 2 members have avatars. */
   fallbackInitials?: string;
+  /** Stable id for deterministic placeholder color (group conversation id). */
+  groupId?: string;
 }
 
 export function GroupAvatarMosaic({
@@ -33,6 +36,7 @@ export function GroupAvatarMosaic({
   size = 88,
   groupPhoto,
   fallbackInitials = 'G',
+  groupId,
 }: GroupAvatarMosaicProps) {
   const { colors } = useAppTheme();
   const halfSize = (size - 3) / 2;
@@ -56,7 +60,7 @@ export function GroupAvatarMosaic({
   const withAvatars = members.filter((m) => m.avatar).slice(0, 4);
   const initialsSource = members[0]?.displayName ?? fallbackInitials;
 
-  // 0 or 1 avatars → show initials fallback.
+  // 0 or 1 avatars → show initials fallback on a deterministic color.
   if (withAvatars.length < 2) {
     const initials = (initialsSource || 'G')
       .split(/\s+/)
@@ -65,6 +69,7 @@ export function GroupAvatarMosaic({
       .join('')
       .slice(0, 2)
       .toUpperCase();
+    const colorSeed = groupId ?? members[0]?.id ?? fallbackInitials;
     return (
       <View
         style={[
@@ -73,11 +78,11 @@ export function GroupAvatarMosaic({
             width: size,
             height: size,
             borderRadius: Radius.full,
-            backgroundColor: colors.surfaceAlt,
+            backgroundColor: colorForId(colorSeed),
           },
         ]}
       >
-        <Text style={[styles.initials, { fontSize: size * 0.36, color: colors.textPrimary }]}>
+        <Text style={[styles.initials, { fontSize: size * 0.36, color: '#FFFFFF' }]}>
           {initials || 'G'}
         </Text>
       </View>

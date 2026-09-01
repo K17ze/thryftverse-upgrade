@@ -9,7 +9,6 @@ import {
   Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -19,11 +18,12 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
+import { GroupMediaSourceSheet, type GroupMediaSource } from '../components/chat/GroupMediaSourceSheet';
 import { createGroupConversationOnApi } from '../services/chatApi';
 import { searchUsers, UserSearchResult } from '../services/profileApi';
-import { uploadMedia } from '../services/mediaUpload';
 import { parseApiError } from '../lib/apiClient';
 import { createStableId } from '../utils/createStableId';
+import { useGroupMediaUpload } from '../hooks/useGroupMediaUpload';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
@@ -75,13 +75,14 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const [searchResults, setSearchResults] = useState<SelectableUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
-  const [groupPhotoFinalizationId, setGroupPhotoFinalizationId] = useState<string | null>(null);
-  const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
-  const [coverPhotoFinalizationId, setCoverPhotoFinalizationId] = useState<string | null>(null);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [mediaSourceSheet, setMediaSourceSheet] = useState<{ visible: boolean; target: 'avatar' | 'cover' }>({ visible: false, target: 'avatar' });
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Flagship media upload — optimistic preview, client-side compression,
+  // camera+gallery source, retry/revert, stale-operation guard.
+  const groupMedia = useGroupMediaUpload(null, null);
+  const isUploadingPhoto = groupMedia.avatar.status === 'uploading';
+  const isUploadingCover = groupMedia.cover.status === 'uploading';
 
   const idempotencyKeyRef = useRef<string>(createStableId('group'));
   const createAttemptRef = useRef(false);
@@ -162,68 +163,36 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         avatar: u.avatar }));
   }, [selectedIds, selectedUsers]);
 
-  const handlePickGroupPhoto = useCallback(async () => {
+  const handlePickGroupPhoto = useCallback(() => {
     if (isUploadingPhoto) return;
     haptic.light();
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: false,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.88 });
-      if (result.canceled || !result.assets?.[0]?.uri) return;
+    setMediaSourceSheet({ visible: true, target: 'avatar' });
+  }, [haptic, isUploadingPhoto]);
 
-      const pickedUri = result.assets[0].uri;
-      setIsUploadingPhoto(true);
-      try {
-        const uploaded = await uploadMedia(pickedUri, 'avatars');
-        setGroupPhoto(uploaded.publicUrl);
-        setGroupPhotoFinalizationId(uploaded.finalizationId);
-        haptic.success();
-        show('Group photo uploaded.', 'success');
-      } catch (uploadErr) {
-        const parsed = parseApiError(uploadErr, 'Could not upload group photo.');
-        show(parsed.message, 'error');
-        // Do not set the avatar — leave the previous photo (or none) so the
-        // user can retry or proceed without a photo.
-      } finally {
-        setIsUploadingPhoto(false);
-      }
-    } catch {
-      show('Could not open photo library.', 'error');
-    }
-  }, [haptic, show, isUploadingPhoto]);
-
-  const handlePickCoverPhoto = useCallback(async () => {
+  const handlePickCoverPhoto = useCallback(() => {
     if (isUploadingCover) return;
     haptic.light();
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: false,
-        allowsEditing: true,
-        aspect: [3, 1],
-        quality: 0.88 });
-      if (result.canceled || !result.assets?.[0]?.uri) return;
+    setMediaSourceSheet({ visible: true, target: 'cover' });
+  }, [haptic, isUploadingCover]);
 
-      const pickedUri = result.assets[0].uri;
-      setIsUploadingCover(true);
-      try {
-        const uploaded = await uploadMedia(pickedUri, 'covers');
-        setCoverPhoto(uploaded.publicUrl);
-        setCoverPhotoFinalizationId(uploaded.finalizationId);
-        haptic.success();
-      } catch (uploadErr) {
-        const parsed = parseApiError(uploadErr, 'Could not upload cover photo.');
-        show(parsed.message, 'error');
-      } finally {
-        setIsUploadingCover(false);
-      }
-    } catch {
-      show('Could not open photo library.', 'error');
+  const handleMediaSourceSelect = useCallback((source: GroupMediaSource) => {
+    const target = mediaSourceSheet.target;
+    if (target === 'avatar') {
+      void groupMedia.pickAvatar(source);
+    } else {
+      void groupMedia.pickCover(source);
     }
-  }, [haptic, show, isUploadingCover]);
+  }, [mediaSourceSheet.target, groupMedia]);
+
+  const handleRemoveGroupPhoto = useCallback(() => {
+    haptic.light();
+    groupMedia.removeAvatar();
+  }, [haptic, groupMedia]);
+
+  const handleRemoveCoverPhoto = useCallback(() => {
+    haptic.light();
+    groupMedia.removeCover();
+  }, [haptic, groupMedia]);
 
   const toggleMember = (user: SelectableUser) => {
     haptic.light();
@@ -328,10 +297,10 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         memberIds: selectedIds,
         idempotencyKey: idempotencyKeyRef.current,
         description: description.trim() || undefined,
-        avatar: groupPhoto ?? undefined,
-        avatarFinalizationId: groupPhotoFinalizationId ?? undefined,
-        coverPhoto: coverPhoto ?? undefined,
-        coverPhotoFinalizationId: coverPhotoFinalizationId ?? undefined });
+        avatar: groupMedia.avatar.confirmedRemote ?? undefined,
+        avatarFinalizationId: groupMedia.avatar.finalizationId ?? undefined,
+        coverPhoto: groupMedia.cover.confirmedRemote ?? undefined,
+        coverPhotoFinalizationId: groupMedia.cover.finalizationId ?? undefined });
 
       upsertConversation(conversation);
       show('Group chat created.', 'success');
@@ -355,8 +324,8 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
     setDescription('');
     setSelectedIds([]);
     setSelectedUsers(new Map());
-    setGroupPhoto(null);
-    setGroupPhotoFinalizationId(null);
+    groupMedia.removeAvatar();
+    groupMedia.removeCover();
     setStage('select');
   };
 
@@ -449,12 +418,12 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               pressed && styles.avatarSelectorPressed,
             ]}
             accessibilityRole="button"
-            accessibilityLabel={coverPhoto ? 'Change cover photo' : 'Add cover photo'}
-            accessibilityHint="Opens your photo library to choose a wide cover image"
+            accessibilityLabel={groupMedia.coverDisplayUri ? 'Change cover photo' : 'Add cover photo'}
+            accessibilityHint="Choose a wide cover image from camera or gallery"
           >
-            {coverPhoto ? (
+            {groupMedia.coverDisplayUri ? (
               <CachedImage
-                uri={coverPhoto}
+                uri={groupMedia.coverDisplayUri}
                 style={styles.coverImage}
                 contentFit="cover"
                 priority="high"
@@ -472,6 +441,17 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
                 <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
               </View>
             ) : null}
+            {groupMedia.coverDisplayUri && !isUploadingCover ? (
+              <Pressable
+                style={styles.coverRemoveBtn}
+                onPress={handleRemoveCoverPhoto}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Remove cover photo"
+              >
+                <Ionicons name="close-circle" size={22} color={colors.scrimTextPrimary} />
+              </Pressable>
+            ) : null}
           </Pressable>
 
           <View style={styles.avatarSelectorWrap}>
@@ -484,12 +464,13 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               ]}
               accessibilityRole="button"
               accessibilityLabel="Set group photo"
-              accessibilityHint="Opens your photo library to choose a group photo"
+              accessibilityHint="Choose a group photo from camera or gallery"
             >
               <GroupAvatarMosaic
                 members={mosaicMembers}
-                groupPhoto={groupPhoto}
+                groupPhoto={groupMedia.avatarDisplayUri}
                 fallbackInitials={title.trim() || 'G'}
+                groupId={idempotencyKeyRef.current}
                 size={Space.xxl + Space.xl}
               />
               {isUploadingPhoto ? (
@@ -505,10 +486,31 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             <Caption color={colors.textMuted} style={styles.avatarHint}>
               {isUploadingPhoto
                 ? 'Uploading photo...'
-                : groupPhoto
+                : groupMedia.avatarDisplayUri
                   ? 'Tap to change photo'
                   : 'Tap to add photo · mosaic auto-generated'}
             </Caption>
+            {groupMedia.avatarDisplayUri && !isUploadingPhoto ? (
+              <Pressable
+                onPress={handleRemoveGroupPhoto}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Remove group photo"
+              >
+                <Caption color={colors.danger} style={styles.removeText}>Remove photo</Caption>
+              </Pressable>
+            ) : null}
+            {groupMedia.avatar.status === 'failed' ? (
+              <View style={styles.mediaErrorRow}>
+                <Ionicons name="warning-outline" size={13} color={colors.danger} />
+                <Text style={[styles.mediaErrorText, { color: colors.danger }]} numberOfLines={2}>
+                  {groupMedia.avatar.error}
+                </Text>
+                <Pressable onPress={() => void groupMedia.retryAvatar()} hitSlop={8}>
+                  <Text style={[styles.retryText, { color: colors.brand }]}>Retry</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.fieldGroup}>
@@ -568,6 +570,12 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             })}
           </View>
         </KeyboardAwareStickyAction>
+        <GroupMediaSourceSheet
+          visible={mediaSourceSheet.visible}
+          onClose={() => setMediaSourceSheet((prev) => ({ ...prev, visible: false }))}
+          onSelect={handleMediaSourceSelect}
+          title={mediaSourceSheet.target === 'avatar' ? 'Group photo' : 'Cover photo'}
+        />
       </FlagshipScreen>
     );
   }
@@ -956,6 +964,28 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center' },
   avatarHint: {
     fontSize: TypographyV2.meta.size },
+  removeText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    marginTop: Space.xs / 2 },
+  mediaErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.xs,
+    paddingHorizontal: Space.sm },
+  mediaErrorText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
+  coverRemoveBtn: {
+    position: 'absolute',
+    top: Space.xs,
+    right: Space.xs,
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center' },
   fieldGroup: {
     marginBottom: Space.lg },
   fieldLabel: {

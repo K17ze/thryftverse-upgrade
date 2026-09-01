@@ -8,12 +8,15 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
+import { colorForId } from '../../utils/avatarColor';
 
 interface ChatTopBarProps {
   title: string;
   subtitle?: string;
   avatarUrl?: string | null;
   initials?: string;
+  /** Stable id for deterministic group placeholder color. */
+  groupId?: string;
   /** Show a verified badge next to the title (trusted seller/partner) */
   isVerified?: boolean;
   /**
@@ -42,6 +45,7 @@ export function ChatTopBar({
   subtitle,
   avatarUrl,
   initials,
+  groupId,
   isVerified = false,
   isOnline = false,
   onBack,
@@ -145,11 +149,11 @@ export function ChatTopBar({
             accessibilityRole={onTitlePress ? 'button' : undefined}
             accessibilityLabel={onTitlePress ? (variant === 'group' ? 'Open group info' : 'Open profile') : undefined}
           >
-            <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
+            <View style={[styles.avatar, !avatarUrl && { backgroundColor: variant === 'group' && groupId ? colorForId(groupId) : colors.surfaceAlt }]}>
               {avatarUrl ? (
                 <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
               ) : variant === 'group' ? (
-                <Ionicons name="people" size={18} color={colors.textSecondary} />
+                <Text style={[styles.avatarText, { color: '#FFFFFF' }]}>{initials ?? 'G'}</Text>
               ) : (
                 <Text style={styles.avatarText}>{initials ?? '?'}</Text>
               )}

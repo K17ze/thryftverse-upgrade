@@ -130,7 +130,7 @@ import {
   DEFAULT_BUYER_QUICK_REPLIES,
   formatDateSeparator,
   formatMessageTime } from "../hooks/chat";
-import { useTypingIndicator } from "../services/realtimeClient";
+import { useTypingIndicator, useChatGroupIdentityEvent } from "../services/realtimeClient";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
 export default function ChatScreen({ navigation, route }: Props) {
@@ -574,6 +574,20 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [suggestedRepliesDismissed, setSuggestedRepliesDismissed] = useState(false);
 
   const isTyping = useTypingIndicator(conversationId);
+
+  // Real-time group identity updates — when an admin changes the group name,
+  // avatar, cover, or description, merge it into the local store immediately
+  // so the chat header and info screen stay current without a refetch.
+  const upsertConversation = useStore((state) => state.upsertConversation);
+  useChatGroupIdentityEvent(conversationId, (payload) => {
+    upsertConversation({
+      id: payload.conversationId,
+      title: payload.title ?? undefined,
+      description: payload.description ?? undefined,
+      avatar: payload.avatar ?? undefined,
+      coverPhoto: payload.coverPhoto ?? undefined,
+    } as any);
+  });
 
   const { formatFromFiat, currencyCode } = useFormattedPrice();
 
@@ -1341,6 +1355,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           subtitle={topBarSubtitle}
           avatarUrl={avatarUri}
           initials={topBarInitials}
+          groupId={isGroup ? conversation?.id : undefined}
           variant={isGroup ? "group" : "dm"}
           isVerified={!isGroup && (partnerProfile?.identityVerified === true || partnerSummary?.identityVerified === true)}
           onBack={() => navigation.goBack()}
