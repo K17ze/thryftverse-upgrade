@@ -65,6 +65,7 @@ import {
   useProductSocialState,
   useRecommendations,
   useSellerTrust,
+  useSellerFollow,
   isRecommendationLook,
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
@@ -353,6 +354,7 @@ export default function AssetDetailScreen() {
   );
 
   const { data: issuerTrust } = useSellerTrust(asset?.issuerId);
+  const issuerFollowMutation = useSellerFollow(asset?.issuerId);
 
   if (isLoading) {
     return (
@@ -792,6 +794,24 @@ export default function AssetDetailScreen() {
                         } finally {
                           setIsResolvingConversation(false);
                         }
+                      },
+                    }
+                  : undefined
+              }
+              secondaryAction={
+                canMessageIssuer
+                  ? {
+                      label: issuerFollowMutation.isPending ? 'Following…' : (issuerTrust?.isFollowing ? 'Following' : 'Follow'),
+                      onPress: () => {
+                        if (!requireAuth('follow_seller')) return;
+                        issuerFollowMutation.mutate(undefined, {
+                          onSuccess: (data) => {
+                            show(data.isFollowing ? 'Followed issuer' : 'Unfollowed issuer', 'success');
+                          },
+                          onError: () => {
+                            show('Could not follow issuer. Try again.', 'error');
+                          },
+                        });
                       },
                     }
                   : undefined

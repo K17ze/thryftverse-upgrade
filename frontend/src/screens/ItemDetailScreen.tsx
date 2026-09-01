@@ -974,13 +974,14 @@ export default function ItemDetailScreen() {
 
         <CommerceDetailOfflineBanner isOffline={isOffline} />
 
-        {/* ── First-viewport seller trust row ──
+        {/* ── First-viewport seller trust row (display-only) ──
             Per spec: seller identity + verification badge + stats line
             must appear in the first viewport, right after the media
             stage and before the price. This is the buyer's first trust
-            signal — who is selling this item. The full SellerInfoCard
-            (with Follow / Message / View shop actions and the
-            "More from this seller" rail) lives in Zone E below. */}
+            signal — who is selling this item. Display-only — no onPress.
+            The full SellerInfoCard (with Follow / Message / View shop
+            actions and the "More from this seller" rail) lives in Zone
+            E below and is the sole profile navigation point. */}
         {seller ? (
           <View style={[styles.firstViewportSellerRow, { borderBottomColor: colors.borderSubtle }]}>
             <CommerceDetailSellerRow
@@ -997,10 +998,6 @@ export default function ItemDetailScreen() {
                   : undefined
               }
               locationLine={seller?.location ?? undefined}
-              onPress={() => {
-                if (item) ProductAnalytics.sellerProfileOpen(item.id, seller.id);
-                openProfile(navigation, seller.id, currentUser?.id);
-              }}
             />
           </View>
         ) : null}

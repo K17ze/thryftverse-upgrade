@@ -800,6 +800,8 @@ export default function AuctionDetailScreen() {
 
         <View style={[styles.identityExtension, { borderTopColor: colors.borderSubtle }]}>
           <CommerceDetailSellerRow
+            variant="rich"
+            avatarUri={sellerTrustData?.avatar ?? auction.seller.avatarUrl ?? undefined}
             name={auction.seller.displayName ?? auction.seller.username}
             verified={sellerTrustData?.verified}
             ratingLine={
@@ -807,6 +809,16 @@ export default function AuctionDetailScreen() {
                 ? `${sellerTrustData.rating.toFixed(1)}${sellerTrustData?.reviewCount != null ? ` · ${sellerTrustData.reviewCount} reviews` : ''}`
                 : undefined
             }
+            statsLine={
+              sellerTrustData
+                ? [
+                    sellerTrustData.completedSales != null ? `${sellerTrustData.completedSales} sales` : null,
+                    sellerTrustData.rating != null ? `${sellerTrustData.rating.toFixed(1)}★` : null,
+                    sellerTrustData.responseRate != null ? `${sellerTrustData.responseRate}% response` : null,
+                  ].filter(Boolean).join(' · ') || undefined
+                : undefined
+            }
+            locationLine={sellerTrustData?.location ?? undefined}
             onPress={() => openProfile(navigation, auction.seller.id, currentUser?.id)}
             primaryAction={
               !isSeller
@@ -1011,12 +1023,11 @@ export default function AuctionDetailScreen() {
           />
         )}
 
-        {/* The slim seller row near identity is the primary seller
-            presentation. The full SellerTrustCard is not rendered by
-            default — the slim row already carries Follow/Message and
-            navigates to the full profile on tap. Spec 04: "choose either
-            the slim seller row or the full seller card as the primary
-            presentation; do not show both by default." */}
+        {/* The rich seller row near identity is the primary seller
+            presentation — avatar, name, verification, stats, location,
+            Follow and Message actions. No separate SellerInfoCard is
+            rendered; the rich row carries all seller trust signals and
+            actions. Tapping the row navigates to the full profile. */}
 
         {/* ── Discovery — maximum one related-auctions rail + one Seen in
             Looks rail. Per spec 02_AUCTION §9: no generic duplicate
