@@ -35,6 +35,8 @@ import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -228,15 +230,17 @@ export function CreatorToolButton({
         {loading ? null : glyph ? (
           <CreatorGlyph
             name={glyph}
-            size={GLYPH_SIZE}
+            size={IconSize.lg}
             color={glyphColor}
             selected={active}
           />
         ) : icon ? (
-          <Ionicons
-            name={icon as React.ComponentProps<typeof Ionicons>['name']}
-            size={GLYPH_SIZE}
+          <AppIcon
+            name={icon}
+            size={IconSize.lg}
             color={glyphColor}
+            opticalCenter={true}
+            accessible={false}
           />
         ) : null}
 

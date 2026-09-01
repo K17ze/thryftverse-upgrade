@@ -50,7 +50,7 @@ export interface AnimatedEmptyStateProps {
  */
 export function AnimatedEmptyState({
   animation,
-  fallbackIcon = 'cube-outline',
+  fallbackIcon = 'image-outline',
   title,
   subtitle,
   actionLabel,

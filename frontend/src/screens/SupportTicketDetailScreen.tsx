@@ -62,7 +62,7 @@ const EVENT_DESCRIPTORS: Record<string, EventDescriptor> = {
   message_sent: { label: 'Message sent', icon: 'chatbubble-outline' },
   customer_message: { label: 'Your message', icon: 'chatbubble-outline' },
   agent_message: { label: 'Agent reply', icon: 'chatbubble-ellipses-outline' },
-  agent_ai_message: { label: 'Assistant reply', icon: 'hardware-chip-outline' },
+  agent_ai_message: { label: 'Assistant reply', icon: 'bulb-outline' },
   agent_human_message: { label: 'Support reply', icon: 'chatbubble-ellipses-outline' },
   system_message: { label: 'System notice', icon: 'information-circle-outline' },
   handoff_requested: { label: 'Escalated to human agent', icon: 'person-add-outline' },
@@ -490,7 +490,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
             accessibilityRole="button"
             accessibilityLabel="View order"
           >
-            <Ionicons name="cube-outline" size={18} color={colors.textSecondary} />
+            <Ionicons name="bag-handle-outline" size={18} color={colors.textSecondary} />
             <Text style={styles.orderLinkText}>View order</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </AnimatedPressable>

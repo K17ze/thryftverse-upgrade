@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, PressScale, CommerceLayout, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
@@ -69,7 +69,7 @@ export function CommerceRelatedRail({
                 />
               ) : (
                 <ImageEmptyGraphic
-                  icon={(mode === 'auction' ? 'trophy-outline' : 'pricetag-outline') as keyof typeof Ionicons.glyphMap}
+                  icon={(mode === 'auction' ? 'trophy-outline' : 'bag-handle-outline') as keyof typeof Ionicons.glyphMap}
                   style={[styles.cardImage, styles.cardImageContainer]}
                 />
               )}
@@ -144,21 +144,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
     gap: Space.sm + Space.xs },
   card: {
-    width: 148 },
+    width: CommerceLayout.relatedCardWidth },
   cardPressed: {
-    opacity: 0.72,
-    transform: [{ scale: 0.985 }] },
+    opacity: 0.85,
+    transform: [{ scale: PressScale.gentle }] },
   cardImage: {
     width: '100%',
-    height: 168 },
+    height: CommerceLayout.relatedCardImageHeight },
   cardImageContainer: {
     width: '100%',
-    height: 168,
+    height: CommerceLayout.relatedCardImageHeight,
     borderRadius: Radius.lg,
     overflow: 'hidden' },
   cardImagePlaceholder: {
     width: '100%',
-    height: 168,
+    height: CommerceLayout.relatedCardImageHeight,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center' },
@@ -173,7 +173,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.md },
   badgeText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
     color: colors.scrimTextPrimary,
     letterSpacing: 0.3 },
   cardBody: {
@@ -195,6 +195,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   cardMeta: {
     marginTop: 2,
     fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.regular },
+    fontFamily: FontFamily.regular },
   cardMetaStrong: {
-    fontFamily: Typography.family.semibold } });
+    fontFamily: FontFamily.semibold } });

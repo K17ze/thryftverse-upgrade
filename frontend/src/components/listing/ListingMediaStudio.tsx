@@ -506,7 +506,9 @@ export function ListingMediaStudio({
           <Text style={styles.countText}>{items.length} / {maxCount}</Text>
         </View>
 
-        {/* Remove cover — only for removable items */}
+        {/* Remove cover — only for removable items.
+            Visible chrome stays a 32pt circle; hitSlop extends the target
+            to the 44pt minimum (AGENTS.md §13). */}
         {coverCanRemove && (
           <Pressable
             style={styles.coverRemoveBtn}
@@ -747,7 +749,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center' },
   coverStatusLabel: {
@@ -765,7 +767,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     left: 0,
     right: 0,
     height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)' },
+    backgroundColor: colors.scrimTextTertiary },
   coverUploadedBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -792,7 +794,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(255,255,255,0.2)' },
+    backgroundColor: colors.scrimTextTertiary },
   coverRetryText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
@@ -879,7 +881,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center' },
   thumbStatusLabel: {
@@ -892,7 +894,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.2)' },
+    backgroundColor: colors.scrimTextTertiary },
   progressBarFill: {
     height: 3,
     backgroundColor: colors.brand },
@@ -906,7 +908,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.mediaOverlayScrim,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4 },
@@ -932,7 +934,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2 },
@@ -965,7 +967,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.55)' },
+    backgroundColor: colors.mediaOverlayScrim },
   thumbSetCoverText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,

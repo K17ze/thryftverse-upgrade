@@ -522,7 +522,7 @@ export default function LoginScreen() {
                 <View style={styles.twoFactorGroup}>
                   <View style={styles.twoFactorHeader}>
                     <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
-                      <Ionicons name="shield-checkmark-outline" size={16} color={colors.commerceTrust} />
+                      <Ionicons name="checkmark-circle-outline" size={16} color={colors.commerceTrust} />
                     </View>
                     <Text style={styles.twoFactorTitle} maxFontSizeMultiplier={1.3}>Two-factor authentication</Text>
                   </View>
@@ -730,7 +730,7 @@ export default function LoginScreen() {
                     <View style={styles.otpTwoFactorGroup}>
                       <View style={styles.twoFactorHeader}>
                         <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
-                          <Ionicons name="shield-checkmark-outline" size={16} color={colors.commerceTrust} />
+                          <Ionicons name="checkmark-circle-outline" size={16} color={colors.commerceTrust} />
                         </View>
                         <Text style={styles.twoFactorTitle} maxFontSizeMultiplier={1.3}>Two-factor authentication</Text>
                       </View>

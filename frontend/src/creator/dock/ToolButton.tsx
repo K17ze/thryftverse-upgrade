@@ -47,6 +47,8 @@ export interface ToolButtonProps {
  * source of truth for bgColor/iconColor — ToolButton does not override them
  * based on its own weight.
  */
+import { AppIcon } from '../../components/common/AppIcon';
+
 export const ToolButton = React.memo(function ToolButton({
   tool,
   size,
@@ -91,10 +93,12 @@ export const ToolButton = React.memo(function ToolButton({
           },
         ]}
       >
-        <Ionicons
+        <AppIcon
           name={tool.icon}
           size={iconSize}
           color={iconColor}
+          opticalCenter={true}
+          accessible={false}
         />
       </View>
 

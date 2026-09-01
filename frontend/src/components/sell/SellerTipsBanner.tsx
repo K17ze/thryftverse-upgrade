@@ -44,7 +44,7 @@ function SellerTipsBanner({ onDismiss }: SellerTipsBannerProps) {
           </Text>
         </View>
         <View style={styles.sellerTipRow}>
-          <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+          <Ionicons name="bag-handle-outline" size={12} color={colors.textMuted} aria-hidden={true} />
           <Text style={[styles.sellerTipText, { color: colors.textSecondary }]}>
             {t('listing.create.sellingTipPricing')}
           </Text>

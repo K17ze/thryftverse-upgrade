@@ -52,7 +52,7 @@ export const VERIFICATION_TIERS: Record<VerificationTier, VerificationTierInfo> 
   seller: {
     tier: 'seller',
     label: 'Trusted Seller',
-    icon: 'shield-checkmark',
+    icon: 'checkmark-circle',
     color: 'success',
     description: 'Meets seller standards programme',
   },

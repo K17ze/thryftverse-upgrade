@@ -142,7 +142,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
       { text: 'Never worn', color: '#16213e', fontFamily: 'modern', fontSize: TypographyV2.body.size, x: 30, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🏷️', x: 300, y: 120 }],
-    thumbnailColor: '#1C5631', icon: 'pricetag' },
+    thumbnailColor: '#1C5631', icon: 'bag-handle-outline' },
   {
     id: 'tpl_vintage', name: 'Vintage Find', category: 'general', layout: 'single',
     backgroundColor: '#d4a76a', filter: 'reyes',
@@ -189,7 +189,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
       { text: '3 for £50', color: '#0f3460', fontFamily: 'classic', fontSize: 18, x: 30, y: 130 },
     ],
     stickers: [{ type: 'emoji', content: '📦', x: 280, y: 80 }],
-    thumbnailColor: '#06489A', icon: 'cube' },
+    thumbnailColor: '#06489A', icon: 'layers-outline' },
   {
     id: 'tpl_rare', name: 'Rare Find', category: 'general', layout: 'single',
     backgroundColor: '#222f3e', filter: 'moon',

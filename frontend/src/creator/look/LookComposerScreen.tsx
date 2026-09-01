@@ -134,12 +134,23 @@ function SlideUpSurface({ children }: { children: React.ReactNode }) {
   return <Reanimated.View style={animStyle}>{children}</Reanimated.View>;
 }
 
-// ── Typed navigation props ──────────────────────────────────────────
-// The Look composer is registered as the 'CreatorStudio' route in the
-// root stack. These types give useNavigation/useRoute full param
-// inference instead of erasing to `any`.
 type LookComposerRouteProp = RouteProp<RootStackParamList, 'CreatorStudio'>;
 type LookComposerNavProp = NativeStackNavigationProp<RootStackParamList, 'CreatorStudio'>;
+
+// ── Global overflow groups ──────────────────────────────────────────
+// Grouped like the Poster composer's overflow sheet: Canvas, Project,
+// Accessibility, Help. Context tools render above these.
+type GlobalOverflowItem = {
+  id: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+};
+
+type GlobalOverflowGroup = {
+  id: string;
+  items: GlobalOverflowItem[];
+};
 
 function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'look' | 'poster') => void }) {
   const navigation = useNavigation<LookComposerNavProp>();
@@ -174,6 +185,9 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     updateLayerLive,
     addLayer,
     commitLayerTransform,
+    clipboard,
+    copyLayer,
+    pasteLayer,
     isLoadingDraft,
     setDocument,
     saveDraft,
@@ -801,19 +815,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     }
   }, [selectedLayer, haptic, cutoutSupported]);
 
-  // ── Crop action for selected media ──────────────────────────────────
-  // Perform a real pixel crop. Resizing the layer frame would only change
-  // the collage layout and must never be labelled as cropping.
-  const handleCropAction = useCallback(() => {
-    if (!selectedLayer || selectedLayer.type !== 'media') {
-      haptic.light();
-      return;
-    }
-    haptic.medium();
-    setCropTarget(selectedLayer);
-  }, [selectedLayer, haptic]);
-
-  // ── Adjust action for selected media ───────────────────────────────
+  // ── Adjust action for selected media ────────────────────────────────
   // Opens the effects bottom surface which contains the AdjustPanel
   // (fine-tuning sliders for brightness, contrast, saturation, etc).
   // This is the correct surface for "Adjust" — not the cutout sheet
@@ -916,17 +918,6 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     }, 'Change alignment');
   }, [selectedLayer, updateLayer, haptic]);
 
-  // ── Product tag actions ─────────────────────────────────────────────
-  // Price tool — opens the inline text editor focused on the price field.
-  // Distinct from the Item tool which opens the product link picker.
-  const handleProductPriceAction = useCallback(() => {
-    if (!selectedLayer || selectedLayer.type !== 'product') {
-      haptic.light();
-      return;
-    }
-    handleEditLayer(selectedLayer);
-  }, [selectedLayer, handleEditLayer, haptic]);
-
   // ── Multi-select operations (extracted to useLookMultiSelect) ──────
   const {
     handleMultiDragStart,
@@ -978,24 +969,19 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         handleReorderLayer,
         handleDuplicateLayer,
         handleDeleteLayer,
-        handleEditLayer,
         handleLinkItem,
         handleTextEditAction,
         handleTextFontAction,
         handleTextColorAction,
         handleTextAlignAction,
-        handleProductPriceAction,
-        handleCropAction,
+        handleCopyLayer: copyLayer,
+        handlePasteLayer: pasteLayer,
+        canPaste: clipboard !== null,
         handleMultiFront,
         handleMultiBack,
         handleMultiDelete,
-        setShowLayers,
-        setShowPreview,
-        setShowSettings,
-        setShowOverflow,
-        setCropTarget,
-        navigate: (route: string) => (navigation.navigate as (r: string) => void)(route),
-        haptic }),
+        handleMultiAlign,
+        setCropTarget }),
     [
       selectedLayer,
       cutoutSupported,
@@ -1011,23 +997,18 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       handleReorderLayer,
       handleDuplicateLayer,
       handleDeleteLayer,
-      handleEditLayer,
       handleLinkItem,
       handleTextEditAction,
       handleTextFontAction,
       handleTextColorAction,
       handleTextAlignAction,
-      handleProductPriceAction,
-      handleCropAction,
+      copyLayer,
+      pasteLayer,
+      clipboard,
       handleMultiFront,
       handleMultiBack,
       handleMultiDelete,
-      setShowLayers,
-      setShowPreview,
-      setShowSettings,
-      setShowOverflow,
-      haptic,
-      navigation,
+      handleMultiAlign,
     ],
   );
 
@@ -1041,6 +1022,59 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     () => getOverflowTools(activeToolContext, toolGroups),
     [activeToolContext, toolGroups],
   );
+
+  // ── Global overflow groups ──────────────────────────────────────────
+  // Canvas / Project / Accessibility / Help — grouped like the Poster
+  // composer's overflow sheet. Rendered after the context tools and one
+  // hairline divider.
+  const globalOverflowGroups: GlobalOverflowGroup[] = [
+    {
+      id: 'canvas',
+      items: [
+        { id: 'look-background', icon: 'color-palette-outline', label: 'Background', onPress: () => { setShowBackground(true); setShowOverflow(false); } },
+        { id: 'look-safe-area', icon: showSafeZone ? 'scan-circle-outline' : 'scan-outline', label: showSafeZone ? 'Safe Area On' : 'Safe Area', onPress: () => { setShowSafeZone(!showSafeZone); setShowOverflow(false); } },
+      ],
+    },
+    {
+      id: 'project',
+      items: [
+        { id: 'look-preview', icon: 'eye-outline', label: 'Preview', onPress: () => { setShowPreview(true); setShowOverflow(false); } },
+        { id: 'look-drafts', icon: 'document-outline', label: 'Drafts', onPress: () => { navigation.navigate('CreatorDraftList'); setShowOverflow(false); } },
+        { id: 'look-settings', icon: 'settings-outline', label: 'Settings', onPress: () => { setShowSettings(true); setShowOverflow(false); } },
+      ],
+    },
+    {
+      id: 'accessibility',
+      items: [
+        { id: 'look-layers', icon: 'layers-outline', label: 'Layers', onPress: () => { setShowLayers(true); setShowOverflow(false); } },
+        { id: 'look-a11y-move', icon: 'accessibility-outline', label: 'Move', onPress: () => { setShowA11yMove(true); setShowOverflow(false); } },
+        { id: 'look-a11y-arrange', icon: 'swap-vertical-outline', label: 'Arrange', onPress: () => { setShowA11yZOrder(true); setShowOverflow(false); } },
+      ],
+    },
+    {
+      id: 'help',
+      items: [
+        { id: 'look-help', icon: 'help-circle-outline', label: 'Help', onPress: () => { setShowHelp(true); setShowOverflow(false); } },
+      ],
+    },
+  ];
+
+  // Dedup safety net — a context tool never repeats a global tool (by id or label).
+  const globalToolKeys = new Set<string>();
+  for (const group of globalOverflowGroups) {
+    for (const item of group.items) {
+      globalToolKeys.add(item.id);
+      globalToolKeys.add(item.label);
+    }
+  }
+  const seenContextToolKeys = new Set<string>();
+  const overflowContextTools = contextOverflowTools.filter((tool) => {
+    if (globalToolKeys.has(tool.id) || globalToolKeys.has(tool.label)) return false;
+    if (seenContextToolKeys.has(tool.id) || seenContextToolKeys.has(tool.label)) return false;
+    seenContextToolKeys.add(tool.id);
+    seenContextToolKeys.add(tool.label);
+    return true;
+  });
 
   // ── Layout preview rail (autoCompose) ───────────────────────────────
   // Replaces the blind "Try arrangement" cycling button. When the user
@@ -1666,85 +1700,48 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         </SlideUpSurface>
       )}
 
-      {/* ── Overflow menu (context tools + global tools) ───────────────── */}
-      {/* Context-specific overflow tools (Effects, Cutout, Front, Back,
-          Duplicate, Delete, etc.) appear first, followed by a hairline
-          separator, then the global editor tools (Layers, Background,
-          Preview, Drafts, Accessibility, Safe Zone, Settings, Help). */}
+      {/* ── Overflow menu (context tools, then grouped global tools) ────── */}
       {showOverflow && (
         <View style={[styles.overflowContainer, { top: insets.top + 48 }]}>
-          <View style={[styles.overflowMenu, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-            {/* ── Context-specific overflow tools ── */}
-            {contextOverflowTools.map((tool) => (
-              <OverflowItem
-                key={tool.id}
-                icon={tool.icon}
-                glyph={tool.glyph}
-                label={tool.label}
-                disabled={tool.disabled}
-                colors={colors}
-                onPress={() => { tool.onPress(); setShowOverflow(false); }}
-              />
-            ))}
-            {/* ── Hairline separator ── */}
-            {contextOverflowTools.length > 0 && (
-              <View style={[styles.overflowSectionDivider, { backgroundColor: colors.border }]} />
-            )}
-            {/* ── Global editor tools ── */}
-            <OverflowItem
-              icon="layers-outline"
-              label="Layers"
-              onPress={() => { setShowLayers(true); setShowOverflow(false); }}
-              colors={colors}
-            />
-            <OverflowItem
-              icon="color-palette-outline"
-              label="Background"
-              onPress={() => { setShowBackground(true); setShowOverflow(false); }}
-              colors={colors}
-            />
-            <OverflowItem
-              icon="eye-outline"
-              label="Preview"
-              onPress={() => { setShowPreview(true); setShowOverflow(false); }}
-              colors={colors}
-            />
-            <OverflowItem
-              icon="document-outline"
-              label="Drafts"
-              onPress={() => { navigation.navigate('CreatorDraftList'); setShowOverflow(false); }}
-              colors={colors}
-            />
-            <OverflowItem
-              icon="accessibility-outline"
-              label="Move"
-              onPress={() => { setShowA11yMove(true); setShowOverflow(false); }}
-              colors={colors}
-            />
-            <OverflowItem
-              icon="accessibility-outline"
-              label="Arrange"
-              onPress={() => { setShowA11yZOrder(true); setShowOverflow(false); }}
-              colors={colors}
-            />
-            <OverflowItem
-              icon={showSafeZone ? 'scan-circle-outline' : 'scan-outline'}
-              label={showSafeZone ? 'Safe Area On' : 'Safe Area'}
-              onPress={() => { setShowSafeZone(!showSafeZone); setShowOverflow(false); }}
-              colors={colors}
-            />
-            <OverflowItem
-              icon="settings-outline"
-              label="Settings"
-              onPress={() => { setShowSettings(true); setShowOverflow(false); }}
-              colors={colors}
-            />
-            <OverflowItem
-              icon="help-circle-outline"
-              label="Help"
-              onPress={() => { setShowHelp(true); setShowOverflow(false); }}
-              colors={colors}
-            />
+          <View
+            style={[
+              styles.overflowMenu,
+              { borderColor: colors.border, backgroundColor: colors.surface, maxHeight: Math.min(screenHeight * 0.68, 620) },
+            ]}
+          >
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {overflowContextTools.map((tool) => (
+                <OverflowItem
+                  key={tool.id}
+                  icon={tool.icon}
+                  glyph={tool.glyph}
+                  label={tool.label}
+                  disabled={tool.disabled}
+                  danger={tool.id.endsWith('-delete')}
+                  colors={colors}
+                  onPress={() => { tool.onPress(); setShowOverflow(false); }}
+                />
+              ))}
+              {overflowContextTools.length > 0 && (
+                <View style={[styles.overflowSectionDivider, { backgroundColor: colors.border }]} />
+              )}
+              {globalOverflowGroups.map((group, groupIndex) => (
+                <View
+                  key={group.id}
+                  style={[styles.overflowGroup, groupIndex > 0 && styles.overflowGroupGap]}
+                >
+                  {group.items.map((item) => (
+                    <OverflowItem
+                      key={item.id}
+                      icon={item.icon}
+                      label={item.label}
+                      onPress={() => { item.onPress(); setShowOverflow(false); }}
+                      colors={colors}
+                    />
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
           </View>
           <Pressable style={styles.overflowBackdrop} onPress={() => setShowOverflow(false)} />
         </View>
@@ -2249,6 +2246,10 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     marginVertical: Space.xs,
     marginHorizontal: Space.sm },
+  overflowGroup: {
+    gap: Space.sm },
+  overflowGroupGap: {
+    marginTop: Space.md },
   // ── Effects surface (shared header styles) ──
   effectsSheetHeader: {
     flexDirection: 'row',

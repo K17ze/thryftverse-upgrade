@@ -460,9 +460,9 @@ export function LookSourceTray({
   const isEmpty = currentItems.length === 0 && !isSearching;
 
   const tabs: { key: TabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { key: 'foryou', label: 'Discover', icon: 'compass-outline' },
+    { key: 'foryou', label: 'Discover', icon: 'search-outline' },
     { key: 'closet', label: 'Closet', icon: 'heart-outline' },
-    { key: 'listings', label: 'Listings', icon: 'pricetag-outline' },
+    { key: 'listings', label: 'Listings', icon: 'bag-handle-outline' },
     { key: 'search', label: 'Search', icon: 'search-outline' },
   ];
 

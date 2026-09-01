@@ -27,7 +27,7 @@ import {
   Space,
   Radius,
   Stroke,
-  TypeStyles,
+  FontFamily,
   Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
@@ -71,7 +71,7 @@ const TAG_DEFINITIONS: SustainabilityTagDef[] = [
   {
     id: 'plastic-free-packaging',
     label: 'Plastic-free packaging',
-    icon: 'cube-outline',
+    icon: 'leaf-outline',
     impact: 'You ship in eco-friendly, plastic-free packaging.' },
 ];
 
@@ -225,11 +225,10 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginRight: Space.xs / 2 },
     sectionTitle: {
       fontSize: TypographyV2.bodyStrong.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     sectionHint: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: FontFamily.regular,
       marginBottom: Space.sm,
       lineHeight: TypographyV2.meta.lineHeight },
     chipWrap: {
@@ -249,8 +248,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginRight: Space.xs / 4 },
     chipLabel: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     summary: {
       marginTop: Space.md,
       padding: Space.sm + 2,
@@ -262,8 +260,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginBottom: Space.xs },
     summaryTitle: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     summaryRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -275,9 +272,8 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     summaryText: {
       flex: 1,
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: FontFamily.regular,
       lineHeight: TypographyV2.meta.lineHeight },
     summaryLabel: {
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' } });
+      fontFamily: FontFamily.semibold } });
 }

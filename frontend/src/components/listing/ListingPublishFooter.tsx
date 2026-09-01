@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography, Radius, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 type PublicationStage =
   | 'idle'
@@ -92,7 +93,7 @@ export function ListingPublishFooter({
             <ActivityIndicator size="small" color={colors.brand} />
           )}
           {publicationStage === 'failed_recoverable' && (
-            <Ionicons name="warning-outline" size={14} color={colors.danger} />
+            <AppIcon name="warning-outline" size={14} color="danger" opticalCenter accessible={false} />
           )}
           <Text
             style={[
@@ -127,7 +128,7 @@ export function ListingPublishFooter({
           accessibilityRole="button"
           accessibilityLabel="Preview listing"
         >
-          <Ionicons name="eye-outline" size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
+          <AppIcon name="eye-outline" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} style={{ marginRight: 6 }} />
           <Text style={styles.previewText}>Preview</Text>
         </Pressable>
         <Pressable
@@ -148,7 +149,7 @@ export function ListingPublishFooter({
           ) : (
             <>
               {!publishDisabled && (
-                <Ionicons name="arrow-up-circle" size={18} color={colors.textInverse} style={{ marginRight: 6 }} />
+                <AppIcon name="arrow-up-circle" size={18} color="textInverse" opticalCenter accessible={false} style={{ marginRight: 6 }} />
               )}
               <Text
                 style={[

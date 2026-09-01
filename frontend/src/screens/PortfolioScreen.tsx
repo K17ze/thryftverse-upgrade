@@ -24,14 +24,9 @@ import {
   CoOwnPortfolioStorytelling,
   CoOwnPortfolioPerformanceChart,
   CoOwnOfflineBanner,
-  CoOwnReconciliationBanner,
   type CoOwnPositionAction,
 } from '../components/coown';
 import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM, type CoOwnPortfolioSummary } from '../services/coOwnPortfolio';
-// listCoOwnAssets and fetchCoOwnHoldings are re-exported here for transparency.
-// The coOwnPortfolio adapter composes them internally; importing them here
-// keeps the screen's data dependencies visible and auditable.
-import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useBackendData } from '../context/BackendDataContext';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -228,7 +223,7 @@ export default function PortfolioScreen() {
     const actions: CoOwnPositionAction[] = [
       {
         label: 'View item details',
-        icon: 'cube-outline',
+        icon: 'document-text-outline',
         onPress: () => navigation.navigate('AssetDetail', { assetId: p.assetId }),
         variant: 'primary',
       },
@@ -426,7 +421,6 @@ export default function PortfolioScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
-      <CoOwnReconciliationBanner isActive={false} />
 
       <FlashList
         data={activePortfolioTab === 'positions' ? positions : []}
@@ -482,66 +476,67 @@ export default function PortfolioScreen() {
                 </View>
               )}
 
-              {/* Phase 3: 4-tile summary — total return / unrealised / realised / distributions */}
-              <View style={[styles.summaryStats, { borderColor: colors.border }]}>
-                <View style={styles.summaryStat}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Total return</Text>
+              {/* ── P&L breakdown — flat hairline rows, not a 4-tile grid ──
+                  Per anti-AI design: remove the generic dashboard silhouette.
+                  Each metric is a flat row with a hairline divider. */}
+              <View style={styles.pnlRows}>
+                <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Total return</Text>
                   <CoOwnNumericText
                     value={summary.totalUnrealizedGbp + summary.totalRealizedGbp}
                     unit="1ZE"
-                    size="priceList"
+                    size="price"
                     signed
                     showUnit={false}
                     showGlyph={false}
                     color={(summary.totalUnrealizedGbp + summary.totalRealizedGbp) >= 0 ? colors.success : colors.danger}
                   />
                 </View>
-                <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Unrealised</Text>
+                <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Unrealised</Text>
                   <CoOwnNumericText
                     value={summary.totalUnrealizedGbp}
                     unit="1ZE"
-                    size="priceList"
+                    size="price"
                     signed
                     showUnit={false}
                     showGlyph={false}
                     color={summary.totalUnrealizedGbp >= 0 ? colors.success : colors.danger}
                   />
                 </View>
-                <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Realised</Text>
+                <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Realised</Text>
                   <CoOwnNumericText
                     value={summary.totalRealizedGbp}
                     unit="1ZE"
-                    size="priceList"
+                    size="price"
                     signed
                     showUnit={false}
                     showGlyph={false}
                     color={summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}
                   />
                 </View>
-                <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Distrib.</Text>
-                  <CoOwnNumericText
-                    value={totalDistributionsGbp}
-                    unit="1ZE"
-                    size="priceList"
-                    signed
-                    showUnit={false}
-                    showGlyph={false}
-                    color={totalDistributionsGbp >= 0 ? colors.success : colors.danger}
-                  />
-                </View>
+                {totalDistributionsGbp > 0 && (
+                  <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Distributions</Text>
+                    <CoOwnNumericText
+                      value={totalDistributionsGbp}
+                      unit="1ZE"
+                      size="price"
+                      signed
+                      showUnit={false}
+                      showGlyph={false}
+                      color={totalDistributionsGbp >= 0 ? colors.success : colors.danger}
+                    />
+                  </View>
+                )}
               </View>
 
-              {/* Phase 3: data-quality note — only when true */}
+              {/* Data-quality note — only when stale marks exist */}
               {staleMarkCount > 0 && (
-                <View style={[styles.dataQualityNote, { backgroundColor: colors.warningSubtle }]}>
-                  <Ionicons name="time-outline" size={12} color={colors.warning} />
-                  <Text style={[styles.dataQualityText, { color: colors.warning }]} numberOfLines={2}>
-                    Data quality: {staleMarkCount} {staleMarkCount === 1 ? 'position has' : 'positions have'} stale marks ({'>'}24h)
-                  </Text>
-                </View>
+                <Text style={[styles.dataQualityText, { color: colors.warning }]} numberOfLines={2}>
+                  {staleMarkCount} {staleMarkCount === 1 ? 'position has' : 'positions have'} stale marks ({'>'}24h)
+                </Text>
               )}
             </View>
 
@@ -923,29 +918,19 @@ const styles = StyleSheet.create({
   // Values use Numeric.priceList (20/24/700) with tabular-nums for stable
   // column alignment — per spec 11_COOWN: "Monetary and unit quantities
   // never change width erratically."
-  summaryStats: {
+  // ── P&L flat rows — replaced 4-tile grid ──
+  pnlRows: {
+    marginTop: Space.sm },
+  pnlRow: {
     flexDirection: 'row',
-    paddingTop: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  summaryStat: {
-    flex: 1,
-    paddingHorizontal: Space.sm,
     alignItems: 'center',
-    gap: Space.xs,
-  },
-  summaryStatLabel: {
-    fontSize: TypographyV2.label.size,
-    lineHeight: TypographyV2.label.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
-  summaryStatValue: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: FontFamily.bold,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth },
+  pnlLabel: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   // ── Allocation card — calm, professional breakdown ──
   // Per spec 11_COOWN: 24pt between sections. Hairline separator, no card
   // chrome — flat canvas with spacing communicates relationship.
@@ -1231,19 +1216,8 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  // ── Data quality note — calm, professional warning ──
-  // Uses warning color with subtle background. Tabular-nums for the count.
-  dataQualityNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-    borderRadius: RadiusRoleValue.compactControl,
-    marginTop: Space.sm,
-  },
+  // ── Data quality text — flat, no chrome ──
   dataQualityText: {
-    flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,

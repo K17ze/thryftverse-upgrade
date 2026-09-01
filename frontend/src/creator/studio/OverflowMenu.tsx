@@ -19,6 +19,9 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
 import { CreatorGlyph, type CreatorGlyphName } from '../controls/CreatorGlyph';
 
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
+
 // ── Overflow menu item ─────────────────────────────────────────────
 // Canonical overflow row used by the Studio overflow menu, the Poster
 // composer overflow sheet, and the Look composer overflow menu.
@@ -29,7 +32,7 @@ import { CreatorGlyph, type CreatorGlyphName } from '../controls/CreatorGlyph';
 // row renders white-on-dark (poster/look full-bleed chrome).
 
 export interface OverflowItemProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: string;
   glyph?: CreatorGlyphName;
   label: string;
   colors?: ThemeColors;
@@ -71,15 +74,15 @@ export const OverflowItem = React.memo(function OverflowItem({
       hitSlop={12}
     >
       {glyph ? (
-        <CreatorGlyph name={glyph} size={IconGrammar.standard} color={contentColor} />
+        <CreatorGlyph name={glyph} size={IconSize.lg} color={contentColor} />
       ) : (
-        <Ionicons name={icon} size={IconGrammar.standard} color={contentColor} />
+        <AppIcon name={icon} size={IconSize.lg} color={contentColor} opticalCenter={true} accessible={false} />
       )}
       <Text style={[styles.overflowItemText, { color: contentColor }]}>
         {label}
       </Text>
       {selected && (
-        <Ionicons name="checkmark" size={IconGrammar.standard} color={contentColor} />
+        <AppIcon name="check" size={IconSize.md} color={contentColor} opticalCenter={true} accessible={false} />
       )}
     </PressScale>
   );

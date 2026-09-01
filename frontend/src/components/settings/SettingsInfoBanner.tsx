@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize, type SemanticIconName } from '../../theme/iconTokens';
 
 type BannerTone = 'info' | 'success' | 'warning' | 'error';
 
@@ -14,7 +16,7 @@ export interface SettingsInfoBannerProps {
   title?: string;
   /** Supporting copy beneath the title. */
   description?: string;
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  icon?: SemanticIconName | React.ComponentProps<typeof Ionicons>['name'];
   /** Legacy prop — prefer `tone`. */
   variant?: 'info' | 'warning' | 'error';
   /** Visual tone. Takes precedence over `variant`. */
@@ -25,7 +27,7 @@ export function SettingsInfoBanner({
   text,
   title,
   description,
-  icon = 'information-circle-outline',
+  icon = 'info',
   variant,
   tone }: SettingsInfoBannerProps) {
   const { colors } = useAppTheme();
@@ -43,7 +45,7 @@ export function SettingsInfoBanner({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.surfaceAlt }]}>
-      <Ionicons name={icon} size={18} color={color} />
+      <AppIcon name={icon} size={IconSize.sm} color={color} opticalCenter accessible={false} />
       {hasTwoLine ? (
         <View style={styles.body}>
           {title ? (

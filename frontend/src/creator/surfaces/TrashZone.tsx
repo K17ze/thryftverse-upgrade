@@ -21,12 +21,13 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
 
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
+
 export interface TrashZoneProps {
   manipulationActiveSV: SharedValue<number>;
   isInTrashZoneSV: SharedValue<number>;
 }
-
-const ICON_SIZE = 24;
 
 export function TrashZone({ manipulationActiveSV, isInTrashZoneSV }: TrashZoneProps) {
   const reducedMotion = useReducedMotion();
@@ -73,10 +74,12 @@ export function TrashZone({ manipulationActiveSV, isInTrashZoneSV }: TrashZonePr
         accessibilityLiveRegion="polite"
       >
         <Reanimated.View style={iconWrapStyle}>
-          <Ionicons
+          <AppIcon
             name="trash"
-            size={ICON_SIZE}
-            color={colors.danger}
+            size={IconSize.lg}
+            color="danger"
+            opticalCenter={true}
+            accessible={false}
           />
         </Reanimated.View>
       </Reanimated.View>

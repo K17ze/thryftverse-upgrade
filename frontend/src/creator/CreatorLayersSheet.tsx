@@ -33,7 +33,7 @@ export interface CreatorLayersSheetProps {
 const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ionicons>['name']> = {
   media: 'images-outline',
   text: 'text-outline',
-  product: 'pricetag-outline',
+  product: 'bag-handle-outline',
   mention: 'at-outline',
   look: 'shirt-outline',
   vote: 'stats-chart-outline',
@@ -48,7 +48,7 @@ const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ioni
   music: 'musical-notes-outline',
   link: 'link-outline',
   location: 'location-outline',
-  hashtag: 'pricetag-outline',
+  hashtag: 'bag-handle-outline',
   time: 'time-outline',
   weather: 'partly-sunny-outline' };
 

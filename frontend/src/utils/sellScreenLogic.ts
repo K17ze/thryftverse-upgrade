@@ -1,6 +1,4 @@
 import { sanitizeDecimalInput, sanitizeIntegerInput } from './currencyAuthoringFlows';
-import type { ListingMediaDraftItem } from './mediaUploadAsset';
-import type { MediaUploadQueue } from '../services/mediaUploadQueue';
 import type { ListingFieldKey } from '../contracts/listingCategoryPolicy';
 import type { ListingMode } from '../components/listing/ListingModeSelector';
 import { getListingModeOptions } from '../components/listing/ListingModeSelector';
@@ -13,36 +11,6 @@ export interface PickerTaxonomyOptions {
   brand: readonly string[];
   size: readonly string[];
   condition: readonly string[];
-}
-
-export type PublishedMedia = {
-  url: string;
-  width?: number;
-  height?: number;
-};
-
-export function resolvePublishedMedia(
-  draftItems: ListingMediaDraftItem[],
-  queue: MediaUploadQueue,
-): PublishedMedia[] {
-  const queuedById = new Map(queue.getItems().map((item) => [item.id, item]));
-
-  return draftItems.flatMap((item) => {
-    const queued = queuedById.get(item.id);
-    const url = queued?.publicUrl
-      ?? item.publicUrl
-      ?? (item.source === 'remote' ? item.uri : null);
-
-    if (!url) {
-      return [];
-    }
-
-    return [{
-      url,
-      width: queued?.asset.width ?? item.width,
-      height: queued?.asset.height ?? item.height,
-    }];
-  });
 }
 
 export function getPickerOptionsForMode(mode: PickerMode, taxonomy: PickerTaxonomyOptions): string[] {
@@ -188,10 +156,10 @@ export function buildContextualPhotoPrompts(
     prompts.push({ icon: 'camera-outline', text: 'Add a side or detail shot' });
   }
   if (category && photoCount > 0 && photoCount < 5) {
-    prompts.push({ icon: 'pricetag-outline', text: 'Show the size label' });
+    prompts.push({ icon: 'bag-handle-outline', text: 'Show the size label' });
   }
   if (isLuxury && photoCount > 0) {
-    prompts.push({ icon: 'shield-checkmark-outline', text: 'Add serial, stitching, or receipt evidence' });
+    prompts.push({ icon: 'checkmark-circle-outline', text: 'Add serial, stitching, or receipt evidence' });
   }
   if (hasFlaws && photoCount > 0) {
     prompts.push({ icon: 'warning-outline', text: 'Add a close-up of any flaws' });

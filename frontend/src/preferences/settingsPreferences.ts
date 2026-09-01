@@ -157,10 +157,10 @@ export interface PushNotificationDefinition {
 }
 
 export const PUSH_NOTIFICATION_DEFINITIONS: PushNotificationDefinition[] = [
-  { key: 'orderUpdates', label: 'Order updates', subtitle: 'Shipping and delivery status changes', icon: 'cube-outline', group: 'orders' },
+  { key: 'orderUpdates', label: 'Order updates', subtitle: 'Shipping and delivery status changes', icon: 'car-outline', group: 'orders' },
   { key: 'auctionAlerts', label: 'Auction alerts', subtitle: 'Outbid, auction ending, and auction won alerts', icon: 'trophy-outline', group: 'orders' },
-  { key: 'offers', label: 'Offers received', subtitle: 'When buyers make an offer on your item', icon: 'pricetags-outline', group: 'orders' },
-  { key: 'priceDrops', label: 'Price drops', subtitle: 'For items on your wishlist', icon: 'pricetag-outline', group: 'orders' },
+  { key: 'offers', label: 'Offers received', subtitle: 'When buyers make an offer on your item', icon: 'cash-outline', group: 'orders' },
+  { key: 'priceDrops', label: 'Price drops', subtitle: 'For items on your wishlist', icon: 'cash-outline', group: 'orders' },
   { key: 'messages', label: 'New messages', subtitle: 'When someone sends you a message', icon: 'chatbubble-outline', group: 'social' },
   { key: 'followers', label: 'New followers', subtitle: 'When someone starts following you', icon: 'person-add-outline', group: 'social' },
   { key: 'wishlist', label: 'Wishlist activity', subtitle: 'When someone likes your item', icon: 'heart-outline', group: 'social' },

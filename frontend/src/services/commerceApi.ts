@@ -771,11 +771,20 @@ export async function createBuyerProtectionClaim(
 
 export interface SellerAnalytics {
   totalListings: number;
+  activeListings: number;
   totalViews: number;
   totalLikes: number;
   totalSaves: number;
   itemsSold: number;
   revenueGbpMinor: number;
+  /** Refunds in the period (GBP minor). Null when ledger tables are absent. */
+  refundsGbpMinor: number | null;
+  /** Platform fees in the period (GBP minor). Null when ledger tables are absent. */
+  feesGbpMinor: number | null;
+  /** Net sales = revenue − refunds − fees (GBP minor). Null when ledger is absent. */
+  netSalesGbpMinor: number | null;
+  /** Data completeness — 'complete' when ledger is available, 'partial' otherwise. */
+  completeness: 'complete' | 'partial';
   avgRating: number | null;
   reviewCount: number;
   responseRate: number | null;

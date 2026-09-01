@@ -86,7 +86,7 @@ const CATEGORY_ICON_MAP: Record<string, string> = {
   home: 'home-outline',
   electronics: 'phone-portrait-outline',
   entertainment: 'book-outline',
-  hobbies: 'color-palette-outline',
+  hobbies: 'shapes-outline',
   sports: 'basketball-outline' };
 
 // Editorial seed data has been removed. The discover landing now relies
@@ -143,7 +143,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
         .slice(0, 8)
         .map((cat) => ({
           label: cat.name,
-          icon: CATEGORY_ICON_MAP[cat.id] ?? 'pricetag-outline',
+          icon: CATEGORY_ICON_MAP[cat.id] ?? 'bag-handle-outline',
           query: cat.id })),
     [categories],
   );
@@ -735,7 +735,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
             ) : (
               visibleSearchSuggestions.map((suggestion) => {
                 const icon = suggestion.type === 'brand'
-                  ? 'pricetag-outline'
+                  ? 'bag-handle-outline'
                   : suggestion.type === 'category'
                     ? 'grid-outline'
                     : suggestion.type === 'item'

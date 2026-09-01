@@ -47,6 +47,8 @@ import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 import { Motion } from '../../../theme/motionTokens';
 import { FontChooserRail } from './FontChooserRail';
 import { CURATED_FONTS, resolveFontPreviewStyle } from './FontRegistry';
@@ -430,7 +432,7 @@ export function TextEditorSheet({
             accessibilityHint="Closes the text editor sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textPrimary} />
+            <AppIcon name="close" size={IconSize.lg} color="textPrimary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
 
@@ -562,10 +564,12 @@ export function TextEditorSheet({
               accessibilityState={{ checked: strokeEnabled }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons
-                name={strokeEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                size={IconGrammar.hero}
-                color={strokeEnabled ? colors.brand : colors.textMuted}
+              <AppIcon
+                name={strokeEnabled ? 'checkmarkCircle' : 'ellipse-outline'}
+                size={IconSize.hero}
+                color={strokeEnabled ? 'brand' : 'textMuted'}
+                opticalCenter={true}
+                accessible={false}
               />
             </Pressable>
           </View>
@@ -592,10 +596,12 @@ export function TextEditorSheet({
                 <Text style={[styles.colorWellLabel, { color: colors.textSecondary }]}>
                   {toHexString(strokeColor).toUpperCase()}
                 </Text>
-                <Ionicons
-                  name={expandedColor === 'stroke' ? 'chevron-up-outline' : 'chevron-down-outline'}
-                  size={IconGrammar.metadata}
-                  color={colors.textSecondary}
+                <AppIcon
+                  name={expandedColor === 'stroke' ? 'up' : 'down'}
+                  size={IconSize.xs}
+                  color="textSecondary"
+                  opticalCenter={true}
+                  accessible={false}
                 />
               </Pressable>
               {expandedColor === 'stroke' && (
@@ -624,10 +630,12 @@ export function TextEditorSheet({
               accessibilityState={{ checked: shadowEnabled }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons
-                name={shadowEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                size={IconGrammar.hero}
-                color={shadowEnabled ? colors.brand : colors.textMuted}
+              <AppIcon
+                name={shadowEnabled ? 'checkmarkCircle' : 'ellipse-outline'}
+                size={IconSize.hero}
+                color={shadowEnabled ? 'brand' : 'textMuted'}
+                opticalCenter={true}
+                accessible={false}
               />
             </Pressable>
           </View>
@@ -674,10 +682,12 @@ export function TextEditorSheet({
                 <Text style={[styles.colorWellLabel, { color: colors.textSecondary }]}>
                   {toHexString(shadowColor).toUpperCase()}
                 </Text>
-                <Ionicons
-                  name={expandedColor === 'shadow' ? 'chevron-up-outline' : 'chevron-down-outline'}
-                  size={IconGrammar.metadata}
-                  color={colors.textSecondary}
+                <AppIcon
+                  name={expandedColor === 'shadow' ? 'up' : 'down'}
+                  size={IconSize.xs}
+                  color="textSecondary"
+                  opticalCenter={true}
+                  accessible={false}
                 />
               </Pressable>
               {expandedColor === 'shadow' && (
@@ -706,10 +716,12 @@ export function TextEditorSheet({
               accessibilityState={{ checked: bgEnabled }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons
-                name={bgEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                size={IconGrammar.hero}
-                color={bgEnabled ? colors.brand : colors.textMuted}
+              <AppIcon
+                name={bgEnabled ? 'checkmarkCircle' : 'ellipse-outline'}
+                size={IconSize.hero}
+                color={bgEnabled ? 'brand' : 'textMuted'}
+                opticalCenter={true}
+                accessible={false}
               />
             </Pressable>
           </View>
@@ -756,10 +768,12 @@ export function TextEditorSheet({
                 <Text style={[styles.colorWellLabel, { color: colors.textSecondary }]}>
                   {toHexString(bgColor).toUpperCase()}
                 </Text>
-                <Ionicons
-                  name={expandedColor === 'background' ? 'chevron-up-outline' : 'chevron-down-outline'}
-                  size={IconGrammar.metadata}
-                  color={colors.textSecondary}
+                <AppIcon
+                  name={expandedColor === 'background' ? 'up' : 'down'}
+                  size={IconSize.xs}
+                  color="textSecondary"
+                  opticalCenter={true}
+                  accessible={false}
                 />
               </Pressable>
               {expandedColor === 'background' && (
@@ -801,7 +815,7 @@ export function TextEditorSheet({
                     accessibilityRole="button"
                     accessibilityState={{ selected: isActive }}
                   >
-                    <Ionicons name={a.icon} size={IconGrammar.metadata} color={isActive ? colors.brand : colors.textSecondary} />
+                    <AppIcon name={a.icon} size={IconSize.sm} color={isActive ? 'brand' : 'textSecondary'} opticalCenter={true} accessible={false} />
                     <Text
                       style={[
                         styles.animTabLabel,
@@ -832,10 +846,12 @@ export function TextEditorSheet({
             accessibilityState={{ disabled: !canConfirm }}
           >
             <Text style={[styles.confirmBtnText, !canConfirm && { color: colors.textMuted }]}>Done</Text>
-            <Ionicons
-              name="checkmark"
-              size={IconGrammar.metadata}
-              color={canConfirm ? colors.textInverse : colors.textMuted}
+            <AppIcon
+              name="check"
+              size={IconSize.sm}
+              color={canConfirm ? 'textInverse' : 'textMuted'}
+              opticalCenter={true}
+              accessible={false}
             />
           </Pressable>
         </View>

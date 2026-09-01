@@ -366,7 +366,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
         {([
           { icon: 'share-outline', text: 'Share your referral link with friends' },
           { icon: 'person-add-outline', text: 'They sign up and create an account' },
-          { icon: 'pricetag-outline', text: 'They list their first item for sale' },
+          { icon: 'bag-handle-outline', text: 'They list their first item for sale' },
           { icon: 'gift-outline', text: 'You both earn Thryftverse credit' },
         ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
           <View key={i} style={[styles.stepRow, i < 3 && styles.stepRowBordered]}>

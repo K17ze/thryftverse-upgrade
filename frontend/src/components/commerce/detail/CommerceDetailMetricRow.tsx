@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Typography } from '../../../theme/designTokens';
-import { TypographyV2 } from '../../../theme/typography.v2';
+import { TypographyV2, typographyV2Style } from '../../../theme/typography.v2';
 
 /**
  * Compact metric row — a label/value pair laid out for tabular numerals.
@@ -99,7 +99,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    paddingVertical: Space.sm },
+    paddingVertical: Space.sm,
+    minHeight: 52 },
   // Hairline detaching a summary total from the line items above it.
   // Per Design.md stroke grammar: separators are hairline.
   rowSeparated: {
@@ -121,27 +122,19 @@ const styles = StyleSheet.create({
     maxWidth: '56%',
     flexShrink: 1,
     justifyContent: 'flex-end' },
+  // Canonical numeric role (numericMeta): tabular figures, right-aligned
+  // so comparable values keep a stable column.
   value: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    fontVariant: ['tabular-nums'],
+    ...typographyV2Style('numericMeta'),
     flexShrink: 1,
     textAlign: 'right' },
   // Per Design.md checkout summary spec: the total is the dominant
   // number in a cost breakdown.
   valueEmphasis: {
-    fontSize: TypographyV2.priceList.size,
-    lineHeight: TypographyV2.priceList.lineHeight,
-    fontFamily: TypographyV2.priceList.fontFamily,
-    letterSpacing: TypographyV2.priceList.letterSpacing },
-  // Per Design.md: checkout totals use Type.priceLarge (28px), which
-  // maps to TypographyV2.priceHero in the V2 token system.
+    ...typographyV2Style('priceList') },
+  // Per Design.md: checkout totals use the hero price scale.
   valueLarge: {
-    fontSize: TypographyV2.priceHero.size,
-    lineHeight: TypographyV2.priceHero.lineHeight,
-    fontFamily: TypographyV2.priceHero.fontFamily,
-    letterSpacing: TypographyV2.priceHero.letterSpacing },
+    ...typographyV2Style('priceHero') },
   subLabel: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,

@@ -12,7 +12,7 @@ import { VERIFICATION_TIERS, VerificationTier } from '../../platform/product/lis
  * Tiers (ascending):
  *   email  → "Verified" (green checkmark)
  *   id     → "ID Verified" (brand card icon)
- *   seller → "Trusted Seller" (green shield)
+ *   seller → "Trusted Seller" (green checkmark)
  *
  * When `compact` is true, renders a single icon + label chip.
  * When `compact` is false, renders a pill with icon + label.

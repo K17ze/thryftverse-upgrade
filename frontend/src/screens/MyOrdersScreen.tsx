@@ -416,7 +416,7 @@ export default function MyOrdersScreen() {
 
     return (
       <EmptyState
-        icon="pricetag-outline"
+        icon="bag-handle-outline"
         title="No sales yet"
         subtitle="When you sell something, your orders will show up here."
         ctaLabel="List an item"

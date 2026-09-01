@@ -194,6 +194,7 @@ export function BuyNowSheet({
         fxRates,
       );
       setError(txError);
+      haptics.error();
 
       if (txError.isAmbiguous) {
         // Ambiguous failure — preserve the same idempotency key for replay
@@ -317,6 +318,30 @@ export function BuyNowSheet({
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
+
+            {/* P0: Risk disclosure — binding purchase, payment due, no
+                cancellation. Presented above the confirm button so the
+                user acknowledges the irreversible nature before acting. */}
+            <View style={styles.commitmentBlock}>
+              <View style={styles.commitmentRow}>
+                <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.commitmentText}>
+                  This is a binding purchase at the fixed price.
+                </Text>
+              </View>
+              <View style={styles.commitmentRow}>
+                <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.commitmentText}>
+                  Payment is due promptly after the auction ends.
+                </Text>
+              </View>
+              <View style={styles.commitmentRow}>
+                <Ionicons name="lock-closed-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.commitmentText}>
+                  You cannot cancel a Buy Now after it is confirmed.
+                </Text>
+              </View>
+            </View>
 
             {/* Single decisive action */}
             <AppButton
@@ -583,5 +608,19 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    lineHeight: 18 } });
+    lineHeight: 18 },
+  // ── Risk disclosure ──
+  commitmentBlock: {
+    gap: Space.xs / 2,
+    paddingVertical: Space.xs },
+  commitmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingVertical: Space.xs / 2 },
+  commitmentText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    color: colors.textSecondary,
+    fontFamily: TypographyV2.meta.fontFamily } });
 }

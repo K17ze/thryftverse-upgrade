@@ -101,13 +101,13 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
   const cta = (() => {
     if (terminal) return null;
     if (isSeller && normalised === 'paid') {
-      return { label: t('orders.dispatchItem'), icon: 'cube-outline' as const, screen: 'SellerFulfilment', params: { orderId: order.id } };
+      return { label: t('orders.dispatchItem'), icon: 'car-outline' as const, screen: 'SellerFulfilment', params: { orderId: order.id } };
     }
     if (!isSeller && (normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery')) {
       return { label: t('orders.trackParcel'), icon: 'navigate-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
     }
     if (!isSeller && normalised === 'delivered') {
-      return { label: t('orders.checkItem'), icon: 'shield-checkmark-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
+      return { label: t('orders.checkItem'), icon: 'checkmark-circle-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
     }
     return { label: t('orders.viewOrder'), icon: 'receipt-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
   })();

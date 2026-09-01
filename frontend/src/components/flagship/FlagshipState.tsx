@@ -49,7 +49,7 @@ const DEFAULT_SUBTITLES: Record<string, string> = {
 
 const DEFAULT_ICONS: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
   loading: 'sync-outline',
-  empty: 'cube-outline',
+  empty: 'image-outline',
   error: 'alert-circle-outline',
   offline: 'cloud-offline-outline',
   unavailable: 'lock-closed-outline' };
@@ -263,7 +263,7 @@ function LoadingShimmer({
   return (
     <View style={styles.shimmerBlock}>
       <View style={[styles.shimmerGlyph, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="cube-outline" size={22} color={colors.textMuted} />
+        <Ionicons name="image-outline" size={22} color={colors.textMuted} />
       </View>
       <ShimmerBar
         width="55%"

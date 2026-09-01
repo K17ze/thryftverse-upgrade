@@ -13,6 +13,8 @@ import { CachedImage } from '../components/CachedImage';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import {
   fetchPublicProfile,
   unblockUser,
@@ -107,7 +109,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
           />
         ) : (
           <View style={[styles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="person-outline" size={18} color={colors.textMuted} />
+            <AppIcon name="profile" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
           </View>
         )}
 
@@ -154,7 +156,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
     >
       {blockedIds.length === 0 ? (
         <EmptyState
-          icon="shield-checkmark-outline"
+          icon="lock"
           title="You haven't blocked anyone"
           subtitle="Blocked accounts appear here."
         />
@@ -162,7 +164,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         <>
           {showSearch && (
             <View style={styles.searchRow}>
-              <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+              <AppIcon name="search" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
               <TextInput
                 style={styles.searchInput}
                 value={query}
@@ -180,7 +182,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
                   accessibilityRole="button"
                   style={styles.clearBtn}
                 >
-                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                  <AppIcon name="close" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                 </AnimatedPressable>
               )}
             </View>
@@ -190,7 +192,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
             <SettingsListSkeleton count={Math.min(blockedIds.length, 4)} />
           ) : filteredIds.length === 0 ? (
             <EmptyState
-              icon="search-outline"
+              icon="search"
               title="No matches"
               subtitle="No blocked accounts match your search."
               density="compact"

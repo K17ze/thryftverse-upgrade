@@ -19,7 +19,7 @@ const FAMILY_META: Record<
   { label: string; icon: keyof typeof Ionicons.glyphMap }
 > = {
   direct: { label: 'Buy now', icon: 'bag-handle-outline' },
-  auction: { label: 'Auction', icon: 'pricetag-outline' },
+  auction: { label: 'Auction', icon: 'bag-handle-outline' },
   co_own: { label: 'Co-own', icon: 'people-outline' } };
 
 /**

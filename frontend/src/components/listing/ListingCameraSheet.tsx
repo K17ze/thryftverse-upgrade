@@ -7,6 +7,7 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import CreatorCamera from '../../creator/CreatorCamera';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
 import type { CreatorInitialMedia } from '../../navigation/types';
@@ -44,6 +45,7 @@ export function ListingCameraSheet({
   onClose,
   onCapture,
 }: ListingCameraSheetProps) {
+  const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   // Fade/slide the camera in on open. Reduced motion collapses to instant.
   const sheetOpacity = useSharedValue(0);
@@ -123,7 +125,7 @@ export function ListingCameraSheet({
       statusBarTranslucent
     >
       <StatusBar hidden />
-      <Reanimated.View style={[styles.fill, animatedStyle]}>
+      <Reanimated.View style={[styles.fill, { backgroundColor: colors.background }, animatedStyle]}>
         <CreatorCamera
           mode="poster"
           onCapture={(uri) => {
@@ -143,6 +145,5 @@ export function ListingCameraSheet({
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
-    backgroundColor: '#000',
   },
 });

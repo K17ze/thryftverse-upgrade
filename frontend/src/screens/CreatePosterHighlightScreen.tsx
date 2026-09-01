@@ -222,7 +222,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
           )}
           {isCover && (
             <View style={styles.coverBadge}>
-              <Ionicons name="star" size={12} color={colors.textInverse} />
+              <Ionicons name="image-outline" size={12} color={colors.textInverse} />
               <Text style={styles.coverBadgeText}>Cover</Text>
             </View>
           )}
@@ -346,7 +346,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
                   </View>
                 )}
                 <View style={styles.coverPreviewBadge}>
-                  <Ionicons name="star" size={12} color={colors.textInverse} />
+                  <Ionicons name="image-outline" size={12} color={colors.textInverse} />
                   <Text style={styles.coverPreviewBadgeText}>Cover</Text>
                 </View>
               </View>

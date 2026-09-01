@@ -57,7 +57,7 @@ export function OfferBubble({
     switch (type) {
       case 'offer':
         return {
-          icon: 'pricetag',
+          icon: 'cash-outline',
           color: colors.brand,
           label: 'Offer',
           bgColor: colors.brandSubtle };

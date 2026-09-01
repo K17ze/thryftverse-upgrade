@@ -41,13 +41,13 @@ interface AttachmentOption {
 const OPTIONS: AttachmentOption[] = [
   { id: 'gallery', label: 'attachments.photoAndVideo', icon: 'images-outline', colorKey: 'brand' },
   { id: 'camera', label: 'attachments.camera', icon: 'camera-outline', colorKey: 'success' },
-  { id: 'offer', label: 'attachments.makeOffer', icon: 'pricetag-outline', colorKey: 'warning' },
-  { id: 'product', label: 'attachments.product', icon: 'cube-outline', colorKey: 'discovery' },
+  { id: 'offer', label: 'attachments.makeOffer', icon: 'bag-handle-outline', colorKey: 'warning' },
+  { id: 'product', label: 'attachments.product', icon: 'bag-handle-outline', colorKey: 'discovery' },
   { id: 'priceQuote', label: 'attachments.priceQuote', icon: 'receipt-outline', colorKey: 'brand' },
   { id: 'shareListing', label: 'attachments.shareListing', icon: 'share-outline', colorKey: 'discovery' },
-  { id: 'shareOrder', label: 'attachments.orderStatus', icon: 'cube-outline', colorKey: 'brand' },
+  { id: 'shareOrder', label: 'attachments.orderStatus', icon: 'car-outline', colorKey: 'brand' },
   { id: 'requestPayment', label: 'attachments.payment', icon: 'card-outline', colorKey: 'success' },
-  { id: 'inviteBot', label: 'attachments.agent', icon: 'hardware-chip-outline', colorKey: 'social' },
+  { id: 'inviteBot', label: 'attachments.agent', icon: 'bulb-outline', colorKey: 'social' },
   { id: 'report', label: 'common.report', icon: 'flag-outline', colorKey: 'danger' },
 ];
 

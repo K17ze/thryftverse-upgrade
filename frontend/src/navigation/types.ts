@@ -252,7 +252,7 @@ export type RootStackParamList = {
     | undefined;
   Success: { orderId: string };
   ManageListing: { itemId: string };
-  EditListing: { itemId: string };
+  EditListing: { itemId: string; focus?: 'price' | 'shipping' | 'format' };
   Withdraw: undefined;
   CategoryTree: { categoryPrefix: string };
   // Phase 24 new screens

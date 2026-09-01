@@ -673,7 +673,7 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
             />
           ) : null}
           <View style={styles.listingRow}>
-            <Ionicons name="pricetag" size={14} color={colors.scrimTextPrimary} />
+            <Ionicons name="bag-handle-outline" size={14} color={colors.scrimTextPrimary} />
             <Text style={styles.listingTitle}>{sticker.payload.snapshotTitle ?? 'Listing'}</Text>
           </View>
           {sticker.payload.snapshotPriceGbp !== undefined && (

@@ -527,7 +527,7 @@ export default function MyProfileScreen() {
         onPress: () => { haptic.light(); navigation.navigate('MyOrders'); },
         accessibilityLabel: tt('accessibility.orders') },
       {
-        icon: 'pulse-outline' as const,
+        icon: 'stats-chart-outline' as const,
         label: tt('utility.analytics'),
         onPress: () => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); },
         accessibilityLabel: tt('accessibility.creatorAnalytics') },

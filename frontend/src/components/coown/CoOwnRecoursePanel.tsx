@@ -50,7 +50,7 @@ export function CoOwnRecoursePanel({
       ? ` · ${currencySymbol}${Math.round(agreement.maxLiabilityGbp).toLocaleString()} liability`
       : '';
     items.push({
-      icon: 'shield-checkmark',
+      icon: 'checkmark-circle',
       label: 'Seller liability',
       value: `Personal guarantee signed${liabilityStr}`,
       positive: true,

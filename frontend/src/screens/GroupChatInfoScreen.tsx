@@ -699,7 +699,7 @@ function SettingsTab({
 
       <ChatInfoSection title="AI agents">
         <ChatInfoRow
-          icon="hardware-chip-outline"
+          icon="bulb-outline"
           label="Manage AI agents"
           subtitle={
             connectedAgentCount > 0

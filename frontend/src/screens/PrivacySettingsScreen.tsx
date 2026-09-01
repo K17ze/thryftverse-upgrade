@@ -141,7 +141,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       ) : (
         <SettingsSection title="Privacy posture">
           <SettingsRow
-            icon="shield-checkmark-outline"
+            icon="checkmark-circle-outline"
             iconColor={postureColor}
             title="Privacy posture"
             subtitle={`${activeCount} of ${postureItems.length} protections active`}
@@ -257,7 +257,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isFirst
         />
         <SettingsRow
-          icon="shield-checkmark-outline"
+          icon="checkmark-circle-outline"
           title="Terms of Service"
           onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
           isLast

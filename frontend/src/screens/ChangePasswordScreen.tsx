@@ -123,7 +123,7 @@ export default function ChangePasswordScreen() {
         <SettingsRow
           title={twoFactorEnabled ? 'Two-factor authentication' : 'Set up 2FA'}
           subtitle={twoFactorEnabled ? 'Enabled' : 'Strengthen your account security'}
-          icon="shield-outline"
+          icon="lock-closed-outline"
           iconColor={twoFactorEnabled ? colors.success : undefined}
           onPress={() => navigation.navigate('TwoFactorSetup')}
           accessibilityLabel="Two-factor authentication"

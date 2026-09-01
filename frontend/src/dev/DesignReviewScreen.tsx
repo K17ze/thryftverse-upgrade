@@ -172,7 +172,7 @@ export default function DesignReviewScreen() {
         <SectionTitle>Empty States</SectionTitle>
         <View style={[styles.card, { minHeight: 200 }]}>
           <EmptyState
-            icon="cube-outline"
+            icon="image-outline"
             title="No orders yet"
             subtitle="Your orders will appear here."
           />

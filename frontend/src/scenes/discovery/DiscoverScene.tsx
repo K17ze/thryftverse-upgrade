@@ -467,7 +467,7 @@ export function DiscoverScene({
       <View style={[styles.container, styles.stateWrap]}>
         <EmptyState
           density="compact"
-          icon="compass-outline"
+          icon="search-outline"
           title="Nothing to explore yet"
           subtitle="New items are uploaded every day. Check back soon or browse categories."
           ctaLabel="Browse Categories"
@@ -489,7 +489,7 @@ export function DiscoverScene({
         />
         <EmptyState
           density="compact"
-          icon="pricetags-outline"
+          icon="bag-handle-outline"
           title={`No ${activeCategoryName.toLowerCase()} items yet`}
           subtitle="Try another category or check back soon."
           ctaLabel="Show all"

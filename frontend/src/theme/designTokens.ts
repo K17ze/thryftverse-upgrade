@@ -9,7 +9,7 @@
  * Anti-AI principles:
  * - No generic blue-purple gradients
  * - No glassmorphism on content cards
- * - No decorative orbs, sparkles, or breathing icons
+ * - No decorative orbs, glitter, or breathing icons
  * - No shadows on every surface
  * - No card-on-card composition
  * - Luxury from geometry and typography, not gold ornament
@@ -76,24 +76,10 @@ interface TypeStyle {
 // ============================================================================
 // FONT FAMILIES (Inter set)
 // ============================================================================
-export const FontFamily = {
-  light: 'Inter_300Light',
-  regular: 'Inter_400Regular',
-  medium: 'Inter_500Medium',
-  semibold: 'Inter_600SemiBold',
-  bold: 'Inter_700Bold',
-  extrabold: 'Inter_800ExtraBold' } as const;
+import { FontFamily, FontFamilySerif } from './fontFamily';
+export { FontFamily, FontFamilySerif };
 
-// Editorial serif accent — Playfair Display, loaded globally in App.tsx.
-// Used sparingly for editorial/display moments: auction lot titles,
-// editorial section headers, "Discover" module headers, seller profile
-// names. Serifs measurably increase perceived quality (+13% per
-// Monotype/Cotford study) and distinguish ThryftVerse from generic
-// AI-generated marketplace UIs. On-brand for a vintage/secondhand marketplace.
-// Per AGENTS.md §4: this is a deliberate, authored choice — not decoration.
-export const FontFamilySerif = {
-  regular: 'PlayfairDisplay_400Regular',
-  bold: 'PlayfairDisplay_700Bold' } as const;
+
 
 export const FontSize = {
   micro: 10,
@@ -783,3 +769,24 @@ export const Scrim = {
 export const CoinGradient = {
   start: '#f4d27b',
   end: '#c68a2d' } as const;
+
+// ============================================================================
+// ICONOGRAPHY TOKENS (Optical size scale, stroke weights, hit targets)
+// ============================================================================
+export {
+  IconSize,
+  IconHitTarget,
+  IconStroke,
+  IconOpticalOffset,
+  SemanticIconMap,
+} from './iconTokens';
+
+export type {
+  IconSizeKey,
+  IoniconsGlyphName,
+  SemanticIconName,
+  SemanticIconDef,
+  OpticalOffset,
+} from './iconTokens';
+
+

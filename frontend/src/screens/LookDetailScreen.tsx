@@ -20,13 +20,15 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { useAppTheme } from '../theme/ThemeContext';
-import type { ThemeColors } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Control, LetterSpacing, AspectRatio } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useToast } from '../context/ToastContext';
+import { useAnalyticsEvent } from '../hooks/useAnalyticsEvent';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import type { SupportedCurrencyCode } from '../constants/currencies';
 import { EmptyState } from '../components/EmptyState';
@@ -81,6 +83,7 @@ export default function LookDetailScreen() {
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
   const { show } = useToast();
+  const analyticsEvent = useAnalyticsEvent();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const { colors } = useAppTheme();
@@ -144,6 +147,11 @@ export default function LookDetailScreen() {
       if (res.ok && res.look) {
         setLook(res.look);
         setCommentCount(res.look.commentCount);
+        // ── Fire analytics view event to the backend pipeline ──
+        // This feeds the creator analytics v2 event table, which drives
+        // the summary/timeline/content-ranking dashboards. Self-views are
+        // filtered in the hook.
+        analyticsEvent.view('look', lookId, { surface: 'look_detail' });
       } else {
         setLoadError({
           kind: 'not-found',
@@ -283,6 +291,9 @@ export default function LookDetailScreen() {
 
   const handleShare = useCallback(async () => {
     haptic.light();
+    if (look) {
+      analyticsEvent.share('look', look.id, { surface: 'look_detail' });
+    }
     try {
       await Share.share({
         title: 'Thryftverse Look',
@@ -292,7 +303,7 @@ export default function LookDetailScreen() {
     } catch {
       // Share failed or was dismissed — no feedback needed unless it's a real error
     }
-  }, [haptic, look]);
+  }, [haptic, look, analyticsEvent]);
 
   const handleEdit = useCallback(() => {
     if (!look || !isOwner) return;
@@ -658,6 +669,8 @@ export default function LookDetailScreen() {
             onCommentPress={handleCommentPress}
             onSharePress={handleShare}
             onSignInRequired={handleSignInRequired}
+            onLikeChange={(liked) => { if (liked) analyticsEvent.like('look', look.id, { surface: 'look_detail' }); }}
+            onSaveChange={(saved) => { if (saved) analyticsEvent.save('look', look.id, { surface: 'look_detail' }); }}
           />
         </View>
 
@@ -796,7 +809,7 @@ export default function LookDetailScreen() {
     }
     return (
       <View style={styles.exploreEmpty}>
-        <Ionicons name="compass-outline" size={32} color={colors.textMuted} aria-hidden={true} />
+        <AppIcon name="search-outline" size={IconSize.hero} color="textMuted" opticalCenter accessible={false} />
         <Text style={styles.exploreEmptyTitle}>No more looks to explore</Text>
         <Text style={styles.exploreEmptySub}>Fresh looks drop daily — check back soon.</Text>
       </View>
@@ -808,7 +821,7 @@ export default function LookDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
           <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85} accessibilityLabel="Go back" accessibilityRole="button">
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} aria-hidden={true} />
+            <AppIcon name="back" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
           </AnimatedPressable>
         </View>
         <ScrollView
@@ -825,10 +838,10 @@ export default function LookDetailScreen() {
     const canRetry = loadError?.kind === 'connection' || loadError?.kind === 'offline';
     const isMissing = loadError?.kind === 'missing' || loadError?.kind === 'not-found';
     const errorIcon = loadError?.kind === 'offline'
-      ? 'cloud-offline-outline' as const
+      ? 'offline' as const
       : isMissing
-        ? 'trash-outline' as const
-        : 'cloud-offline-outline' as const;
+        ? 'trash' as const
+        : 'offline' as const;
     const errorTitle = loadError?.kind === 'offline'
       ? "You're offline"
       : isMissing
@@ -838,7 +851,7 @@ export default function LookDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
           <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85} accessibilityLabel="Go back" accessibilityRole="button">
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} aria-hidden={true} />
+            <AppIcon name="back" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
           </AnimatedPressable>
         </View>
         <EmptyState
@@ -862,7 +875,7 @@ export default function LookDetailScreen() {
           where every viewer can access secondary actions. */}
       <View style={styles.headerRow}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85} accessibilityLabel="Go back" accessibilityRole="button">
-          <Ionicons name="arrow-back" size={24} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
+          <AppIcon name="back" size={IconSize.lg} color={colors.scrimTextPrimary} opticalCenter accessible={false} />
         </AnimatedPressable>
         <AnimatedPressable
           style={styles.headerBtn}
@@ -875,7 +888,7 @@ export default function LookDetailScreen() {
           accessibilityLabel="More options"
           accessibilityHint="Open the look options menu"
         >
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.scrimTextPrimary} style={styles.headerGlyph} aria-hidden={true} />
+          <AppIcon name="more" size={IconSize.lg} color={colors.scrimTextPrimary} opticalCenter accessible={false} />
         </AnimatedPressable>
       </View>
 
@@ -904,6 +917,7 @@ export default function LookDetailScreen() {
       {/* Comments Sheet */}
       <LookCommentsSheet
         lookId={look.id}
+        lookCreatorId={look.creatorId}
         currentUserId={currentUser?.id}
         visible={commentsVisible}
         onClose={() => setCommentsVisible(false)}
@@ -951,7 +965,7 @@ export default function LookDetailScreen() {
                         />
                       ) : (
                         <View style={styles.inspectImgEmpty}>
-                          <Ionicons name="pricetag-outline" size={28} color={colors.textMuted} aria-hidden={true} />
+                          <AppIcon name="bag-handle-outline" size={IconSize.xl} color="textMuted" opticalCenter accessible={false} />
                         </View>
                       )}
                       {inspectTag.isSold && <View style={styles.inspectSoldScrim} />}
@@ -979,7 +993,7 @@ export default function LookDetailScreen() {
                     <Text style={styles.inspectCtaText}>
                       {ref ? 'View details' : 'Unavailable'}
                     </Text>
-                    <Ionicons name="arrow-forward" size={18} color={colors.textInverse} aria-hidden={true} />
+                    <AppIcon name="forward" size={IconSize.sm} color="textInverse" opticalCenter accessible={false} />
                   </AnimatedPressable>
                 </>
               );
@@ -1018,7 +1032,7 @@ export default function LookDetailScreen() {
                   accessibilityRole="menuitem"
                   accessibilityLabel="Edit look"
                 >
-                  <Ionicons name="create-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
+                  <AppIcon name="edit" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
                   <Text style={styles.overflowItemText}>Edit look</Text>
                 </Pressable>
                 <View style={styles.overflowDivider} />
@@ -1029,7 +1043,7 @@ export default function LookDetailScreen() {
                   accessibilityRole="menuitem"
                   accessibilityLabel="Delete look"
                 >
-                  <Ionicons name="trash-outline" size={20} color={colors.danger} aria-hidden={true} />
+                  <AppIcon name="trash" size={IconSize.md} color="danger" opticalCenter accessible={false} />
                   <Text style={[styles.overflowItemText, { color: colors.danger }]}>Delete look</Text>
                 </Pressable>
               </>
@@ -1043,7 +1057,7 @@ export default function LookDetailScreen() {
                   accessibilityLabel="Recreate this look"
                   accessibilityHint="Open the creator studio seeded from this look to build your own version"
                 >
-                  <Ionicons name="color-wand-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
+                  <AppIcon name="bulb-outline" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
                   <Text style={styles.overflowItemText}>Recreate this look</Text>
                 </Pressable>
                 <Pressable
@@ -1057,7 +1071,7 @@ export default function LookDetailScreen() {
                   {repostBusy ? (
                     <ActivityIndicator size="small" color={colors.textPrimary} />
                   ) : (
-                    <Ionicons name="repeat-outline" size={20} color={colors.textPrimary} aria-hidden={true} />
+                    <AppIcon name="repeat" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
                   )}
                   <Text style={[styles.overflowItemText, repostBusy && { color: colors.textMuted }]}>
                     {repostBusy ? 'Reposting…' : 'Repost'}
@@ -1072,7 +1086,7 @@ export default function LookDetailScreen() {
                   accessibilityLabel="Report this look"
                   accessibilityHint="Reports the creator of this look"
                 >
-                  <Ionicons name="flag-outline" size={20} color={colors.danger} aria-hidden={true} />
+                  <AppIcon name="warning" size={IconSize.md} color="danger" opticalCenter accessible={false} />
                   <Text style={[styles.overflowItemText, { color: colors.danger }]}>Report</Text>
                 </Pressable>
               </>

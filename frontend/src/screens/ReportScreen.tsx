@@ -55,7 +55,7 @@ const REPORT_REASONS: Array<{
     key: 'counterfeit',
     labelKey: 'reasons.counterfeit',
     descKey: 'reasons.counterfeitDesc',
-    icon: 'pricetag-outline' },
+    icon: 'bag-handle-outline' },
   {
     key: 'prohibited',
     labelKey: 'reasons.prohibited',
@@ -90,7 +90,7 @@ const REPORT_REASONS: Array<{
     key: 'minor_safety',
     labelKey: 'reasons.minorSafety',
     descKey: 'reasons.minorSafetyDesc',
-    icon: 'shield-outline' },
+    icon: 'lock-closed-outline' },
   {
     key: 'other',
     labelKey: 'reasons.other',

@@ -19,8 +19,9 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, Control } from '../../../theme/designTokens';
+import { Space, Radius, Control, PressScale } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
+import { Motion } from '../../../theme/motionTokens';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { CachedImage } from '../../CachedImage';
@@ -104,7 +105,7 @@ export function SellerInfoCard({
             <CachedImage
               uri={seller.avatar}
               style={styles.avatarImage}
-              transition={200}
+              transition={Motion.duration.normal}
               emptyIcon="person-outline"
             />
           ) : (
@@ -154,7 +155,7 @@ export function SellerInfoCard({
             <Pressable
               onPress={() => handleAction(onMessage)}
               hitSlop={8}
-              style={({ pressed }) => [styles.actionHitTarget, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.actionHitTarget, pressed && styles.actionPressed]}
               accessibilityLabel={`Message ${seller.username}`}
               accessibilityRole="button"
               accessibilityHint="Starts a chat with the seller"
@@ -169,7 +170,7 @@ export function SellerInfoCard({
               onPress={() => handleAction(onFollow)}
               disabled={isFollowPending}
               hitSlop={8}
-              style={({ pressed }) => [styles.actionHitTarget, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.actionHitTarget, pressed && styles.actionPressed]}
               accessibilityRole="button"
               accessibilityState={{ selected: isFollowing, busy: isFollowPending }}
               accessibilityLabel={isFollowing ? `Unfollow ${seller.username}` : `Follow ${seller.username}`}
@@ -204,8 +205,8 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     minHeight: 44 },
   pressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.985 }] },
+    opacity: 0.85,
+    transform: [{ scale: PressScale.gentle }] },
   avatar: {
     width: 48,
     height: 48,
@@ -260,6 +261,8 @@ const styles = StyleSheet.create({
   actionHitTarget: {
     minHeight: 44,
     justifyContent: 'center' },
+  actionPressed: {
+    opacity: 0.85 },
   actionText: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,

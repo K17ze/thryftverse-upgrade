@@ -2070,7 +2070,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       accessibilityRole="link"
     >
       <View style={o.overlayRow}>
-        <Ionicons name="pricetag" size={IconGrammar.badge} color={colors.textPrimary} aria-hidden={true} />
+        <Ionicons name="bag-handle-outline" size={IconGrammar.badge} color={colors.textPrimary} aria-hidden={true} />
         <Text style={[o.overlayLabel, { fontFamily: TypographyV2.body.fontFamily }]} numberOfLines={1}>{payload.snapshotTitle || 'Listing'}</Text>
       </View>
       {payload.snapshotPriceGbp !== undefined && (

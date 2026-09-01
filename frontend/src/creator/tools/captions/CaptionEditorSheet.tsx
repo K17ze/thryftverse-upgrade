@@ -55,6 +55,8 @@ import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 import { CreatorSlider } from '../../controls';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -298,7 +300,7 @@ export function CaptionEditorSheet({
             accessibilityHint="Closes the caption editor sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Captions</Text>
           <PressScale
@@ -336,10 +338,12 @@ export function CaptionEditorSheet({
             {autoStatus === 'transcribing' ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
-              <Ionicons
-                name="sparkles-outline"
-                size={16}
-                color={sttAvailable ? colors.textPrimary : colors.textMuted}
+              <AppIcon
+                name="sparkles"
+                size={IconSize.sm}
+                color={sttAvailable ? 'textPrimary' : 'textMuted'}
+                opticalCenter={true}
+                accessible={false}
               />
             )}
             <Text
@@ -359,7 +363,7 @@ export function CaptionEditorSheet({
           {/* Truthful status messaging */}
           {!sttAvailable && (
             <View style={styles.noticeBox}>
-              <Ionicons name="information-circle-outline" size={IconGrammar.metadata} color={colors.textMuted} />
+              <AppIcon name="info" size={IconSize.sm} color="textMuted" opticalCenter={true} accessible={false} />
               <Text style={[styles.noticeText, { color: colors.textMuted }]}>
                 Auto captions need speech recognition. Add manually below.
               </Text>
@@ -367,7 +371,7 @@ export function CaptionEditorSheet({
           )}
           {autoStatus === 'error' && (
             <View style={styles.noticeBox}>
-              <Ionicons name="alert-circle-outline" size={IconGrammar.metadata} color={colors.danger} />
+              <AppIcon name="alert-circle-outline" size={IconSize.sm} color="danger" opticalCenter={true} accessible={false} />
               <Text style={[styles.noticeText, { color: colors.danger }]}>
                 {autoError || 'Transcription failed. Try again.'}
               </Text>
@@ -375,7 +379,7 @@ export function CaptionEditorSheet({
           )}
           {autoStatus === 'ready' && (
             <View style={styles.noticeBox}>
-              <Ionicons name="checkmark-circle-outline" size={IconGrammar.metadata} color={colors.success} />
+              <AppIcon name="checkmarkCircle" size={IconSize.sm} color="success" opticalCenter={true} accessible={false} />
               <Text style={[styles.noticeText, { color: colors.success }]}>
                 Captions generated. Edit below.
               </Text>
@@ -444,10 +448,12 @@ export function CaptionEditorSheet({
             accessibilityRole="button"
             accessibilityState={{ disabled: !entryText.trim() }}
           >
-            <Ionicons
+            <AppIcon
               name="add"
-              size={IconGrammar.metadata}
-              color={entryText.trim() ? colors.textInverse : colors.textMuted}
+              size={IconSize.sm}
+              color={entryText.trim() ? 'textInverse' : 'textMuted'}
+              opticalCenter={true}
+              accessible={false}
             />
             <Text
               style={[
@@ -458,7 +464,7 @@ export function CaptionEditorSheet({
               Add Caption
             </Text>
             {entryText.trim() && (
-              <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textInverse} />
+              <AppIcon name="forward" size={IconSize.sm} color="textInverse" opticalCenter={true} accessible={false} />
             )}
           </Pressable>
         </View>

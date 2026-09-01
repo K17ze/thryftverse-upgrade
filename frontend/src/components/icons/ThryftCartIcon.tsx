@@ -1,27 +1,27 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Stroke } from '../../theme/designTokens';
+import { IconSize, type IconSizeKey } from '../../theme/iconTokens';
 
 interface ThryftCartIconProps {
-  size?: number;
+  size?: number | IconSizeKey;
   color?: string;
+  focused?: boolean;
 }
 
-export function ThryftCartIcon({ size = 14, color }: ThryftCartIconProps) {
+export function ThryftCartIcon({ size = IconSize.xs, color, focused }: ThryftCartIconProps) {
   const { colors } = useAppTheme();
-  const resolvedColor = color ?? colors.surfaceElevated;
-  const bodyWidth = Math.max(8, Math.round(size * 0.88));
-  const wheelSize = Math.max(2, Math.round(size * 0.2));
+  const resolvedColor = color ?? colors.textPrimary;
+  const resolvedSize = typeof size === 'number' ? size : IconSize[size] ?? IconSize.xs;
 
   return (
-    <View style={[styles.wrap, { width: size, height: size }]}>
-      <View style={[styles.handle, { borderColor: resolvedColor }]} />
-      <View style={[styles.body, { width: bodyWidth, borderColor: resolvedColor }]} />
-      <View style={styles.wheelsRow}>
-        <View style={[styles.wheel, { width: wheelSize, height: wheelSize, borderRadius: wheelSize / 2, backgroundColor: resolvedColor }]} />
-        <View style={[styles.wheel, { width: wheelSize, height: wheelSize, borderRadius: wheelSize / 2, backgroundColor: resolvedColor }]} />
-      </View>
+    <View style={[styles.wrap, { width: resolvedSize, height: resolvedSize }]}>
+      <Ionicons
+        name={focused ? 'bag-handle' : 'bag-handle-outline'}
+        size={resolvedSize}
+        color={resolvedColor}
+      />
     </View>
   );
 }
@@ -31,33 +31,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  handle: {
-    position: 'absolute',
-    top: 2,
-    left: 1,
-    width: 5,
-    height: 3,
-    borderTopWidth: 1.4,
-    borderLeftWidth: 1.4,
-    borderTopLeftRadius: 2,
-  },
-  body: {
-    position: 'absolute',
-    top: 4,
-    left: 3,
-    height: 6,
-    borderWidth: Stroke.standard,
-    borderTopRightRadius: 2,
-    borderBottomLeftRadius: 2,
-    borderBottomRightRadius: 3,
-  },
-  wheelsRow: {
-    position: 'absolute',
-    bottom: 1,
-    left: 4,
-    right: 3,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  wheel: {},
 });

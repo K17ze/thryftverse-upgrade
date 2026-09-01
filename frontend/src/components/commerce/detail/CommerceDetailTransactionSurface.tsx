@@ -54,7 +54,9 @@ export interface CommerceDetailTransactionSurfaceProps {
   family?: CommerceDetailFamily;
   /** Removes page margins when the parent owns the full-bleed chapter. */
   flush?: boolean;
-  /** Optional family surface colour; geometry remains flat/full-width. */
+  /** Optional family surface colour override. The default is transparent —
+   * the surface composes flat on the page canvas with hairline separators.
+   * Pass a colour only when a distinct state boundary is required. */
   surfaceColor?: string;
 }
 
@@ -133,9 +135,7 @@ export function CommerceDetailTransactionSurface({
         familyContainerStyle,
         {
           backgroundColor: surfaceColor
-            ?? (elevated
-              ? colors.surfaceElevated
-              : colors.background) },
+            ?? (elevated ? colors.surfaceElevated : 'transparent') },
       ]}
       accessibilityRole="summary"
     >

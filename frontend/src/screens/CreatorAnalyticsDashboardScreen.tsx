@@ -36,6 +36,7 @@ import { useA11yAudit } from '../hooks/useA11yAudit';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { formatFiatAmount } from '../utils/currency';
 import type { SupportedCurrencyCode } from '../constants/currencies';
+import { useToast } from '../context/ToastContext';
 import {
   fetchAnalyticsSummary,
   fetchAnalyticsTimeline,
@@ -154,6 +155,8 @@ export default function CreatorAnalyticsDashboardScreen() {
   const [partialError, setPartialError] = useState<string | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [isPayoutLoading, setIsPayoutLoading] = useState(false);
+  const [payoutError, setPayoutError] = useState<string | null>(null);
+  const { show: showToast } = useToast();
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -233,17 +236,25 @@ export default function CreatorAnalyticsDashboardScreen() {
     if (isPayoutLoading) return;
     haptic.light();
     setIsPayoutLoading(true);
+    setPayoutError(null);
     try {
       await requestPayout('wallet', `manual_${Date.now()}`);
       // Reload earnings after successful payout
       const fresh = await fetchEarningsSummary();
       if (mountedRef.current) setEarnings(fresh);
-    } catch {
-      // Silently fail — the user can retry. No alert spam.
+      if (mountedRef.current) showToast('Payout requested', 'success');
+    } catch (err) {
+      // Surface the failure — silent swallowing is a truth defect.
+      // The user must know the payout did not go through so they can retry.
+      const message = err instanceof Error ? err.message : 'Payout failed. Please try again.';
+      if (mountedRef.current) {
+        setPayoutError(message);
+        showToast(message, 'error');
+      }
     } finally {
       if (mountedRef.current) setIsPayoutLoading(false);
     }
-  }, [haptic, isPayoutLoading]);
+  }, [haptic, isPayoutLoading, showToast]);
 
   // ── Derived: chart data ─────────────────────────────────────────────
   const chartData = useMemo<ChartPoint[]>(() => {
@@ -468,16 +479,13 @@ export default function CreatorAnalyticsDashboardScreen() {
                     {formatCount(s.views.value)}
                   </Text>
                   {viewsDelta ? (
-                    <View style={[
-                      styles.heroDelta,
-                      { backgroundColor: viewsUp ? colors.scrimDeltaPositive : colors.scrimDeltaNegative },
-                    ]}>
+                    <View style={styles.heroDeltaInline}>
                       <Ionicons
                         name={viewsUp ? 'arrow-up' : 'arrow-down'}
                         size={11}
                         color={colors.scrimTextPrimary}
                       />
-                      <Text style={styles.heroDeltaText}>
+                      <Text style={styles.heroDeltaInlineText}>
                         {viewsDelta}
                       </Text>
                     </View>
@@ -666,19 +674,26 @@ export default function CreatorAnalyticsDashboardScreen() {
 
             {/* Payout action — only if there's available balance */}
             {earnings.available.amountMinor > 0 && (
-              <AnimatedPressable
-                onPress={onPayout}
-                style={[styles.payoutButton, { backgroundColor: colors.brand }]}
-                hapticFeedback="light"
-                scaleValue={0.97}
-                disabled={isPayoutLoading}
-                accessibilityRole="button"
-                accessibilityLabel="Request payout"
-              >
-                <Text style={styles.payoutButtonText}>
-                  {isPayoutLoading ? 'Processing…' : 'Request payout'}
-                </Text>
-              </AnimatedPressable>
+              <>
+                <AnimatedPressable
+                  onPress={onPayout}
+                  style={[styles.payoutButton, { backgroundColor: colors.brand }]}
+                  hapticFeedback="light"
+                  scaleValue={0.97}
+                  disabled={isPayoutLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Request payout"
+                >
+                  <Text style={styles.payoutButtonText}>
+                    {isPayoutLoading ? 'Processing…' : 'Request payout'}
+                  </Text>
+                </AnimatedPressable>
+                {payoutError ? (
+                  <Text style={[styles.payoutErrorText, { color: colors.danger }]}>
+                    {payoutError}
+                  </Text>
+                ) : null}
+              </>
             )}
 
             {/* Recent entries — last 5 */}
@@ -936,6 +951,15 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.semibold,
       letterSpacing: 0.2,
       color: colors.scrimTextPrimary },
+    // ── Inline delta on hero (no pill chrome) ──
+    heroDeltaInline: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2 },
+    heroDeltaInlineText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.scrimTextPrimary },
     // ── Comparison context ──
     comparisonContext: {
       fontSize: TypographyV2.meta.size,
@@ -999,6 +1023,10 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.semibold,
       color: colors.textInverse },
+    payoutErrorText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      marginTop: Space.xs },
     earningsEntries: {
       marginTop: Space.lg },
     entriesLabel: {

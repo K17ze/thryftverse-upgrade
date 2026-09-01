@@ -1107,6 +1107,49 @@ Deliberately NOT added (unimplemented in the model): opacity control, flip/mirro
 - `vitest creatorStudio.test.ts` → **22/22 passed**
 - Overflow row counts: Look default **14 (with dupes) → 9**; every context grouped, dedup-safe, destructive-separated
 
+### 9.10 Round-6 Implementation — Anti-AI Iconography Pass (2026-08-31)
+
+*Trigger: user report that icons still look bot-made ("shield, cube, compass, sparkling star"). Method: 2026 iconography research (ShapeofAI iconography patterns, Google's 2,000-person sparkle study via IBM Think, hybrid-metaphor direction) → full codebase census (semantic map + raw glyph usage, verdict-graded A/B/C) → three file-disjoint implementation agents + parent fixes. Verification: `tsc --noEmit` exit 0.*
+
+#### 9.10.1 Research → decision framework
+
+| Finding (2026) | Source | Decision |
+|---|---|---|
+| Sparkles is the **converged AI-presence motif** — Google ships ~100 of them; users learned "sparkle = AI" but not *what kind* | Google UX research / IBM Think | Keep `sparkles` as the app's **single dedicated AI marker** — but ONLY for genuine ML-generative actions |
+| 2026 AI icons need **hybrid metaphors** (AI + function), not bare magic | ShapeofAI / Sergushkin | Sparkles on non-AI features (feed, promos, empty states) is the slop form — replaced with function-precise glyphs |
+| One metaphor per concept app-wide | Instagram (magnifier = explore everywhere) | `compass` retired; explore = `search-outline` everywhere |
+| Universal standards stay | Apple/Google/banks | `shield` (security), `finger-print`, `leaf`, `globe`, `star` (ratings), `flash` (camera), `cube` (literal packages), `diamond` (jewellery/co-own assets) — all kept |
+
+#### 9.10.2 Swaps applied (~45 glyph edits across ~40 files)
+
+**Sparkle de-slopping (sparkles now = AI only):**
+- Non-AI misuses replaced: "Your feed" → `newspaper-outline`; "New to selling?" promo → `storefront-outline`; Background photo tip → `image-outline`; ledger test status → `flask-outline`; ledger empty → `receipt-outline`; empty-state default hint → `image-outline`
+- Genuine AI keeps verified: AI suggested details/price, Recommendations, Auto-adjust, STT captions, ML-effects, Recreate-this-look, AI-agent surfaces
+
+**`compass` retired (8 sites):** all explore/discovery empty states, LookSourceTray Discover tab, onboarding slide, command palette, FeedExplanationSheet → `search-outline`; `compass` semantic remapped to `search-outline` in iconTokens
+
+**`cube` de-genericized (~20 sites):** image fallbacks (FlagshipState, FlagshipOrderCard, 8 Co-Own cards, AssetLeaderboard) → `image-outline`; empty states → context nouns (listings `pricetag-outline`, orders `receipt-outline`, collections `albums-outline`, drops `pricetag-outline`); checkout informational/warning states → `information-circle-outline`/`warning-outline`; **kept literal**: shipping/postage/delivery/package contexts, order stepper
+
+**`hardware-chip` as AI retired (10 sites):** all chat-agent surfaces, inbox bot indicator, support assistant, ML tab, AI-preferences palette entry → `sparkles-outline`; `chip` semantic remapped to sparkles ("AI agents & assistants"); **collateral caught and fixed**: `AccountSecurityScreen`/`ActiveSessionsScreen` unknown-device fallback used `chip` → would have rendered sparkles on a security surface; changed to `desktop`
+
+**Category/style precision:** Boxing → `hand-left-outline` (was shield — misleading), Outdoor sports → `trail-sign-outline` (was leaf), Techwear → `shirt-outline` (was chip), Other devices → `desktop-outline`, Hobbies → `shapes-outline`, Trending "New" → `trending-up-outline`, Lighting tip → `bulb-outline`
+
+**Star de-decoration (4 sites):** DEFAULT address badge, Save-as-default toggle, My-size chip → `checkmark-circle-outline`; Poster Highlight → `bookmark-outline`; Cover badge → `image-outline`; **kept**: ratings, Featured badge, sticker shape names
+
+**Multi-select align ops wired earlier retained; co-own context glyphs:** activity → `swap-horizontal-outline`, liquidation → `cash-outline`, custodian → `shield-checkmark-outline`
+
+#### 9.10.3 In-progress file completions (user's active workstream)
+
+- `AIPoweredListingScreen.tsx`: completed the two half-finished renames following the file's own sibling patterns (`priceSuggestion` memo, `handlePriceChange` with `markDirty('price')`)
+- `SmartSellCard.tsx`: `listingId`/`policy`/`onPolicyChange` made optional with a render-nothing guard — the AI composer's preview-context call site (category/condition/listingPrice only) now type-checks without fabricating a policy; the pricing-card body remains the user's to build
+- `SellScreen`/`ManageListingScreen`: fixed `AppIconButton` import paths; `MyListingsScreen`: widened `TabConfig.icon` union
+
+#### 9.10.4 Round-6 verification
+
+- `tsc --noEmit` → **exit 0, zero errors** (full project including the user's in-progress AI listing screen)
+- Post-pass census: `compass` → 2 hits (both the remapped token definition itself), `hardware-chip` → 0 UI uses, generic `cube` fallbacks → 0, non-AI `sparkles` → 0
+- Metro running with warm cache — Fast Refresh picks up the swaps; full reload rebuilds clean
+
 ---
 
 ## 10. Validation Methodology

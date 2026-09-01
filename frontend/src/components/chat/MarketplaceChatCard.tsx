@@ -221,7 +221,7 @@ export function MarketplaceChatCard({
     return (
       <View style={styles.statusInline}>
         <View style={styles.statusInlineIcon}>
-          <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
+          <Ionicons name="bag-handle-outline" size={16} color={colors.textSecondary} />
         </View>
         <View style={styles.statusInlineCopy}>
           <Text style={styles.statusInlineTitle}>{lines[0]}</Text>

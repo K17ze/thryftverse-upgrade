@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, StyleSheet, StatusBar, Text, Platform } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -25,6 +26,7 @@ import { TypographyV2 } from '../theme/typography.v2';
 import { Meta, BodyEmphasis, Body, Headline } from '../components/ui/Text';
 import { createAuction } from '../services/marketApi';
 import { createStableId } from '../utils/createStableId';
+import { t } from '../i18n';
 import { EmptyState } from '../components/EmptyState';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useQueryClient } from '@tanstack/react-query';
@@ -122,14 +124,14 @@ export default function CreateAuctionScreen() {
 
   const launchAuction = async () => {
     if (!selectedListing) {
-      show('Select a listing to launch', 'error');
+      show(t('auction.create.selectListingError'), 'error');
       return;
     }
 
     const startingBidDisplay = Number(startingBidInput);
     const startingBid = fromDisplayToGbp(startingBidDisplay);
     if (!Number.isFinite(startingBid) || startingBid <= 0) {
-      show('Enter a valid starting bid', 'error');
+      show(t('auction.create.invalidStartingBid'), 'error');
       return;
     }
 
@@ -137,11 +139,11 @@ export default function CreateAuctionScreen() {
     if (reservePriceInput.trim()) {
       reservePriceGbp = fromDisplayToGbp(Number(reservePriceInput));
       if (!Number.isFinite(reservePriceGbp) || reservePriceGbp <= 0) {
-        show('Enter a valid reserve price', 'error');
+        show(t('auction.create.invalidReserve'), 'error');
         return;
       }
       if (reservePriceGbp < startingBid) {
-        show('Reserve price must be at least the starting bid', 'error');
+        show(t('auction.create.reserveBelowBid'), 'error');
         return;
       }
     }
@@ -150,7 +152,7 @@ export default function CreateAuctionScreen() {
     if (buyNowEnabled) {
       buyNowPriceGbp = fromDisplayToGbp(Number(buyNowInput));
       if (!Number.isFinite(buyNowPriceGbp) || buyNowPriceGbp <= startingBid) {
-        show('Buy now must be greater than starting bid', 'error');
+        show(t('auction.create.buyNowBelowBid'), 'error');
         return;
       }
     }
@@ -170,7 +172,7 @@ export default function CreateAuctionScreen() {
         idempotencyKey,
         ...(reservePriceGbp ? { reservePriceGbp } : {}),
         ...(buyNowPriceGbp ? { buyNowPriceGbp } : {}) });
-      const startLabel = startInMinutes === 0 ? 'Immediately' : `In ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`;
+      const startLabel = startInMinutes === 0 ? t('auction.create.startsImmediately') : `${t('auction.create.startsIn')} ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`;
       const durationLabel = DURATION_OPTIONS.find(d => d.hours === durationHours)?.label ?? `${durationHours}h`;
       setResultData({
         auctionId: result.id,
@@ -181,7 +183,7 @@ export default function CreateAuctionScreen() {
         startingBid: `${currencyCode} ${startingBidInput}`,
         reservePrice: reservePriceInput ? `${currencyCode} ${reservePriceInput}` : null,
         buyNow: buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : null });
-      show(startInMinutes > 0 ? 'Auction scheduled successfully' : 'Auction is now live', 'success');
+      show(startInMinutes > 0 ? t('auction.create.scheduled') : t('auction.create.live'), 'success');
       // The backend pauses the listing when an auction is created from it.
       // Refresh the feed + invalidate the listing detail so the paused
       // status propagates immediately.
@@ -189,7 +191,7 @@ export default function CreateAuctionScreen() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
       void queryClient.invalidateQueries({ queryKey: ['auctions', 'home'] });
     } catch (e) {
-      show('Failed to launch auction. Try again.', 'error');
+      show(t('auction.create.launchFailed'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -201,7 +203,7 @@ export default function CreateAuctionScreen() {
       <AnimatedPressable
         style={[styles.listingCard, selected && styles.listingCardSelected]}
         onPress={() => setSelectedListingId(item.id)}
-        activeOpacity={0.9}
+        activeOpacity={0.85}
         disableAnimation={false}
         scaleValue={0.97}
         accessibilityRole="button"
@@ -220,7 +222,7 @@ export default function CreateAuctionScreen() {
         </View>
         {selected && (
           <View style={styles.selectedTick}>
-            <Ionicons name="checkmark" size={14} color={colors.textInverse} />
+            <AppIcon name="checkmark" size={14} color="textInverse" opticalCenter accessible={false} />
           </View>
         )}
       </AnimatedPressable>
@@ -236,7 +238,7 @@ export default function CreateAuctionScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <TradeHeader
-        title="Launch Auction"
+        title={t('auction.create.launchTitle')}
         showClose
         onClose={() => {
           if (stage > 0) setStage(stage - 1);
@@ -247,7 +249,7 @@ export default function CreateAuctionScreen() {
 
       {/* Step indicator — refined active/inactive, weighted connectors */}
       <View style={styles.stepIndicator}>
-        {['Listing', 'Configure', 'Review'].map((label, i) => {
+        {[t('auction.create.stepListing'), t('auction.create.stepConfigure'), t('auction.create.stepReview')].map((label, i) => {
           const isComplete = i < stage;
           const isActive = i === stage;
           const isReached = i <= stage;
@@ -255,7 +257,7 @@ export default function CreateAuctionScreen() {
             <View key={label} style={styles.stepItem}>
               <View style={[styles.stepDot, isReached && styles.stepDotActive, isComplete && styles.stepDotComplete]}>
                 {isComplete ? (
-                  <Ionicons name="checkmark" size={12} color={colors.textInverse} />
+                  <AppIcon name="checkmark" size={12} color="textInverse" opticalCenter accessible={false} />
                 ) : (
                   <Text style={[styles.stepDotText, isReached && styles.stepDotTextActive]}>{i + 1}</Text>
                 )}
@@ -277,10 +279,10 @@ export default function CreateAuctionScreen() {
         {!sellerListings.length ? (
           <View>
             <EmptyState
-              icon="pricetag-outline"
-              title="No listings available"
-              subtitle="Create a listing first to launch an auction."
-              ctaLabel="Create Listing"
+              icon="bag-handle-outline"
+              title={t('auction.create.emptyTitle')}
+              subtitle={t('auction.create.emptySubtitle')}
+              ctaLabel={t('auction.create.emptyCta')}
               onCtaPress={() => navigation.navigate('Sell')}
             />
           </View>
@@ -290,7 +292,7 @@ export default function CreateAuctionScreen() {
             {stage === 0 && (
               <>
                 <View>
-                  <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
+                  <Meta style={styles.sectionLabel}>{t('auction.create.sectionSelectListing')}</Meta>
                 </View>
 
                 <FlashList
@@ -307,7 +309,7 @@ export default function CreateAuctionScreen() {
                     <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
                     <View style={styles.previewMeta}>
                       <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
-                        {selectedListing?.title ?? 'Select a listing'}
+                        {selectedListing?.title ?? t('auction.create.selectListing')}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
                         {selectedListing ? formatFromFiat(selectedListing.price, currencyCode) : '—'}
@@ -323,7 +325,7 @@ export default function CreateAuctionScreen() {
               <>
                 <View>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>START WINDOW</Meta>
+                    <Meta style={styles.sectionLabel}>{t('auction.create.sectionStartWindow')}</Meta>
                     <View style={styles.windowRow}>
                       {START_WINDOWS.map((win) => (
                         <AnimatedPressable
@@ -333,7 +335,7 @@ export default function CreateAuctionScreen() {
                             startInMinutes === win.minutes && styles.windowChipActive,
                           ]}
                           onPress={() => setStartInMinutes(win.minutes)}
-                          activeOpacity={0.9}
+                          activeOpacity={0.85}
                           hapticFeedback="light"
                           accessibilityRole="button"
                           accessibilityState={{ selected: startInMinutes === win.minutes }}
@@ -350,7 +352,7 @@ export default function CreateAuctionScreen() {
 
                 <View>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>DURATION</Meta>
+                    <Meta style={styles.sectionLabel}>{t('auction.create.sectionDuration')}</Meta>
                     <View style={styles.windowRow}>
                       {DURATION_OPTIONS.map((opt) => (
                         <AnimatedPressable
@@ -360,7 +362,7 @@ export default function CreateAuctionScreen() {
                             durationHours === opt.hours && styles.windowChipActive,
                           ]}
                           onPress={() => setDurationHours(opt.hours)}
-                          activeOpacity={0.9}
+                          activeOpacity={0.85}
                           hapticFeedback="light"
                           accessibilityRole="button"
                           accessibilityState={{ selected: durationHours === opt.hours }}
@@ -377,7 +379,7 @@ export default function CreateAuctionScreen() {
 
                 <View>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>STARTING BID</Meta>
+                    <Meta style={styles.sectionLabel}>{t('listing.create.startingBid')}</Meta>
                     <AppInput
                       value={startingBidInput}
                       onChangeText={setStartingBidInput}
@@ -392,7 +394,7 @@ export default function CreateAuctionScreen() {
 
                 <View>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>RESERVE PRICE (OPTIONAL)</Meta>
+                    <Meta style={styles.sectionLabel}>{t('listing.create.reservePriceOptional')}</Meta>
                     <AppInput
                       value={reservePriceInput}
                       onChangeText={setReservePriceInput}
@@ -401,7 +403,7 @@ export default function CreateAuctionScreen() {
                       prefix={currencyCode}
                       accessibilityLabel="Reserve price (optional)"
                       accessibilityHint="Minimum sale price — item won't sell unless reserve is met"
-                      helperText="Minimum sale price — item won't sell unless reserve is met"
+                      helperText={t('auction.create.reserveHint')}
                       containerStyle={styles.input}
                     />
                   </TradeCard>
@@ -410,17 +412,17 @@ export default function CreateAuctionScreen() {
                 <View>
                   <TradeCard style={styles.formCard}>
                     <View style={styles.buyNowRow}>
-                      <Meta style={styles.sectionLabel}>BUY NOW PRICE</Meta>
+                      <Meta style={styles.sectionLabel}>{t('auction.create.sectionBuyNow')}</Meta>
                       <AnimatedPressable
                         style={[styles.toggleChip, buyNowEnabled && styles.toggleChipActive]}
                         onPress={() => setBuyNowEnabled((v) => !v)}
-                        activeOpacity={0.9}
+                        activeOpacity={0.85}
                         hapticFeedback="light"
                         accessibilityRole="switch"
                         accessibilityState={{ checked: buyNowEnabled }}
                       >
                         <Body style={[styles.toggleText, buyNowEnabled && styles.toggleTextActive]}>
-                          {buyNowEnabled ? 'ON' : 'OFF'}
+                          {buyNowEnabled ? t('auction.create.on') : t('auction.create.off')}
                         </Body>
                       </AnimatedPressable>
                     </View>
@@ -444,8 +446,8 @@ export default function CreateAuctionScreen() {
             {stage === 2 && (
               <>
                 <View>
-                  <Headline style={styles.reviewHeadline}>Review your auction</Headline>
-                  <Meta style={styles.reviewSubheadline}>Confirm the details below before launching.</Meta>
+                  <Headline style={styles.reviewHeadline}>{t('auction.create.reviewTitle')}</Headline>
+                  <Meta style={styles.reviewSubheadline}>{t('auction.create.reviewSubtitle')}</Meta>
                 </View>
 
                 <View>
@@ -453,7 +455,7 @@ export default function CreateAuctionScreen() {
                     <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
                     <View style={styles.previewMeta}>
                       <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
-                        {selectedListing?.title ?? 'Select a listing'}
+                        {selectedListing?.title ?? t('auction.create.selectListing')}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
                         {selectedListing ? formatFromFiat(selectedListing.price, currencyCode) : '—'}
@@ -464,25 +466,25 @@ export default function CreateAuctionScreen() {
 
                 <View>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>AUCTION SUMMARY</Meta>
+                    <Meta style={styles.sectionLabel}>{t('auction.create.sectionSummary')}</Meta>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Listing</Meta>
+                      <Meta style={styles.termsLabel}>{t('auction.create.labelListing')}</Meta>
                       <Body style={styles.termsValue} numberOfLines={1}>{selectedListing?.title ?? '—'}</Body>
                     </View>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Starts</Meta>
+                      <Meta style={styles.termsLabel}>{t('auction.create.labelStarts')}</Meta>
                       <Body style={styles.termsValue}>
-                        {startInMinutes === 0 ? 'Immediately' : `In ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`}
+                        {startInMinutes === 0 ? t('auction.create.startsImmediately') : `${t('auction.create.startsIn')} ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`}
                       </Body>
                     </View>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Duration</Meta>
+                      <Meta style={styles.termsLabel}>{t('listing.create.duration')}</Meta>
                       <Body style={styles.termsValue}>
                         {DURATION_OPTIONS.find(d => d.hours === durationHours)?.label ?? `${durationHours}h`}
                       </Body>
                     </View>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Starting bid</Meta>
+                      <Meta style={styles.termsLabel}>{t('listing.create.startingBid')}</Meta>
                       <View style={styles.termsValueCol}>
                         <Body style={styles.termsValue}>
                           {startingBidInput ? `${currencyCode} ${startingBidInput}` : '—'}
@@ -495,10 +497,10 @@ export default function CreateAuctionScreen() {
                       </View>
                     </View>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Reserve price</Meta>
+                      <Meta style={styles.termsLabel}>{t('auction.create.labelReserve')}</Meta>
                       <View style={styles.termsValueCol}>
                         <Body style={styles.termsValue}>
-                          {reservePriceInput ? `${currencyCode} ${reservePriceInput}` : 'None'}
+                          {reservePriceInput ? `${currencyCode} ${reservePriceInput}` : t('auction.create.none')}
                         </Body>
                         {reservePriceInput && (
                           <Text style={styles.termsIzeText}>
@@ -508,10 +510,10 @@ export default function CreateAuctionScreen() {
                       </View>
                     </View>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Buy now</Meta>
+                      <Meta style={styles.termsLabel}>{t('auction.create.labelBuyNow')}</Meta>
                       <View style={styles.termsValueCol}>
                         <Body style={styles.termsValue}>
-                          {buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : 'Disabled'}
+                          {buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : t('auction.create.disabled')}
                         </Body>
                         {buyNowEnabled && buyNowInput && (
                           <Text style={styles.termsIzeText}>
@@ -525,24 +527,24 @@ export default function CreateAuctionScreen() {
 
                 <View>
                   <View style={styles.termsCard}>
-                    <Meta style={styles.termsSectionLabel}>TERMS & FEES</Meta>
+                    <Meta style={styles.termsSectionLabel}>{t('auction.create.sectionTerms')}</Meta>
                     <View style={styles.termsInlineRow}>
-                      <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
-                      <Text style={styles.termsInlineLabel}>Platform fee</Text>
-                      <Text style={styles.termsInlineValue}>3% of winning bid</Text>
+                      <AppIcon name="cash-outline" size={13} color="textMuted" opticalCenter accessible={false} />
+                      <Text style={styles.termsInlineLabel}>{t('auction.create.platformFee')}</Text>
+                      <Text style={styles.termsInlineValue}>{t('auction.create.platformFeeValue')}</Text>
                     </View>
                     <View style={styles.termsInlineRow}>
-                      <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-                      <Text style={styles.termsInlineLabel}>Settlement</Text>
-                      <Text style={styles.termsInlineValue}>After auction ends</Text>
+                      <AppIcon name="time-outline" size={13} color="textMuted" opticalCenter accessible={false} />
+                      <Text style={styles.termsInlineLabel}>{t('auction.create.settlement')}</Text>
+                      <Text style={styles.termsInlineValue}>{t('auction.create.settlementValue')}</Text>
                     </View>
                   </View>
                 </View>
 
                 <View>
                   <AppButton
-                    title={isSubmitting ? 'Launching...' : 'Launch Auction'}
-                    icon={isSubmitting ? undefined : <Ionicons name="speedometer-outline" size={16} color={colors.background} />}
+                    title={isSubmitting ? t('auction.create.launching') : t('auction.create.launchTitle')}
+                    icon={isSubmitting ? undefined : <AppIcon name="speedometer-outline" size={16} color="background" opticalCenter accessible={false} />}
                     onPress={launchAuction}
                     variant="primary"
                     size="md"
@@ -561,7 +563,7 @@ export default function CreateAuctionScreen() {
               <View style={styles.stageNavRow}>
                 {stage > 0 && (
                   <AppButton
-                    title="Back"
+                    title={t('auction.create.back')}
                     onPress={() => setStage(stage - 1)}
                     variant="secondary"
                     size="md"
@@ -571,7 +573,7 @@ export default function CreateAuctionScreen() {
                   />
                 )}
                 <AppButton
-                  title="Continue"
+                  title={t('auction.create.continue')}
                   onPress={() => setStage(stage + 1)}
                   variant="primary"
                   size="md"
@@ -592,10 +594,10 @@ export default function CreateAuctionScreen() {
           <View style={styles.resultCard}>
             {/* Success mark — refined, not a giant icon */}
             <View style={styles.resultIconWrap}>
-              <Ionicons name="checkmark" size={28} color={colors.success} />
+              <AppIcon name="checkmark" size={28} color="success" opticalCenter accessible={false} />
             </View>
-            <Headline style={styles.resultTitle}>Auction Launched</Headline>
-            <Meta style={styles.resultSubtitle}>{resultData.startLabel === 'Immediately' ? 'Your auction is now live' : 'Your auction is scheduled'}</Meta>
+            <Headline style={styles.resultTitle}>{t('auction.create.resultTitle')}</Headline>
+            <Meta style={styles.resultSubtitle}>{resultData.startLabel === t('auction.create.startsImmediately') ? t('auction.create.resultLive') : t('auction.create.resultScheduled')}</Meta>
 
             {resultData.imageUrl ? (
               <CachedImage
@@ -608,19 +610,19 @@ export default function CreateAuctionScreen() {
 
             <View style={styles.resultSummary}>
               <View style={styles.termsRow}>
-                <Meta style={styles.termsLabel}>Listing</Meta>
+                <Meta style={styles.termsLabel}>{t('auction.create.labelListing')}</Meta>
                 <Body style={styles.termsValue} numberOfLines={1}>{resultData.title}</Body>
               </View>
               <View style={styles.termsRow}>
-                <Meta style={styles.termsLabel}>Starts</Meta>
+                <Meta style={styles.termsLabel}>{t('auction.create.labelStarts')}</Meta>
                 <Body style={styles.termsValue}>{resultData.startLabel}</Body>
               </View>
               <View style={styles.termsRow}>
-                <Meta style={styles.termsLabel}>Duration</Meta>
+                <Meta style={styles.termsLabel}>{t('listing.create.duration')}</Meta>
                 <Body style={styles.termsValue}>{resultData.durationLabel}</Body>
               </View>
               <View style={styles.termsRow}>
-                <Meta style={styles.termsLabel}>Starting bid</Meta>
+                <Meta style={styles.termsLabel}>{t('listing.create.startingBid')}</Meta>
                 <View style={styles.termsValueCol}>
                   <Body style={styles.termsValue}>{resultData.startingBid}</Body>
                   {startingBidInput && (
@@ -632,7 +634,7 @@ export default function CreateAuctionScreen() {
               </View>
               {resultData.reservePrice && (
                 <View style={styles.termsRow}>
-                  <Meta style={styles.termsLabel}>Reserve price</Meta>
+                  <Meta style={styles.termsLabel}>{t('auction.create.labelReserve')}</Meta>
                   <View style={styles.termsValueCol}>
                     <Body style={styles.termsValue}>{resultData.reservePrice}</Body>
                     {reservePriceInput && (
@@ -645,7 +647,7 @@ export default function CreateAuctionScreen() {
               )}
               {resultData.buyNow && (
                 <View style={styles.termsRow}>
-                  <Meta style={styles.termsLabel}>Buy now</Meta>
+                  <Meta style={styles.termsLabel}>{t('auction.create.labelBuyNow')}</Meta>
                   <View style={styles.termsValueCol}>
                     <Body style={styles.termsValue}>{resultData.buyNow}</Body>
                     {buyNowInput && (
@@ -660,7 +662,7 @@ export default function CreateAuctionScreen() {
 
             <View style={styles.resultActions}>
               <AppButton
-                title="View Auction"
+                title={t('auction.create.viewAuction')}
                 onPress={() => navigation.replace('AuctionDetail', { auctionId: resultData.auctionId })}
                 variant="primary"
                 size="md"
@@ -668,7 +670,7 @@ export default function CreateAuctionScreen() {
                 accessibilityLabel="View the launched auction"
               />
               <AppButton
-                title="Done"
+                title={t('auction.create.done')}
                 onPress={() => navigation.goBack()}
                 variant="secondary"
                 size="md"
@@ -843,8 +845,7 @@ function createStyles(colors: ThemeColors) {
   stepDotText: {
     fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontWeight: '700',
-    fontFamily: TypographyV2.meta.fontFamily },
+    fontFamily: Typography.family.bold },
   stepDotTextActive: {
     color: colors.textInverse },
   stepLabel: {
@@ -958,7 +959,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xl,
     padding: Space.lg,
     width: '100%',
-    maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl - 4,
+    maxWidth: Space.xxl * 10,
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,

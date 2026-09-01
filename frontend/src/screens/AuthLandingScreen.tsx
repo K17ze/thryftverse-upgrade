@@ -411,7 +411,7 @@ export default function AuthLandingScreen() {
           >
             <View style={styles.twoFactorNoticeHeader}>
               <View style={[styles.twoFactorNoticeIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
-                <Ionicons name="shield-checkmark-outline" size={18} color={colors.commerceTrust} />
+                <Ionicons name="lock-closed-outline" size={18} color={colors.commerceTrust} />
               </View>
               <Text style={styles.twoFactorNoticeTitle} maxFontSizeMultiplier={1.3}>
                 Two-factor authentication required

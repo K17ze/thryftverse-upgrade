@@ -1,10 +1,9 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, RefreshControl, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Stroke  } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
@@ -13,6 +12,8 @@ import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize, type SemanticIconName } from '../theme/iconTokens';
 import {
   fetchActiveSessions,
   revokeSession,
@@ -37,11 +38,10 @@ function formatLastActive(iso: string | null): string {
   return date.toLocaleDateString();
 }
 
-function platformIcon(platform: string): React.ComponentProps<typeof Ionicons>['name'] {
-  if (platform === 'iOS') return 'phone-portrait-outline';
-  if (platform === 'Android') return 'phone-portrait-outline';
-  if (platform === 'Web') return 'desktop-outline';
-  return 'hardware-chip-outline';
+function platformIcon(platform: string): SemanticIconName {
+  if (platform === 'iOS' || platform === 'Android') return 'phone';
+  if (platform === 'Web') return 'desktop';
+  return 'desktop';
 }
 
 export default function ActiveSessionsScreen({ navigation }: Props) {
@@ -155,7 +155,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         {/* Security overview */}
           <View style={[styles.trustSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.trustHeader}>
-              <Ionicons name="checkmark-done-outline" size={20} color={colors.success} />
+              <AppIcon name="lock" focused size={IconSize.md} color="success" opticalCenter accessible={false} />
               <Text style={styles.trustTitle}>
                 {loading ? 'Checking your sessions…' : otherSessions.length === 0 ? 'Your account is secure' : `${otherSessions.length} other active session${otherSessions.length > 1 ? 's' : ''}`}
               </Text>
@@ -171,7 +171,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
 
         {error && (
             <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
-              <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+              <AppIcon name="warning" size={IconSize.sm} color="danger" opticalCenter accessible={false} />
               <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
             </View>
         )}
@@ -186,7 +186,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                   currentSessions.map((session) => (
                     <View key={session.id} style={styles.sessionRow}>
                       <View style={styles.deviceIcon}>
-                        <Ionicons name={platformIcon(session.platform)} size={22} color={colors.brand} />
+                        <AppIcon name={platformIcon(session.platform)} size={IconSize.lg} color="brand" opticalCenter accessible={false} />
                       </View>
                       <View style={styles.sessionText}>
                         <Text style={styles.sessionName}>{session.deviceName}</Text>
@@ -199,7 +199,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                   ))
                 ) : (
                   <View style={styles.emptyGroup}>
-                    <Ionicons name="help-circle-outline" size={32} color={colors.textMuted} />
+                    <AppIcon name="help" size={IconSize.hero} color="textMuted" opticalCenter accessible={false} />
                     <Text style={styles.emptyTitle}>Could not identify this device</Text>
                     <Text style={styles.emptyBody}>
                       Pull to refresh to try again.
@@ -212,7 +212,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
               <SettingsSection title="Other devices" noCard>
                 {otherSessions.length === 0 ? (
                   <View style={styles.emptyGroup}>
-                    <Ionicons name="desktop-outline" size={32} color={colors.textMuted} />
+                    <AppIcon name="desktop" size={IconSize.hero} color="textMuted" opticalCenter accessible={false} />
                     <Text style={styles.emptyTitle}>No other active sessions</Text>
                     <Text style={styles.emptyBody}>
                       When you sign in on another device, it will appear here so you can review it.
@@ -228,7 +228,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                       ]}
                     >
                       <View style={styles.deviceIcon}>
-                        <Ionicons name={platformIcon(session.platform)} size={22} color={colors.textSecondary} />
+                        <AppIcon name={platformIcon(session.platform)} size={IconSize.lg} color="textSecondary" opticalCenter accessible={false} />
                       </View>
                       <View style={styles.sessionText}>
                         <Text style={styles.sessionName}>{session.deviceName}</Text>

@@ -52,6 +52,8 @@ import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 import {
   STICKER_CATEGORIES,
   AUTO_STICKER_CATEGORY,
@@ -222,7 +224,7 @@ export function StickerBrowserSheet({
             onPress={handleClose}
             style={styles.closeButton}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
           <Text style={styles.title} numberOfLines={1}>
             Stickers
@@ -240,10 +242,12 @@ export function StickerBrowserSheet({
                   pinMode ? styles.pinBtnActive : styles.pinBtnInactive,
                 ]}
               >
-                <Ionicons
+                <AppIcon
                   name="pin-outline"
-                  size={Control.iconCompact}
-                  color={pinMode ? colors.textInverse : colors.textSecondary}
+                  size={IconSize.sm}
+                  color={pinMode ? 'textInverse' : 'textSecondary'}
+                  opticalCenter={true}
+                  accessible={false}
                 />
                 <Text
                   style={[
@@ -269,11 +273,12 @@ export function StickerBrowserSheet({
 
         {/* Search */}
         <View style={styles.searchRow}>
-          <Ionicons
+          <AppIcon
             name="search-outline"
-            size={Control.iconCompact}
-            color={colors.textMuted}
-            style={styles.searchIcon}
+            size={IconSize.sm}
+            color="textMuted"
+            opticalCenter={true}
+            accessible={false}
           />
           <TextInput
             ref={searchRef}
@@ -295,10 +300,12 @@ export function StickerBrowserSheet({
               onPress={() => setQuery('')}
               style={styles.clearButton}
             >
-              <Ionicons
-                name="close-circle"
-                size={Control.iconCompact}
-                color={colors.textMuted}
+              <AppIcon
+                name="closeCircle"
+                size={IconSize.sm}
+                color="textMuted"
+                opticalCenter={true}
+                accessible={false}
               />
             </PressScale>
           ) : null}
@@ -416,10 +423,12 @@ const StickerCell = React.memo(function StickerCell({
         {sticker.emoji ? (
           <Text style={styles.emoji}>{sticker.emoji}</Text>
         ) : sticker.iconRef ? (
-          <Ionicons
+          <AppIcon
             name={sticker.iconRef}
-            size={IconGrammar.hero}
-            color={isInteractive ? colors.brand : colors.textPrimary}
+            size={IconSize.hero}
+            color={isInteractive ? 'brand' : 'textPrimary'}
+            opticalCenter={true}
+            accessible={false}
           />
         ) : null}
         {isInteractive ? (

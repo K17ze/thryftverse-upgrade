@@ -9,7 +9,6 @@ import {
   Share,
   Pressable } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedScrollHandler,
   useSharedValue,
@@ -46,6 +45,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { t } from '../i18n';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { AppIcon } from '../components/common/AppIcon';
+import { AppIconButton } from '../components/common/AppIconButton';
+import { IconSize } from '../theme/iconTokens';
 
 
 type RouteT = RouteProp<RootStackParamList, 'ManageListing'>;
@@ -98,7 +100,7 @@ export default function ManageListingScreen() {
       .catch(() => {
         if (mounted) {
           setHasError(true);
-          show('Could not load listing', 'error');
+          show(t('manage.couldNotLoad'), 'error');
         }
       })
       .finally(() => { if (mounted) setIsLoading(false); });
@@ -149,10 +151,10 @@ export default function ManageListingScreen() {
       <View style={styles.container}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
         <EmptyState
-          icon="cube-outline"
-          title="Listing not found"
-          subtitle="This listing may have been removed."
-          ctaLabel="Go back"
+          icon="bag-handle-outline"
+          title={t('manage.listingNotFound')}
+          subtitle={t('manage.listingRemoved')}
+          ctaLabel={t('manage.goBack')}
           onCtaPress={() => navigation.goBack()}
         />
       </View>
@@ -163,11 +165,11 @@ export default function ManageListingScreen() {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <Ionicons name="warning-outline" size={48} color={colors.textMuted} />
+        <AppIcon name="warning" size={IconSize.display} color="textMuted" opticalCenter accessible={false} />
         <Text style={{ fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary, marginTop: Space.md }}>
-          Could not load listing
+          {t('manage.couldNotLoad')}
         </Text>
-        <AppButton title="Retry" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => {
+        <AppButton title={t('manage.retry')} variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => {
           setHasError(false);
           setIsLoading(true);
           fetchListingByIdFromApi(itemId)
@@ -190,14 +192,14 @@ export default function ManageListingScreen() {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <Ionicons name="lock-closed-outline" size={48} color={colors.textMuted} />
+        <AppIcon name="lock" size={IconSize.display} color="textMuted" opticalCenter accessible={false} />
         <Text style={{ fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary, marginTop: Space.md }}>
-          Permission denied
+          {t('manage.permissionDenied')}
         </Text>
         <Text style={{ fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textMuted, marginTop: Space.xs, textAlign: 'center' }}>
-          You do not have permission to manage this listing.
+          {t('manage.noPermission')}
         </Text>
-        <AppButton title="Go back" variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => navigation.goBack()} />
+        <AppButton title={t('manage.goBack')} variant="secondary" size="md" style={{ marginTop: Space.lg }} onPress={() => navigation.goBack()} />
       </View>
     );
   }
@@ -208,7 +210,7 @@ export default function ManageListingScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.priceGbp ?? 0, currencyCode, { displayMode: 'fiat' })}.` });
+        message: t('manage.shareMessage', { title: item.title, price: formatFromFiat(item.priceGbp ?? 0, currencyCode, { displayMode: 'fiat' }) }) });
     } catch {
       // silently fail
     }
@@ -217,19 +219,19 @@ export default function ManageListingScreen() {
   const handleDeleteListing = () => {
     setConfirmSheet({
       visible: true,
-      title: 'Delete Listing',
-      message: 'This cannot be undone. Permanently remove this listing?',
-      confirmLabel: 'Delete',
-      cancelLabel: 'Cancel',
+      title: t('manage.deleteTitle'),
+      message: t('manage.deleteMessage'),
+      confirmLabel: t('manage.delete'),
+      cancelLabel: t('manage.cancel'),
       onConfirm: async () => {
         try {
           await deleteListingOnApi(itemId);
-          show('Listing deleted.', 'success');
+          show(t('manage.deleted'), 'success');
           void refreshListings();
           void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
           navigation.goBack();
         } catch {
-          show('Failed to delete listing', 'error');
+          show(t('manage.deleteFailed'), 'error');
         }
       },
       variant: 'danger' });
@@ -242,20 +244,20 @@ export default function ManageListingScreen() {
   const handleMarkSold = () => {
     setConfirmSheet({
       visible: true,
-      title: 'Mark as Sold',
-      message: 'This item will no longer be available for purchase.',
-      confirmLabel: 'Mark Sold',
-      cancelLabel: 'Cancel',
+      title: t('manage.markSoldTitle'),
+      message: t('manage.markSoldMessage'),
+      confirmLabel: t('manage.markSold'),
+      cancelLabel: t('manage.cancel'),
       variant: 'default',
       onConfirm: async () => {
         try {
           await patchListingOnApi(itemId, { status: 'sold' });
           setItem((prev: any) => ({ ...prev, status: 'sold' }));
-          show('Listing marked as sold.', 'success');
+          show(t('manage.markedSold'), 'success');
           void refreshListings();
           void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
         } catch {
-          show('Failed to update listing', 'error');
+          show(t('manage.updateFailed'), 'error');
         }
       } });
   };
@@ -264,11 +266,11 @@ export default function ManageListingScreen() {
     try {
       await patchListingOnApi(itemId, { status: 'paused' });
       setItem((prev: any) => ({ ...prev, status: 'paused' }));
-      show('Listing paused', 'info');
+      show(t('manage.paused'), 'info');
       void refreshListings();
       void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
     } catch {
-      show('Failed to update listing', 'error');
+      show(t('manage.updateFailed'), 'error');
     }
   };
 
@@ -276,36 +278,36 @@ export default function ManageListingScreen() {
     try {
       await patchListingOnApi(itemId, { status: 'active' });
       setItem((prev: any) => ({ ...prev, status: 'active' }));
-      show('Listing reactivated', 'success');
+      show(t('manage.reactivated'), 'success');
       void refreshListings();
       void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
     } catch {
-      show('Failed to update listing', 'error');
+      show(t('manage.updateFailed'), 'error');
     }
   };
 
   const handleOverflowMenu = () => {
     const firstAction =
       status === 'active'
-        ? { label: 'Pause listing', action: handlePause }
+        ? { label: t('manage.pauseListing'), action: handlePause }
         : status === 'paused'
-          ? { label: 'Reactivate listing', action: handleReactivate }
+          ? { label: t('manage.reactivateListing'), action: handleReactivate }
           : status === 'sold'
-            ? { label: 'Reactivate listing', action: handleReactivate }
+            ? { label: t('manage.reactivateListing'), action: handleReactivate }
             : null;
     if (!firstAction) return;
     setConfirmSheet({
       visible: true,
-      title: 'More actions',
+      title: t('manage.moreActions'),
       message: '',
       confirmLabel: firstAction.label,
-      cancelLabel: 'Cancel',
+      cancelLabel: t('manage.cancel'),
       variant: 'default',
       onConfirm: firstAction.action });
   };
 
   // Status metadata for the flat identity block.
-  const statusLabel = isSold ? 'Sold' : isPaused ? 'Paused' : 'Active';
+  const statusLabel = isSold ? t('manage.statusSold') : isPaused ? t('manage.statusPaused') : t('manage.statusActive');
   // Per 2026 best practices: Active (success), Paused (warning), Sold (brand).
   const statusColor = isSold ? colors.brand : isPaused ? colors.warning : colors.success;
 
@@ -326,15 +328,24 @@ export default function ManageListingScreen() {
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
 
       <Reanimated.View style={[styles.floatingHeader, headerBgStyle, { paddingTop: Math.max(insets.top, 20) }]}>
-        <AnimatedPressable style={styles.hdrBtn} onPress={() => navigation.goBack()} accessibilityLabel="Go back" accessibilityRole="button">
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </AnimatedPressable>
+        <AppIconButton
+          name="back"
+          size={IconSize.lg}
+          color="textPrimary"
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Go back"
+        />
         <Reanimated.View style={headerTitleStyle}>
-          <Text style={styles.hdrTitle} numberOfLines={1}>Manage listing</Text>
+          <Text style={styles.hdrTitle} numberOfLines={1}>{t('manage.title')}</Text>
         </Reanimated.View>
-        <AnimatedPressable style={styles.hdrBtn} onPress={handleOverflowMenu} accessibilityLabel="More actions" accessibilityRole="button" accessibilityHint="Pause, reactivate, mark as sold or delete this listing">
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
-        </AnimatedPressable>
+        <AppIconButton
+          name="overflow"
+          size={IconSize.md}
+          color="textPrimary"
+          onPress={handleOverflowMenu}
+          accessibilityLabel="More actions"
+          accessibilityHint={t('manage.a11y.overflowHint')}
+        />
       </Reanimated.View>
 
       <Reanimated.ScrollView
@@ -382,24 +393,24 @@ export default function ManageListingScreen() {
               <Text style={[styles.statusPillFlatText, { color: statusColor }]}>{statusLabel}</Text>
             </View>
             <Text style={styles.statusMeta}>
-              {activeOfferCount > 0 ? `${activeOfferCount} offer${activeOfferCount === 1 ? '' : 's'}` : 'No offers yet'}
+              {activeOfferCount > 0 ? t('manage.offerCount', { count: activeOfferCount, plural: activeOfferCount === 1 ? '' : 's' }) : t('manage.noOffersYet')}
               {' · '}
-              {savesCount} save{savesCount === 1 ? '' : 's'}
-              {questionCount > 0 ? ` · ${questionCount} question${questionCount === 1 ? '' : 's'}` : ''}
+              {t('manage.saveCount', { count: savesCount, plural: savesCount === 1 ? '' : 's' })}
+              {questionCount > 0 ? ` · ${t('manage.questionCount', { count: questionCount, plural: questionCount === 1 ? '' : 's' })}` : ''}
             </Text>
           </View>
         </View>
 
         {/* ── Primary CTA: Edit listing ── */}
         <AppButton
-          title="Edit listing"
-          icon={<Ionicons name="create-outline" size={18} color={colors.background} />}
+          title={t('manage.editListing')}
+          icon={<AppIcon name="edit" size={IconSize.sm} color={colors.background} opticalCenter accessible={false} />}
           variant="primary"
           size="lg"
           style={styles.editBtn}
           onPress={() => navigation.navigate('EditListing', { itemId })}
-          accessibilityLabel="Edit listing"
-          accessibilityHint="Opens the listing editor"
+          accessibilityLabel={t('manage.editListing')}
+          accessibilityHint={t('manage.a11y.editListingHint')}
           hapticFeedback="light"
         />
 
@@ -410,35 +421,35 @@ export default function ManageListingScreen() {
           <AnimatedPressable
             style={styles.iconAction}
             onPress={() => navigation.navigate('CreatorStudio', { type: 'poster' })}
-            accessibilityLabel="Create poster"
+            accessibilityLabel={t('manage.a11y.createPoster')}
             accessibilityRole="button"
-            accessibilityHint="Generate a promotional poster for this listing"
+            accessibilityHint={t('manage.a11y.createPosterHint')}
             hapticFeedback="light"
           >
-            <Ionicons name="image-outline" size={22} color={colors.brand} />
-            <Text style={styles.iconActionLabel}>Poster</Text>
+            <AppIcon name="image" size={IconSize.lg} color="brand" opticalCenter accessible={false} />
+            <Text style={styles.iconActionLabel}>{t('manage.poster')}</Text>
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.iconAction}
             onPress={handleShare}
-            accessibilityLabel="Share listing"
+            accessibilityLabel={t('manage.a11y.shareListing')}
             accessibilityRole="button"
-            accessibilityHint="Share this listing"
+            accessibilityHint={t('manage.a11y.shareListingHint')}
             hapticFeedback="light"
           >
-            <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
-            <Text style={styles.iconActionLabel}>Share</Text>
+            <AppIcon name="share" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
+            <Text style={styles.iconActionLabel}>{t('manage.share')}</Text>
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.iconAction}
             onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
-            accessibilityLabel="Preview listing"
+            accessibilityLabel={t('manage.a11y.previewListing')}
             accessibilityRole="button"
-            accessibilityHint="View this listing as buyers see it"
+            accessibilityHint={t('manage.a11y.previewListingHint')}
             hapticFeedback="light"
           >
-            <Ionicons name="eye-outline" size={22} color={colors.textPrimary} />
-            <Text style={styles.iconActionLabel}>Preview</Text>
+            <AppIcon name="eye" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
+            <Text style={styles.iconActionLabel}>{t('manage.preview')}</Text>
           </AnimatedPressable>
         </View>
 
@@ -450,31 +461,31 @@ export default function ManageListingScreen() {
             lines + disclosure rows. No cards, no borders. */}
         <FlagshipFormSection
           variant="flat"
-          title="Buyer activity"
+          title={t('manage.buyerActivity')}
           style={styles.metricsSection}
         >
-          <FlagshipMetricLine label="Likes" value={String(likesCount)} />
-          <FlagshipMetricLine label="Saves" value={String(savesCount)} separated />
+          <FlagshipMetricLine label={t('manage.likes')} value={String(likesCount)} />
+          <FlagshipMetricLine label={t('manage.saves')} value={String(savesCount)} separated />
           <FlagshipMetricLine
-            label="Questions"
+            label={t('manage.questions')}
             value={String(questionCount)}
-            subLabel={answeredQuestionCount > 0 ? `${answeredQuestionCount} answered` : undefined}
+            subLabel={answeredQuestionCount > 0 ? t('manage.answered', { count: answeredQuestionCount }) : undefined}
             separated
           />
-          <FlagshipMetricLine label="Active offers" value={String(activeOfferCount)} separated />
+          <FlagshipMetricLine label={t('manage.activeOffers')} value={String(activeOfferCount)} separated />
           <FlagshipNavigationRow
-            title="View analytics"
-            subtitle="Performance across all your listings"
-            icon="analytics-outline"
+            title={t('manage.viewAnalytics')}
+            subtitle={t('manage.analyticsSubtitle')}
+            icon="analytics"
             onPress={() => navigation.navigate('SellerAnalytics')}
-            accessibilityLabel="View analytics"
-            accessibilityHint="Open seller analytics for performance insights"
+            accessibilityLabel={t('manage.viewAnalytics')}
+            accessibilityHint={t('manage.a11y.viewAnalyticsHint')}
           />
           {questionCount > 0 ? (
             <FlagshipNavigationRow
-              title="View questions"
-              subtitle={`${questionCount} buyer question${questionCount === 1 ? '' : 's'} to review`}
-              icon="chatbubble-outline"
+              title={t('manage.viewQuestions')}
+              subtitle={t('manage.questionsToReview', { count: questionCount, plural: questionCount === 1 ? '' : 's' })}
+              icon="chat"
               onPress={() => navigation.navigate('Inbox')}
               accessibilityLabel="View questions"
               accessibilityHint="Open your inbox to review and answer buyer questions"
@@ -484,98 +495,97 @@ export default function ManageListingScreen() {
 
         {/* ── Progressive disclosure rows ── */}
         <View style={styles.disclosureGroup}>
-          <Text style={styles.sectionLabel}>Listing details</Text>
+          <Text style={styles.sectionLabel}>{t('manage.listingDetails')}</Text>
           <FlagshipNavigationRow
-            title="Price & offers"
-            subtitle={activeOfferCount > 0 ? `${activeOfferCount} offer${activeOfferCount === 1 ? '' : 's'} received` : 'No offers yet'}
-            icon="pricetag-outline"
+            title={t('manage.priceAndOffers')}
+            subtitle={activeOfferCount > 0 ? t('manage.offersReceived', { count: activeOfferCount, plural: activeOfferCount === 1 ? '' : 's' }) : t('manage.noOffersYet')}
+            icon="cash-outline"
             onPress={() => navigation.navigate('EditListing', { itemId, focus: 'price' })}
-            accessibilityLabel="Price and offers"
-            accessibilityHint="Edit price and review offers"
+            accessibilityLabel={t('manage.a11y.priceAndOffers')}
+            accessibilityHint={t('manage.a11y.priceAndOffersHint')}
           />
           <FlagshipNavigationRow
-            title="Delivery"
-            subtitle={item.shippingType ? item.shippingType : 'Shipping options'}
-            icon="cube-outline"
+            title={t('manage.delivery')}
+            subtitle={item.shippingType ? item.shippingType : t('manage.shippingOptions')}
+            icon="car-outline"
             onPress={() => navigation.navigate('EditListing', { itemId, focus: 'shipping' })}
-            accessibilityLabel="Delivery"
-            accessibilityHint="Edit shipping and delivery options"
+            accessibilityLabel={t('manage.delivery')}
+            accessibilityHint={t('manage.a11y.deliveryHint')}
           />
           <FlagshipNavigationRow
-            title="Format"
-            subtitle={item.isAuction ? 'Auction' : 'Fixed price'}
-            icon={item.isAuction ? 'hammer-outline' : 'pricetag-outline'}
+            title={t('manage.format')}
+            icon="cash-outline"
             onPress={() => navigation.navigate('EditListing', { itemId, focus: 'format' })}
-            accessibilityLabel="Listing format"
-            accessibilityHint="Edit listing format — auction or fixed price"
+            accessibilityLabel={t('manage.format')}
+            accessibilityHint={t('manage.a11y.listingFormatHint')}
           />
         </View>
 
         {/* ── Terminal / overflow section: destructive & state controls ── */}
         <View style={styles.moreSection}>
-          <Text style={styles.sectionLabel}>More</Text>
+          <Text style={styles.sectionLabel}>{t('manage.more')}</Text>
           {status === 'active' && (
             <>
               <FlagshipNavigationRow
-                title="Pause listing"
-                subtitle="Hide from buyers temporarily"
-                icon="pause-outline"
+                title={t('manage.pauseListing')}
+                subtitle={t('manage.pauseSubtitle')}
+                icon="pause"
                 onPress={handlePause}
-                accessibilityLabel="Pause listing"
-                accessibilityHint="Temporarily hide this listing from buyers"
+                accessibilityLabel={t('manage.pauseListing')}
+                accessibilityHint={t('manage.a11y.pauseListingHint')}
               />
               <FlagshipNavigationRow
-                title="Mark as sold"
-                subtitle="No longer available for purchase"
-                icon="checkmark-circle-outline"
+                title={t('manage.markAsSold')}
+                subtitle={t('manage.markSoldSubtitle')}
+                icon="verified"
                 danger
                 onPress={handleMarkSold}
-                accessibilityLabel="Mark as sold"
-                accessibilityHint="Mark this listing as sold"
+                accessibilityLabel={t('manage.markAsSold')}
+                accessibilityHint={t('manage.a11y.markAsSoldHint')}
               />
             </>
           )}
           {status === 'paused' && (
             <>
               <FlagshipNavigationRow
-                title="Reactivate listing"
-                subtitle="Make visible to buyers again"
-                icon="play-circle-outline"
+                title={t('manage.reactivateListing')}
+                subtitle={t('manage.reactivateSubtitle')}
+                icon="play"
                 onPress={handleReactivate}
-                accessibilityLabel="Reactivate listing"
-                accessibilityHint="Make this listing visible to buyers again"
+                accessibilityLabel={t('manage.reactivateListing')}
+                accessibilityHint={t('manage.a11y.reactivateListingHint')}
               />
               <FlagshipNavigationRow
-                title="Mark as sold"
-                subtitle="No longer available for purchase"
-                icon="checkmark-circle-outline"
+                title={t('manage.markAsSold')}
+                subtitle={t('manage.markSoldSubtitle')}
+                icon="verified"
                 danger
                 onPress={handleMarkSold}
-                accessibilityLabel="Mark as sold"
-                accessibilityHint="Mark this listing as sold"
+                accessibilityLabel={t('manage.markAsSold')}
+                accessibilityHint={t('manage.a11y.markAsSoldHint')}
               />
             </>
           )}
           {status === 'sold' && (
             <FlagshipNavigationRow
-              title="Reactivate listing"
-              subtitle="Make available for purchase again"
-              icon="play-circle-outline"
+              title={t('manage.reactivateListing')}
+              subtitle={t('manage.reactivateSoldSubtitle')}
+              icon="play"
               onPress={handleReactivate}
-              accessibilityLabel="Reactivate listing"
-              accessibilityHint="Make this listing available for purchase again"
+              accessibilityLabel={t('manage.reactivateListing')}
+              accessibilityHint={t('manage.a11y.reactivateListingHint')}
             />
           )}
           {/* Delete — clearly separated as the terminal action */}
           <FlagshipNavigationRow
-            title="Delete listing"
-            subtitle="Permanently remove this listing"
-            icon="trash-outline"
+            title={t('manage.deleteListing')}
+            subtitle={t('manage.deleteSubtitle')}
+            icon="trash"
             danger
             separator={false}
             onPress={handleDeleteListing}
-            accessibilityLabel="Delete listing"
-            accessibilityHint="This action cannot be undone"
+            accessibilityLabel={t('manage.deleteListing')}
+            accessibilityHint={t('manage.deleteHint')}
           />
         </View>
       </Reanimated.ScrollView>

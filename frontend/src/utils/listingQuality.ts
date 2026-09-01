@@ -52,6 +52,7 @@ const MIN_DESC_FOR_FULL = 60;
 const MIN_TAGS_FOR_FULL = 3;
 
 export function calculateListingQuality(input: ListingQualityInput): ListingQualityResult {
+  const isAuction = input.listingMode === 'auction';
   const photoCount = input.photos.length;
   const descLen = input.description.trim().length;
   const tagCount = input.tags.length;
@@ -77,7 +78,7 @@ export function calculateListingQuality(input: ListingQualityInput): ListingQual
     {
       key: 'brand',
       label: 'Brand',
-      icon: 'pricetag-outline',
+      icon: 'bag-handle-outline',
       done: input.brand.trim().length > 0,
       weight: 0.05,
     },
@@ -106,7 +107,7 @@ export function calculateListingQuality(input: ListingQualityInput): ListingQual
     // Pricing — 15%
     {
       key: 'price',
-      label: 'Price',
+      label: isAuction ? 'Starting bid' : 'Price',
       icon: 'cash-outline',
       done: hasPrice,
       weight: 0.10,
@@ -114,7 +115,7 @@ export function calculateListingQuality(input: ListingQualityInput): ListingQual
     {
       key: 'originalPrice',
       label: 'Original price',
-      icon: 'pricetags-outline',
+      icon: 'cash-outline',
       done: parseFloat(input.originalPrice) > 0,
       weight: 0.05,
     },
@@ -122,7 +123,7 @@ export function calculateListingQuality(input: ListingQualityInput): ListingQual
     {
       key: 'shipping',
       label: 'Shipping method',
-      icon: 'cube-outline',
+      icon: 'car-outline',
       done: input.shippingMethod !== null,
       weight: 0.05,
     },
@@ -137,7 +138,7 @@ export function calculateListingQuality(input: ListingQualityInput): ListingQual
     {
       key: 'tags',
       label: tagCount >= MIN_TAGS_FOR_FULL ? '3+ tags' : 'Tags',
-      icon: 'pricetags-outline',
+      icon: 'bag-handle-outline',
       done: tagCount >= 1,
       weight: tagCount >= MIN_TAGS_FOR_FULL ? 0.10 : tagCount >= 1 ? 0.05 : 0,
     },

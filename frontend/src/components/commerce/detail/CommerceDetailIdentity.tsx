@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { Space, Typography, Radius } from '../../../theme/designTokens';
+import { Space, Radius, FontFamily } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import type {
   CommerceDetailFamily,
@@ -56,6 +56,10 @@ export interface CommerceDetailIdentityProps {
   interestSignal?: string;
   /** Optional small family chip rendered inline with the eyebrow. */
   familyChip?: React.ReactNode;
+  /** Optional single quiet trust row (e.g. seller verification) rendered
+   *  under the price/identity block. Height-capped, no card or badge
+   *  chrome. Omit for zero visual change. */
+  trustSlot?: React.ReactNode;
   /** Family variant — controls price eligibility and title rhythm.
    * Defaults to `direct` for backward compatibility. */
   family?: CommerceDetailFamily;
@@ -75,6 +79,7 @@ export function CommerceDetailIdentity({
   secondaryLine,
   interestSignal,
   familyChip,
+  trustSlot,
   family = 'direct',
   density = 'standard',
   tone = 'canvas' }: CommerceDetailIdentityProps) {
@@ -199,6 +204,12 @@ export function CommerceDetailIdentity({
           {interestSignal}
         </Text>
       ) : null}
+
+      {trustSlot ? (
+        <View style={styles.trustSlot}>
+          {trustSlot}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -263,6 +274,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   titleCompact: {
     fontSize: TypographyV2.priceHero.size - 2,
     lineHeight: TypographyV2.priceHero.lineHeight - 1 },
+  // Quiet trust row under the price/identity block — one compact line,
+  // height-capped, no card or badge chrome.
+  trustSlot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Space.xs,
+    maxHeight: 28 },
   // Value row: price + secondary line sit on one baseline row. The
   // price is dominant; the secondary line is a quiet truth partner.
   // Wrapping is suppressed so the price never stacks below itself.
@@ -322,7 +340,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexShrink: 1,
     marginTop: Space.xs },
   secondaryLineMedia: {
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6 },
@@ -334,7 +352,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs },
   interestMedia: {
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 5 } });

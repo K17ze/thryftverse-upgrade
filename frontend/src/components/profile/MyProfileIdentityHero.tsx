@@ -6,6 +6,8 @@ import { VERIFICATION_TIERS } from '../../platform/product';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
@@ -286,7 +288,7 @@ export function MyProfileIdentityHero({
             <View style={styles.trustRatingRow}>
               {hasRating && ratingAverage !== null && ratingAverage !== undefined ? (
                 <>
-                  <Ionicons name="star" size={16} color={colors.brand} aria-hidden={true} />
+                  <AppIcon name="star" focused size={IconSize.sm} color="ratingStar" opticalCenter accessible={false} />
                   <Text style={styles.trustRating}>{ratingAverage.toFixed(1)}</Text>
                   <Text style={styles.trustReviewCount}>({reviewCount} {(reviewCount ?? 0) === 1 ? 'review' : 'reviews'})</Text>
                 </>

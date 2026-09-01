@@ -31,6 +31,8 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
 import { CreatorSlider } from '../controls/CreatorSlider';
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import {
   cutoutService,
   sourceChecksum,
@@ -473,7 +475,7 @@ export function CutoutPreviewSheet({
   // ── Mode button config ────────────────────────────────────────────
   const modeButtons: { id: ModeId; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
     { id: 'keep-person', label: 'Keep Person', icon: 'person-outline' },
-    { id: 'keep-object', label: 'Keep Object', icon: 'cube-outline' },
+    { id: 'keep-object', label: 'Keep Object', icon: 'image-outline' },
     { id: 'erase', label: 'Erase', icon: 'remove-circle-outline' },
     { id: 'restore', label: 'Restore', icon: 'return-up-back-outline' },
   ];
@@ -497,7 +499,7 @@ export function CutoutPreviewSheet({
             accessibilityLabel="Close cutout"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textPrimary} />
+            <AppIcon name="close" size={IconSize.lg} color="textPrimary" opticalCenter={true} accessible={false} />
           </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             Cutout
@@ -614,10 +616,12 @@ export function CutoutPreviewSheet({
                 accessibilityHint="Clears all brush strokes and starts over"
                 accessibilityRole="button"
               >
-                <Ionicons
-                  name="refresh-outline"
-                  size={IconGrammar.metadata}
-                  color={colors.textSecondary}
+                <AppIcon
+                  name="refresh"
+                  size={IconSize.sm}
+                  color="textSecondary"
+                  opticalCenter={true}
+                  accessible={false}
                 />
                 <Text
                   style={[
@@ -645,7 +649,7 @@ export function CutoutPreviewSheet({
                 accessibilityLabel="Hold to compare original"
                 accessibilityRole="button"
               >
-                <Ionicons name="eye-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
+                <AppIcon name="eye" size={IconSize.sm} color="textSecondary" opticalCenter={true} accessible={false} />
                 <Text style={[styles.controlBtnLabel, { color: colors.textSecondary }]}>
                   Compare
                 </Text>
@@ -666,10 +670,12 @@ export function CutoutPreviewSheet({
                 accessibilityRole="button"
                 accessibilityState={{ selected: invert }}
               >
-                <Ionicons
+                <AppIcon
                   name="swap-horizontal-outline"
-                  size={IconGrammar.metadata}
-                  color={invert ? colors.textInverse : colors.textSecondary}
+                  size={IconSize.sm}
+                  color={invert ? 'textInverse' : 'textSecondary'}
+                  opticalCenter={true}
+                  accessible={false}
                 />
                 <Text
                   style={[

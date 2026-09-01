@@ -29,6 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { Listing } from '../services/listingsApi';
+import { trackListingView, trackListingInteraction } from '../services/listingsApi';
 import type { DisplayReadyListing } from '../services/listingMapper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
@@ -56,7 +57,6 @@ import { ProductCard } from '../components/ProductCard';
 import type { Listing as CatalogListing } from '../domain';
 
 import {
-  ProductDetailSkeleton,
   FullscreenMediaViewer,
   ProductFamilyBadge,
   SizeGuideSheet,
@@ -79,6 +79,7 @@ import {
   CommerceDetailMediaRail,
   CommerceDetailUnavailableInline,
   CommerceDetailOfflineBanner,
+  CommerceDetailSellerRow,
   SellerInfoCard,
   ShippingReturnsInfo,
   SustainabilityImpact,
@@ -100,13 +101,15 @@ import {
   buildCommerceContext,
   buildSellerTrustSummary,
   buildCapabilities,
+  buildDirectViewModel,
+  isDirectViewModel,
   isRecommendationLook,
   type RecommendationLook,
 } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
 import { track } from '../analytics/track';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
-import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterSpacing, PressScale } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { t } from '../i18n';
@@ -314,6 +317,11 @@ export default function ItemDetailScreen() {
         seller_id: item.sellerId ?? item.seller?.id ?? '',
         price: item.price,
       });
+      // ── Feed the backend interactions table ──
+      // This is the critical bridge that makes seller analytics real.
+      // Without this call, views/conversion/top-performers are always zero.
+      // Fire-and-forget — failures must never block the viewing flow.
+      trackListingView(item.id, { qualified: true }).catch(() => {});
     }
   }, [item?.id, sectionKey, position, reasonCode, personalised]);
 
@@ -493,6 +501,10 @@ export default function ItemDetailScreen() {
     toggleFav(item.id);
     ProductAnalytics.itemSave(item.id);
     track('item_favorited', { listing_id: item.id, action: isFav ? 'unsave' : 'save' });
+    // Feed the backend interactions table for seller analytics
+    if (!isFav) {
+      trackListingInteraction(item.id, 'save').catch(() => {});
+    }
     if (!isFav) {
       show('Added to wishlist', 'success');
     }
@@ -513,7 +525,10 @@ export default function ItemDetailScreen() {
 
   const handleShare = () => {
     setShareVisible(true);
-    if (item) ProductAnalytics.itemShare(item.id);
+    if (item) {
+      ProductAnalytics.itemShare(item.id);
+      trackListingInteraction(item.id, 'share').catch(() => {});
+    }
   };
 
   const handleOpenFullscreen = (index: number) => {
@@ -555,6 +570,29 @@ export default function ItemDetailScreen() {
       ? buildSellerTrustSummary(item.seller)
       : null;
 
+  // ── First-viewport seller trust row ──
+  // Compact stats line for the rich seller row: sales · rating ·
+  // response rate. Only truthful backend-backed signals — never
+  // fabricated. Surfaces seller identity + verification in the first
+  // viewport so a buyer sees who is selling before the price.
+  const sellerStatsLine = (() => {
+    if (!seller) return undefined;
+    const parts: string[] = [];
+    if (seller.completedSales != null && seller.completedSales > 0) {
+      parts.push(`${seller.completedSales} sale${seller.completedSales > 1 ? 's' : ''}`);
+    }
+    if (seller.rating != null && seller.rating > 0) {
+      parts.push(`${seller.rating.toFixed(1)}★`);
+    }
+    if (seller.responseRate != null && seller.responseRate > 0) {
+      parts.push(`${Math.round(seller.responseRate)}% response`);
+    }
+    return parts.length > 0 ? parts.join(' · ') : undefined;
+  })();
+  const sellerVerified = !!seller?.verified
+    || seller?.verificationTier === 'seller'
+    || seller?.verificationTier === 'id';
+
   // "More from this seller" browse rail — moved before conditional returns.
   const moreFromSellerRailItems: Listing[] = useMemo(
     () =>
@@ -576,7 +614,11 @@ export default function ItemDetailScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <ProductDetailSkeleton />
+        <CommerceStateCanvas
+          state="loading"
+          family="direct"
+          heroFraction={isCompactScreen ? 0.54 : 0.58}
+        />
       </View>
     );
   }
@@ -630,15 +672,24 @@ export default function ItemDetailScreen() {
     : null;
 
   const capabilities = buildCapabilities(item, currentUser?.id);
-  const commerce = buildCommerceContext(item, serverCommerce ? {
-    buyerProtectionFee: serverCommerce.buyerProtectionFee,
-    estimatedTotal: serverCommerce.estimatedTotal,
-    shippingMethod: serverCommerce.shippingMethod,
-    shippingPayer: (serverCommerce.shippingPayer as 'buyer' | 'seller' | null) ?? null,
-    protectionPolicy: serverCommerce.protectionPolicy,
-    returnPolicy: serverCommerce.returnPolicy,
-    authenticity: serverCommerce.authenticity,
-  } : undefined);
+  // Use the platform view-model builder for the commerce context
+  // transformation — single source of truth for direct-listing data
+  // shaping. buildCapabilities is retained for the full capability
+  // set (isOwner / isSold / isAvailable / commerceTier / canEnquire)
+  // which the VM's capabilities subset does not expose.
+  const directViewModel = buildDirectViewModel({
+    listing: item,
+    commerce: serverCommerce ?? undefined,
+    seller: seller ?? undefined,
+    currentUserId: currentUser?.id,
+    isLiked: isFav,
+    isSavedToCollection: isItemSavedAnywhere(item.id),
+  });
+  // buildDirectViewModel always returns the direct family branch; the
+  // type guard narrows the discriminated union so commerce is typed.
+  const commerce = isDirectViewModel(directViewModel)
+    ? directViewModel.commerce
+    : buildCommerceContext(item);
   const recommendationSections = recommendationsData?.sections ?? [];
 
   // Bundle upsell: items from the same seller (more_from_seller section)
@@ -923,6 +974,37 @@ export default function ItemDetailScreen() {
 
         <CommerceDetailOfflineBanner isOffline={isOffline} />
 
+        {/* ── First-viewport seller trust row ──
+            Per spec: seller identity + verification badge + stats line
+            must appear in the first viewport, right after the media
+            stage and before the price. This is the buyer's first trust
+            signal — who is selling this item. The full SellerInfoCard
+            (with Follow / Message / View shop actions and the
+            "More from this seller" rail) lives in Zone E below. */}
+        {seller ? (
+          <View style={[styles.firstViewportSellerRow, { borderBottomColor: colors.borderSubtle }]}>
+            <CommerceDetailSellerRow
+              variant="rich"
+              avatarUri={seller.avatar ?? undefined}
+              name={seller.username}
+              verified={sellerVerified}
+              statsLine={sellerStatsLine}
+              ratingLine={
+                seller?.rating != null && seller.rating > 0
+                  ? (seller.reviewCount != null && seller.reviewCount > 0
+                    ? `${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
+                    : `${seller.rating.toFixed(1)}`)
+                  : undefined
+              }
+              locationLine={seller?.location ?? undefined}
+              onPress={() => {
+                if (item) ProductAnalytics.sellerProfileOpen(item.id, seller.id);
+                openProfile(navigation, seller.id, currentUser?.id);
+              }}
+            />
+          </View>
+        ) : null}
+
         {/* ── Zone B — Identity seam ──
             Direct keeps critical copy off arbitrary seller photography.
             Media establishes desire first; the stable editorial canvas
@@ -962,13 +1044,14 @@ export default function ItemDetailScreen() {
                   <Pressable
                     onPress={() => { haptic.light(); setConditionInfoVisible(true); }}
                     hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
-                    style={[
+                    style={({ pressed }) => [
                       styles.conditionChip,
                       {
                         // TODO: replace `${conditionMeta.color}66` and `${conditionMeta.color}14` with conditionColorSubtle token when available
                         borderColor: conditionMeta ? `${conditionMeta.color}66` : colors.borderSubtle,
                         backgroundColor: conditionMeta ? `${conditionMeta.color}14` : 'transparent',
                       },
+                      pressed && styles.pressed,
                     ]}
                     accessibilityLabel={`Condition: ${item.condition}. Tap for definition.`}
                     accessibilityRole="button"
@@ -1005,7 +1088,7 @@ export default function ItemDetailScreen() {
                 <Pressable
                   onPress={() => { haptic.light(); setSizeGuideVisible(true); }}
                   hitSlop={8}
-                  style={styles.quietTextTarget}
+                  style={({ pressed }) => [styles.quietTextTarget, pressed && styles.pressed]}
                   accessibilityLabel="View size guide"
                   accessibilityRole="button"
                 >
@@ -1070,12 +1153,12 @@ export default function ItemDetailScreen() {
           // 4. Dispatch time — when will it arrive?
           if (seller?.dispatchTimeLabel) {
             trustRows.push({
-              icon: 'cube-outline',
+              icon: 'car-outline',
               label: seller.dispatchTimeLabel,
             });
           } else if (commerce.shippingMethod) {
             trustRows.push({
-              icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'cube-outline',
+              icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'car-outline',
               label: commerce.shippingPayer === 'seller'
                 ? `Free ${commerce.shippingMethod}`
                 : commerce.shippingMethod,
@@ -1088,7 +1171,7 @@ export default function ItemDetailScreen() {
           // is the baseline trust guarantee.
           if (trustRows.length === 0 && commerce.protectionPolicy?.available) {
             trustRows.push({
-              icon: 'shield-checkmark-outline',
+              icon: 'checkmark-circle-outline',
               label: commerce.protectionPolicy.label ?? 'Buyer Protection',
             });
           }
@@ -1162,7 +1245,7 @@ export default function ItemDetailScreen() {
                 <Pressable
                   onPress={() => setDescriptionExpanded((prev) => !prev)}
                   hitSlop={8}
-                  style={styles.quietTextTarget}
+                  style={({ pressed }) => [styles.quietTextTarget, pressed && styles.pressed]}
                   accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: descriptionExpanded }}
@@ -2104,6 +2187,16 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
+  // ── First-viewport seller trust row ──
+  // Sits on the flat canvas right after the media stage, before the
+  // price identity chapter. Horizontal padding matches the identity
+  // rhythm; no card surface — hairline-only separation per surface
+  // budget. The row itself carries its own vertical padding.
+  firstViewportSellerRow: {
+    paddingHorizontal: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'transparent', // overridden inline with theme color
+  },
   // ── Attribute row ──
   // Rendered inside the identity's padding rhythm — no separate
   // horizontal padding. The negative top margin pulls it closer to
@@ -2153,8 +2246,9 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   attributeText: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
     flexShrink: 1,
     fontVariant: ['tabular-nums'],
   },
@@ -2445,7 +2539,7 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.85,
-    transform: [{ scale: 0.97 }],
+    transform: [{ scale: PressScale.gentle }],
   },
   // ── Condition definition sheet ──
   conditionSheetWrap: {

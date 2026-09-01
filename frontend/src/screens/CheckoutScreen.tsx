@@ -1076,7 +1076,7 @@ export default function CheckoutScreen() {
     // live quote is unavailable.
     if (shippingError && addressLoaded && paymentLoaded && !!postageOption.carrierId) {
       return {
-        icon: 'cube-outline' as const,
+        icon: 'information-circle-outline' as const,
         message: 'Shipping quote unavailable â€” proceeding with standard shipping.',
         action: { label: 'Try again', onPress: (): void => void hydrateCheckout() },
       };
@@ -1151,7 +1151,7 @@ export default function CheckoutScreen() {
           <View style={styles.headerSpacer} />
         </View>
         <EmptyState
-          icon="cube-outline"
+          icon="warning-outline"
           title="Item unavailable"
           subtitle="This listing can no longer be purchased."
           ctaLabel="Go back"
@@ -1294,7 +1294,7 @@ export default function CheckoutScreen() {
   const suppressAddressError = partialDataPrompt?.icon === 'location-outline';
   const suppressPaymentError = partialDataPrompt?.icon === 'card-outline';
   const suppressShippingError =
-    partialDataPrompt?.icon === 'cube-outline' && !!postageOption.carrierId;
+    partialDataPrompt?.icon === 'information-circle-outline' && !!postageOption.carrierId;
 
   return (
     <SafeAreaView ref={a11yRef} style={[styles.container, t.container]} edges={['top']}>
@@ -1398,7 +1398,7 @@ export default function CheckoutScreen() {
           subtitle={`${postageOption.etaLabel}${postageOption.liveQuote ? '' : ' (Estimated)'}${postageOption.tracking ? ' Â· Tracking' : ''}`}
           actionLabel={formatFromFiat(POSTAGE_FEE, currencyCode)}
           onPress={canChangePostage ? handleDeliveryPress : undefined}
-          icon="cube-outline"
+          icon="car-outline"
           isFilled={!!postageOption.carrierId}
           errorText={
             !postageOption.carrierId

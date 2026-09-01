@@ -18,7 +18,7 @@ export function ReserveStatusBadge({ status, compact, showExplanation }: Props) 
   if (status === 'hidden') return null;
 
   const isMet = status === 'met';
-  const iconName = isMet ? 'shield-checkmark-outline' : 'shield-half-outline';
+  const iconName = isMet ? 'checkmark-circle-outline' : 'alert-circle-outline';
   const color = isMet ? colors.success : colors.warning;
   const label = isMet ? 'Reserve met' : 'Reserve not met';
   const explanation = isMet

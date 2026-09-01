@@ -18,7 +18,7 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Radius, FontFamily, DockConstants, Control, Numeric } from '../theme/designTokens';
+import { Space, Radius, FontFamily, DockConstants, Control, Numeric, PressScale } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
@@ -39,6 +39,7 @@ import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { formatCoOwnIze } from '../utils/currency';
 import {
   CommerceMediaStage,
+  CommerceStateCanvas,
 } from '../components/commerce';
 import {
   CommerceDetailHeader,
@@ -69,7 +70,6 @@ import {
 import type { RecommendationLook } from '../platform/product';
 import {
   CoOwnRiskDisclosure,
-  CoOwnAssetDetailSkeleton,
   CoOwnStateCanvas,
   CoOwnPriceChart,
   CoOwnFirstTradeGuide,
@@ -358,7 +358,7 @@ export default function AssetDetailScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnAssetDetailSkeleton />
+        <CommerceStateCanvas state="loading" family="coown" />
       </View>
     );
   }
@@ -733,11 +733,15 @@ export default function AssetDetailScreen() {
           ) : null}
 
           {/* Issuer — shared seller row primitive, configured for
-              institutional Co-Own issuers. Taps into issuer profile. */}
+              institutional Co-Own issuers. Taps into issuer profile.
+              variant="rich" presents the full confidence row (avatar,
+              name, verification badge, compact stats line) so issuer
+              trust is visible in the first viewport. */}
           <View style={styles.collectibleIssuerWrap}>
             <CommerceDetailSellerRow
               roleLabel="Issuer"
               institutional
+              variant="rich"
               avatarUri={asset.issuer?.avatar ?? undefined}
               name={issuerUsername}
               verified={asset.issuerVerification?.tier === 'id' || asset.issuerVerification?.tier === 'seller'}
@@ -751,6 +755,15 @@ export default function AssetDetailScreen() {
                       : undefined
               }
               locationLine={issuerTrust?.location ?? asset.issuer?.location ?? undefined}
+              statsLine={
+                issuerTrust
+                  ? [
+                      issuerTrust.completedSales != null ? `${issuerTrust.completedSales} sales` : null,
+                      issuerTrust.rating != null ? `${issuerTrust.rating.toFixed(1)}★` : null,
+                      issuerTrust.responseRate != null ? `${issuerTrust.responseRate}% response` : null,
+                    ].filter(Boolean).join(' · ') || undefined
+                  : undefined
+              }
               onPress={() => openProfile(navigation, asset.issuerId, currentUser?.id)}
               primaryAction={
                 canMessageIssuer
@@ -879,7 +892,7 @@ export default function AssetDetailScreen() {
           <Pressable
             onPress={() => openSheet('rights')}
             hitSlop={4}
-            style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.5 }]}
+            style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
             accessibilityRole="button"
             accessibilityLabel={
               lastDistributionAmount != null && lastDistributionDate != null
@@ -970,7 +983,7 @@ export default function AssetDetailScreen() {
             style={({ pressed }) => [
               styles.allocationIndicatorRow,
               { borderTopColor: colors.border },
-              pressed && { opacity: 0.6 },
+              pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] },
             ]}
             onPress={() => openSheet('supply')}
             accessibilityRole="button"
@@ -1132,7 +1145,7 @@ export default function AssetDetailScreen() {
             <Pressable
               onPress={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
               hitSlop={8}
-              style={({ pressed }) => [styles.assetStoryLink, pressed && { opacity: 0.5 }]}
+              style={({ pressed }) => [styles.assetStoryLink, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
               accessibilityRole="button"
               accessibilityLabel="Read full asset story"
             >
@@ -1161,7 +1174,7 @@ export default function AssetDetailScreen() {
             <Pressable
               onPress={() => setExpansion('diligenceSection', true)}
               hitSlop={4}
-              style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.5 }]}
+              style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
               accessibilityRole="button"
               accessibilityLabel={`Trust facts: ${trustFacts.join(', ')}. View asset dossier.`}
             >
@@ -1369,7 +1382,7 @@ export default function AssetDetailScreen() {
               <Pressable
                 onPress={() => navigation.navigate('DistributionHistory', { assetId: asset.id })}
                 hitSlop={8}
-                style={({ pressed }) => [styles.assetStoryLink, pressed && { opacity: 0.5 }]}
+                style={({ pressed }) => [styles.assetStoryLink, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
                 accessibilityRole="button"
                 accessibilityLabel="View full distribution history"
               >
@@ -1618,7 +1631,7 @@ export default function AssetDetailScreen() {
           <Pressable
             onPress={() => closeSheet('riskDisclosure')}
             hitSlop={12}
-            style={({ pressed }) => [styles.sheetCloseTarget, pressed && { opacity: 0.5 }]}
+            style={({ pressed }) => [styles.sheetCloseTarget, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
             accessibilityLabel="Close risk disclosure"
             accessibilityRole="button"
           >
@@ -1752,6 +1765,7 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.priceHero.lineHeight,
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.priceHero.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   collectiblePriceUnit: {
     fontSize: TypographyV2.meta.size,

@@ -1,7 +1,7 @@
 /**
  * SuggestedRepliesBar — horizontal scroll of pill-shaped AI-suggested replies
  * shown above the chat input. Each pill has an icon based on the reply type.
- * The bar uses a neutral visual identity (no sparkles) per AGENTS.md §4.
+ * The bar uses a neutral visual identity (no decorative glyphs) per AGENTS.md §4.
  */
 import React, { useMemo } from 'react';
 import {
@@ -29,7 +29,7 @@ interface SuggestedRepliesBarProps {
 const ICON_BY_TYPE: Record<SuggestedReplyType, keyof typeof Ionicons.glyphMap> = {
   question: 'help-circle-outline',
   answer: 'chatbubble-ellipses-outline',
-  offer: 'pricetags-outline',
+  offer: 'cash-outline',
   info: 'information-circle-outline' };
 
 export function SuggestedRepliesBar({

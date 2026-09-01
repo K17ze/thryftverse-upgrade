@@ -40,10 +40,9 @@ function ShippingPickerSheet({
       onRequestClose={onClose}
     >
       <Pressable style={[styles.shippingSheetBackdrop, { backgroundColor: colors.overlay }]} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close shipping options">
-        <Pressable
+        <View
           style={[styles.shippingSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + Space.md }]}
-          onPress={(e) => { e.stopPropagation(); }}
-          accessibilityRole="button"
+          accessibilityViewIsModal={true}
         >
           {/* Header */}
           <View style={styles.shippingSheetHeader}>
@@ -70,11 +69,11 @@ function ShippingPickerSheet({
                 key={m}
                 style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
                 onPress={() => { onSetShippingMethod(m); haptics.selection(); }}
-                accessibilityRole="button"
+                accessibilityRole="radio"
                 accessibilityLabel={`Set shipping method to ${m}`}
                 accessibilityState={{ selected: active }}
               >
-                <Ionicons name={m === 'standard' ? 'cube-outline' : 'flash-outline'} size={22} color={colors.textPrimary} style={{ marginRight: Space.md }} aria-hidden={true} />
+                <Ionicons name={m === 'standard' ? 'car-outline' : 'flash-outline'} size={22} color={colors.textPrimary} style={{ marginRight: Space.md }} aria-hidden={true} />
                 <Text style={[styles.shippingSheetRowLabel, { color: colors.textPrimary }]}>
                   {m === 'standard' ? 'Standard' : 'Express'}
                 </Text>
@@ -94,7 +93,7 @@ function ShippingPickerSheet({
                 key={p}
                 style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
                 onPress={() => { onSetShippingPayer(p); haptics.selection(); }}
-                accessibilityRole="button"
+                accessibilityRole="radio"
                 accessibilityLabel={`Set shipping payer to ${p}`}
                 accessibilityState={{ selected: active }}
               >
@@ -108,7 +107,7 @@ function ShippingPickerSheet({
               </Pressable>
             );
           })}
-        </Pressable>
+        </View>
       </Pressable>
     </Modal>
   );
@@ -133,7 +132,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: Radius.full,
-    backgroundColor: '#00000033',
     marginBottom: Space.sm },
   shippingSheetTitleRow: {
     flexDirection: 'row',
@@ -156,8 +154,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.sm + Space.xs,
     minHeight: Control.hit,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#00000000' },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   shippingSheetRowLabel: {
     flex: 1,
     fontSize: TypographyV2.bodyStrong.size,
@@ -168,7 +165,6 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: Radius.full,
     borderWidth: 2,
-    borderColor: '#00000033',
     alignItems: 'center',
     justifyContent: 'center' },
   shippingSheetRadioInner: {

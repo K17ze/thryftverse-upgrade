@@ -15,6 +15,8 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import { FlagshipProfileMedia } from '../flagship';
 import { isVideoUri } from '../../utils/media';
 import type { PublicProfileStats, PublicProfileViewer, PublicProfileTrader } from '../../services/profileApi';
@@ -53,7 +55,6 @@ interface ProfileHeroProps {
   onMessage: () => void;
   onMore: () => void;
   onEditProfile?: () => void;
-  onShare: () => void;
   onOpenConnections: (segment: 'followers' | 'following') => void;
   onTabSelect: (tab: 'Listings' | 'Reviews') => void;
   onShopSegmentSelect: (segment: 'forsale' | 'sold') => void;
@@ -126,7 +127,6 @@ export function ProfileHero({
   onMessage,
   onMore,
   onEditProfile,
-  onShare,
   onOpenConnections,
   onTabSelect,
   onShopSegmentSelect }: ProfileHeroProps) {
@@ -318,7 +318,7 @@ export function ProfileHero({
                     accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
                     style={({ pressed }) => [styles.trustRatingWrap, pressed && { opacity: 0.6 }]}
                   >
-                    <Ionicons name="star" size={16} color={colors.brand} aria-hidden={true} />
+                    <AppIcon name="star" focused size={IconSize.sm} color="ratingStar" opticalCenter accessible={false} />
                     <Text style={styles.trustRatingValue}>{ratingValue!.toFixed(1)}</Text>
                     <Text style={styles.trustReviewCount}>({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})</Text>
                   </Pressable>
@@ -407,15 +407,6 @@ export function ProfileHero({
             >
               <Ionicons name="create-outline" size={15} color={colors.textPrimary} />
               <Text style={styles.editProfileBtnText}>Edit profile</Text>
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.moreBtn}
-              onPress={onShare}
-              activeOpacity={0.88}
-              accessibilityRole="button"
-              accessibilityLabel="Share profile"
-            >
-              <Ionicons name="share-outline" size={18} color={colors.textPrimary} />
             </AnimatedPressable>
           </View>
         ) : null}

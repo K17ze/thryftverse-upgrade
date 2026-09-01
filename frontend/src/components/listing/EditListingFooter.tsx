@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography, Radius, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 type SaveStage =
   | 'idle'
@@ -60,10 +61,10 @@ export function EditListingFooter({
             <ActivityIndicator size="small" color={colors.brand} />
           )}
           {saveStage === 'failed_recoverable' && (
-            <Ionicons name="warning-outline" size={14} color={colors.danger} />
+            <AppIcon name="warning-outline" size={14} color="danger" opticalCenter accessible={false} />
           )}
           {saveStage === 'completed' && (
-            <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+            <AppIcon name="checkmark-circle" size={14} color="success" opticalCenter accessible={false} />
           )}
           <Text
             style={[
@@ -71,6 +72,7 @@ export function EditListingFooter({
               saveStage === 'failed_recoverable' && styles.feedbackTextError,
             ]}
             numberOfLines={2}
+            accessibilityLiveRegion="polite"
           >
             {errorMsg && saveStage === 'failed_recoverable' ? errorMsg : stageText}
           </Text>

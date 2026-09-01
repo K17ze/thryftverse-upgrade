@@ -72,7 +72,7 @@ const SOURCE_LABEL: Record<SignalSource, string> = {
 const CONFIDENCE_META: Record<ConfidenceLabel, { barWidth: number; iconName: keyof typeof Ionicons.glyphMap }> = {
   'Strong match': { barWidth: 0.85, iconName: 'checkmark-circle' },
   'Moderate match': { barWidth: 0.55, iconName: 'remove-circle' },
-  'Exploratory': { barWidth: 0.25, iconName: 'compass-outline' } };
+  'Exploratory': { barWidth: 0.25, iconName: 'search-outline' } };
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export function FeedExplanationSheet({

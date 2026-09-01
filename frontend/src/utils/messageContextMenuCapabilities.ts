@@ -32,7 +32,7 @@ export function deriveMessageActions(caps: MessageContextCapabilities): ActionDe
     list.push({
       id: 'askAgent',
       label: 'Ask agent about this',
-      icon: 'hardware-chip-outline',
+      icon: 'bulb-outline',
     });
   }
 

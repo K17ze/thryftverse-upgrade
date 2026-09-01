@@ -33,6 +33,8 @@ import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 const TOUCH = 44;
 const FINE_STEP = 0.01; // 1%
@@ -138,7 +140,7 @@ export function AccessibilityMoveSheet({
             accessibilityRole="button"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             Move
@@ -240,7 +242,7 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-up" size={IconGrammar.hero} color={colors.textPrimary} />
+                  <AppIcon name="up" size={IconSize.hero} color="textPrimary" opticalCenter={true} accessible={false} />
                 </PressScale>
                 <View style={styles.nudgeSpacer} />
               </View>
@@ -253,10 +255,10 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-back" size={IconGrammar.hero} color={colors.textPrimary} />
+                  <AppIcon name="back" size={IconSize.hero} color="textPrimary" opticalCenter={true} accessible={false} />
                 </PressScale>
                 <View style={styles.nudgeCenter}>
-                  <Ionicons name="move" size={IconGrammar.standard} color={colors.textMuted} />
+                  <AppIcon name="move" size={IconSize.md} color="textMuted" opticalCenter={true} accessible={false} />
                 </View>
                 <PressScale
                   onPress={() => nudge('x', step)}
@@ -266,7 +268,7 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-forward" size={IconGrammar.hero} color={colors.textPrimary} />
+                  <AppIcon name="forward" size={IconSize.hero} color="textPrimary" opticalCenter={true} accessible={false} />
                 </PressScale>
               </View>
               <View style={styles.nudgeRow}>
@@ -279,7 +281,7 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-down" size={IconGrammar.hero} color={colors.textPrimary} />
+                  <AppIcon name="down" size={IconSize.hero} color="textPrimary" opticalCenter={true} accessible={false} />
                 </PressScale>
                 <View style={styles.nudgeSpacer} />
               </View>
@@ -298,7 +300,7 @@ export function AccessibilityMoveSheet({
                   keyboardType="number-pad"
                   maxLength={3}
                   accessibilityLabel="X position in percent"
-                  accessibilityHint="Enter the horizontal position from 0 to 100 percent"
+                  accessibilityHint="Enter a number from 0 to 100"
                   returnKeyType="done"
                   onSubmitEditing={handleApplyNumeric}
                 />
@@ -314,7 +316,7 @@ export function AccessibilityMoveSheet({
                   keyboardType="number-pad"
                   maxLength={3}
                   accessibilityLabel="Y position in percent"
-                  accessibilityHint="Enter the vertical position from 0 to 100 percent"
+                  accessibilityHint="Enter a number from 0 to 100"
                   returnKeyType="done"
                   onSubmitEditing={handleApplyNumeric}
                 />
@@ -343,7 +345,7 @@ export function AccessibilityMoveSheet({
               accessibilityRole="button"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="locate-outline" size={IconGrammar.standard} color={colors.textInverse} />
+              <AppIcon name="locate-outline" size={IconSize.md} color="textInverse" opticalCenter={true} accessible={false} />
               <Text style={[styles.centerBtnText, { color: colors.textInverse }]}>
                 Center on Canvas
               </Text>

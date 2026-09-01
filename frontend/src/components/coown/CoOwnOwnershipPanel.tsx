@@ -215,7 +215,7 @@ export function CoOwnOwnershipPanel({
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>{settlementLabel}</Text>
         </View>
         <View style={styles.footerItem}>
-          <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
+          <Ionicons name="cash-outline" size={14} color={colors.textMuted} />
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>{feePct}% fee</Text>
         </View>
       </View>
@@ -340,6 +340,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.priceHero.size,
     fontFamily: TypographyV2.priceHero.fontFamily,
     letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   pricePer: {
     fontSize: TypographyV2.body.size,
@@ -365,6 +366,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   allocationBlock: {
     gap: 6,
@@ -376,10 +378,12 @@ const styles = StyleSheet.create({
   allocationLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   allocationRemaining: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   allocationBarBg: {
     height: 5,
@@ -418,6 +422,7 @@ const styles = StyleSheet.create({
   viewerStatValue: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   footerRow: {
     flexDirection: 'row',

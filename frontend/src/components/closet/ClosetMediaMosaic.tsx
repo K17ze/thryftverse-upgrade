@@ -200,7 +200,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
         {/* Price-drop badge — compact, top-left, only when on sale & not sold */}
         {!isSold && hasPriceDrop ? (
           <View style={styles.priceDropBadge}>
-            <Ionicons name="pricetag" size={9} color={colors.scrimTextPrimary} />
+            <Ionicons name="bag-handle-outline" size={9} color={colors.scrimTextPrimary} />
             <Text style={styles.priceDropText}>
               -{Math.round(((item.originalPrice! - item.price) / item.originalPrice!) * 100)}%
             </Text>

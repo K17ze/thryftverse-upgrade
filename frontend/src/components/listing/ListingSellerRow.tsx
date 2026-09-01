@@ -8,6 +8,8 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import type { ListingSeller } from '../../domain';
 
 interface ListingSellerRowProps {
@@ -46,14 +48,14 @@ export function ListingSellerRow({
             </Text>
             {seller.rating != null && seller.reviewCount != null ? (
               <View style={styles.metaRow}>
-                <Ionicons name="star" size={11} color={colors.brand} />
+                <AppIcon name="star" focused size={IconSize.xs} color="ratingStar" opticalCenter accessible={false} />
                 <Text style={styles.metaText}>
                   {seller.rating} · {seller.reviewCount} reviews
                 </Text>
               </View>
             ) : seller.rating != null ? (
               <View style={styles.metaRow}>
-                <Ionicons name="star" size={11} color={colors.brand} />
+                <AppIcon name="star" focused size={IconSize.xs} color="ratingStar" opticalCenter accessible={false} />
                 <Text style={styles.metaText}>{seller.rating} rating</Text>
               </View>
             ) : seller.reviewCount != null ? (
@@ -62,7 +64,7 @@ export function ListingSellerRow({
               <Text style={styles.metaText} numberOfLines={1}>{seller.location}</Text>
             ) : null}
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </AnimatedPressable>
 
         <AppButton
@@ -82,7 +84,7 @@ export function ListingSellerRow({
       <View style={styles.container}>
         <View style={styles.identityTap}>
           <View style={[styles.avatar, styles.avatarFallback]}>
-            <Ionicons name="person" size={18} color={colors.textMuted} />
+            <AppIcon name="profile" size={IconSize.md} color="textMuted" opticalCenter accessible={false} />
           </View>
           <View style={styles.info}>
             <Text style={styles.name}>Seller</Text>

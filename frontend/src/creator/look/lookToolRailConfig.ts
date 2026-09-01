@@ -5,20 +5,14 @@
 
 import type { ToolContext, ToolGroup, ToolDefinition } from '../core/toolRegistry';
 import type { CreatorLayer } from '../composition';
-import type { useHaptic } from '../../hooks/useHaptic';
 
 // ── Types ────────────────────────────────────────────────────────────
-
-type Haptic = ReturnType<typeof useHaptic>;
-
-/**
- * Navigation function type — matches React Navigation's `navigate`.
- */
-type NavigateFn = (route: string) => void;
 
 /**
  * All dependencies required to build the Look tool rail groups.
  * The screen passes these in from its handler callbacks and state setters.
+ * Global editor tools (Layers, Preview, Drafts, Settings, Help) are owned
+ * by the screen's overflow menu, not by the context rail config.
  */
 export interface LookToolRailParams {
   // ── Selection state ──
@@ -38,32 +32,25 @@ export interface LookToolRailParams {
   handleReorderLayer: (id: string, direction: 'forward' | 'backward') => void;
   handleDuplicateLayer: (id: string) => void;
   handleDeleteLayer: (id: string) => void;
-  handleEditLayer: (layer: CreatorLayer) => void;
   handleLinkItem: (layer: CreatorLayer) => void;
   handleTextEditAction: () => void;
   handleTextFontAction: () => void;
   handleTextColorAction: () => void;
   handleTextAlignAction: () => void;
-  handleProductPriceAction: () => void;
-  handleCropAction: () => void;
+
+  // ── Clipboard ──
+  handleCopyLayer: (layerId: string) => void;
+  handlePasteLayer: () => void;
+  canPaste: boolean;
 
   // ── Multi-select handlers ──
   handleMultiFront: () => void;
   handleMultiBack: () => void;
   handleMultiDelete: () => void;
+  handleMultiAlign: (alignment: 'center' | 'middle') => void;
 
   // ── State setters (for overflow / sheet tools) ──
-  setShowLayers: (show: boolean) => void;
-  setShowPreview: (show: boolean) => void;
-  setShowSettings: (show: boolean) => void;
-  setShowOverflow: (show: boolean) => void;
   setCropTarget: (layer: CreatorLayer) => void;
-
-  // ── Navigation ──
-  navigate: NavigateFn;
-
-  // ── Haptic ──
-  haptic: Haptic;
 }
 
 // ── Active context derivation ────────────────────────────────────────
@@ -107,29 +94,24 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
     handleReorderLayer,
     handleDuplicateLayer,
     handleDeleteLayer,
-    handleEditLayer,
     handleLinkItem,
     handleTextEditAction,
     handleTextFontAction,
     handleTextColorAction,
     handleTextAlignAction,
-    handleProductPriceAction,
-    handleCropAction,
+    handleCopyLayer,
+    handlePasteLayer,
+    canPaste,
     handleMultiFront,
     handleMultiBack,
     handleMultiDelete,
-    setShowLayers,
-    setShowPreview,
-    setShowSettings,
-    setShowOverflow,
+    handleMultiAlign,
     setCropTarget,
-    navigate,
-    haptic,
   } = params;
 
   const groups: ToolGroup[] = [];
 
-  // ── look-default: Photo, Items, Text, Layout, More ──
+  // ── look-default: Photo, Items, Text, Layout ──
   groups.push({
     context: 'look-default',
     primary: [
@@ -175,57 +157,10 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         weight: 'secondary',
       },
     ],
-    overflow: [
-      {
-        id: 'look-cutout',
-        label: cutoutSupported ? 'Cutout' : 'Crop',
-        icon: cutoutSupported ? 'cut-outline' : 'crop-outline',
-        glyph: cutoutSupported ? 'cutout' : 'crop',
-        onPress: handleCutoutAction,
-        accessibilityLabel: cutoutSupported ? 'Cutout' : 'Crop',
-        accessibilityHint: cutoutSupported
-          ? 'Remove background with subject segmentation'
-          : 'Crop media to a rectangle',
-        hapticFeedback: 'medium',
-        disabled: !selectedLayer || selectedLayer.type !== 'media',
-      },
-      {
-        id: 'look-layers',
-        label: 'Layers',
-        icon: 'layers-outline',
-        glyph: 'layers',
-        onPress: () => { haptic.light(); setShowLayers(true); },
-        accessibilityLabel: 'Layers',
-        hapticFeedback: 'light',
-      },
-      {
-        id: 'look-preview',
-        label: 'Preview',
-        icon: 'eye-outline',
-        onPress: () => { haptic.light(); setShowPreview(true); },
-        accessibilityLabel: 'Preview',
-        hapticFeedback: 'light',
-      },
-      {
-        id: 'look-drafts',
-        label: 'Drafts',
-        icon: 'document-outline',
-        onPress: () => { haptic.light(); navigate('CreatorDraftList'); },
-        accessibilityLabel: 'Drafts',
-        hapticFeedback: 'light',
-      },
-      {
-        id: 'look-settings',
-        label: 'Settings',
-        icon: 'settings-outline',
-        onPress: () => { haptic.light(); setShowSettings(true); },
-        accessibilityLabel: 'Settings',
-        hapticFeedback: 'light',
-      },
-    ],
+    overflow: [],
   });
 
-  // ── look-media-selected: Replace, Crop, Auto, Adjust, More ──
+  // ── look-media-selected: Replace, Crop, Adjust, Effects ──
   groups.push({
     context: 'look-media-selected',
     primary: [
@@ -249,17 +184,6 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         weight: 'primary',
       },
       {
-        id: 'look-media-auto',
-        label: 'Auto',
-        icon: 'bulb-outline',
-        glyph: 'enhance',
-        onPress: handleAutoAdjust,
-        accessibilityLabel: 'Auto',
-        accessibilityHint: 'Apply one-tap color correction',
-        hapticFeedback: 'medium',
-        weight: 'secondary',
-      },
-      {
         id: 'look-media-adjust',
         label: 'Adjust',
         icon: 'contrast-outline',
@@ -269,8 +193,6 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         hapticFeedback: 'medium',
         weight: 'secondary',
       },
-    ],
-    overflow: [
       {
         id: 'look-media-effects',
         label: 'Effects',
@@ -280,6 +202,19 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         accessibilityLabel: 'Effects',
         hapticFeedback: 'medium',
         capabilityId: 'imageFilter',
+        weight: 'secondary',
+      },
+    ],
+    overflow: [
+      {
+        id: 'look-media-auto',
+        label: 'Auto',
+        icon: 'bulb-outline',
+        glyph: 'enhance',
+        onPress: handleAutoAdjust,
+        accessibilityLabel: 'Auto',
+        accessibilityHint: 'Apply one-tap color correction',
+        hapticFeedback: 'medium',
       },
       {
         id: 'look-media-cutout',
@@ -310,9 +245,28 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         hapticFeedback: 'light',
       },
       {
+        id: 'look-media-copy',
+        label: 'Copy',
+        icon: 'copy-outline',
+        onPress: () => selectedLayer && handleCopyLayer(selectedLayer.id),
+        accessibilityLabel: 'Copy',
+        accessibilityHint: 'Copy the selected layer to the clipboard',
+        hapticFeedback: 'light',
+      },
+      {
+        id: 'look-media-paste',
+        label: 'Paste',
+        icon: 'clipboard-outline',
+        onPress: handlePasteLayer,
+        accessibilityLabel: 'Paste',
+        accessibilityHint: 'Place the copied layer on the canvas',
+        hapticFeedback: 'light',
+        disabled: !canPaste,
+      },
+      {
         id: 'look-media-duplicate',
         label: 'Duplicate',
-        icon: 'copy-outline',
+        icon: 'duplicate-outline',
         onPress: () => selectedLayer && handleDuplicateLayer(selectedLayer.id),
         accessibilityLabel: 'Duplicate',
         hapticFeedback: 'light',
@@ -395,9 +349,28 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         hapticFeedback: 'light',
       },
       {
+        id: 'look-text-copy',
+        label: 'Copy',
+        icon: 'copy-outline',
+        onPress: () => selectedLayer && handleCopyLayer(selectedLayer.id),
+        accessibilityLabel: 'Copy',
+        accessibilityHint: 'Copy the selected layer to the clipboard',
+        hapticFeedback: 'light',
+      },
+      {
+        id: 'look-text-paste',
+        label: 'Paste',
+        icon: 'clipboard-outline',
+        onPress: handlePasteLayer,
+        accessibilityLabel: 'Paste',
+        accessibilityHint: 'Place the copied layer on the canvas',
+        hapticFeedback: 'light',
+        disabled: !canPaste,
+      },
+      {
         id: 'look-text-duplicate',
         label: 'Duplicate',
-        icon: 'copy-outline',
+        icon: 'duplicate-outline',
         onPress: () => selectedLayer && handleDuplicateLayer(selectedLayer.id),
         accessibilityLabel: 'Duplicate',
         hapticFeedback: 'light',
@@ -413,14 +386,14 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
     ],
   });
 
-  // ── look-product-selected: Item, Price, Duplicate, More ──
+  // ── look-product-selected: Item, Duplicate ──
   groups.push({
     context: 'look-product-selected',
     primary: [
       {
         id: 'look-product-item',
         label: 'Item',
-        icon: 'pricetag-outline',
+        icon: 'bag-handle-outline',
         glyph: 'product-tag',
         onPress: () => selectedLayer && handleLinkItem(selectedLayer),
         accessibilityLabel: 'Change item',
@@ -428,17 +401,9 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         capabilityId: 'stickerProduct',
       },
       {
-        id: 'look-product-price',
-        label: 'Price',
-        icon: 'cash-outline',
-        onPress: handleProductPriceAction,
-        accessibilityLabel: 'Price',
-        hapticFeedback: 'light',
-      },
-      {
         id: 'look-product-duplicate',
         label: 'Duplicate',
-        icon: 'copy-outline',
+        icon: 'duplicate-outline',
         onPress: () => selectedLayer && handleDuplicateLayer(selectedLayer.id),
         accessibilityLabel: 'Duplicate',
         hapticFeedback: 'light',
@@ -472,7 +437,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
     ],
   });
 
-  // ── look-multi-select: Front, Back, Delete ──
+  // ── look-multi-select: Front, Back, Delete + align overflow ──
   groups.push({
     context: 'look-multi-select',
     primary: [
@@ -502,25 +467,36 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         hapticFeedback: 'medium',
       },
     ],
-    overflow: [],
+    overflow: [
+      {
+        id: 'look-multi-align-center',
+        label: 'Center horizontally',
+        icon: 'swap-horizontal-outline',
+        onPress: () => handleMultiAlign('center'),
+        accessibilityLabel: 'Center horizontally',
+        accessibilityHint: 'Align selected layers to the horizontal center of the selection',
+        hapticFeedback: 'light',
+      },
+      {
+        id: 'look-multi-align-middle',
+        label: 'Center vertically',
+        icon: 'swap-vertical-outline',
+        onPress: () => handleMultiAlign('middle'),
+        accessibilityLabel: 'Center vertically',
+        accessibilityHint: 'Align selected layers to the vertical center of the selection',
+        hapticFeedback: 'light',
+      },
+    ],
   });
 
-  // ── look-sticker-selected: Edit, Copy, Delete, Front/Back ──
+  // ── look-sticker-selected: Duplicate, Delete, Front/Back ──
   groups.push({
     context: 'look-sticker-selected',
     primary: [
       {
-        id: 'look-sticker-edit',
-        label: 'Edit',
-        icon: 'create-outline',
-        onPress: () => selectedLayer && handleEditLayer(selectedLayer),
-        accessibilityLabel: 'Edit',
-        hapticFeedback: 'light',
-      },
-      {
         id: 'look-sticker-duplicate',
-        label: 'Copy',
-        icon: 'copy-outline',
+        label: 'Duplicate',
+        icon: 'duplicate-outline',
         onPress: () => selectedLayer && handleDuplicateLayer(selectedLayer.id),
         accessibilityLabel: 'Duplicate',
         hapticFeedback: 'light',

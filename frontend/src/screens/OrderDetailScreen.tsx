@@ -678,7 +678,7 @@ export default function OrderDetailScreen() {
       actions.push({
         key: 'buyer_protection',
         label: t('orderDetail.overflow.buyerProtection'),
-        icon: 'shield-checkmark-outline',
+        icon: 'checkmark-circle-outline',
         onPress: () => navigation.navigate('BuyerProtection', { orderId }) });
     }
 

@@ -135,7 +135,7 @@ export default function SellerVerificationScreen() {
               />
             ) : (
               <View style={[styles.assetThumb, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="cube-outline" size={18} color={colors.textMuted} />
+                <Ionicons name="image-outline" size={18} color={colors.textMuted} />
               </View>
             )}
             <View style={styles.assetInfo}>
@@ -291,7 +291,7 @@ export default function SellerVerificationScreen() {
             variant="empty"
             title="No verification requests"
             subtitle="When unit holders request proof of authenticity, possession, or condition, you'll see them here."
-            icon="shield-checkmark-outline"
+            icon="checkmark-circle-outline"
           />
         ) : (
           <>

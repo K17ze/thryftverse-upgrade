@@ -25,14 +25,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Control, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Control, Stroke, PressScale } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri, getCategoryFocalPoint } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AnimatedHeart } from '../AnimatedHeart';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
-import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
 import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
@@ -210,7 +209,7 @@ function MediaPage({
             style={subComponentStyles.image}
           >
             <Pressable
-              style={subComponentStyles.retryBtn}
+              style={({ pressed }) => [subComponentStyles.retryBtn, pressed && { opacity: 0.85, transform: [{ scale: PressScale.tap }] }]}
               onPress={() => { setFailed(false); setRetryKey((k) => k + 1); }}
               accessibilityLabel="Retry loading image"
               accessibilityRole="button"
@@ -228,6 +227,7 @@ function MediaPage({
               style={subComponentStyles.image}
               containerStyle={subComponentStyles.image}
               contentFit={item.fit ?? 'cover'}
+              transition={Motion.duration.normal}
               focalPoint={item.focalPoint}
               sharedTransitionTag={sharedTransitionTag}
               onError={() => setFailed(true)}
@@ -241,6 +241,7 @@ function MediaPage({
               style={subComponentStyles.image}
               containerStyle={subComponentStyles.image}
               contentFit={item.fit ?? 'cover'}
+              transition={Motion.duration.normal}
               sharedTransitionTag={sharedTransitionTag}
               onError={() => setFailed(true)}
               downscaleWidth={width}
@@ -519,7 +520,7 @@ function VideoPage({
           {/* Center play/pause button — only show when paused or on first load */}
           {!isPlaying && (
             <Pressable
-              style={videoControlStyles.centerPlayBtn}
+              style={({ pressed }) => [videoControlStyles.centerPlayBtn, pressed && { opacity: 0.85, transform: [{ scale: PressScale.tap }] }]}
               onPress={togglePlayPause}
               accessibilityLabel="Play video"
               accessibilityRole="button"
@@ -532,7 +533,7 @@ function VideoPage({
           <View style={videoControlStyles.controlBar}>
             {/* Play/pause */}
             <Pressable
-              style={videoControlStyles.controlBtn}
+              style={({ pressed }) => [videoControlStyles.controlBtn, pressed && { opacity: 0.85, transform: [{ scale: PressScale.tap }] }]}
               onPress={togglePlayPause}
               accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
               accessibilityRole="button"
@@ -577,7 +578,7 @@ function VideoPage({
 
             {/* Mute toggle */}
             <Pressable
-              style={videoControlStyles.controlBtn}
+              style={({ pressed }) => [videoControlStyles.controlBtn, pressed && { opacity: 0.85, transform: [{ scale: PressScale.tap }] }]}
               onPress={toggleMute}
               accessibilityLabel={isMuted ? 'Unmute video' : 'Mute video'}
               accessibilityRole="button"
@@ -588,7 +589,7 @@ function VideoPage({
 
             {/* Fullscreen */}
             <Pressable
-              style={videoControlStyles.controlBtn}
+              style={({ pressed }) => [videoControlStyles.controlBtn, pressed && { opacity: 0.85, transform: [{ scale: PressScale.tap }] }]}
               onPress={handleFullscreen}
               accessibilityLabel="Open video fullscreen"
               accessibilityRole="button"
@@ -668,10 +669,12 @@ const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
     textAlign: 'center' } });
 
 export interface CommerceMediaStageProps {
-  images?: string[];
-  /** Authoritative typed media. When supplied, media kind is never guessed
+  /** Canonical typed media. When supplied, media kind is never guessed
    * from a URL and crop/poster metadata remains attached end-to-end. */
   media?: readonly ProductMediaItem[];
+  /** Raw image URIs — mapped internally to ProductMediaItem[] (cover fit)
+   * so both props render through the single media code path. */
+  images?: string[];
   /** Canonical video URLs supplied by the API. URL-suffix detection remains
    * as a compatibility fallback for older callers. */
   videoUris?: readonly string[];
@@ -728,8 +731,8 @@ export interface CommerceMediaStageProps {
 }
 
 export function CommerceMediaStage({
-  images = [],
   media,
+  images = [],
   videoUris = [],
   objectId,
   topInset,
@@ -985,7 +988,8 @@ export function CommerceMediaStage({
           <AnimatedPressable
             style={styles.controlBtn}
             onPress={onBack}
-            {...PressPresets.iconButton}
+            scaleValue={PressScale.tap}
+            activeOpacity={0.85}
             accessibilityLabel="Go back"
           >
             <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} style={styles.controlIcon} />
@@ -995,7 +999,8 @@ export function CommerceMediaStage({
             <AnimatedPressable
               style={styles.controlBtn}
               onPress={onShare}
-              {...PressPresets.iconButton}
+              scaleValue={PressScale.tap}
+              activeOpacity={0.85}
               accessibilityLabel="Share"
             >
               <Ionicons name="share-outline" size={24} color={colors.scrimTextPrimary} style={styles.controlIcon} />
@@ -1005,7 +1010,8 @@ export function CommerceMediaStage({
               <AnimatedPressable
                 style={styles.controlBtn}
                 onPress={onSave}
-                {...PressPresets.iconButton}
+                scaleValue={PressScale.tap}
+                activeOpacity={0.85}
                 accessibilityLabel={isSaved ? 'Saved to collection' : 'Save to collection'}
               >
                 <Ionicons
@@ -1247,8 +1253,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 5,
     borderRadius: Radius.md },
   indexBadgePressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.95 }] },
+    opacity: 0.85,
+    transform: [{ scale: PressScale.tap }] },
   // Dot indicators — quiet position signal (Depop/Vinted pattern).
   // Inactive dots are small and translucent; active dot is wider and opaque.
   dotRow: {
@@ -1329,11 +1335,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: 'transparent' },
   thumbnailActive: {
     opacity: 1,
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.scrimTextPrimary },
   thumbnailPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.92 }] },
+    opacity: 0.85,
+    transform: [{ scale: PressScale.tap }] },
   thumbnailImage: {
     width: '100%',
     height: '100%' },

@@ -48,7 +48,7 @@ function resolveCommerceVisual(eventType: NotificationEventV2['eventType']): Com
     case 'order_paid':
       return { icon: 'card-outline', accentKey: 'success', statusLabel: 'Paid' };
     case 'order_dispatched':
-      return { icon: 'cube-outline', accentKey: 'commerceTrust', statusLabel: 'Dispatched' };
+      return { icon: 'car-outline', accentKey: 'commerceTrust', statusLabel: 'Dispatched' };
     case 'order_in_transit':
       return { icon: 'airplane-outline', accentKey: 'commerceTrust', statusLabel: 'In transit' };
     case 'order_out_for_delivery':
@@ -170,7 +170,7 @@ export function CommerceNotificationRow({
   const trailing = event.objectRef ? (
     <NotificationThumbnail
       uri={objectImage}
-      fallbackIcon="cube-outline"
+      fallbackIcon="bag-handle-outline"
       size={40}
       colors={colors}
     />

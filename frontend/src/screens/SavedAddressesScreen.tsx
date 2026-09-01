@@ -208,7 +208,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
               <View style={styles.addressCardHeaderLeft}>
                 {isDefault ? (
                   <View style={[styles.defaultBadge, { backgroundColor: colors.brandSubtle }]}>
-                    <Ionicons name="star" size={11} color={colors.brand} />
+                    <Ionicons name="checkmark-circle-outline" size={11} color={colors.brand} />
                     <Text style={[styles.defaultBadgeText, { color: colors.brand }]}>DEFAULT</Text>
                   </View>
                 ) : null}

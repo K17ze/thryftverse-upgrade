@@ -32,8 +32,8 @@ function calculateCompleteness(input: ProfileCompletenessInput): {
     { key: 'bio', label: 'Bio', icon: 'text-outline', done: !!input.bio?.trim() },
     { key: 'location', label: 'Location', icon: 'location-outline', done: !!input.location?.trim() },
     { key: 'website', label: 'Website', icon: 'link-outline', done: !!input.website?.trim() },
-    { key: 'emailVerified', label: 'Email verified', icon: 'shield-checkmark-outline', done: !!input.emailVerified },
-    { key: 'listings', label: 'First listing', icon: 'pricetag-outline', done: !!input.hasListings },
+    { key: 'emailVerified', label: 'Email verified', icon: 'checkmark-circle-outline', done: !!input.emailVerified },
+    { key: 'listings', label: 'First listing', icon: 'bag-handle-outline', done: !!input.hasListings },
   ];
 
   const doneCount = items.filter((i) => i.done).length;

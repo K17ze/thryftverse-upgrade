@@ -193,7 +193,7 @@ export function CoOwnAssetDossier({
       {/* ── Storage ── */}
       {storage && (
         <View style={styles.section}>
-          <SectionHeader icon="shield-checkmark-outline" title="Storage" colors={colors} />
+          <SectionHeader icon="lock-closed-outline" title="Storage" colors={colors} />
           <InfoRow label="Location" value={storage.location} colors={colors} />
           <InfoRow label="Custodian" value={storage.custodian} colors={colors} />
           <InfoRow

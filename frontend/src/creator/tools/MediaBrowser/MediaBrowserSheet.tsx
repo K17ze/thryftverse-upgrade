@@ -65,6 +65,8 @@ import { useHaptic } from '../../../hooks/useHaptic';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
 import { Motion } from '../../../theme/motionTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -264,7 +266,7 @@ function MediaGridItem({
         />
         {asset.mediaType === 'video' && (
           <View style={styles.mediaGridVideoBadge}>
-            <Ionicons name="play" size={IconGrammar.badge} color={colors.scrimTextPrimary} />
+            <AppIcon name="play" size={IconSize.xs} color="textInverse" opticalCenter={true} accessible={false} />
             {asset.durationMs != null && (
               <Text style={styles.mediaGridDuration}>
                 {formatDuration(asset.durationMs)}
@@ -292,17 +294,17 @@ function StaticStateIcon({
   name,
   size,
   color }: {
-  name: React.ComponentProps<typeof Ionicons>['name'];
+  name: string;
   size: number;
   color: string;
 }) {
-  return <Ionicons name={name} size={size} color={color} />;
+  return <AppIcon name={name} size={size} color={color} opticalCenter={true} accessible={false} />;
 }
 
 // ── PermissionDeniedState — spring entrance with retry CTA ──────────
 
 interface PermissionDeniedStateProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: string;
   title: string;
   message: string;
   ctaLabel: string;
@@ -370,7 +372,7 @@ function CameraTile({ onPress, colors, styles }: CameraTileProps) {
       accessibilityHint="Opens the camera to capture a new photo"
       hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
     >
-      <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.brand} />
+      <AppIcon name="camera-outline" size={IconSize.hero} color="brand" opticalCenter={true} accessible={false} />
     </PressScale>
   );
 }
@@ -397,7 +399,7 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
           />
           {asset.mediaType === 'video' && asset.durationMs != null && (
             <View style={[previewStyles.durationBadge, { backgroundColor: colors.mediaOverlayScrim }]}>
-              <Ionicons name="play" size={IconGrammar.badge} color={colors.scrimTextPrimary} />
+              <AppIcon name="play" size={IconSize.xs} color="textInverse" opticalCenter={true} accessible={false} />
               <Text style={[previewStyles.durationText, { color: colors.scrimTextPrimary }]}>
                 {formatDuration(asset.durationMs)}
               </Text>
@@ -405,7 +407,7 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
           )}
         </View>
         <Pressable style={[previewStyles.closeBtn, { backgroundColor: colors.scrimTextTertiary }]} onPress={onClose} hitSlop={12} accessibilityLabel="Close preview" accessibilityRole="button">
-          <Ionicons name="close" size={IconGrammar.hero} color={colors.scrimTextPrimary} />
+          <AppIcon name="close" size={IconSize.hero} color="textInverse" opticalCenter={true} accessible={false} />
         </Pressable>
       </Pressable>
     </Modal>
@@ -491,7 +493,7 @@ function AlbumRow({ album, isActive, onSelect, colors, styles }: AlbumRowProps) 
             recyclingKey={album.id}
           />
         ) : (
-          <Ionicons name="images-outline" size={IconGrammar.standard} color={colors.textMuted} />
+          <AppIcon name="images-outline" size={IconSize.lg} color="textMuted" opticalCenter={true} accessible={false} />
         )}
       </View>
       <View style={styles.albumRowTextCol}>
@@ -508,7 +510,7 @@ function AlbumRow({ album, isActive, onSelect, colors, styles }: AlbumRowProps) 
           {album.assetCount} items
         </Text>
       </View>
-      {isActive && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} />}
+      {isActive && <AppIcon name="check" size={IconSize.sm} color="brand" opticalCenter={true} accessible={false} />}
     </Pressable>
   );
 }
@@ -532,7 +534,7 @@ function AlbumListView({
   if (albums.length === 0) {
     return (
       <View style={styles.centerState}>
-        <StaticStateIcon name="folder-open-outline" size={IconGrammar.hero} color={colors.textMuted} />
+        <StaticStateIcon name="folder-open-outline" size={IconSize.hero} color={colors.textMuted} />
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
           No albums found
         </Text>
@@ -550,7 +552,7 @@ function AlbumListView({
         accessibilityState={{ selected: activeAlbumId === null }}
       >
         <View style={[styles.albumThumb, { backgroundColor: colors.brandSubtle }]}>
-          <Ionicons name="images-outline" size={IconGrammar.standard} color={colors.brand} />
+          <AppIcon name="images-outline" size={IconSize.lg} color="brand" opticalCenter={true} accessible={false} />
         </View>
         <View style={styles.albumRowTextCol}>
           <Text
@@ -565,7 +567,7 @@ function AlbumListView({
             Everything in your library
           </Text>
         </View>
-        {activeAlbumId === null && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} />}
+        {activeAlbumId === null && <AppIcon name="check" size={IconSize.sm} color="brand" opticalCenter={true} accessible={false} />}
       </Pressable>
       {albums.slice(0, 30).map((album) => (
         <AlbumRow
@@ -876,7 +878,7 @@ export function MediaBrowserSheet({
             accessibilityLabel="Close"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
         <View style={styles.centerState}>
@@ -897,7 +899,7 @@ export function MediaBrowserSheet({
             accessibilityLabel="Close"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
         <PermissionDeniedState
@@ -924,7 +926,7 @@ export function MediaBrowserSheet({
             accessibilityLabel="Close"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
         <PermissionDeniedState
@@ -962,7 +964,7 @@ export function MediaBrowserSheet({
             accessibilityHint="Closes the media browser"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
 
@@ -1074,11 +1076,11 @@ export function MediaBrowserSheet({
                 accessibilityLabel="Limited photo access — tap to select more photos"
                 accessibilityRole="button"
               >
-                <Ionicons name="images-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
+                <AppIcon name="images-outline" size={IconSize.sm} color="textSecondary" opticalCenter={true} accessible={false} />
                 <Text style={[styles.limitedBannerText, { color: colors.textSecondary }]}>
                   Limited access — tap to manage
                 </Text>
-                <Ionicons name="chevron-forward" size={IconGrammar.badge} color={colors.textMuted} />
+                <AppIcon name="forward" size={IconSize.xs} color="textMuted" opticalCenter={true} accessible={false} />
               </Pressable>
             )}
 
@@ -1129,10 +1131,12 @@ export function MediaBrowserSheet({
             >
               {selectedCount > 0 ? `Next (${selectedCount})` : 'Next'}
             </Text>
-            <Ionicons
-              name="chevron-forward"
-              size={IconGrammar.metadata}
-              color={selectedCount > 0 ? colors.textInverse : colors.textMuted}
+            <AppIcon
+              name="forward"
+              size={IconSize.sm}
+              color={selectedCount > 0 ? 'textInverse' : 'textMuted'}
+              opticalCenter={true}
+              accessible={false}
             />
           </PressScale>
         </View>

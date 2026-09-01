@@ -625,7 +625,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onFollowToggle={handleFollowToggle}
         onMessage={handleMessageProfile}
         onMore={handleMore}
-        onShare={handleShare}
         onOpenConnections={openConnections}
         onTabSelect={(t) => setActiveTab(t)}
         onShopSegmentSelect={(s) => setShopSegment(s)}

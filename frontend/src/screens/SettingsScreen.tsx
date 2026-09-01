@@ -193,7 +193,6 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'Personalisation', label: 'Content preferences', searchTerms: 'feed personalisation appearance content preferences', section: 'Experience', showSection: true },
   { key: 'AIPreferences', label: 'Recommendations', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell recommendations', section: 'Experience' },
   { key: 'YourAlgorithm', label: 'Your feed', searchTerms: 'feed recommendations topics signals transparency algorithm', section: 'Experience' },
-  { key: 'SustainabilityPreferences', label: 'Sustainability', searchTerms: 'carbon neutral packaging badges eco secondhand', section: 'Experience' },
   { key: 'AccessibilitySettings', label: 'Accessibility', searchTerms: 'text size reduced motion high contrast screen reader', section: 'Experience' },
   // ── Connected services (normal product destination) ──
   { key: 'BotDirectory', label: 'Agents', searchTerms: 'agent assistant browse catalogue deploy permissions', section: 'Connected services', showSection: true },
@@ -502,13 +501,12 @@ export default function SettingsScreen({ navigation }: Props) {
               is not yet complete. Email verification alone does not grant
               a trust badge (P0-UI-3). ── */}
           {!currentUser?.identityVerified && !currentUser?.sellerVerified ? (
-            <FlatRow
-              icon="shield-checkmark-outline"
+            <SettingsRow
+              glyph="verified-check"
               iconColor={colors.brand}
-              label={ts('verification.promptTitle')}
-              secondary={ts('verification.promptSubtitle')}
+              title={ts('verification.promptTitle')}
+              subtitle={ts('verification.promptSubtitle')}
               onPress={() => navigation.navigate('Verification')}
-              separatorInset={false}
               accessibilityLabel={ts('accessibility.verifyIdentity')}
               accessibilityHint={ts('accessibility.verifyIdentityHint')}
             />
@@ -556,7 +554,7 @@ export default function SettingsScreen({ navigation }: Props) {
           {/* ── YOUR ACCOUNT (profile, security, privacy) ── */}
           <SettingsSection title={ts('sections.yourAccount')}>
             <SettingsRow
-              icon="shield-checkmark-outline"
+              glyph="verified-check"
               iconColor={currentUser?.identityVerified || currentUser?.sellerVerified ? colors.success : colors.textMuted}
               titleStyle={currentUser?.identityVerified || currentUser?.sellerVerified ? { color: colors.success } : undefined}
               title={ts('rows.verification')}
@@ -565,13 +563,13 @@ export default function SettingsScreen({ navigation }: Props) {
               isFirst
             />
             <SettingsRow
-              icon="key-outline"
+              glyph="security-lock"
               title={ts('rows.changePassword')}
               subtitle={twoFactorEnabled ? ts('rows.twoFAEnabled') : ts('rows.passwordOnly')}
               onPress={() => navigation.navigate('ChangePassword')}
             />
             <SettingsRow
-              icon="finger-print-outline"
+              glyph="security-lock"
               title={ts('rows.biometricLock')}
               subtitle={
                 !isBiometricAvailable
@@ -585,7 +583,7 @@ export default function SettingsScreen({ navigation }: Props) {
               disabled={!isBiometricAvailable}
             />
             <SettingsRow
-              icon="lock-closed-outline"
+              glyph="security-lock"
               title={ts('rows.biometricLogin')}
               subtitle={
                 !isBiometricAvailable
@@ -599,42 +597,42 @@ export default function SettingsScreen({ navigation }: Props) {
               disabled={!isBiometricAvailable}
             />
             <SettingsRow
-              icon="link-outline"
+              glyph="connection-link"
               title={ts('rows.connectedAccounts')}
               subtitle={ts('rows.connectedAccountsSubtitle')}
               onPress={() => navigation.navigate('ConnectedAccounts')}
             />
             <SettingsRow
-              icon="phone-portrait-outline"
+              glyph="history-clock"
               title={ts('rows.devicesSessions')}
               onPress={() => navigation.navigate('ActiveSessions')}
             />
             <SettingsRow
-              icon="shield-outline"
+              glyph="security-lock"
               title={ts('rows.accountControl')}
               subtitle={ts('rows.accountControlSubtitle')}
               onPress={() => navigation.navigate('AccountControl')}
             />
             <SettingsRow
-              icon="download-outline"
+              icon="download"
               title={ts('rows.downloadData')}
               subtitle={ts('rows.downloadDataSubtitle')}
               onPress={() => navigation.navigate('DataExport')}
             />
             <SettingsRow
-              icon="eye-outline"
+              icon="eye"
               title={ts('rows.privacySafety')}
               subtitle={ts('rows.privacySafetySubtitle')}
               onPress={() => navigation.navigate('PrivacySettings')}
             />
             <SettingsRow
-              icon="chatbubble-outline"
+              icon="chat"
               title={ts('rows.chatPrivacy')}
               subtitle={ts('rows.chatPrivacySubtitle')}
               onPress={() => navigation.navigate('ChatSettings')}
             />
             <SettingsRow
-              icon="language-outline"
+              glyph="language-globe"
               title={ts('rows.autoTranslate')}
               subtitle={
                 autoTranslateMessages
@@ -645,13 +643,13 @@ export default function SettingsScreen({ navigation }: Props) {
               onToggle={(v) => setAutoTranslateMessages(v)}
             />
             <SettingsRow
-              icon="lock-closed-outline"
+              glyph="security-lock"
               title={ts('rows.dataPrivacy')}
               subtitle={ts('rows.dataPrivacySubtitle')}
               onPress={() => navigation.navigate('DataPrivacy')}
             />
             <SettingsRow
-              icon="ban-outline"
+              icon="ban"
               title={ts('rows.blockedUsers')}
               subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None'}
               onPress={() => navigation.navigate('BlockedUsers')}
@@ -662,59 +660,59 @@ export default function SettingsScreen({ navigation }: Props) {
           {/* ── BUYING & SELLING (payments, payouts, orders, co-own, disputes) ── */}
           <SettingsSection title={ts('sections.buyingSelling')}>
             <SettingsRow
-              icon="location-outline"
+              icon="location"
               title={ts('rows.savedAddresses')}
               subtitle={savedAddress ? ts('rows.oneSaved') : ts('rows.noneSaved')}
               onPress={() => navigation.navigate('SavedAddresses')}
               isFirst
             />
             <SettingsRow
-              icon="card-outline"
+              icon="card"
               title={ts('rows.paymentMethods')}
               subtitle={savedPaymentMethod ? savedPaymentMethod.label : ts('rows.noneSaved')}
               onPress={() => navigation.navigate('Payments')}
             />
             <SettingsRow
-              icon="heart-outline"
+              icon="bookmark"
               title={ts('rows.savedCollections')}
               onPress={() => navigation.navigate('Closet')}
             />
             <SettingsRow
-              icon="wallet-outline"
+              icon="wallet"
               title={ts('rows.payoutAccount')}
               subtitle={ts('rows.payoutAccountSubtitle')}
               onPress={() => navigation.navigate('Wallet')}
             />
             <SettingsRow
-              icon="cash-outline"
+              icon="receipt"
               title={ts('rows.payoutHistory')}
               onPress={() => navigation.navigate('BalanceHistory')}
             />
             <SettingsRow
-              icon="cube-outline"
+              icon="box"
               title={ts('rows.shippingPreferences')}
               onPress={() => navigation.navigate('Postage')}
             />
             <SettingsRow
-              icon="notifications-outline"
+              icon="notifications"
               title={ts('rows.priceAlerts')}
               subtitle={ts('rows.priceAlertsSubtitle')}
               onPress={() => navigation.navigate('CoOwnPriceAlerts')}
             />
             <SettingsRow
-              icon="repeat-outline"
+              icon="repeat"
               title={ts('rows.autoInvestPlans')}
               subtitle={ts('rows.autoInvestPlansSubtitle')}
               onPress={() => navigation.navigate('CoOwnRecurringOrders')}
             />
             <SettingsRow
-              icon="document-text-outline"
+              icon="document"
               title={ts('rows.taxDocuments')}
               subtitle={ts('rows.taxDocumentsSubtitle')}
               onPress={() => navigation.navigate('CoOwnTaxDocuments')}
             />
             <SettingsRow
-              icon="folder-open-outline"
+              icon="folder"
               title={ts('rows.resolutionCentre')}
               subtitle={ts('rows.resolutionCentreSubtitle')}
               onPress={() => navigation.navigate('ResolutionCentre')}
@@ -734,19 +732,19 @@ export default function SettingsScreen({ navigation }: Props) {
               isFirst
             />
             <SettingsRow
-              icon="notifications-outline"
+              icon="notifications"
               title={ts('rows.notificationCategories')}
               subtitle={notificationSummary}
               onPress={() => navigation.navigate('PushNotifications')}
             />
             <SettingsRow
-              icon="options-outline"
+              icon="options"
               title={ts('rows.notificationPreferences')}
               subtitle={ts('rows.notificationPreferencesSubtitle')}
               onPress={() => navigation.navigate('NotificationPreferences')}
             />
             <SettingsRow
-              icon="mail-outline"
+              icon="mail"
               title={ts('rows.emailPreferences')}
               subtitle={emailNotificationsEnabled ? 'On' : 'Off'}
               onPress={() => navigation.navigate('EmailNotifications')}
@@ -757,68 +755,62 @@ export default function SettingsScreen({ navigation }: Props) {
           {/* ── EXPERIENCE (appearance, language, currency, accessibility, recommendations) ── */}
           <SettingsSection title={ts('sections.experience')}>
             <SettingsRow
-              icon="color-palette-outline"
+              glyph="theme-palette"
               title={ts('rows.theme')}
               value={getThemePreferenceLabel(themePreference)}
               onPress={() => setThemePickerVisible(true)}
               isFirst
             />
             <SettingsRow
-              icon="swap-horizontal-outline"
+              icon="repeat"
               title={ts('rows.currencyDisplay')}
               value={displayModeLabel}
               onPress={cycleDisplayMode}
             />
             <SettingsRow
-              icon="globe-outline"
+              glyph="currency-local"
               title={ts('rows.localCurrency')}
               value={`${currencyCode} (${CURRENCIES[currencyCode].symbol})`}
               onPress={() => setCurrencyPickerVisible(true)}
             />
             <SettingsRow
-              icon="language-outline"
+              glyph="language-globe"
               title={ts('rows.language')}
               value={getLanguageEndonym(selectedLanguage)}
               onPress={() => setLanguagePickerVisible(true)}
             />
             <SettingsRow
-              icon="options-outline"
+              glyph="content-sliders"
               title={ts('rows.contentPreferences')}
               subtitle={ts('rows.contentPreferencesSubtitle')}
               onPress={() => navigation.navigate('Personalisation')}
             />
             <SettingsRow
-              icon="bulb-outline"
+              glyph="ai-smart"
               title={ts('rows.recommendations')}
               subtitle={ts('rows.recommendationsSubtitle')}
               onPress={() => navigation.navigate('AIPreferences')}
             />
             <SettingsRow
-              icon="analytics-outline"
+              glyph="feed-list"
               title={ts('rows.yourFeed')}
               subtitle={ts('rows.yourFeedSubtitle')}
               onPress={() => navigation.navigate('YourAlgorithm')}
             />
             <SettingsRow
-              icon="leaf-outline"
-              title={ts('rows.sustainability')}
-              subtitle={ts('rows.sustainabilitySubtitle')}
-              onPress={() => navigation.navigate('SustainabilityPreferences')}
-            />
-            <SettingsRow
-              icon="accessibility-outline"
+              icon="accessibility"
               title={ts('rows.accessibility')}
               subtitle={ts('rows.accessibilitySubtitle')}
               onPress={() => navigation.navigate('AccessibilitySettings')}
             />
             <SettingsRow
-              icon="time-outline"
+              glyph="history-clock"
               title={ts('rows.searchHistory')}
               subtitle={ts('rows.searchHistorySubtitle')}
               onPress={() => void handleClearSearchHistory()}
             />
             <SettingsRow
-              icon="analytics-outline"
+              glyph="connection-link"
               title={ts('rows.dataSharing')}
               subtitle={ts('rows.dataSharingSubtitle')}
               toggleValue={!analyticsOptOut}
@@ -833,20 +825,20 @@ export default function SettingsScreen({ navigation }: Props) {
               Settings — it lives in the Agents home and profile menu. */}
           <SettingsSection title={ts('sections.connectedServices')}>
             <SettingsRow
-              icon="people-outline"
+              icon="people"
               title={ts('rows.agents')}
               subtitle={ts('rows.agentsSubtitle')}
               onPress={() => navigation.navigate('BotDirectory')}
               isFirst
             />
             <SettingsRow
-              icon="key-outline"
+              icon="key"
               title={ts('rows.connections')}
               subtitle={ts('rows.connectionsSubtitle')}
               onPress={() => navigation.navigate('AIAgentIntegration')}
             />
             <SettingsRow
-              icon="person-circle-outline"
+              icon="profile"
               title={ts('rows.yourAgents')}
               subtitle={ts('rows.yourAgentsSubtitle')}
               onPress={() => navigation.navigate('CustomBots')}
@@ -858,23 +850,23 @@ export default function SettingsScreen({ navigation }: Props) {
           <SettingsSection title={ts('sections.helpLegal')}>
 
             <SettingsRow
-              icon="help-circle-outline"
+              icon="help"
               title={ts('rows.helpCentre')}
               onPress={() => navigation.navigate('HelpSupport')}
               isFirst
             />
             <SettingsRow
-              icon="document-text-outline"
+              icon="document"
               title={ts('rows.termsOfService')}
               onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
             />
             <SettingsRow
-              icon="shield-checkmark-outline"
+              glyph="privacy-document"
               title={ts('rows.privacyPolicy')}
               onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
             />
             <SettingsRow
-              icon="information-circle-outline"
+              icon="info"
               title={ts('rows.aboutThryftverse')}
               value="v1.0.0"
               onPress={() => navigation.navigate('About')}

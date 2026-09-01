@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS, deriveSellerBadges, SELLER_BADGES } from '../../platform/product';
 import type { PublicProfileTrader } from '../../services/profileApi';
@@ -13,11 +15,11 @@ import type { PublicProfileTrader } from '../../services/profileApi';
  * Used in the trust metrics row on profile heroes.
  *
  * 2026 flagship: no bordered pills around every chip — spacing gaps
- * provide rhythm. Icon 13pt (metadata band), label captionElevated.
+ * provide rhythm. Icon 14pt (metadata band), label captionElevated.
  * One dot separator between chips when in a horizontal row.
  */
 interface TrustChipProps {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: keyof typeof Ionicons.glyphMap | string;
   label: string;
   tone?: 'default' | 'success' | 'muted';
 }
@@ -25,9 +27,17 @@ interface TrustChipProps {
 function TrustChip({ icon, label, tone = 'default', colors, styles }: TrustChipProps & { colors: ThemeColors; styles: ReturnType<typeof createStyles> }) {
   const color =
     tone === 'success' ? colors.success : tone === 'muted' ? colors.textMuted : colors.textSecondary;
+  const isStar = icon === 'star';
   return (
     <View style={styles.chip}>
-      <Ionicons name={icon} size={13} color={color} />
+      <AppIcon
+        name={icon}
+        focused={isStar}
+        size={IconSize.xs}
+        color={isStar ? 'ratingStar' : (tone === 'success' ? 'success' : tone === 'muted' ? 'textMuted' : 'textSecondary')}
+        opticalCenter
+        accessible={false}
+      />
       <Text style={[styles.chipText, { color }]} numberOfLines={1}>{label}</Text>
     </View>
   );
@@ -110,7 +120,7 @@ export function ProfileTrustSignals({
 
   // Dispatch time
   if (sellerTrust?.dispatchTimeLabel) {
-    chips.push({ icon: 'cube', label: sellerTrust.dispatchTimeLabel });
+    chips.push({ icon: 'car-outline', label: sellerTrust.dispatchTimeLabel });
   }
 
   // Completed sales — suppressed when hideSoldChip is true (MyProfileIdentityHero

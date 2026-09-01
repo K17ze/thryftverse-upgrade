@@ -17,6 +17,8 @@ import { useStore } from '../store/useStore';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import type { SupportTicket } from '../store/useStore';
 
 type TicketFilter = 'all' | 'open' | 'resolved' | 'closed';
@@ -28,11 +30,12 @@ const FILTERS: Array<{ value: TicketFilter; label: string; accessibilityLabel: s
   { value: 'closed', label: 'Closed', accessibilityLabel: 'Show closed requests' },
 ];
 
-function getStatusConfig(colors: ThemeColors): Record<string, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> {
+function getStatusConfig(colors: ThemeColors): Record<string, { label: string; color: string; icon: string }> {
   return {
-  open: { label: 'Open', color: colors.brand, icon: 'folder-open-outline' },
-  resolved: { label: 'Resolved', color: colors.success, icon: 'checkmark-circle-outline' },
-  closed: { label: 'Closed', color: colors.textMuted, icon: 'close-circle-outline' } };
+    open: { label: 'Open', color: colors.brand, icon: 'folder' },
+    resolved: { label: 'Resolved', color: colors.success, icon: 'checkmark-circle-outline' },
+    closed: { label: 'Closed', color: colors.textMuted, icon: 'close' },
+  };
 }
 
 function formatRelativeDate(timestamp: number): string {
@@ -99,7 +102,7 @@ export default function ResolutionCentreScreen() {
           accessibilityRole="button"
           accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
         >
-          <Ionicons name={statusCfg.icon} size={24} color={statusCfg.color} />
+          <AppIcon name={statusCfg.icon} size={IconSize.lg} color={statusCfg.color} opticalCenter accessible={false} />
           <View style={styles.ticketInfo}>
             <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
             <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
@@ -111,11 +114,11 @@ export default function ResolutionCentreScreen() {
               <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </Pressable>
       </View>
     );
-  }, [statusConfig, navigation, styles, colors.textMuted]);
+  }, [statusConfig, navigation, styles]);
 
   return (
     <FlagshipScreen

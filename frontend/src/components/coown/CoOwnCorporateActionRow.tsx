@@ -62,8 +62,8 @@ const ACTION_CONFIG: Record<CoOwnCorporateActionType, { label: string; icon: Rea
   buyback: { label: 'Buyback', icon: 'arrow-undo-circle-outline' },
   compulsory_buyout: { label: 'Compulsory buyout', icon: 'exit-outline' },
   revaluation: { label: 'Revaluation', icon: 'trending-up-outline' },
-  insurance_proceeds: { label: 'Insurance proceeds', icon: 'shield-checkmark-outline' },
-  liquidation: { label: 'Liquidation', icon: 'cube-outline' },
+  insurance_proceeds: { label: 'Insurance proceeds', icon: 'checkmark-circle-outline' },
+  liquidation: { label: 'Liquidation', icon: 'cash-outline' },
   vote: { label: 'Vote', icon: 'ribbon-outline' },
 };
 

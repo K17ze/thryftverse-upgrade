@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     fontFamily: TypographyV2.bodyStrong.fontFamily,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     textTransform: 'none' },
-  // editorial: stronger heading — slightly larger, tighter tracking.
+  // editorial: stronger heading — section-title scale, tighter tracking.
   labelEditorial: {
     fontSize: TypographyV2.sectionTitle.size,
     lineHeight: TypographyV2.sectionTitle.lineHeight,

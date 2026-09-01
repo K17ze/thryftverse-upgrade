@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Confetti } from '../components/Confetti';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -130,7 +129,6 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={colors.background}
       />
-      <Confetti />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -346,7 +344,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <Text style={styles.tipText}>Add clear, well-lit photos from multiple angles</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+            <Ionicons name="cash-outline" size={12} color={colors.textMuted} aria-hidden={true} />
             <Text style={styles.tipText}>Price competitively — check similar sold items</Text>
           </View>
           <View style={styles.tipRow}>

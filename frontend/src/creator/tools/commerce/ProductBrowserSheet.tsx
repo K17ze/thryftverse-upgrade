@@ -43,6 +43,8 @@ import { useStore } from '../../../store/useStore';
 import { createStableId } from '../../../utils/createStableId';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -97,7 +99,7 @@ const MAX_RECENT = 30;
 const ALL_TABS: Array<{ key: TabKey; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { key: 'discover', label: 'Discover', icon: 'search-outline' },
   { key: 'closet', label: 'Closet', icon: 'shirt-outline' },
-  { key: 'listings', label: 'Listings', icon: 'pricetag-outline' },
+  { key: 'listings', label: 'Listings', icon: 'bag-handle-outline' },
   { key: 'saved', label: 'Saved', icon: 'bookmark-outline' },
 ];
 
@@ -455,7 +457,7 @@ export function ProductBrowserSheet({
             accessibilityHint="Closes the product browser sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Tag Product</Text>
           <PressScale
@@ -496,7 +498,7 @@ export function ProductBrowserSheet({
         {/* ── Search input (Discover tab only) ────────────────────── */}
         {activeTab === 'discover' && (
           <View style={[styles.searchRow, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="search" size={IconGrammar.metadata} color={colors.textMuted} style={styles.searchIcon} />
+            <AppIcon name="search" size={IconSize.sm} color="textMuted" style={styles.searchIcon} opticalCenter={true} accessible={false} />
             <TextInput
               style={[styles.searchInput, { color: colors.textPrimary }]}
               placeholder="Search"
@@ -554,12 +556,12 @@ export function ProductBrowserSheet({
                       <Image source={{ uri: item.imageUrl }} style={styles.productImage} contentFit="cover" />
                     ) : (
                       <View style={[styles.productImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
-                        <Ionicons name="pricetag" size={IconGrammar.metadata} color={colors.textSecondary} />
+                        <AppIcon name="tag" size={IconSize.sm} color="textSecondary" opticalCenter={true} accessible={false} />
                       </View>
                     )}
                     {isSelected && (
                       <View style={styles.selectedBadge}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.brand} />
+                        <AppIcon name="checkmarkCircle" size={IconSize.md} color="brand" opticalCenter={true} accessible={false} />
                       </View>
                     )}
                   </View>

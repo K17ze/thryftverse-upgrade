@@ -6,7 +6,6 @@ import {
   TextInput,
   Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -14,6 +13,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, DockConstants, Radius, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -30,7 +31,7 @@ import { fetchListingByIdFromApi, patchListingOnApi, createListingImageOnApi } f
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { EditListingFooter } from '../components/listing/EditListingFooter';
-import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
@@ -50,6 +51,12 @@ import { t } from '../i18n';
 type PickerMode = 'Category' | 'Brand' | 'Size' | 'Condition' | null;
 type RouteT = RouteProp<RootStackParamList, 'EditListing'>;
 type SaveStage = 'idle' | 'uploading_media' | 'updating_listing' | 'completed' | 'failed_recoverable';
+type SectionFocus = 'price' | 'shipping' | 'format';
+
+interface EditListingRouteParams {
+  itemId: string;
+  focus?: SectionFocus;
+}
 
 export default function EditListingScreen() {
   const insets = useSafeAreaInsets();
@@ -102,7 +109,7 @@ export default function EditListingScreen() {
     soldCompsAction: { color: colors.brand } }), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { itemId } = route.params;
+  const { itemId, focus } = route.params as EditListingRouteParams;
   const { show: showToast } = useToast();
   const { currencyCode } = useCurrencyPref();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
@@ -168,6 +175,24 @@ export default function EditListingScreen() {
     return () => { unsub(); };
   }, []);
 
+  /* ── focus scroll (ManageListing deep-links: price / shipping / format) ── */
+  const scrollRef = useRef<KeyboardAwareScrollViewRef | null>(null);
+  const sectionYRef = useRef<Partial<Record<SectionFocus, number>>>({});
+  const trackSectionY = useCallback((key: SectionFocus) => (e: { nativeEvent: { layout: { y: number } } }) => {
+    sectionYRef.current[key] = e.nativeEvent.layout.y;
+  }, []);
+  useEffect(() => {
+    if (!focus || isLoading || loadError) return;
+    // Wait one frame so the restored form content has laid out.
+    const timer = setTimeout(() => {
+      const y = sectionYRef.current[focus];
+      if (y != null) {
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - Space.lg), animated: true });
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [focus, isLoading, loadError]);
+
   /* ── fetch listing on mount ── */
   useEffect(() => {
     let mounted = true;
@@ -200,13 +225,13 @@ export default function EditListingScreen() {
           setMediaItems(items);
         } else {
           setLoadError(true);
-          showToast('Could not load listing', 'error');
+          showToast(t('listing.edit.couldNotLoad'), 'error');
         }
       })
       .catch(() => {
         if (mounted) {
           setLoadError(true);
-          showToast('Could not load listing', 'error');
+          showToast(t('listing.edit.couldNotLoad'), 'error');
         }
       })
       .finally(() => { if (mounted) setIsLoading(false); });
@@ -262,7 +287,7 @@ export default function EditListingScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        setErrorMsg('Allow gallery access to upload media.');
+        setErrorMsg(t('listing.edit.allowGallery'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -297,7 +322,7 @@ export default function EditListingScreen() {
         }
       }
     } catch {
-      setErrorMsg('Could not open photo library. Try again.');
+      setErrorMsg(t('listing.edit.couldNotOpenLibrary'));
     }
   }, [appendPhotoAsset, mediaItems]);
 
@@ -305,7 +330,7 @@ export default function EditListingScreen() {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        setErrorMsg('Allow camera access to capture listing media.');
+        setErrorMsg(t('listing.edit.allowCamera'));
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -335,7 +360,7 @@ export default function EditListingScreen() {
         }
       }
     } catch {
-      setErrorMsg('Could not open camera. Try again.');
+      setErrorMsg(t('listing.edit.couldNotOpenCamera'));
     }
   }, [appendPhotoAsset, mediaItems]);
 
@@ -429,17 +454,17 @@ export default function EditListingScreen() {
     // brand/size requirements.
     for (const field of editCompleteness.missingRequired) {
       switch (field) {
-        case 'title': if (!trimmedTitle) return 'Add a title.'; break;
-        case 'category': if (!category) return 'Select a category.'; break;
-        case 'brand': if (!brand) return 'Select a brand.'; break;
-        case 'size': if (!size) return 'Select a size.'; break;
-        case 'condition': if (!condition) return 'Select a condition.'; break;
-        case 'images': if (mediaItems.length === 0) return 'Add at least one photo.'; break;
+        case 'title': if (!trimmedTitle) return t('listing.create.errorAddTitle'); break;
+        case 'category': if (!category) return t('listing.create.errorSelectCategoryField'); break;
+        case 'brand': if (!brand) return t('listing.create.errorSelectBrandField'); break;
+        case 'size': if (!size) return t('listing.create.errorSelectSizeField'); break;
+        case 'condition': if (!condition) return t('listing.create.errorSelectConditionField'); break;
+        case 'images': if (mediaItems.length === 0) return t('listing.create.errorAddPhoto'); break;
         case 'description':
-          if (!trimmedDesc || trimmedDesc.length < 10) return 'Add a description with at least 10 characters.';
+          if (!trimmedDesc || trimmedDesc.length < 10) return t('listing.create.errorAddDescription');
           break;
         case 'price':
-          if (!Number.isFinite(numericPrice) || numericPrice <= 0) return 'Enter a valid price greater than 0.';
+          if (!Number.isFinite(numericPrice) || numericPrice <= 0) return t('listing.create.errorValidPrice');
           break;
         default: break;
       }
@@ -457,7 +482,7 @@ export default function EditListingScreen() {
       return;
     }
     if (!isOwner) {
-      setErrorMsg('You do not have permission to edit this listing.');
+      setErrorMsg(t('listing.edit.noPermission'));
       setSaveStage('failed_recoverable');
       return;
     }
@@ -501,7 +526,7 @@ export default function EditListingScreen() {
         const failedItems = queueItems.filter((q) => q.state === 'failed');
         if (failedItems.length > 0) {
           setSaveStage('failed_recoverable');
-          setErrorMsg('Some media failed to upload. Retry before saving.');
+          setErrorMsg(t('listing.edit.mediaFailedRetry'));
           haptics.error();
           return;
         }
@@ -547,7 +572,7 @@ export default function EditListingScreen() {
 
       setSaveStage('completed');
       haptics.success();
-      showToast('Listing updated successfully.', 'success');
+      showToast(t('listing.edit.updated'), 'success');
       // Refresh feed + invalidate cached detail so the edit propagates
       // immediately when the user returns to the feed or profile.
       void refreshListings();
@@ -555,8 +580,8 @@ export default function EditListingScreen() {
       navigation.goBack();
     } catch (e) {
       setSaveStage('failed_recoverable');
-      setErrorMsg('Failed to update listing. Try again.');
-      showToast('Failed to update listing. Try again.', 'error');
+      setErrorMsg(t('listing.edit.updateFailed'));
+      showToast(t('listing.edit.updateFailed'), 'error');
     } finally {
       setIsSaving(false);
     }
@@ -587,10 +612,10 @@ export default function EditListingScreen() {
     if (hasChanges) {
       setConfirmSheet({
         visible: true,
-        title: 'Discard changes?',
-        message: 'You have unsaved changes that will be lost.',
-        confirmLabel: 'Discard',
-        cancelLabel: 'Keep editing',
+        title: t('listing.edit.discardTitle'),
+        message: t('listing.edit.discardMessage'),
+        confirmLabel: t('listing.edit.discard'),
+        cancelLabel: t('listing.edit.keepEditing'),
         variant: 'danger',
         onConfirm: () => navigation.goBack() });
     } else {
@@ -657,6 +682,9 @@ export default function EditListingScreen() {
   }, [soldComps, hasValidPrice, numericPrice]);
 
   /* ── listing quality ── */
+  // The listings API does not expose a sales-format field (auctions are
+  // separate rows joined by listing id), so the meter scores the editable
+  // fixed-price record fields — always listingMode 'sell_now'.
   const qualityResult = useMemo(() => calculateListingQuality({
     photos: mediaItems.map((m) => m.publicUrl || m.uri),
     title,
@@ -677,10 +705,10 @@ export default function EditListingScreen() {
     if (!listing) return null;
     const status = listing.status;
     switch (status) {
-      case 'active': return 'Active listing';
-      case 'draft': return 'Draft listing';
-      case 'sold': return 'Sold listing';
-      case 'paused': return 'Paused listing';
+      case 'active': return t('listing.edit.statusActive');
+      case 'draft': return t('listing.edit.statusDraft');
+      case 'sold': return t('listing.edit.statusSold');
+      case 'paused': return t('listing.edit.statusPaused');
       default: return null;
     }
   }, [listing]);
@@ -690,7 +718,7 @@ export default function EditListingScreen() {
   /* ── loading state ── */
   if (isLoading) {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Edit listing" onBack={() => navigation.goBack()} />}>
+      <FlagshipScreen header={<FlagshipHeader title={t('listing.create.editTitle')} onBack={() => navigation.goBack()} />}>
         <View style={styles.loadingContainer}>
           <SkeletonLoader width="100%" height={200} borderRadius={Radius.lg} />
           <View style={styles.skeletonFormGap}>
@@ -706,12 +734,12 @@ export default function EditListingScreen() {
 
   if (loadError) {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Edit listing" onBack={() => navigation.goBack()} />}>
+      <FlagshipScreen header={<FlagshipHeader title={t('listing.create.editTitle')} onBack={() => navigation.goBack()} />}>
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} aria-hidden={true} />
-          <Text style={[styles.errorTitle, themed.errorTitle]}>Could not load listing</Text>
+          <AppIcon name="cloud-offline-outline" size={IconSize.xl} color="textMuted" opticalCenter accessible={false} />
+          <Text style={[styles.errorTitle, themed.errorTitle]}>{t('listing.edit.couldNotLoad')}</Text>
           <Pressable
-            style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && { opacity: 0.85 }]}
             onPress={() => {
               setLoadError(false);
               setIsLoading(true);
@@ -747,9 +775,9 @@ export default function EditListingScreen() {
                 .finally(() => setIsLoading(false));
             }}
             accessibilityRole="button"
-            accessibilityLabel="Retry loading listing"
+            accessibilityLabel={t('listing.edit.retryLoad')}
           >
-            <Text style={[styles.retryBtnText, themed.retryBtnText]}>Retry</Text>
+            <Text style={[styles.retryBtnText, themed.retryBtnText]}>{t('listing.edit.retry')}</Text>
           </Pressable>
         </View>
       </FlagshipScreen>
@@ -760,12 +788,12 @@ export default function EditListingScreen() {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Edit listing"
+          title={t('listing.create.editTitle')}
           onBack={handleCancel}
           backIcon="close"
           rightAction={
             <Text style={[styles.navStatusText, themed.navStatusText, hasChanges && styles.navStatusUnsaved, hasChanges && themed.navStatusUnsaved]}>
-              {hasChanges ? 'Unsaved' : 'Saved'}
+              {hasChanges ? t('listing.edit.unsaved') : t('listing.create.saved')}
             </Text>
           }
         />
@@ -774,6 +802,7 @@ export default function EditListingScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
         <KeyboardAwareScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -793,8 +822,8 @@ export default function EditListingScreen() {
               onRetryItem={handleRetryItem}
               canRemoveItem={canRemoveItem}
               reorderEnabled={true}
-              lockedNote="Existing listing photos cannot be removed yet."
-              removeLabel="Remove"
+              lockedNote={t('listing.edit.lockedPhotos')}
+              removeLabel={t('listing.edit.remove')}
             />
           ) : (
             <ListingMediaStudio
@@ -808,22 +837,22 @@ export default function EditListingScreen() {
               onPickFromCamera={handlePickFromCamera}
               reorderEnabled={true}
               canRemoveItem={() => false}
-              lockedNote="You do not have permission to edit this listing."
+              lockedNote={t('listing.edit.noPermission')}
             />
           )}
 
           {/* ── 2a. PHOTO UPLOAD GUIDANCE ── */}
           <View style={[styles.photoGuideCard, themed.photoGuideCard]}>
             <Pressable
-              style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.85 }]}
               onPress={() => setPhotoGuideCollapsed((v) => !v)}
               accessibilityRole="button"
-              accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
+              accessibilityLabel={photoGuideCollapsed ? t('listing.edit.expandPhotoTips') : t('listing.edit.collapsePhotoTips')}
             >
-              <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
-              <Text style={[styles.photoGuideTitle, themed.photoGuideTitle]}>Photo tips</Text>
-              <Text style={[styles.photoGuideMin, themed.photoGuideMin]}>Min 3 photos recommended</Text>
-              <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="camera-outline" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
+              <Text style={[styles.photoGuideTitle, themed.photoGuideTitle]}>{t('listing.create.photoTips')}</Text>
+              <Text style={[styles.photoGuideMin, themed.photoGuideMin]}>{t('listing.create.photoTipsMin')}</Text>
+              <AppIcon name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             {!photoGuideCollapsed && (
               <Reanimated.View
@@ -832,16 +861,16 @@ export default function EditListingScreen() {
                 style={styles.photoGuideTips}
               >
                 <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="sunny-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Good lighting</Text>
+                  <AppIcon name="sunny-outline" size={12} color="textMuted" opticalCenter accessible={false} />
+                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipLighting')}</Text>
                 </View>
                 <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="camera-reverse-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Show all angles</Text>
+                  <AppIcon name="camera-reverse-outline" size={12} color="textMuted" opticalCenter accessible={false} />
+                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipAngles')}</Text>
                 </View>
                 <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="leaf-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Natural background</Text>
+                  <AppIcon name="leaf-outline" size={12} color="textMuted" opticalCenter accessible={false} />
+                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipBackground')}</Text>
                 </View>
               </Reanimated.View>
             )}
@@ -857,29 +886,52 @@ export default function EditListingScreen() {
 
           {isEditingRestricted && (
             <View style={styles.restrictedRow}>
-              <Ionicons name="lock-closed" size={16} color={colors.textMuted} aria-hidden={true} />
-              <Text style={[styles.restrictedText, themed.restrictedText]}>Editing is limited for this listing status.</Text>
+              <AppIcon name="lock-closed" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
+              <Text style={[styles.restrictedText, themed.restrictedText]}>{t('listing.edit.restricted')}</Text>
             </View>
           )}
 
           {/* ── 4. DETAILS ── */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Details</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.details')}</Text>
+
+            {/* ── Format (read-only) ──
+                The listing format is chosen when a listing is created and the
+                update API accepts no format field, so this row is deliberately
+                read-only. It gives the ManageListing "Format" deep-link an
+                honest destination instead of a dead control. */}
+            <View onLayout={trackSectionY('format')}>
+              <View style={styles.pickerRow}>
+                <View style={styles.pickerRowInner}>
+                  <View style={styles.fieldLabelRow}>
+                    <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.edit.format')}</Text>
+                  </View>
+                  <Text style={[styles.pickerValue, themed.pickerValue]}>
+                    {t('listing.edit.formatFixedPrice')}
+                  </Text>
+                </View>
+                <AppIcon name="lock-closed-outline" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
+              </View>
+              <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>
+                {t('listing.edit.formatHelper')}
+              </Text>
+            </View>
+            <View style={[styles.hairline, themed.hairline]} />
 
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Title</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.listingTitle')}</Text>
                 {title.trim().length > 0 ? (
-                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
               </View>
               <TextInput
                 style={[styles.fieldInput, themed.fieldInput, isEditingRestricted && styles.fieldInputDisabled]}
                 value={title}
                 onChangeText={(t) => { setTitle(t); setErrorMsg(''); }}
-                placeholder="e.g. Vintage Levi's 501 Denim Jacket"
+                placeholder={t('listing.edit.titlePlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 returnKeyType="next"
                 editable={!isEditingRestricted}
@@ -888,112 +940,112 @@ export default function EditListingScreen() {
             </View>
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setPickerMode('Category')}
               accessibilityRole="button"
-              accessibilityLabel="Select category"
+              accessibilityLabel={t('listing.edit.selectCategory')}
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Category</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.category')}</Text>
                   {category ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
                 <Text style={[styles.pickerValue, themed.pickerValue, !category && styles.pickerPlaceholder, !category && themed.pickerPlaceholder]}>
-                  {category || 'Select category'}
+                  {category || t('listing.edit.selectCategory')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setPickerMode('Brand')}
               accessibilityRole="button"
-              accessibilityLabel="Select brand"
+              accessibilityLabel={t('listing.edit.selectBrand')}
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Brand</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.brand')}</Text>
                   {brand ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                   ) : editCompleteness.policy.brandlessValid ? (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Optional</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
                 <Text style={[styles.pickerValue, themed.pickerValue, !brand && styles.pickerPlaceholder, !brand && themed.pickerPlaceholder]}>
-                  {brand || 'Select brand'}
+                  {brand || t('listing.edit.selectBrand')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setPickerMode('Size')}
               accessibilityRole="button"
-              accessibilityLabel="Select size"
+              accessibilityLabel={t('listing.edit.selectSize')}
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Size</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.size')}</Text>
                   {size ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                   ) : editCompleteness.policy.sizelessValid ? (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Optional</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
                 <Text style={[styles.pickerValue, themed.pickerValue, !size && styles.pickerPlaceholder, !size && themed.pickerPlaceholder]}>
-                  {size || 'Select size'}
+                  {size || t('listing.edit.selectSize')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setPickerMode('Condition')}
               accessibilityRole="button"
-              accessibilityLabel="Select condition"
+              accessibilityLabel={t('listing.edit.selectCondition')}
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Condition</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.condition')}</Text>
                   {condition ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
                 <Text style={[styles.pickerValue, themed.pickerValue, !condition && styles.pickerPlaceholder, !condition && themed.pickerPlaceholder]}>
-                  {condition || 'Select condition'}
+                  {condition || t('listing.edit.selectCondition')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
           </View>
 
           {/* ── 5. PRICING ── */}
-          <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Pricing</Text>
+          <View style={styles.sectionGroup} onLayout={trackSectionY('price')}>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.edit.pricing')}</Text>
 
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Price</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.price')}</Text>
                 {hasValidPrice ? (
-                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
               </View>
               <View style={styles.priceRow}>
@@ -1009,55 +1061,54 @@ export default function EditListingScreen() {
                 />
               </View>
               {hasDiscount && (
-                <Text style={[styles.discountPreview, themed.discountPreview]}>−{discountPercent}% off original</Text>
+                <Text style={[styles.discountPreview, themed.discountPreview]}>{t('listing.create.discountOffOriginal', { percent: discountPercent })}</Text>
               )}
               {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null ? (
                 <View style={styles.priceSuggestionBlock}>
                   <View style={styles.soldCompsHint}>
-                    <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                    <AppIcon name="cash-outline" size={12} color="textMuted" opticalCenter accessible={false} />
                     <Text style={[styles.soldCompsText, themed.soldCompsText]}>
-                      Similar items sold for {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
-                      {' '}({soldComps.sampleSize} sold)
+                      {t('listing.create.soldCompsRange', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize })}
                     </Text>
                   </View>
                   {soldComps.medianPrice != null && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="bulb-outline" size={12} color={colors.brand} aria-hidden={true} />
+                      <AppIcon name="bulb-outline" size={12} color="brand" opticalCenter accessible={false} />
                       <Text style={[styles.soldCompsText, themed.priceSuggestion]}>
-                        Suggested price: {currencySymbol}{soldComps.medianPrice.toFixed(0)}
+                        {t('listing.create.suggestedPrice', { amount: `${currencySymbol}${soldComps.medianPrice.toFixed(0)}` })}
                       </Text>
                     </View>
                   )}
                   {priceVsMarket === 'above' && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="trending-up-outline" size={12} color={colors.warning} aria-hidden={true} />
+                      <AppIcon name="trending-up-outline" size={12} color="warning" opticalCenter accessible={false} />
                       <Text style={[styles.soldCompsText, themed.priceMarketHigh]}>
-                        Priced above recent sold range
+                        {t('listing.create.pricedAboveRange')}
                       </Text>
                     </View>
                   )}
                   {priceVsMarket === 'below' && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="trending-down-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                      <AppIcon name="trending-down-outline" size={12} color="textMuted" opticalCenter accessible={false} />
                       <Text style={[styles.soldCompsText, themed.priceMarketLow]}>
-                        Priced below recent sold range
+                        {t('listing.create.pricedBelowRange')}
                       </Text>
                     </View>
                   )}
                   {priceVsMarket === 'in_range' && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                      <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                       <Text style={[styles.soldCompsText, themed.priceMarketGood]}>
-                        Within recent sold range
+                        {t('listing.create.pricedInRange')}
                       </Text>
                     </View>
                   )}
                 </View>
               ) : (
                 <View style={styles.soldCompsHint}>
-                  <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                  <AppIcon name="information-circle-outline" size={12} color="textMuted" opticalCenter accessible={false} />
                   <Text style={[styles.soldCompsText, themed.priceNoCompsHint]}>
-                    Price competitively for faster sales
+                    {t('listing.create.priceCompetitively')}
                   </Text>
                 </View>
               )}
@@ -1065,7 +1116,7 @@ export default function EditListingScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, themed.fieldLabel]}>Original price</Text>
+              <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.originalPrice')}</Text>
               <View style={styles.priceRow}>
                 <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                 <TextInput
@@ -1083,21 +1134,21 @@ export default function EditListingScreen() {
 
           {/* ── 6. DESCRIPTION ── */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Description</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.description')}</Text>
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Description</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.description')}</Text>
                 {description.trim().length >= 10 ? (
-                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
               </View>
               <TextInput
                 style={[styles.descInput, themed.descInput, isEditingRestricted && styles.fieldInputDisabled]}
                 value={description}
                 onChangeText={(t) => { setDescription(t); setErrorMsg(''); }}
-                placeholder="Describe the item, condition, and any notable details…"
+                placeholder={t('listing.edit.descriptionPlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={4}
@@ -1105,51 +1156,51 @@ export default function EditListingScreen() {
                 editable={!isEditingRestricted}
               />
               <Text style={[styles.charCount, description.trim().length < 10 ? themed.charCountWarn : themed.charCount]}>
-                {description.trim().length} characters{description.trim().length < 10 ? ' · min 10' : description.length < 60 ? ' · add more detail' : ''}
+                {description.trim().length < 10 ? t('listing.create.charCountMin', { count: description.trim().length }) : description.length < 60 ? t('listing.create.charCountMore', { count: description.length }) : t('listing.create.charCount', { count: description.length })}
               </Text>
             </View>
           </View>
 
           {/* ── 7. SHIPPING ── */}
-          <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Shipping</Text>
+          <View style={styles.sectionGroup} onLayout={trackSectionY('shipping')}>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.edit.shipping')}</Text>
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setShippingMethod(shippingMethod === 'standard' ? 'express' : 'standard')}
               accessibilityRole="button"
-              accessibilityLabel="Toggle shipping method"
+              accessibilityLabel={t('listing.edit.toggleShippingMethod')}
             >
               <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Shipping method</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.edit.shippingMethod')}</Text>
                 <Text style={[styles.pickerValue, themed.pickerValue, !shippingMethod && styles.pickerPlaceholder, !shippingMethod && themed.pickerPlaceholder]}>
-                  {shippingMethod === 'standard' ? 'Standard' : shippingMethod === 'express' ? 'Express' : 'Select method'}
+                  {shippingMethod === 'standard' ? t('listing.edit.shippingStandard') : shippingMethod === 'express' ? t('listing.edit.shippingExpress') : t('listing.edit.selectMethod')}
                 </Text>
               </View>
-              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="swap-horizontal" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setShippingPayer(shippingPayer === 'buyer' ? 'seller' : 'buyer')}
               accessibilityRole="button"
-              accessibilityLabel="Toggle who pays shipping"
+              accessibilityLabel={t('listing.edit.toggleShippingPayer')}
             >
               <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Who pays</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.edit.whoPays')}</Text>
                 <Text style={[styles.pickerValue, themed.pickerValue, !shippingPayer && styles.pickerPlaceholder, !shippingPayer && themed.pickerPlaceholder]}>
-                  {shippingPayer === 'buyer' ? 'Buyer pays' : shippingPayer === 'seller' ? 'I pay' : 'Select payer'}
+                  {shippingPayer === 'buyer' ? t('listing.edit.payerBuyer') : shippingPayer === 'seller' ? t('listing.edit.payerSeller') : t('listing.edit.selectPayer')}
                 </Text>
               </View>
-              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="swap-horizontal" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
           </View>
 
           {/* ── 8. SAVE/UPDATE FEEDBACK ── */}
           {errorMsg && saveStage !== 'idle' && (
             <View style={styles.inlineErrorRow}>
-              <Ionicons name="alert-circle" size={16} color={colors.danger} aria-hidden={true} />
+              <AppIcon name="alert-circle" size={16} color="danger" opticalCenter accessible={false} />
               <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
@@ -1158,11 +1209,12 @@ export default function EditListingScreen() {
               Per Phase 5 WP7: truthful completeness based on the category
               policy. Flat inline — no card chrome (§4 surface budget). */}
           <View style={styles.completenessRow}>
-            <Ionicons
+            <AppIcon
               name={editCompleteness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
-              size={16}
-              color={editCompleteness.canActivate ? colors.success : colors.warning}
-              aria-hidden={true}
+              size={IconSize.sm}
+              color={editCompleteness.canActivate ? 'success' : 'warning'}
+              opticalCenter
+              accessible={false}
             />
             <View style={styles.completenessTextWrap}>
               <Text style={[styles.completenessLabel, { color: editCompleteness.canActivate ? colors.success : colors.textSecondary }]}>
@@ -1184,13 +1236,14 @@ export default function EditListingScreen() {
         <View style={[styles.qualityBar, themed.qualityBar]}>
           <View style={styles.qualityBarRow}>
             <View style={styles.qualityBarLeft}>
-              <Ionicons
+              <AppIcon
                 name={qualityResult.tier === 'excellent' ? 'star' : qualityResult.tier === 'good' ? 'star-half-outline' : 'ellipse-outline'}
-                size={16}
-                color={colors.textSecondary}
-                aria-hidden={true}
+                size={IconSize.sm}
+                color="textSecondary"
+                opticalCenter
+                accessible={false}
               />
-              <Text style={[styles.qualityBarLabel, themed.qualityBarLabel]}>Listing quality</Text>
+              <Text style={[styles.qualityBarLabel, themed.qualityBarLabel]}>{t('listing.edit.listingQuality')}</Text>
             </View>
             <View style={styles.qualityBarRight}>
               <Text style={[styles.qualityBarScore, themed.qualityBarScore]}>{qualityResult.score}%</Text>
@@ -1198,12 +1251,12 @@ export default function EditListingScreen() {
               <Pressable
                 hitSlop={8}
                 onPress={() => setQualityTipsExpanded((v) => !v)}
-                style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.85 }]}
                 accessibilityRole="button"
-                accessibilityLabel={qualityTipsExpanded ? 'Hide tips to improve' : 'Show tips to improve'}
+                accessibilityLabel={qualityTipsExpanded ? t('listing.edit.hideTips') : t('listing.edit.showTips')}
               >
-                <Text style={[styles.qualityTipsLabel, themed.qualityTipsLabel]}>Tips to improve</Text>
-                <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} aria-hidden={true} />
+                <Text style={[styles.qualityTipsLabel, themed.qualityTipsLabel]}>{t('listing.edit.tipsToImprove')}</Text>
+                <AppIcon name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color="brand" opticalCenter accessible={false} />
               </Pressable>
             </View>
           </View>
@@ -1218,7 +1271,7 @@ export default function EditListingScreen() {
             >
               {qualityResult.missingItems.slice(0, 6).map((item) => (
                 <View key={item.key} style={styles.qualityTipChip}>
-                  <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={12} color={colors.textMuted} aria-hidden={true} />
+                  <AppIcon name={item.icon} size={12} color="textMuted" opticalCenter accessible={false} />
                   <Text style={[styles.qualityTipsText, themed.qualityTipsText]}>{item.label}</Text>
                 </View>
               ))}
@@ -1257,7 +1310,7 @@ export default function EditListingScreen() {
       <BottomSheetPicker
         visible={pickerMode !== null}
         onClose={() => setPickerMode(null)}
-        title={pickerMode ?? 'Select'}
+        title={pickerMode ?? t('listing.edit.select')}
         options={getPickerOptions()}
         selectedValue={getPickerSelected()}
         onSelect={handlePickerSelect}

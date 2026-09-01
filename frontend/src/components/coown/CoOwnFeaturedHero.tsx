@@ -57,7 +57,7 @@ export function CoOwnFeaturedHero({
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={300} />
           ) : (
             <View style={[styles.image, styles.imageFallback]}>
-              <Ionicons name="cube-outline" size={40} color={colors.textMuted} />
+              <Ionicons name="image-outline" size={40} color={colors.textMuted} />
             </View>
           )}
           <View style={styles.imageOverlay}>

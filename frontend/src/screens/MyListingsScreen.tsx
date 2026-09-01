@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, RefreshControl, Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -21,6 +20,8 @@ import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { t } from '../i18n';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize, type SemanticIconName, type IoniconsGlyphName } from '../theme/iconTokens';
 
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -32,15 +33,15 @@ type FilterTab = 'all' | 'active' | 'draft' | 'sold' | 'paused';
 interface TabConfig {
   key: FilterTab;
   label: string;
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: SemanticIconName | IoniconsGlyphName;
 }
 
 const TABS: TabConfig[] = [
-  { key: 'all', label: 'All', icon: 'list-outline' },
-  { key: 'active', label: 'Active', icon: 'pricetag-outline' },
-  { key: 'draft', label: 'Draft', icon: 'document-text-outline' },
-  { key: 'sold', label: 'Sold', icon: 'checkmark-done' },
-  { key: 'paused', label: 'Paused', icon: 'pause-outline' },
+  { key: 'all', label: t('myListings.tabAll'), icon: 'list' },
+  { key: 'active', label: t('myListings.tabActive'), icon: 'bag-handle-outline' },
+  { key: 'draft', label: t('myListings.tabDraft'), icon: 'document' },
+  { key: 'sold', label: t('myListings.tabSold'), icon: 'verified' },
+  { key: 'paused', label: t('myListings.tabPaused'), icon: 'pause' },
 ];
 
 // ── Listing row with views count and improved hierarchy ──
@@ -73,7 +74,7 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
         <CachedImage uri={item.images[0]} style={styles.rowImage} containerStyle={styles.rowImageWrap} contentFit="cover" />
       ) : (
         <View style={[styles.rowImageWrap, styles.rowImageFallback]}>
-          <Ionicons name="bag-handle-outline" size={20} color={colors.textMuted} />
+          <AppIcon name="cart" size={IconSize.md} color="textMuted" opticalCenter accessible={false} />
         </View>
       )}
       <View style={styles.rowBody}>
@@ -91,13 +92,13 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
           <View style={styles.engagementRow}>
             {views > 0 && (
               <View style={styles.engagementItem}>
-                <Ionicons name="eye-outline" size={12} color={colors.textMuted} />
+                <AppIcon name="eye" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                 <Text style={styles.engagementText}>{views > 999 ? `${(views / 1000).toFixed(1)}k` : views}</Text>
               </View>
             )}
             {likes > 0 && (
               <View style={styles.engagementItem}>
-                <Ionicons name="heart-outline" size={12} color={colors.textMuted} />
+                <AppIcon name="heart" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                 <Text style={styles.engagementText}>{likes > 999 ? `${(likes / 1000).toFixed(1)}k` : likes}</Text>
               </View>
             )}
@@ -106,12 +107,12 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
         {/* Missing details warning — only for active listings with incomplete data */}
         {item.status === 'active' && hasMissingDetails && (
           <View style={styles.missingDetailsRow}>
-            <Ionicons name="alert-circle-outline" size={11} color={colors.warning} />
-            <Text style={styles.missingDetailsText}>Missing details</Text>
+            <AppIcon name="warning" size={IconSize.micro} color="warning" opticalCenter accessible={false} />
+            <Text style={styles.missingDetailsText}>{t('myListings.missingDetails')}</Text>
           </View>
         )}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
     </AnimatedPressable>
   );
 }
@@ -120,14 +121,14 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
 // Replaces the 2x2 StatCard grid (generic dashboard silhouette) with an
 // inline list that passes the thumbnail test: the eye reads a labelled
 // ledger, not four identical grey tiles.
-function FlagshipMetricLine({ icon, label, value, tone }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
+function FlagshipMetricLine({ icon, label, value, tone }: { icon: SemanticIconName | IoniconsGlyphName; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const valueColor = tone === 'success' ? colors.success : tone === 'brand' ? colors.brand : colors.textPrimary;
   return (
     <View style={styles.metricRow}>
       <View style={styles.metricLabel}>
-        <Ionicons name={icon} size={16} color={colors.textMuted} />
+        <AppIcon name={icon} size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         <Text style={styles.metricLabelText} numberOfLines={1}>{label}</Text>
       </View>
       <Text style={[styles.metricValue, { color: valueColor }]} numberOfLines={1}>{value}</Text>
@@ -152,11 +153,11 @@ export default function MyListingsScreen() {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   const headerTitle =
-    filterType === 'coown' ? 'My Co-Own Listings' : 'My Listings';
+    filterType === 'coown' ? t('myListings.titleCoOwn') : t('myListings.title');
   const emptySubtitle =
     filterType === 'coown'
-      ? 'Co-own offerings you create will appear here.'
-      : 'Items you list for sale will appear here.';
+      ? t('myListings.emptyCoOwn')
+      : t('myListings.empty');
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -164,7 +165,7 @@ export default function MyListingsScreen() {
       const res = await fetchUserListingsFromApi(currentUser.id, { limit: 100 });
       setListings(res.items);
     } catch (e) {
-      show('Could not load listings', 'error');
+      show(t('myListings.couldNotLoad'), 'error');
     }
   }, [currentUser?.id, show]);
 
@@ -246,25 +247,25 @@ export default function MyListingsScreen() {
         {/* Analytics summary — flat metric ledger, no card chrome */}
         <View style={styles.metricList}>
           <FlagshipMetricLine
-            icon="pricetag-outline"
-            label="Active"
+            icon="bag-handle-outline"
+            label={t('myListings.statActive')}
             value={String(analytics.activeCount)}
             tone="success"
           />
           <FlagshipMetricLine
-            icon="checkmark-done"
-            label="Sold"
+            icon="verified"
+            label={t('myListings.statSold')}
             value={String(analytics.soldCount)}
             tone="brand"
           />
           <FlagshipMetricLine
-            icon="cash-outline"
-            label="Avg price"
+            icon="wallet"
+            label={t('myListings.statAvgPrice')}
             value={formatFromFiat(analytics.avgActivePrice, currencyCode)}
           />
           <FlagshipMetricLine
-            icon="trending-up-outline"
-            label="Active value"
+            icon="trending"
+            label={t('myListings.statActiveValue')}
             value={formatFromFiat(analytics.totalActiveValue, currencyCode)}
           />
         </View>
@@ -283,38 +284,38 @@ export default function MyListingsScreen() {
             accessibilityLabel="Create new listing"
             accessibilityRole="button"
           >
-            <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
-            <Text style={styles.quickActionText}>New listing</Text>
+            <AppIcon name="plus" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+            <Text style={styles.quickActionText}>{t('myListings.newListing')}</Text>
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.quickActionBtn}
             onPress={() => { haptics.tap(); navigation.navigate('SellerAnalytics'); }}
             activeOpacity={0.85}
-            accessibilityLabel="View seller analytics"
+            accessibilityLabel={t('myListings.analytics')}
             accessibilityRole="button"
           >
-            <Ionicons name="bar-chart-outline" size={18} color={colors.brand} />
-            <Text style={styles.quickActionText}>Analytics</Text>
+            <AppIcon name="analytics" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+            <Text style={styles.quickActionText}>{t('myListings.analytics')}</Text>
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.quickActionBtn}
             onPress={() => { haptics.tap(); navigation.navigate('SellerAuctionCentre'); }}
             activeOpacity={0.85}
-            accessibilityLabel="Manage auctions"
+            accessibilityLabel={t('myListings.auctions')}
             accessibilityRole="button"
           >
-            <Ionicons name="trophy-outline" size={18} color={colors.brand} />
-            <Text style={styles.quickActionText}>Auctions</Text>
+            <AppIcon name="hammer" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+            <Text style={styles.quickActionText}>{t('myListings.auctions')}</Text>
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.quickActionBtn}
             onPress={() => { haptics.tap(); navigation.navigate('Wallet'); }}
             activeOpacity={0.85}
-            accessibilityLabel="View payout account"
+            accessibilityLabel={t('myListings.payouts')}
             accessibilityRole="button"
           >
-            <Ionicons name="wallet-outline" size={18} color={colors.brand} />
-            <Text style={styles.quickActionText}>Payouts</Text>
+            <AppIcon name="wallet" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+            <Text style={styles.quickActionText}>{t('myListings.payouts')}</Text>
           </AnimatedPressable>
         </View>
       </View>
@@ -337,7 +338,7 @@ export default function MyListingsScreen() {
           return (
             <Pressable
               key={tab.key}
-              style={styles.filterTab}
+              style={({ pressed }) => [styles.filterTab, pressed && { opacity: 0.85 }]}
               onPress={() => { haptics.tap(); setActiveTab(tab.key); }}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
@@ -372,18 +373,19 @@ export default function MyListingsScreen() {
     const tabLabel = TABS.find(t => t.key === activeTab)?.label ?? '';
     return (
       <View style={styles.filteredEmpty}>
-        <Ionicons name="filter-outline" size={32} color={colors.textMuted} />
+        <AppIcon name="filter" size={IconSize.hero} color="textMuted" opticalCenter accessible={false} />
         <Text style={[styles.filteredEmptyTitle, { color: colors.textSecondary }]}>
-          No {tabLabel.toLowerCase()} listings
+          {t('myListings.noTabListings', { tab: tabLabel.toLowerCase() })}
         </Text>
         <Pressable
           onPress={() => { haptics.tap(); setActiveTab('all'); }}
           hitSlop={8}
+          style={({ pressed }) => pressed && { opacity: 0.85 }}
           accessibilityRole="button"
-          accessibilityLabel="Show all listings"
+          accessibilityLabel={t('myListings.showAll')}
         >
           <Text style={[styles.filteredEmptyAction, { color: colors.brand }]}>
-            Show all
+            {t('myListings.showAll')}
           </Text>
         </Pressable>
       </View>
@@ -400,10 +402,10 @@ export default function MyListingsScreen() {
       {listings.length === 0 ? (
         <View style={styles.body}>
           <EmptyState
-            icon="pricetags-outline"
-            title="No listings yet"
+            icon="bag-handle-outline"
+            title={t('myListings.noListings')}
             subtitle={emptySubtitle}
-            ctaLabel="Start selling"
+            ctaLabel={t('myListings.startSelling')}
             onCtaPress={() => navigation.navigate('Sell')}
           />
         </View>
@@ -420,8 +422,8 @@ export default function MyListingsScreen() {
               {/* Listing count for current filter */}
               <View style={styles.listingsHeaderRow}>
                 <Text style={styles.listingsHeaderText}>
-                  {filteredListings.length} {filteredListings.length === 1 ? 'listing' : 'listings'}
-                  {activeTab !== 'all' ? ` · ${TABS.find(t => t.key === activeTab)?.label}` : ''}
+                  {t('myListings.listingCount', { count: filteredListings.length, word: filteredListings.length === 1 ? t('myListings.listingWord') : t('myListings.listingWordPlural') })}
+                  {activeTab !== 'all' ? ` · ${TABS.find(t2 => t2.key === activeTab)?.label}` : ''}
                 </Text>
               </View>
             </View>

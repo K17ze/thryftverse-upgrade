@@ -256,12 +256,12 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             />
           ) : (
             <View style={[styles.cardPlaceholder, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="star" size={28} color={colors.textMuted} />
+              <Ionicons name="bookmark-outline" size={28} color={colors.textMuted} />
             </View>
           )}
           <View style={styles.cardOverlay}>
             <View style={[styles.statusPill, styles.statusHighlight]}>
-              <Ionicons name="star" size={10} color={colors.scrimTextPrimary} />
+              <Ionicons name="bookmark-outline" size={10} color={colors.scrimTextPrimary} />
               <Text style={styles.statusText}>Highlight</Text>
             </View>
             {frameCount > 1 && (

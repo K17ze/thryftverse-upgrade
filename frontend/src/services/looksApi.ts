@@ -204,7 +204,11 @@ export interface LookCommentApiItem {
   authorId: string;
   parentId: string | null;
   author: LookCreator;
+  /** Empty for tombstones — deleted comments with live replies keep their
+   *  thread but never serve their body. */
   body: string;
+  /** True when this row is a tombstone (deleted, kept for its replies). */
+  deleted: boolean;
   likeCount: number;
   likedByViewer: boolean;
   replyCount: number;

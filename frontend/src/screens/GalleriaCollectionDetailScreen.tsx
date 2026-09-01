@@ -456,7 +456,7 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
           ) : items.length === 0 ? (
             <EmptyState
               density="compact"
-              icon="cube-outline"
+              icon="albums-outline"
               title="No pieces in this collection yet"
               subtitle="The curator hasn't added any items to this collection."
               ctaLabel="Refresh"

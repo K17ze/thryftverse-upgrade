@@ -28,7 +28,7 @@ import {
 
 const TYPE_ICON: Record<AutocompleteSuggestionType, keyof typeof Ionicons.glyphMap> = {
   category: 'grid-outline',
-  brand: 'pricetag-outline',
+  brand: 'bag-handle-outline',
   style: 'shirt-outline',
   size: 'resize-outline',
   color: 'color-palette-outline',

@@ -462,7 +462,7 @@ export default function VerificationResponseScreen() {
         {/* Liability warning */}
         <View>
           <View style={[styles.warningBox, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
-            <Ionicons name="shield-outline" size={18} color={colors.warning} />
+            <Ionicons name="lock-closed-outline" size={18} color={colors.warning} />
             <Text style={[styles.warningText, { color: colors.textSecondary }]}>
               Your personal liability guarantee is active. Failure to provide satisfactory evidence may trigger recourse proceedings.
             </Text>

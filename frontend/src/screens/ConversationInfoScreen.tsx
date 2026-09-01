@@ -241,7 +241,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
             <ChatInfoRow icon="link-outline" label="Links shared" detail={String(linkCount)} />
           ) : null}
           {offerCount > 0 ? (
-            <ChatInfoRow icon="pricetag-outline" label="Offers exchanged" detail={String(offerCount)} />
+            <ChatInfoRow icon="cash-outline" label="Offers exchanged" detail={String(offerCount)} />
           ) : null}
         </ChatInfoSection>
 

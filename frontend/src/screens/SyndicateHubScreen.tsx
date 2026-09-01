@@ -30,7 +30,6 @@ import {
   CoOwnInstrumentCard,
   CoOwnMarketHighlightsCarousel,
   CoOwnOfflineBanner,
-  CoOwnReconciliationBanner,
   CoOwnStateCanvas,
   COOWN_POSITION_CARD_WIDTH,
   type CoOwnAssetStatus,
@@ -891,7 +890,6 @@ export default function CoOwnHubScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
-      <CoOwnReconciliationBanner isActive={false} />
       <FlashList
         data={hubRows}
         renderItem={renderRow}

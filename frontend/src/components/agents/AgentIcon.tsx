@@ -7,7 +7,7 @@ function resolveAgentIcon(category?: string, name?: string): AgentIconName {
   const identity = `${category || ''} ${name || ''}`.toLowerCase();
 
   if (identity.includes('guard') || identity.includes('moderation')) {
-    return 'shield-checkmark-outline';
+    return 'checkmark-circle-outline';
   }
   if (identity.includes('trade') || identity.includes('market')) {
     return 'trending-up-outline';
@@ -16,7 +16,7 @@ function resolveAgentIcon(category?: string, name?: string): AgentIconName {
     return 'newspaper-outline';
   }
   if (identity.includes('deal') || identity.includes('commerce')) {
-    return 'pricetags-outline';
+    return 'bag-handle-outline';
   }
   if (identity.includes('safety') || identity.includes('scam')) {
     return 'lock-closed-outline';

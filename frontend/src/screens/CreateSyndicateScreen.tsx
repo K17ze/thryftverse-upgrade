@@ -778,7 +778,7 @@ export default function CreateCoOwnScreen() {
                   Your obligations
                 </Text>
                 {([
-                  { icon: 'cube-outline', text: 'Safeguard the physical asset in the condition stated' },
+                  { icon: 'lock-closed-outline', text: 'Safeguard the physical asset in the condition stated' },
                   { icon: 'search-outline', text: 'Prove authenticity when requested by a unit holder' },
                   { icon: 'hand-right-outline', text: 'Produce the physical item on demand within 14 days' },
                   { icon: 'cash-outline', text: 'Repay the total traded value if you fail any obligation' },

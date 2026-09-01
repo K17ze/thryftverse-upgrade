@@ -12,7 +12,6 @@ import {
   Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
@@ -21,6 +20,8 @@ import { Space, Radius, TypeStyles, Stroke, Control, LetterSpacing } from '../th
 import { TypographyV2 } from '../theme/typography.v2';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useAIListingSuggestion } from '../hooks/useAIListingSuggestion';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -267,6 +268,10 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     markDirty('brand');
     setBrand(v);
   }, [markDirty]);
+  const handlePriceChange = useCallback((v: string) => {
+    markDirty('price');
+    setPrice(v);
+  }, [markDirty]);
 
   // -- Tags ----------------------------------------------------------------
   const handleAddTag = useCallback(() => {
@@ -460,6 +465,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
   const categorySuggestion = shouldShowSuggestion('category');
   const brandSuggestion = shouldShowSuggestion('brand');
   const tagsSuggestion = shouldShowSuggestion('tags');
+  const priceSuggestion = shouldShowSuggestion('price');
   const conditionField = getField('condition');
   const priceGuidance = suggestion?.priceGuidance;
 
@@ -602,7 +608,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                     >
                       {category || t('placeholders.selectCategory')}
                     </Text>
-                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} aria-hidden={true} />
+                    <AppIcon name="chevronDown" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                   </Pressable>
                   {categorySuggestion && (
                     <SuggestionRow
@@ -658,7 +664,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                     >
                       {condition || t('placeholders.selectCondition')}
                     </Text>
-                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} aria-hidden={true} />
+                    <AppIcon name="chevronDown" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                   </Pressable>
                   {/* Condition always requires seller attestation — no suggestion */}
                   {conditionField?.abstained && !condition && (
@@ -673,30 +679,29 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                   <TextInput
                     style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
                     value={price}
-                    onChangeText={(v) => {
-                      markDirty('price');
-                      setPrice(sanitizeDecimalInput(v));
-                    }}
-                    placeholder={t('placeholders.price')}
+                    onChangeText={handlePriceChange}
+                    placeholder="0.00"
                     placeholderTextColor={colors.textMuted}
                     keyboardType="decimal-pad"
                   />
+                  {priceSuggestion && (
+                    <SuggestionRow
+                      suggestion={priceSuggestion}
+                      onAccept={() => handleAcceptSuggestion('price', priceSuggestion.candidate)}
+                      onDismiss={() => handleDismissSuggestion('price')}
+                      colors={colors}
+                      styles={styles}
+                      compact
+                    />
+                  )}
                 </View>
               </View>
 
-              {/* Price guidance — communicates uncertainty as a range */}
-              {priceGuidance && !dirtyFieldsRef.current.has('price') && (
-                <Text style={[styles.priceRangeHint, { color: colors.textMuted }]}>
-                  {priceGuidance.basis}: {currencySymbol}{priceGuidance.min}–{currencySymbol}{priceGuidance.max}
-                </Text>
-              )}
-
-              {/* Smart Sell — compact row */}
-              <View style={styles.smartSellWrap}>
+              {/* Dynamic pricing intelligence card */}
+              <View style={{ marginTop: Space.sm }}>
                 <SmartSellCard
-                  listingId={`draft_${currentUser?.id ?? 'anon'}`}
-                  policy={smartSellPolicy}
-                  onPolicyChange={setSmartSellPolicy}
+                  category={category}
+                  condition={condition}
                   listingPrice={Number(sanitizeDecimalInput(price)) || undefined}
                 />
               </View>
@@ -715,7 +720,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                       accessibilityLabel={t('accessibility.removeTag', { tag })}
                       accessibilityHint={t('accessibility.removeTagHint', { tag })}
                     >
-                      <Ionicons name="close" size={14} color={colors.textMuted} aria-hidden={true} />
+                      <AppIcon name="close" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
                     </Pressable>
                   </View>
                 ))}
@@ -738,7 +743,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                       accessibilityLabel={t('accessibility.addTag')}
                       accessibilityHint={t('accessibility.addTagHint')}
                     >
-                      <Ionicons name="add-circle" size={18} color={colors.brand} aria-hidden={true} />
+                      <AppIcon name="plus" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                     </Pressable>
                   )}
                 </View>
@@ -820,7 +825,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             size="lg"
             accessibilityLabel={t('accessibility.publishListing')}
             accessibilityHint={t('accessibility.publishListingHint')}
-            icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} aria-hidden={true} />}
+            icon={<AppIcon name="verified" focused size={IconSize.sm} color={colors.textInverse} opticalCenter accessible={false} />}
           />
         </View>
       )}
@@ -903,7 +908,7 @@ function SuggestionRow({ suggestion, onAccept, onDismiss, colors, styles, compac
           accessibilityLabel={t('accessibility.dismissSuggestion')}
           accessibilityHint={t('accessibility.dismissSuggestionHint')}
         >
-          <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
+          <AppIcon name="close" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </Pressable>
       </View>
     </View>
@@ -977,7 +982,7 @@ function PhotoCaptureSection({
                 accessibilityLabel={t('accessibility.removePhoto')}
                 accessibilityHint={t('accessibility.removePhotoHint')}
               >
-                <Ionicons name="close-circle" size={22} color={colors.textInverse} aria-hidden={true} />
+                <AppIcon name="close" size={IconSize.md} color={colors.textInverse} opticalCenter accessible={false} />
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.photoEnhanceBtn, { backgroundColor: colors.overlay }, pressed && { opacity: 0.6 }]}
@@ -986,7 +991,7 @@ function PhotoCaptureSection({
                 accessibilityLabel={t('accessibility.enhancePhoto')}
                 accessibilityHint={t('accessibility.enhancePhotoHint')}
               >
-                <Ionicons name="color-filter-outline" size={12} color={colors.brand} aria-hidden={true} />
+                <AppIcon name="palette" size={IconSize.micro} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>{t('photo.enhance')}</Text>
               </Pressable>
             </View>
@@ -1002,7 +1007,7 @@ function PhotoCaptureSection({
           accessibilityLabel={t('accessibility.takePhotoWithCamera')}
           accessibilityHint={t('accessibility.takePhotoWithCameraHint')}
         >
-          <Ionicons name="camera-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
+          <AppIcon name="camera" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
           <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>{t('photo.camera')}</Text>
         </Pressable>
         <Pressable
@@ -1012,7 +1017,7 @@ function PhotoCaptureSection({
           accessibilityLabel={t('accessibility.pickPhotosFromGallery')}
           accessibilityHint={t('accessibility.pickPhotosFromGalleryHint')}
         >
-          <Ionicons name="images-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
+          <AppIcon name="image" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
           <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>{t('photo.library')}</Text>
         </Pressable>
       </View>
@@ -1104,7 +1109,7 @@ function EmptyState({
   return (
     <View style={styles.emptyState}>
       <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="camera-outline" size={28} color={colors.textMuted} aria-hidden={true} />
+        <AppIcon name="camera" size={IconSize.xl} color="textMuted" opticalCenter accessible={false} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
         {t('empty.title')}
@@ -1133,7 +1138,7 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
   return (
     <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
       <View style={styles.errorHeader}>
-        <Ionicons name="alert-circle-outline" size={18} color={colors.danger} aria-hidden={true} />
+        <AppIcon name="warning" size={IconSize.sm} color="danger" opticalCenter accessible={false} />
         <Text style={[styles.errorText, { color: colors.danger }]} numberOfLines={3}>
           {message}
         </Text>
@@ -1145,7 +1150,7 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
           accessibilityLabel={t('accessibility.dismissError')}
           accessibilityHint={t('accessibility.dismissErrorHint')}
         >
-          <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
+          <AppIcon name="close" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </Pressable>
       </View>
       <Pressable
@@ -1216,7 +1221,7 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
                 >
                   {opt}
                 </Text>
-                {selected && <Ionicons name="checkmark" size={18} color={colors.brand} aria-hidden={true} />}
+                {selected && <AppIcon name="verified" focused size={IconSize.sm} color="brand" opticalCenter accessible={false} />}
               </Pressable>
             );
           })}

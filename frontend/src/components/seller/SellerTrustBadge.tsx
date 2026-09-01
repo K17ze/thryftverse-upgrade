@@ -15,7 +15,7 @@ interface TrustBadgeConfig {
 }
 
 const TRUST_BADGE_CONFIG: Record<TrustBadgeType, TrustBadgeConfig> = {
-  verified: { icon: 'shield-checkmark', label: 'Verified' },
+  verified: { icon: 'checkmark-circle', label: 'Verified' },
   fastShipper: { icon: 'flash', label: 'Fast shipping' },
   responsive: { icon: 'chatbubble', label: 'Responsive' },
   topRated: { icon: 'star', label: 'Top rated' },

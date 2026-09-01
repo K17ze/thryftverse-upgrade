@@ -27,7 +27,7 @@ import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import {
   Space,
   Radius,
-  TypeStyles,
+  FontFamily,
   AspectRatio,
   Control,
   Stroke } from '../../theme/designTokens';
@@ -96,6 +96,7 @@ export function ListingPreviewCard({
               source={{ uri: coverPhotoUri! }}
               style={styles.image}
               resizeMode="cover"
+              accessible={false}
             />
           ) : (
             <ImageEmptyGraphic
@@ -130,6 +131,7 @@ export function ListingPreviewCard({
                   source={{ uri: sellerAvatar }}
                   style={styles.sellerAvatar}
                   resizeMode="cover"
+                  accessible={false}
                 />
               ) : (
                 <View style={styles.sellerAvatarPlaceholder}>
@@ -162,8 +164,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginBottom: Space.sm },
     labelText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      fontWeight: '500',
+      fontFamily: FontFamily.medium,
       color: colors.textSecondary },
     card: {
       flexDirection: 'row',

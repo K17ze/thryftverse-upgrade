@@ -45,7 +45,7 @@ const STYLE_OPTIONS: QuizOption[] = [
   { label: 'Vintage', value: 'Vintage', icon: 'time-outline' },
   { label: 'Gorpcore', value: 'Gorpcore', icon: 'leaf-outline' },
   { label: 'Archive', value: 'Archive', icon: 'archive-outline' },
-  { label: 'Techwear', value: 'Techwear', icon: 'hardware-chip-outline' },
+  { label: 'Techwear', value: 'Techwear', icon: 'shirt-outline' },
 ];
 
 export default function StyleQuizScreen() {

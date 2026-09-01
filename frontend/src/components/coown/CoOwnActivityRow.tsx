@@ -103,7 +103,7 @@ export function CoOwnActivityRow({
           <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={200} />
         ) : (
           <View style={[styles.image, styles.imageFallback, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="cube-outline" size={18} color={colors.textMuted} />
+            <Ionicons name="swap-horizontal-outline" size={18} color={colors.textMuted} />
           </View>
         )}
       </View>

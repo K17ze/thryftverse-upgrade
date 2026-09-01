@@ -620,7 +620,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
           >
             <EmptyState
-              icon="cube-outline"
+              icon="bag-handle-outline"
               title="No listings yet"
               subtitle="Create your first listing to start selling."
               ctaLabel="Create listing"

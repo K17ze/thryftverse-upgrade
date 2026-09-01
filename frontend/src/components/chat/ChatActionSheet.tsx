@@ -44,7 +44,7 @@ export function ChatActionSheet({
         description: t('attachments.takePhotoOrVideo') },
       {
         id: "agent",
-        icon: 'hardware-chip-outline',
+        icon: 'bulb-outline',
         label: t('agentPicker.addAssistant'),
         description: t('agentPicker.addAssistantDescription') },
     ],

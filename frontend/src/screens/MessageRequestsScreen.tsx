@@ -228,7 +228,7 @@ export default function MessageRequestsScreen() {
                 <CachedImage uri={listing.images[0]} style={styles.listingThumb} contentFit="cover" />
               ) : (
                 <View style={styles.listingThumbPlaceholder}>
-                  <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
+                  <Ionicons name="bag-handle-outline" size={14} color={colors.textMuted} />
                 </View>
               )}
               <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, PressScale } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
@@ -142,7 +142,7 @@ export function CoOwnTradeComposer({
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
           ) : (
             <View style={[styles.image, styles.imageFallback, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="cube-outline" size={20} color={colors.textMuted} />
+              <Ionicons name="image-outline" size={20} color={colors.textMuted} />
             </View>
           )}
         </View>
@@ -209,7 +209,10 @@ export function CoOwnTradeComposer({
       {/* Expandable details — progressive disclosure */}
       {(fillEstimate || depthContext || duration || postTradePreview) && (
         <Pressable
-          style={styles.detailsToggle}
+          style={({ pressed }) => [
+            styles.detailsToggle,
+            pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] },
+          ]}
           onPress={() => setDetailsExpanded((prev) => !prev)}
           accessibilityRole="button"
           accessibilityLabel={detailsExpanded ? 'Collapse details' : 'Expand details'}
@@ -325,6 +328,19 @@ export function CoOwnTradeComposer({
           <Text style={[styles.settlementText, { color: colors.textSecondary }]} numberOfLines={1}>
             Escrow: {escrowPartner}
             {escrowTermsUrl ? ' · terms available' : ''}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* P0: Risk disclosure — visible above the confirm button so the user
+          sees the irrevocable nature of fractional ownership before
+          committing. Concise, truthful, not buried. Shown for buy side only
+          (sells are disposals, not new commitments). */}
+      {isBuy ? (
+        <View style={[styles.riskDisclosureRow, { borderColor: colors.borderSubtle }]}>
+          <Ionicons name="warning-outline" size={13} color={colors.textMuted} />
+          <Text style={[styles.riskDisclosureText, { color: colors.textMuted }]}>
+            Fractional ownership is irrevocable. Subject to corporate actions. No guaranteed return. Past performance does not indicate future results.
           </Text>
         </View>
       ) : null}
@@ -619,6 +635,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
+  },
+  // ── P0: risk disclosure row ──
+  riskDisclosureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  riskDisclosureText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   rightsChip: {
     paddingHorizontal: Space.sm,

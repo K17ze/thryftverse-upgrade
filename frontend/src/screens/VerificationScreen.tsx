@@ -776,7 +776,7 @@ export default function VerificationScreen({ navigation }: Props) {
       ) : null}
 
       <SettingsInfoBanner
-        icon="shield-checkmark-outline"
+        icon="checkmark-circle-outline"
         text="Verification builds trust with buyers and unlocks higher selling limits. Your data is encrypted and never shared publicly."
       />
 

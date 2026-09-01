@@ -52,7 +52,7 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
   if (!listing?.images?.[0]) {
     return (
       <View style={[styles.contextThumb, listingThemed.contextThumb]}>
-        <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
+        <Ionicons name="bag-handle-outline" size={14} color={colors.textMuted} />
       </View>
     );
   }
@@ -430,7 +430,7 @@ export default function InboxScreen() {
         </Text>
         {(item.botIds?.length ?? 0) > 0 && (
           <View style={[styles.botIndicator, t.botIndicator]}>
-            <Ionicons name="hardware-chip-outline" size={14} color={colors.brand} />
+            <Ionicons name="bulb-outline" size={14} color={colors.brand} />
           </View>
         )}
       </View>

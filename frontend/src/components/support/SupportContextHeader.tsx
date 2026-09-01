@@ -9,8 +9,8 @@ import type { SupportContextKind } from '../../contracts/support';
 // ─── Context icon mapping (one icon family, outline resting state) ──────────
 const CONTEXT_ICON: Record<SupportContextKind, keyof typeof Ionicons.glyphMap> = {
   general: 'help-circle-outline',
-  order: 'cube-outline',
-  listing: 'pricetag-outline',
+  order: 'car-outline',
+  listing: 'bag-handle-outline',
   payout: 'card-outline',
   report: 'flag-outline',
   auction: 'trophy-outline',

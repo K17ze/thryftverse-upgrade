@@ -96,10 +96,11 @@ export function SustainabilityImpact({ listingId }: SustainabilityImpactProps) {
         onPress={toggleExpanded}
         style={({ pressed }) => [
           styles.disclosureTrigger,
-          pressed && { opacity: 0.6 },
+          pressed && styles.disclosurePressed,
         ]}
         accessibilityRole="button"
         accessibilityLabel={expanded ? 'Hide methodology' : 'Show methodology'}
+        accessibilityState={{ expanded }}
       >
         <Text style={[styles.disclosureLabel, { color: colors.textSecondary }]}>
           Methodology
@@ -211,7 +212,10 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.xs },
+      paddingVertical: Space.xs,
+      minHeight: 44 },
+    disclosurePressed: {
+      opacity: 0.85 },
     disclosureLabel: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,

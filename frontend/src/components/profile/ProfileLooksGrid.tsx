@@ -124,7 +124,7 @@ export function ProfileLooksGrid({
             ) : null}
             <View style={styles.tileMeta}>
               <View style={styles.metaItem}>
-                <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} />
+                <Ionicons name="bag-handle-outline" size={12} color={colors.textMuted} />
                 <Text style={styles.metaText}>{look.tags.length}</Text>
               </View>
               <View style={styles.metaItem}>

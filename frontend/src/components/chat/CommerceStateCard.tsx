@@ -69,7 +69,7 @@ function getStateConfig(type: CommerceStateType, colors: ThemeColors, t: (key: s
       return {
         title: t('orders.shipped'),
         subtitle: t('orders.shippedBody'),
-        icon: 'cube-outline',
+        icon: 'car-outline',
         iconColor: colors.brand,
         stage: 'shipped',
         nextStep: 'In carrier transit' };

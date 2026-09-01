@@ -1772,7 +1772,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       : [];
 
     const productOverflow: ToolDefinition[] = [
-      mk('product', 'Product', 'pricetag-outline', handleAddProduct, 'Add product', 'Opens the product picker', 'product-tag', undefined, 'stickerProduct'),
+      mk('product', 'Product', 'bag-handle-outline', handleAddProduct, 'Add product', 'Opens the product picker', 'product-tag', undefined, 'stickerProduct'),
     ];
 
     // ── poster-photo-default: Text, Stickers, Product, Draw ──
@@ -1857,7 +1857,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       overflow: [
         ...(!isVideoMedia ? [
           mk('auto', 'Auto', 'bulb-outline', handleAutoAdjust, 'Auto', 'Applies one-tap color correction', 'enhance'),
-          mk('cutout', cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'cut-outline' : 'crop-outline', handleCutoutAction, cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'Removes the photo background using on-device subject segmentation' : 'Crops the selected photo', cutoutSupported ? 'cutout' : 'crop'),
+          ...(cutoutSupported ? [mk('cutout', 'Cutout', 'cut-outline', handleCutoutAction, 'Cutout', 'Removes the photo background using on-device subject segmentation', 'cutout')] : []),
           mk('animation', 'Animation', 'analytics-outline', () => { haptic.light(); openSheet('keyframes'); }, 'Animation', 'Opens the keyframe editor for the selected layer', 'keyframe'),
         ] : [
           // ── Video-specific advanced tools (time context) ──
@@ -1872,8 +1872,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         ]),
         mk('front', 'Front', 'arrow-up', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'forward'); }, 'Bring forward', 'Brings the layer forward'),
         mk('back', 'Back', 'arrow-down', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'backward'); }, 'Send backward', 'Sends the layer backward'),
-        mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
-        mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
+        ...(!isVideoMedia ? [
+          mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
+          mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
+        ] : []),
         ...sharedOverflow,
       ],
     };
@@ -1949,7 +1951,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     const productSelected: ToolGroup = {
       context: 'poster-product-selected',
       primary: [
-        mk('item', 'Item', 'pricetag-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Edit item', 'Links a different listing'),
+        mk('item', 'Item', 'bag-handle-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Edit item', 'Links a different listing'),
         mk('price', 'Price', 'logo-usd', () => {
           if (!selectedLayer || selectedLayer.type !== 'product') return;
           haptic.light();
@@ -2020,20 +2022,38 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     [activeToolContext, toolGroups],
   );
 
+  const overflowDestructive = useMemo(
+    () => activeOverflowTools.filter((tool) => tool.id === 'delete'),
+    [activeOverflowTools],
+  );
+
   const overflowSections = useMemo(() => {
     const sectionFor = (id: string): 'Create' | 'Edit' | 'Arrange' | 'Project' => {
       if (['draw', 'stickers', 'product', 'add-frame', 'music'].includes(id)) return 'Create';
-      if (['front', 'back', 'duplicate', 'delete', 'layers'].includes(id)) return 'Arrange';
-      if (['preview', 'safe-zone', 'templates', 'drafts', 'settings'].includes(id)) return 'Project';
+      if (['front', 'back', 'duplicate', 'layers'].includes(id)) return 'Arrange';
+      if (['preview', 'safe-zone', 'templates', 'drafts', 'settings', 'manage-frames'].includes(id)) return 'Project';
       return 'Edit';
     };
+    const tools: ToolDefinition[] = hasMultipleFrames
+      ? [
+          ...activeOverflowTools.filter((tool) => tool.id !== 'delete'),
+          {
+            id: 'manage-frames',
+            label: 'Manage frames',
+            icon: 'albums-outline',
+            onPress: () => { setShowFrameTray(true); },
+            accessibilityLabel: 'Manage frames',
+            accessibilityHint: 'Opens the frame organizer',
+          },
+        ]
+      : activeOverflowTools.filter((tool) => tool.id !== 'delete');
     return (['Create', 'Edit', 'Arrange', 'Project'] as const)
       .map((title) => ({
         title,
-        tools: activeOverflowTools.filter((tool) => sectionFor(tool.id) === title),
+        tools: tools.filter((tool) => sectionFor(tool.id) === title),
       }))
       .filter((section) => section.tools.length > 0);
-  }, [activeOverflowTools]);
+  }, [activeOverflowTools, hasMultipleFrames]);
 
   // ── Camera → Editor crossfade ─────────────────────────────────────
   // Per the human-flow reconstruction spec, the captured/selected media
@@ -2693,22 +2713,12 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                       icon={tool.icon}
                       glyph={tool.glyph}
                       label={tool.label}
-                      danger={tool.id === 'delete'}
                       selected={tool.active}
                       onPress={() => { tool.onPress(); closeSheet(); }}
                     />
                   ))}
                 </View>
               ))}
-              {hasMultipleFrames && (
-                <View style={[styles.overflowGroup, styles.overflowGroupGap]}>
-                  <OverflowItem
-                    icon="film-outline"
-                    label="Manage frames"
-                    onPress={() => { setShowFrameTray(true); closeSheet(); }}
-                  />
-                </View>
-              )}
               <View style={[styles.overflowGroup, styles.overflowGroupGap]}>
                 <OverflowItem
                   icon="accessibility-outline"
@@ -2726,6 +2736,20 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                   onPress={() => { openSheet('help'); closeSheet(); }}
                 />
               </View>
+              {overflowDestructive.length > 0 && (
+                <View style={[styles.overflowGroup, styles.overflowGroupGap]}>
+                  {overflowDestructive.map((tool) => (
+                    <OverflowItem
+                      key={tool.id}
+                      icon={tool.icon}
+                      glyph={tool.glyph}
+                      label={tool.label}
+                      danger
+                      onPress={() => { tool.onPress(); closeSheet(); }}
+                    />
+                  ))}
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>

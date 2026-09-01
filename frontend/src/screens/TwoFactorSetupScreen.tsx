@@ -233,7 +233,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
     <>
       <View style={styles.phaseIntro}>
         <View style={[styles.statusBadge, { backgroundColor: colors.successSubtle }]}>
-          <Ionicons name="shield-checkmark" size={18} color={colors.success} />
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
           <Text style={[styles.statusBadgeText, { color: colors.success }]}>Protected</Text>
         </View>
         <Text style={styles.phaseTitle}>Two-factor authentication is on</Text>
@@ -282,7 +282,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
     <>
       <View style={styles.phaseIntro}>
         <View style={[styles.statusBadge, { backgroundColor: colors.dangerSubtle }]}>
-          <Ionicons name="shield-outline" size={18} color={colors.danger} />
+          <Ionicons name="lock-closed-outline" size={18} color={colors.danger} />
           <Text style={[styles.statusBadgeText, { color: colors.danger }]}>Remove protection</Text>
         </View>
         <Text style={styles.phaseTitle}>Confirm with a code</Text>

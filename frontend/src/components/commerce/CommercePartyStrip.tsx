@@ -62,7 +62,8 @@ export function CommercePartyStrip({
         <AnimatedPressable
           style={styles.profileRow}
           onPress={onOpenProfile}
-          {...PressPresets.card}
+          scaleValue={0.985}
+          activeOpacity={0.85}
           accessibilityLabel={`View ${party.username} profile`}
           accessibilityRole="button"
         >
@@ -117,9 +118,11 @@ export function CommercePartyStrip({
             <AnimatedPressable
               style={[styles.followBtn, isFollowing && styles.followingBtn]}
               onPress={onFollow}
-              {...PressPresets.primaryButton}
+              scaleValue={0.985}
+              activeOpacity={0.85}
               accessibilityLabel={isFollowing ? `Unfollow ${party.username}` : `Follow ${party.username}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: isFollowing }}
             >
               <Text style={[styles.followText, isFollowing && styles.followingText]}>
                 {isFollowing ? followingLabel : followLabel}
@@ -130,7 +133,8 @@ export function CommercePartyStrip({
             <AnimatedPressable
               style={styles.messageBtn}
               onPress={onMessage}
-              {...PressPresets.primaryButton}
+              scaleValue={0.985}
+              activeOpacity={0.85}
               accessibilityLabel={`${messageLabel} ${party.username}`}
               accessibilityRole="button"
             >
@@ -162,9 +166,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md },
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.xs },
   sectionTitle: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,

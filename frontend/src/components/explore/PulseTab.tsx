@@ -83,7 +83,7 @@ function LiveNowCard({ auction, now, onPress, styles, formatPrice }: { auction: 
 function ActivityCard({ item, onPress, colors, styles, formatPrice }: { item: ActivityItem; onPress: () => void; colors: ThemeColors; styles: ReturnType<typeof createStyles>; formatPrice: (n: number) => string }) {
   const iconMap: Record<ActivityType, React.ComponentProps<typeof Ionicons>['name']> = {
     auction_live: 'flame-outline',
-    fresh_drop: 'cube-outline',
+    fresh_drop: 'bag-handle-outline',
     price_drop: 'trending-down-outline' };
   const accentMap: Record<ActivityType, string> = {
     auction_live: colors.danger,

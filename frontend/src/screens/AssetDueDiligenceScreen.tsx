@@ -255,7 +255,7 @@ export default function AssetDueDiligenceScreen() {
 
     if (asset.escrowTermsUrl) {
       docs.push({
-        icon: 'shield-checkmark-outline',
+        icon: 'checkmark-circle-outline',
         title: 'Escrow terms',
         subtitle: asset.escrowPartner ?? null,
         url: asset.escrowTermsUrl,
@@ -282,7 +282,7 @@ export default function AssetDueDiligenceScreen() {
     }
     if (asset.buyerProtectionTermsUrl) {
       docs.push({
-        icon: 'shield-outline',
+        icon: 'checkmark-circle-outline',
         title: 'Buyer protection terms',
         subtitle: asset.buyerProtection ? 'Active' : null,
         url: asset.buyerProtectionTermsUrl,
@@ -384,7 +384,7 @@ export default function AssetDueDiligenceScreen() {
             <View style={[styles.custodyEvidence, { borderTopColor: colors.borderSubtle }]}>
               {asset.custodianName && (
                 <View style={styles.evidenceRow}>
-                  <Ionicons name="cube-outline" size={16} color={colors.textMuted} />
+                  <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
                   <Text style={[styles.evidenceRowLabel, { color: colors.textSecondary }]}>
                     {asset.custodianName}
                     {asset.custodianLocation ? ` · ${asset.custodianLocation}` : ''}

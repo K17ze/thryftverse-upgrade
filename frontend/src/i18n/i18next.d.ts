@@ -38,6 +38,7 @@ declare module 'i18next' {
       aiListing: (typeof flattenedResources)['aiListing'];
       report: (typeof flattenedResources)['report'];
       appeal: (typeof flattenedResources)['appeal'];
+      coOwn: (typeof flattenedResources)['coOwn'];
     };
   }
 }

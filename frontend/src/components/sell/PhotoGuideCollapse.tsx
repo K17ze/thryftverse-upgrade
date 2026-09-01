@@ -41,7 +41,7 @@ function PhotoGuideCollapse({ collapsed, onToggle }: PhotoGuideCollapseProps) {
             <Text style={[styles.photoGuideTip, { color: colors.textMuted }]}>{t('listing.create.photoTipLighting')}</Text>
           </View>
           <View style={styles.photoGuideTipRow}>
-            <Ionicons name="cube-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+            <Ionicons name="bag-handle-outline" size={12} color={colors.textMuted} aria-hidden={true} />
             <Text style={[styles.photoGuideTip, { color: colors.textMuted }]}>{t('listing.create.photoTipAngles')}</Text>
           </View>
           <View style={styles.photoGuideTipRow}>

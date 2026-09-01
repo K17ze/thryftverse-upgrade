@@ -30,13 +30,11 @@ import {
   type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import {
-  Space,
-  FontFamily,
-  Control,
-  Radius } from '../../theme/designTokens';
+import { Space, FontFamily, Control, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -198,10 +196,12 @@ export function FlatRow({
           />
         ) : icon ? (
           <View style={styles.iconWrap}>
-            <Ionicons
+            <AppIcon
               name={icon}
-              size={IconGrammar.metadata}
-              color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
+              size={IconSize.md}
+              color={iconColor ?? (danger ? 'danger' : 'textSecondary')}
+              opticalCenter={true}
+              accessible={false}
             />
           </View>
         ) : null}
@@ -224,7 +224,7 @@ export function FlatRow({
           ) : null}
         </View>
 
-        {/* Trailing badge / value / chevron / custom node */}
+        {/* Trailing slot: custom trailing takes precedence over badge/value/chevron */}
         {trailing ? (
           <View style={styles.trailing}>{trailing}</View>
         ) : (
@@ -247,10 +247,12 @@ export function FlatRow({
               </Text>
             ) : null}
             {resolvedShowChevron ? (
-              <Ionicons
-                name="chevron-forward"
-                size={16}
-                color={colors.textMuted}
+              <AppIcon
+                name="forward"
+                size={IconSize.sm}
+                color="textMuted"
+                opticalCenter={true}
+                accessible={false}
               />
             ) : null}
           </View>

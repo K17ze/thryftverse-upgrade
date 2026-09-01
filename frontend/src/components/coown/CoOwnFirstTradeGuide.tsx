@@ -52,7 +52,7 @@ const GUIDE_STEPS: GuideStep[] = [
     keyTakeaway: 'Only invest what you can afford to hold',
   },
   {
-    icon: 'shield-checkmark-outline',
+    icon: 'lock-closed-outline',
     title: 'Rights & custody',
     body: 'Read the instrument dossier for its recorded provenance, custody, insurance, valuation, transfer limits, and current rights version. If required rights remain incomplete, trading stays disabled.',
     keyTakeaway: 'Rights are instrument-specific and versioned',

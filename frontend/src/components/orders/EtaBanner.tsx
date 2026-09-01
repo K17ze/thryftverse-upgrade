@@ -27,7 +27,7 @@ export function EtaBanner({ etaWindow, estimatedDeliveryLabel, serviceName }: Pr
   return (
     <View style={[styles.etaBanner, themed.etaBanner]}>
       <View style={[styles.etaIconWrap, themed.etaIconWrap]}>
-        <Ionicons name="cube-outline" size={16} color={colors.brand} aria-hidden={true} />
+        <Ionicons name="car-outline" size={16} color={colors.brand} aria-hidden={true} />
       </View>
       <View style={styles.etaContent}>
         <Text style={[styles.etaLabel, themed.etaLabel]}>ESTIMATED DELIVERY</Text>

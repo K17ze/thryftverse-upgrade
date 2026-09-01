@@ -174,7 +174,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
             : effectiveStatus === 'in_review'
             ? 'active'
             : 'pending',
-        icon: 'shield-checkmark-outline' },
+        icon: 'checkmark-circle-outline' },
     ];
   }, [backendStatus, emailVerified, effectiveStatus]);
 
@@ -254,7 +254,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
                 <ReviewCheckItem icon="document-text-outline" text="Your identity details match the document provided" colors={colors} styles={styles} />
                 <ReviewCheckItem icon="scan-outline" text="Document is genuine and not tampered with" colors={colors} styles={styles} />
                 <ReviewCheckItem icon="happy-outline" text="Selfie matches the document photo" colors={colors} styles={styles} />
-                <ReviewCheckItem icon="shield-checkmark-outline" text="Sanctions and fraud screening" colors={colors} styles={styles} />
+                <ReviewCheckItem icon="lock-closed-outline" text="Sanctions and fraud screening" colors={colors} styles={styles} />
                 <View style={[styles.etaBanner, { backgroundColor: colors.surfaceAlt }]}>
                   <Ionicons name="time-outline" size={16} color={colors.warning} />
                   <Text style={[styles.etaText, { color: colors.textSecondary }]}>
@@ -274,9 +274,9 @@ export default function VerificationStatusScreen({ navigation }: Props) {
               style={styles.section}
             >
               <View style={styles.panelContent}>
-                <BenefitItem icon="shield-checkmark" text="Verified seller badge on your profile and listings" colors={colors} styles={styles} />
+                <BenefitItem icon="checkmark-circle-outline" text="Verified seller badge on your profile and listings" colors={colors} styles={styles} />
                 <BenefitItem icon="trending-up-outline" text="Higher listing visibility in search and discovery" colors={colors} styles={styles} />
-                <BenefitItem icon="cube-outline" text="Higher selling limits and Co-Own eligibility" colors={colors} styles={styles} />
+                <BenefitItem icon="layers-outline" text="Higher selling limits and Co-Own eligibility" colors={colors} styles={styles} />
                 <BenefitItem icon="people-outline" text="Buyer trust — verified sellers sell faster" colors={colors} styles={styles} />
               </View>
             </FlagshipFormSection>
@@ -403,7 +403,7 @@ const STATUS_HERO_CONFIG: Record<
   verified: {
     title: 'Verified',
     subtitle: 'Your identity is confirmed. You have the verified seller badge.',
-    icon: 'shield-checkmark',
+    icon: 'checkmark-circle',
     accent: 'success' },
   rejected: {
     title: 'Verification declined',

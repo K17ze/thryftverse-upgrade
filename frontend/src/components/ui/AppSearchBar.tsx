@@ -12,6 +12,9 @@ import { Space, Radius, Control, Stroke  } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
+
 interface AppSearchBarProps {
   placeholder?: string;
   value: string;
@@ -44,7 +47,12 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
 
   return (
     <View style={[styles.container, isFocused && styles.containerFocused, containerStyle]}>
-      <Ionicons name="search-outline" size={18} color={isFocused ? colors.textSecondary : colors.textMuted} />
+      <AppIcon
+        name="search"
+        size={IconSize.md}
+        color={isFocused ? colors.textSecondary : colors.textMuted}
+        accessible={false}
+      />
       <TextInput
         ref={ref}
         {...inputProps}
@@ -68,7 +76,13 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
           accessibilityLabel="Clear search"
           accessibilityRole="button"
         >
-          <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          <AppIcon
+            name="closeCircle"
+            size={IconSize.md}
+            color={colors.textMuted}
+            focused={true}
+            accessible={false}
+          />
         </AnimatedPressable>
       ) : rightNode ? (
         rightNode

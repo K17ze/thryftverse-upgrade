@@ -60,7 +60,7 @@ function BundleUpsellRowComponent({
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Ionicons name="cube" size={16} color={colors.brand} />
+          <Ionicons name="layers-outline" size={16} color={colors.brand} />
           <Text style={styles.sectionTitle}>Bundle and save</Text>
         </View>
         <View style={styles.bundleCountBadge}>

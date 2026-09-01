@@ -17,6 +17,8 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { AppButton } from '../components/ui/AppButton';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { RootStackParamList } from '../navigation/types';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 
 type PreferencePickerMode = 'categories' | 'brands' | 'members' | null;
 
@@ -181,7 +183,7 @@ export default function PersonalisationScreen() {
         {/* Discovery preference rows — flat, hairline-separated */}
         <SettingsSection title="Discovery preferences">
           <SettingsRow
-            icon="grid-outline"
+            icon="grid"
             title="Categories and sizes"
             subtitle="Keep a preferred size mix."
             value={categoriesAndSizesPref}
@@ -189,14 +191,14 @@ export default function PersonalisationScreen() {
             isFirst
           />
           <SettingsRow
-            icon="barcode-outline"
+            icon="bag-handle-outline"
             title="Brands"
             subtitle="Choose a general brand direction."
             value={brandsPref}
             onPress={() => { haptic.light(); setPickerMode('brands'); }}
           />
           <SettingsRow
-            icon="people-outline"
+            icon="people"
             title="Members"
             subtitle="Choose whose listings you prefer to browse."
             value={membersPref}
@@ -214,7 +216,7 @@ export default function PersonalisationScreen() {
             accessibilityRole="button"
             accessibilityLabel="Reset preferences to defaults"
           >
-            <Ionicons name="refresh-outline" size={16} color={colors.textMuted} />
+            <AppIcon name="refresh" size={IconSize.sm} color="textMuted" accessible={false} />
             <Text style={[styles.resetBtnText, { color: colors.textMuted }]}>Reset preferences</Text>
           </Pressable>
         </View>

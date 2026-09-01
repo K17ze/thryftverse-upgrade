@@ -1,17 +1,14 @@
-import { MediaUploadQueue, UploadQueueItemState } from './mediaUploadQueue';
+import { MediaUploadQueue } from './mediaUploadQueue';
 import { createListingOnApi, createListingImageOnApi, type ListingCreateBody } from './listingsApi';
 import { ListingMediaDraftItem } from '../utils/mediaUploadAsset';
-import { ListingPublicationRecovery } from '../store/useStore';
 import { makeStableId } from '../utils/createStableId';
-import { getDb } from '../storage/db';
-import { enqueueOperation, removeOutboxOperation } from '../storage/outboxClient';
+import { ApiRequestError, isRecord } from '../lib/apiClient';
+import { OFFLINE_WRITE_QUEUED_CODE } from '../lib/offlineQueue';
 
 export type PublicationStage =
-  | 'validating'
   | 'uploading_media'
   | 'creating_listing'
   | 'attaching_media'
-  | 'finalising'
   | 'completed'
   | 'failed_recoverable';
 
@@ -19,10 +16,19 @@ export interface PublicationContext {
   clientPublicationId: string;
   mode: 'sell_now' | 'auction';
   stage: PublicationStage;
+  /** Client-generated listing id. Reserved before the first create attempt so
+   *  retries reuse it: the create body is byte-identical, the offline queue
+   *  dedupes by url+method+body, and the backend upserts listings by id. */
   listingId?: string;
+  /** Server confirmed the listing row exists. False after an offline-queued
+   *  or failed create — the id is reserved but the listing is NOT created. */
+  listingCreated: boolean;
+  /** True when the latest failure was a write queued for offline replay. */
+  offlineQueued: boolean;
   uploadedMediaByAssetId: Record<string, string>;
   uploadedFinalizationByAssetId: Record<string, string>;
   attachedAssetIds: string[];
+  coverImageUrl?: string;
   lastError?: string;
 }
 
@@ -40,7 +46,7 @@ export interface PublicationInput {
   shippingMethod?: string;
   shippingPayer?: string;
   sellerId: string;
-  existingRecovery?: ListingPublicationRecovery | null;
+  existingRecovery?: PublicationContext | null;
   onStageChange?: (stage: PublicationStage) => void;
 }
 
@@ -68,6 +74,14 @@ function makeAttachmentId(listingId: string, assetId: string): string {
   return `${listingId}_att_${assetId}`;
 }
 
+function isOfflineQueuedError(e: unknown): boolean {
+  return (
+    e instanceof ApiRequestError &&
+    isRecord(e.details) &&
+    e.details.code === OFFLINE_WRITE_QUEUED_CODE
+  );
+}
+
 /**
  * Build resolved media from the queue result map, reading live queue state
  * rather than stale React closures.
@@ -92,6 +106,12 @@ function buildResolvedMedia(
 
 /**
  * Unified recoverable publication orchestrator for fixed-price and auction flows.
+ *
+ * Order of operations: upload ALL media first, then create the listing with
+ * the verified cover, then attach the remaining media. A failure after the
+ * listing was created is recoverable and idempotent — the caller retries with
+ * the returned context, the listing is not recreated, and only the missing
+ * attachments are sent.
  */
 export async function executePublication(
   input: PublicationInput,
@@ -100,13 +120,16 @@ export async function executePublication(
   const ctx: PublicationContext = {
     clientPublicationId: input.existingRecovery?.clientPublicationId ?? generateClientPublicationId(),
     mode: input.mode,
-    stage: 'validating',
+    stage: 'uploading_media',
     listingId: input.existingRecovery?.listingId,
+    listingCreated: input.existingRecovery?.listingCreated ?? false,
+    offlineQueued: false,
     uploadedMediaByAssetId: { ...(input.existingRecovery?.uploadedMediaByAssetId ?? {}) },
     uploadedFinalizationByAssetId: {
       ...(input.existingRecovery?.uploadedFinalizationByAssetId ?? {}),
     },
     attachedAssetIds: [...(input.existingRecovery?.attachedAssetIds ?? [])],
+    coverImageUrl: input.existingRecovery?.coverImageUrl,
     lastError: undefined,
   };
 
@@ -115,8 +138,16 @@ export async function executePublication(
     input.onStageChange?.(s);
   };
 
+  const fail = (error: string): PublicationResult => {
+    ctx.lastError = error;
+    setStage('failed_recoverable');
+    return { ok: false, error, context: ctx };
+  };
+
   try {
-    // 1. Upload local media
+    // 1. Upload local media — all media is durably uploaded before the
+    //    listing row is created, so a media failure never leaves an active
+    //    listing behind.
     setStage('uploading_media');
     const itemsToUpload = input.mediaDraftItems.filter(
       (m) => m.source === 'local' && m.status !== 'uploaded' && !ctx.uploadedMediaByAssetId[m.id]
@@ -139,13 +170,12 @@ export async function executePublication(
       await queue.run();
     }
 
-    // Read resolved state directly from queue — never from stale React closures
+    // Read resolved state directly from the queue — never from stale closures.
     const resolvedMedia = buildResolvedMedia(input.mediaDraftItems, queue);
 
-    // Merge uploaded URLs into context
     for (const m of resolvedMedia) {
       const uploadResult = queue.getResultMap().get(m.id);
-      if (m.publicUrl) {
+      if (m.publicUrl && !isLocalUri(m.publicUrl)) {
         ctx.uploadedMediaByAssetId[m.id] = m.publicUrl;
       }
       if (uploadResult?.finalizationId) {
@@ -153,25 +183,19 @@ export async function executePublication(
       }
     }
 
-    // Guard: every required local item must have a public URL
     const unresolvedLocals = resolvedMedia.filter(
       (m) => m.source === 'local' && !ctx.uploadedMediaByAssetId[m.id]
     );
     if (unresolvedLocals.length > 0) {
-      setStage('failed_recoverable');
-      ctx.lastError = `${unresolvedLocals.length} upload(s) failed. Tap to retry.`;
-      return { ok: false, error: ctx.lastError, context: ctx };
+      return fail(`${unresolvedLocals.length} upload(s) failed. Tap Publish to retry.`);
     }
 
-    // Build final ordered URL list from resolved media
     const uploadedUrls: string[] = resolvedMedia
-      .map((m) => ctx.uploadedMediaByAssetId[m.id] || m.publicUrl || m.uri)
+      .map((m) => ctx.uploadedMediaByAssetId[m.id] || m.publicUrl)
       .filter((u): u is string => !!u && !isLocalUri(u));
 
     if (uploadedUrls.length === 0) {
-      setStage('failed_recoverable');
-      ctx.lastError = 'No media uploaded successfully.';
-      return { ok: false, error: ctx.lastError, context: ctx };
+      return fail('No media uploaded successfully.');
     }
 
     const coverMedia = resolvedMedia.find((media) => media.kind === 'image');
@@ -182,18 +206,19 @@ export async function executePublication(
       ? ctx.uploadedFinalizationByAssetId[coverMedia.id]
       : undefined;
     if (!coverImage || !coverFinalizationId) {
-      setStage('failed_recoverable');
-      ctx.lastError = 'Cover image required to publish.';
-      return { ok: false, error: ctx.lastError, context: ctx };
+      return fail('A verified cover image is required to publish.');
     }
+    ctx.coverImageUrl = coverImage;
 
-    // 2. Create listing if not already created
-    setStage('creating_listing');
-    let listingId = ctx.listingId;
-    if (!listingId) {
-      listingId = makeStableId('listing');
+    // 2. Create the listing — skipped entirely when a previous attempt
+    //    already created it (idempotent resume).
+    if (!ctx.listingCreated) {
+      setStage('creating_listing');
+      if (!ctx.listingId) {
+        ctx.listingId = makeStableId('listing');
+      }
       const listingBody: ListingCreateBody = {
-        id: listingId,
+        id: ctx.listingId,
         sellerId: input.sellerId,
         title: input.title.trim(),
         description: input.description.trim(),
@@ -210,38 +235,22 @@ export async function executePublication(
         shippingPayer: input.shippingPayer,
       };
 
-      const db = await getDb();
-      await enqueueOperation(db, {
-        operationId: listingId,
-        entityType: 'listing',
-        entityId: listingId,
-        operation: 'create',
-        payload: JSON.stringify(listingBody),
-        baseRev: 0,
-      });
-
       try {
         await createListingOnApi(listingBody);
-        await removeOutboxOperation(listingId);
+        ctx.listingCreated = true;
+        ctx.offlineQueued = false;
       } catch (e) {
-        const isNetworkError = e instanceof Error && (
-          e.message.includes('Network request failed') ||
-          e.message.includes('offline') ||
-          e.message.includes('connection dropped')
-        );
-        if (isNetworkError) {
-          ctx.listingId = listingId;
-          ctx.lastError = e instanceof Error ? e.message : 'Network error — listing saved offline.';
-          setStage('failed_recoverable');
-          return { ok: false, error: ctx.lastError, context: ctx };
+        if (isOfflineQueuedError(e)) {
+          ctx.offlineQueued = true;
+          return fail(
+            'You are offline. Your listing has been saved and will be published when you reconnect.'
+          );
         }
-        await removeOutboxOperation(listingId);
         throw e;
       }
-      ctx.listingId = listingId;
     }
 
-    // 3. Attach media, skipping already-attached assets
+    // 3. Attach media, skipping already-attached assets.
     setStage('attaching_media');
     for (let i = 0; i < resolvedMedia.length; i++) {
       const m = resolvedMedia[i];
@@ -253,39 +262,34 @@ export async function executePublication(
         throw new Error('Media verification failed — re-upload to continue.');
       }
 
-      await createListingImageOnApi({
-        id: makeAttachmentId(listingId, m.id),
-        listingId,
-        imageUrl: url,
-        sortOrder: i,
-        mediaWidth: m.width,
-        mediaHeight: m.height,
-        mediaType: m.kind,
-        finalizationId,
-      });
+      try {
+        await createListingImageOnApi({
+          id: makeAttachmentId(ctx.listingId!, m.id),
+          listingId: ctx.listingId!,
+          imageUrl: url,
+          sortOrder: i,
+          mediaWidth: m.width,
+          mediaHeight: m.height,
+          mediaType: m.kind,
+          finalizationId,
+        });
+        ctx.offlineQueued = false;
+      } catch (e) {
+        if (isOfflineQueuedError(e)) {
+          ctx.offlineQueued = true;
+          return fail(
+            'You are offline. Your listing was created and remaining media will attach automatically when you reconnect.'
+          );
+        }
+        throw e;
+      }
       ctx.attachedAssetIds.push(m.id);
     }
 
-    setStage('finalising');
     setStage('completed');
-    return { ok: true, listingId, context: ctx };
+    return { ok: true, listingId: ctx.listingId, context: ctx };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Publishing failed — try again.';
-    ctx.lastError = msg;
-    setStage('failed_recoverable');
-    return { ok: false, error: msg, context: ctx };
+    return fail(msg);
   }
-}
-
-export function buildRecoveryState(ctx: PublicationContext): ListingPublicationRecovery {
-  return {
-    clientPublicationId: ctx.clientPublicationId,
-    mode: ctx.mode,
-    stage: ctx.stage,
-    listingId: ctx.listingId,
-    uploadedMediaByAssetId: ctx.uploadedMediaByAssetId,
-    uploadedFinalizationByAssetId: ctx.uploadedFinalizationByAssetId,
-    attachedAssetIds: ctx.attachedAssetIds,
-    lastError: ctx.lastError,
-  };
 }

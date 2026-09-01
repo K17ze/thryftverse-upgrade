@@ -366,7 +366,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
         )}
       </View>
       <Ionicons
-        name={item.isExisting ? 'chevron-forward' : 'pricetag-outline'}
+        name={item.isExisting ? 'chevron-forward' : 'bag-handle-outline'}
         size={18}
         color={colors.textMuted}
       />

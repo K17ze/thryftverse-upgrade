@@ -201,7 +201,7 @@ export default function PostageScreen({ navigation }: Props) {
       ) : carriers.length === 0 ? (
         <FlagshipState
           variant="empty"
-          icon="cube-outline"
+          icon="car-outline"
           title={t('postage.empty.title')}
           subtitle={t('postage.empty.subtitle')}
           actionLabel={t('postage.error.retry')}
@@ -261,7 +261,7 @@ export default function PostageScreen({ navigation }: Props) {
           isFirst
         />
         <SettingsRow
-          icon="cube-outline"
+          icon="car-outline"
           iconColor={colors.brand}
           title="Bundle discount on postage"
           subtitle="Save on multi-item orders"

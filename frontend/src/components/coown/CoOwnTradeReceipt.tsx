@@ -129,7 +129,7 @@ export function CoOwnTradeReceipt({
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
           ) : (
             <View style={[styles.image, styles.imageFallback, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="cube-outline" size={20} color={colors.textMuted} />
+              <Ionicons name="image-outline" size={20} color={colors.textMuted} />
             </View>
           )}
         </View>

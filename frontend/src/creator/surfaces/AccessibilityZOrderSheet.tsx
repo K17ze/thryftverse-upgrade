@@ -23,14 +23,14 @@ import {
   StyleSheet,
   ScrollView,
   AccessibilityInfo } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Typography, FontFamily, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 const TOUCH = 44;
 
@@ -53,6 +53,14 @@ export interface AccessibilityZOrderSheetProps {
 
 type ReorderDirection = 'front' | 'back' | 'forward' | 'backward';
 
+interface ReorderAction {
+  direction: ReorderDirection;
+  label: string;
+  icon: string;
+  disabled: boolean;
+  hint: string;
+}
+
 /**
  * Shows keyboard/button-based z-order alternatives for the selected
  * layer. The host screen passes the layer stack and an onReorder
@@ -64,59 +72,33 @@ export function AccessibilityZOrderSheet({
   layers,
   selectedLayerId,
   onClose,
-  onReorder }: AccessibilityZOrderSheetProps) {
+  onReorder,
+}: AccessibilityZOrderSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
 
-  // Sort the mini stack front-to-back (highest zIndex first) so the
-  // list reads top = front, bottom = back, matching the visual stack.
   const sortedLayers = useMemo(
-    () => [...layers].sort((a, b) => b.zIndex - a.zIndex),
+    () => [...layers].sort((a, b) => a.zIndex - b.zIndex),
     [layers],
   );
 
-  const selectedIndex = useMemo(
-    () => sortedLayers.findIndex((l) => l.id === selectedLayerId),
-    [sortedLayers, selectedLayerId],
-  );
+  const selectedIndex = sortedLayers.findIndex((l) => l.id === selectedLayerId);
+  const canEdit = selectedIndex !== -1 && sortedLayers.length > 1;
 
-  const canEdit = !!selectedLayerId && selectedIndex >= 0;
-  const isFront = canEdit && selectedIndex === 0;
-  const isBack = canEdit && selectedIndex === sortedLayers.length - 1;
+  const isFront = selectedIndex === sortedLayers.length - 1;
+  const isBack = selectedIndex === 0;
 
   const handleReorder = useCallback(
     (direction: ReorderDirection) => {
       if (!selectedLayerId) return;
-      haptic.light();
+      haptic.medium();
       onReorder(selectedLayerId, direction);
-      const layer = sortedLayers.find((l) => l.id === selectedLayerId);
-      if (layer) {
-        const directionDelta: Record<ReorderDirection, number> = {
-          front: -selectedIndex,
-          back: sortedLayers.length - 1 - selectedIndex,
-          forward: -1,
-          backward: 1,
-        };
-        const newIndex = Math.max(
-          0,
-          Math.min(sortedLayers.length - 1, selectedIndex + directionDelta[direction]),
-        );
-        AccessibilityInfo.announceForAccessibility(
-          `Moved ${layer.label} to position ${newIndex + 1}`,
-        );
-      }
     },
-    [selectedLayerId, haptic, onReorder, sortedLayers, selectedIndex],
+    [selectedLayerId, onReorder, haptic],
   );
 
-  const reorderActions: {
-    direction: ReorderDirection;
-    label: string;
-    icon: React.ComponentProps<typeof Ionicons>['name'];
-    disabled: boolean;
-    hint: string;
-  }[] = [
+  const reorderActions: ReorderAction[] = [
     {
       direction: 'front',
       label: 'Bring to Front',
@@ -125,16 +107,16 @@ export function AccessibilityZOrderSheet({
       hint: 'Moves the selected object to the very front of the stack' },
     {
       direction: 'forward',
-      label: 'Forward One',
+      label: 'Bring Forward',
       icon: 'chevron-up-circle-outline',
       disabled: !canEdit || isFront,
-      hint: 'Moves the selected object forward by one layer' },
+      hint: 'Moves the selected object one step closer to the front' },
     {
       direction: 'backward',
-      label: 'Backward One',
+      label: 'Send Backward',
       icon: 'chevron-down-circle-outline',
       disabled: !canEdit || isBack,
-      hint: 'Moves the selected object backward by one layer' },
+      hint: 'Moves the selected object one step closer to the back' },
     {
       direction: 'back',
       label: 'Send to Back',
@@ -156,7 +138,7 @@ export function AccessibilityZOrderSheet({
             accessibilityRole="button"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             Arrange
@@ -180,7 +162,7 @@ export function AccessibilityZOrderSheet({
               style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}
               accessibilityLiveRegion="polite"
             >
-              <Ionicons name="layers-outline" size={IconGrammar.standard} color={colors.textMuted} />
+              <AppIcon name="layers-outline" size={IconSize.md} color="textMuted" opticalCenter={true} accessible={false} />
               <Text style={[styles.readoutText, { color: colors.textPrimary }]}>
                 Position {selectedIndex + 1} of {sortedLayers.length}
               </Text>
@@ -203,7 +185,7 @@ export function AccessibilityZOrderSheet({
                   accessibilityState={{ disabled: action.disabled }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name={action.icon} size={IconGrammar.hero} color={colors.textPrimary} />
+                  <AppIcon name={action.icon} size={IconSize.hero} color="textPrimary" opticalCenter={true} accessible={false} />
                   <Text
                     style={[styles.actionBtnText, { color: colors.textPrimary }]}
                     numberOfLines={1}

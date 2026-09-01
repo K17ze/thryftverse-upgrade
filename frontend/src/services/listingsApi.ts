@@ -556,6 +556,50 @@ export async function reportListing(
   );
 }
 
+/**
+ * Record a listing view — feeds the `interactions` table so seller
+ * analytics (views, conversion rate, top performers) have real data.
+ * Fire-and-forget at call sites; the server handles idempotency.
+ */
+export async function trackListingView(
+  listingId: string,
+  options?: { qualified?: boolean; idempotencyKey?: string }
+): Promise<{ ok: boolean; recorded: boolean }> {
+  return fetchJson<{ ok: boolean; recorded: boolean }>(
+    `/listings/${encodeURIComponent(listingId)}/view`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        qualified: options?.qualified ?? false,
+        idempotencyKey: options?.idempotencyKey,
+      }),
+    }
+  );
+}
+
+/**
+ * Record a listing interaction (like/save/share) — feeds the
+ * `interactions` table for seller analytics engagement metrics.
+ */
+export async function trackListingInteraction(
+  listingId: string,
+  action: 'like' | 'save' | 'share',
+  options?: { idempotencyKey?: string }
+): Promise<{ ok: boolean; recorded: boolean }> {
+  return fetchJson<{ ok: boolean; recorded: boolean }>(
+    `/listings/${encodeURIComponent(listingId)}/interact`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        idempotencyKey: options?.idempotencyKey,
+      }),
+    }
+  );
+}
+
 export async function patchListingOnApi(
   listingId: string,
   patch: Partial<Omit<ListingCreateBody, 'id' | 'sellerId'>>

@@ -50,10 +50,10 @@ const TYPE_CONFIG: Record<NotificationType, TypeConfig> = {
   warning: { icon: 'warning', accentKey: 'warning' },
   error: { icon: 'alert-circle', accentKey: 'danger' },
   info: { icon: 'information-circle', accentKey: 'brand' },
-  offer: { icon: 'pricetag', accentKey: 'discovery' },
+  offer: { icon: 'cash-outline', accentKey: 'discovery' },
   message: { icon: 'chatbubble', accentKey: 'social' },
-  listing: { icon: 'cube', accentKey: 'commerceTrust' },
-  order: { icon: 'cube', accentKey: 'commerceTrust' } };
+  listing: { icon: 'bag-handle-outline', accentKey: 'commerceTrust' },
+  order: { icon: 'car-outline', accentKey: 'commerceTrust' } };
 
 // ---------------------------------------------------------------------------
 // Props

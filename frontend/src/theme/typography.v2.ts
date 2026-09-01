@@ -26,7 +26,7 @@
  * - First viewport normally uses no more than three type sizes and one eyebrow.
  */
 
-import { FontFamily, FontFamilySerif } from './designTokens';
+import { FontFamily, FontFamilySerif } from './fontFamily';
 
 export type TypographyWeight = '400' | '500' | '600' | '700';
 

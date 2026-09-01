@@ -26,6 +26,8 @@ import { lookupUKPostcode, isUKPostcode } from '../utils/postcodeLookup';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { t } from '../i18n';
 
 
@@ -444,7 +446,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         scrollEnabled={false}
       >
         <View style={styles.signedOutContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
+          <AppIcon name="lock" size={IconSize.hero} color="textMuted" opticalCenter accessible={false} />
           <Text style={styles.signedOutTitle}>Sign in required</Text>
           <Text style={styles.signedOutBody}>
             You need to be signed in to manage your delivery address.
@@ -513,7 +515,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             />
             {errors.name && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.errorText}>{errors.name}</Text>
               </View>
             )}
@@ -541,7 +543,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             />
             {errors.streetAddress && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.errorText}>{errors.streetAddress}</Text>
               </View>
             )}
@@ -585,7 +587,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             />
             {errors.city && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.errorText}>{errors.city}</Text>
               </View>
             )}
@@ -627,7 +629,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             />
             {errors.postalCode && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.errorText}>{errors.postalCode}</Text>
               </View>
             )}
@@ -638,12 +640,12 @@ export default function AddressFormScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel={`Use ${postcodeSuggestion.city}, ${postcodeSuggestion.region} for this postcode`}
               >
-                <Ionicons name="location-outline" size={14} color={colors.brand} />
+                <AppIcon name="location" size={IconSize.xs} color="brand" opticalCenter accessible={false} />
                 <Text style={styles.postcodeSuggestionText}>
                   Use <Text style={styles.postcodeSuggestionBold}>{postcodeSuggestion.city}</Text>
                   {postcodeSuggestion.region ? `, ${postcodeSuggestion.region}` : ''}
                 </Text>
-                <Ionicons name="arrow-forward-circle" size={16} color={colors.brand} />
+                <AppIcon name="forward" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
               </Pressable>
             )}
           </View>
@@ -667,11 +669,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               >
                 {countryDisplayName}
               </Text>
-              <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+              <AppIcon name="chevronDown" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             {errors.country && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.errorText}>{errors.country}</Text>
               </View>
             )}
@@ -692,7 +694,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             accessibilityHint="When enabled, this address is selected automatically at checkout"
           >
             <View style={styles.defaultToggleLeft}>
-              <Ionicons name="star-outline" size={16} color={colors.textSecondary} />
+              <AppIcon name="checkmark-circle-outline" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
               <View style={styles.defaultToggleTextCol}>
                 <Text style={[styles.defaultToggleTitle, { color: colors.textPrimary }]}>
                   Save as default
@@ -726,7 +728,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Remove delivery address"
             >
-              <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
+              <AppIcon name="trash" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
               <Text style={styles.removeBtnText}>Remove address</Text>
             </Pressable>
           )}
@@ -735,7 +737,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       {/* Save error display */}
       {saveError ? (
         <View style={styles.saveErrorRow}>
-          <Ionicons name="alert-circle" size={14} color={colors.danger} />
+          <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
           <Text style={styles.saveErrorText}>{saveError}</Text>
         </View>
       ) : null}

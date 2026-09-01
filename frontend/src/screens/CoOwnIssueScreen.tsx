@@ -20,7 +20,7 @@ import { useScreenCaptureProtection } from '../platform/screenCapture';
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnIssue'>;
 
 const CATEGORIES = [
-  { value: 'dispute', label: 'Ownership dispute', icon: 'shield-half-outline' as const },
+  { value: 'dispute', label: 'Ownership dispute', icon: 'alert-circle-outline' as const },
   { value: 'technical', label: 'Technical problem', icon: 'bug-outline' as const },
   { value: 'fraud', label: 'Fraud or scam', icon: 'warning-outline' as const },
   { value: 'other', label: 'Other', icon: 'chatbox-ellipses-outline' as const },
@@ -104,7 +104,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         {/* Asset context — show title, not UUID */}
         {assetId && (
           <View style={[styles.assetContext, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+            <Ionicons name="bag-handle-outline" size={16} color={colors.textMuted} />
             <Text style={[styles.assetContextLabel, { color: colors.textMuted }]}>Item:</Text>
             <Text style={[styles.assetContextText, { color: colors.textPrimary }]} numberOfLines={1}>
               {assetTitle ?? 'Loading...'}

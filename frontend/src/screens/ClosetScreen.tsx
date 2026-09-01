@@ -820,7 +820,7 @@ export default function ClosetScreen() {
               accessibilityState={{ selected: showPriceDropsOnly }}
               accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
             >
-              <Ionicons name="pricetag-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
+              <Ionicons name="cash-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
               <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]}>
                 Price drops ({priceDropCount})
               </Text>

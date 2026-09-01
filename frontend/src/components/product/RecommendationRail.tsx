@@ -193,7 +193,7 @@ export function RecommendationRail({
       {section.reason ? (
         <View style={styles.reasonRow}>
           <Ionicons
-            name={section.personalised ? 'person-outline' : 'pricetag'}
+            name={section.personalised ? 'person-outline' : 'bag-handle-outline'}
             size={12}
             color={colors.textMuted}
           />

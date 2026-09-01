@@ -1,21 +1,19 @@
 import { useState, useRef, useCallback } from 'react';
 import { useStore } from '../../store/useStore';
 import { haptics } from '../../utils/haptics';
-import { makeStableId } from '../../utils/createStableId';
 import { sanitizeDecimalInput } from '../../utils/currencyAuthoringFlows';
-import {
-  resolvePublishedMedia,
-  buildPublishErrors,
-} from '../../utils/sellScreenLogic';
+import { buildPublishErrors } from '../../utils/sellScreenLogic';
 import { buildCreateCoOwnPrefillFromSell } from '../../utils/syndicatePrefill';
 import type { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
-import { createListingOnApi, createListingImageOnApi } from '../../services/listingsApi';
 import type { MediaUploadQueue } from '../../services/mediaUploadQueue';
+import {
+  executePublication,
+  type PublicationContext,
+  type PublicationStage,
+} from '../../services/listingPublication';
 import type { ListingMode } from '../../components/listing/ListingModeSelector';
 import type { ListingCompletenessResult } from '../../contracts/listingCategoryPolicy';
 import { track, trackFunnelStep } from '../../analytics';
-import { ApiRequestError, classifyNetworkError, isRecord } from '../../lib/apiClient';
-import { OFFLINE_WRITE_QUEUED_CODE } from '../../lib/offlineQueue';
 
 interface ListingPublishPipelineParams {
   listingMode: ListingMode;
@@ -48,9 +46,11 @@ interface ListingPublishPipelineParams {
 }
 
 /**
- * Owns the listing publication state and the publish effect chain:
- * media-upload → create-listing → attach-media. Manages isPublishing,
- * publicationStage, and ref guards for recoverable failure handling.
+ * Owns the listing publication state and the publish flow: validation →
+ * co-own redirect → executePublication (media-upload → create-listing →
+ * attach-media). Manages isPublishing, publicationStage, and the recovery
+ * context that makes retries idempotent (the listing is never recreated;
+ * only missing media attachments are re-sent).
  */
 export function useListingPublishPipeline(params: ListingPublishPipelineParams) {
   const {
@@ -88,9 +88,27 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
   const [isPublishing, setIsPublishing] = useState(false);
   // Ref guard prevents double-tap publish before state update propagates (§13).
   const isPublishingRef = useRef(false);
-  const [publicationStage, setPublicationStage] = useState<'idle' | 'uploading_media' | 'creating_listing' | 'attaching_media' | 'completed' | 'failed_recoverable'>('idle');
-  const publishedListingIdRef = useRef<string | null>(null);
-  const uploadedUrlsRef = useRef<string[]>([]);
+  const [publicationStage, setPublicationStage] = useState<PublicationStage | 'idle'>('idle');
+  // Recovery context from the last failed attempt. Reused on retry so the
+  // reserved listing id and completed uploads/attachments are not redone.
+  const recoveryRef = useRef<PublicationContext | null>(null);
+
+  const syncMediaFromQueue = useCallback((queue: MediaUploadQueue) => {
+    const resultMap = queue.getResultMap();
+    if (resultMap.size === 0) return;
+    setMediaDraftItems((prev) =>
+      prev.map((m) => {
+        const res = resultMap.get(m.id);
+        if (!res) return m;
+        return {
+          ...m,
+          status: res.state === 'uploaded' ? 'uploaded' : res.state === 'failed' ? 'failed' : m.status,
+          publicUrl: res.publicUrl || m.publicUrl,
+          error: res.error || m.error,
+        };
+      })
+    );
+  }, [setMediaDraftItems]);
 
   const handlePublish = useCallback(async () => {
     const trimmedTitle = title.trim();
@@ -141,114 +159,6 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
       return;
     }
 
-    if (listingMode === 'auction') {
-      if (!currentUser?.id) {
-        setErrorMsg('Sign in to publish a listing.');
-        haptics.error();
-        return;
-      }
-      setErrorMsg(null);
-      setIsPublishing(true);
-      try {
-        const queue = uploadQueueRef.current;
-        const itemsToUpload = mediaDraftItems.filter((m) => m.source === 'local' && m.status !== 'uploaded');
-        if (itemsToUpload.length > 0) {
-          queue.addAssets(
-            itemsToUpload.map((m) => ({
-              id: m.id,
-              uri: m.uri,
-              fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
-              mimeType: m.mimeType || 'image/jpeg',
-              kind: m.kind,
-              width: m.width,
-              height: m.height,
-            }))
-          );
-          await queue.run();
-          const queueItems = queue.getItems();
-          setMediaDraftItems((prev) =>
-            prev.map((m) => {
-              const qi = queueItems.find((q) => q.id === m.id);
-              if (!qi) return m;
-              return { ...m, status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status, publicUrl: qi.publicUrl || m.publicUrl, error: qi.error || m.error };
-            })
-          );
-        }
-        const uploadedMedia = resolvePublishedMedia(mediaDraftItems, queue);
-        const uploadedUrls = uploadedMedia.map((item) => item.url);
-        const verifiedQueueItems = queue.getItems();
-        const coverUpload = verifiedQueueItems.find(
-          (item) => item.state === 'uploaded'
-            && item.asset.kind === 'image'
-            && item.publicUrl
-            && item.finalizationId,
-        );
-        if (!coverUpload) {
-          throw new Error('A verified cover image is required before creating an auction.');
-        }
-        const coverImage = coverUpload.publicUrl!;
-        const listingId = makeStableId('listing');
-        await createListingOnApi({
-          id: listingId,
-          sellerId: currentUser.id,
-          title: trimmedTitle,
-          description: trimmedDescription,
-          priceGbp: numericPrice,
-          imageUrl: coverImage,
-          coverFinalizationId: coverUpload.finalizationId!,
-          status: 'active',
-          category,
-          brand: brand || undefined,
-          size,
-          condition,
-          originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-          shippingMethod: shippingMethod || undefined,
-          shippingPayer: shippingPayer || undefined,
-        });
-        for (let i = 0; i < uploadedUrls.length; i++) {
-          const verifiedUpload = verifiedQueueItems.find(
-            (item) => item.publicUrl === uploadedUrls[i] && item.finalizationId,
-          );
-          if (!verifiedUpload) {
-            throw new Error('Every auction media item must be verified before attachment.');
-          }
-          await createListingImageOnApi({
-            id: `${listingId}_img_${i}`,
-            listingId,
-            imageUrl: uploadedUrls[i],
-            sortOrder: i,
-            mediaWidth: uploadedMedia[i]?.width,
-            mediaHeight: uploadedMedia[i]?.height,
-            finalizationId: verifiedUpload.finalizationId!,
-          });
-        }
-        clearSellDraft();
-        setMediaDraftItems([]);
-        queue.reset();
-        haptics.success();
-        // Performance mark: listing creation complete (auction path).
-        performance.mark('listing:create:complete');
-        navigation.replace('CreateAuction', { listingId });
-      } catch (e: unknown) {
-        // Detect the offline-queued case: the listing was NOT created on the
-        // server — it was saved for later replay. Show a truthful message and
-        // stay on the sell screen; do NOT navigate to CreateAuction.
-        const isOfflineQueued =
-          e instanceof ApiRequestError &&
-          isRecord(e.details) &&
-          e.details.code === OFFLINE_WRITE_QUEUED_CODE;
-        const rawMsg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to prepare auction. Try again.';
-        setErrorMsg(isOfflineQueued
-          ? "You're offline. Your listing has been saved and will be published when you reconnect."
-          : rawMsg);
-        haptics.error();
-      } finally {
-        isPublishingRef.current = false;
-        setIsPublishing(false);
-      }
-      return;
-    }
-
     if (!currentUser?.id) {
       setErrorMsg('Sign in to publish a listing.');
       haptics.error();
@@ -259,141 +169,74 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
     isPublishingRef.current = true;
     setIsPublishing(true);
     setErrorMsg(null);
-    setPublicationStage('uploading_media');
 
-    try {
-      const queue = uploadQueueRef.current;
-      const itemsToUpload = mediaDraftItems.filter((m) => m.source === 'local' && m.status !== 'uploaded');
-      if (itemsToUpload.length > 0) {
-        const assets = itemsToUpload.map((m) => ({
-          id: m.id,
-          uri: m.uri,
-          fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
-          mimeType: m.mimeType || 'image/jpeg',
-          kind: m.kind,
-          width: m.width,
-          height: m.height,
-        }));
-        queue.addAssets(assets);
-        await queue.run();
-        const queueItems = queue.getItems();
-        setMediaDraftItems((prev) =>
-          prev.map((m) => {
-            const qi = queueItems.find((q) => q.id === m.id);
-            if (!qi) return m;
-            return {
-              ...m,
-              status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status,
-              publicUrl: qi.publicUrl || m.publicUrl,
-              error: qi.error || m.error,
-            };
-          })
-        );
-      }
+    const queue = uploadQueueRef.current;
+    const result = await executePublication(
+      {
+        mode: listingMode === 'auction' ? 'auction' : 'sell_now',
+        mediaDraftItems,
+        title: trimmedTitle,
+        description: trimmedDescription,
+        priceGbp: numericPrice,
+        category,
+        brand: brand || undefined,
+        size,
+        condition,
+        originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
+        shippingMethod: shippingMethod || undefined,
+        shippingPayer: shippingPayer || undefined,
+        sellerId: currentUser.id,
+        existingRecovery: recoveryRef.current,
+        onStageChange: setPublicationStage,
+      },
+      queue
+    );
 
-      const uploadedMedia = resolvePublishedMedia(mediaDraftItems, queue);
-      const uploadedUrls = uploadedMedia.map((item) => item.url);
-      const verifiedQueueItems = queue.getItems();
-      const coverUpload = verifiedQueueItems.find(
-        (item) => item.state === 'uploaded'
-          && item.asset.kind === 'image'
-          && item.publicUrl
-          && item.finalizationId,
-      );
-      if (!coverUpload) {
-        throw new Error('A verified cover image is required before publishing.');
-      }
-      const coverImage = coverUpload.publicUrl!;
-      let listingId = publishedListingIdRef.current;
+    // Reflect live upload state in the draft items regardless of outcome.
+    syncMediaFromQueue(queue);
 
-      if (!listingId) {
-        setPublicationStage('creating_listing');
-        listingId = makeStableId('listing');
-        await createListingOnApi({
-          id: listingId,
-          sellerId: currentUser.id,
-          title: trimmedTitle,
-          description: trimmedDescription,
-          priceGbp: numericPrice,
-          imageUrl: coverImage,
-          coverFinalizationId: coverUpload.finalizationId!,
-          status: 'active',
-          category,
-          brand: brand || undefined,
-          size,
-          condition,
-          originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-          shippingMethod: shippingMethod || undefined,
-          shippingPayer: shippingPayer || undefined,
-        });
-        publishedListingIdRef.current = listingId;
-      }
-
-      setPublicationStage('attaching_media');
-      for (let i = 0; i < uploadedUrls.length; i++) {
-        const verifiedUpload = verifiedQueueItems.find(
-          (item) => item.publicUrl === uploadedUrls[i] && item.finalizationId,
-        );
-        if (!verifiedUpload) {
-          throw new Error('Every listing media item must be verified before attachment.');
-        }
-        await createListingImageOnApi({
-          id: `${listingId}_img_${i}`,
-          listingId,
-          imageUrl: uploadedUrls[i],
-          sortOrder: i,
-          mediaWidth: uploadedMedia[i]?.width,
-          mediaHeight: uploadedMedia[i]?.height,
-          finalizationId: verifiedUpload.finalizationId!,
-        });
-      }
-
+    if (result.ok && result.listingId) {
+      recoveryRef.current = null;
       setPublicationStage('completed');
       clearSellDraft();
       setMediaDraftItems([]);
+      setPhotos([]);
       queue.reset();
-      publishedListingIdRef.current = null;
       haptics.success();
-      // Performance mark: listing creation complete (standard path).
+      // Performance mark: listing creation complete.
       performance.mark('listing:create:complete');
-      track('listing_created', { category, price_range: numericPrice <= 20 ? 'low' : numericPrice <= 50 ? 'mid' : numericPrice <= 100 ? 'high' : 'premium' });
-      navigation.replace('ListingSuccess', {
-        listingId,
-        title: trimmedTitle,
-        price: numericPrice,
-        categoryId: category,
-        photoUri: coverImage,
-      });
-    } catch (e: unknown) {
-      // Detect the offline-queued case explicitly: the API client enqueued the
-      // write for later replay but did NOT complete it. This is NOT a success —
-      // the listing was never created on the server — so we must not navigate
-      // to the success screen. Surface a truthful "saved offline" message and
-      // stay on the sell screen so the user knows their work is preserved and
-      // will be published automatically on reconnect.
-      const isOfflineQueued =
-        e instanceof ApiRequestError &&
-        isRecord(e.details) &&
-        e.details.code === OFFLINE_WRITE_QUEUED_CODE;
-      const isNetworkError = isOffline || classifyNetworkError(e) === 'offline';
-      const rawMsg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Try again.';
-      const msg = isOfflineQueued
-        ? "You're offline. Your listing has been saved and will be published when you reconnect."
-        : isNetworkError ? 'You appear to be offline. Check your connection and try again.' : rawMsg;
-      const hasListing = !!publishedListingIdRef.current;
-      const hasMedia = mediaDraftItems.some((m) => m.status === 'uploaded');
+      if (result.context.mode === 'sell_now') {
+        track('listing_created', { category, price_range: numericPrice <= 20 ? 'low' : numericPrice <= 50 ? 'mid' : numericPrice <= 100 ? 'high' : 'premium' });
+        navigation.replace('ListingSuccess', {
+          listingId: result.listingId,
+          title: trimmedTitle,
+          price: numericPrice,
+          categoryId: category,
+          photoUri: result.context.coverImageUrl,
+        });
+      } else {
+        navigation.replace('CreateAuction', { listingId: result.listingId });
+      }
+    } else {
+      // Recovery context is authoritative at failure time — no stale reads.
+      recoveryRef.current = result.context;
       setPublicationStage('failed_recoverable');
-      // For the offline-queued case, the listing was NOT created — don't imply
-      // it was. Show only the truthful saved-offline message.
-      setErrorMsg(isOfflineQueued
-        ? msg
-        : hasListing ? `${msg} -- your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} -- some media uploaded. Tap Publish to retry.` : msg);
+      const rawMsg = result.error ?? 'Failed to publish. Try again.';
+      let msg = rawMsg;
+      if (result.context.offlineQueued) {
+        msg = rawMsg;
+      } else if (isOffline && !result.context.listingCreated) {
+        msg = 'You appear to be offline. Check your connection and try again.';
+      } else if (result.context.listingCreated) {
+        msg = `${rawMsg} — your listing was created. Tap Publish to retry attaching media.`;
+      }
+      setErrorMsg(msg);
       haptics.error();
-    } finally {
-      isPublishingRef.current = false;
-      setIsPublishing(false);
     }
-  }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline, completeness, uploadQueueRef, setMediaDraftItems, setPhotos, setErrors, setErrorMsg]);
+
+    isPublishingRef.current = false;
+    setIsPublishing(false);
+  }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline, completeness, uploadQueueRef, setMediaDraftItems, setPhotos, setErrors, setErrorMsg, syncMediaFromQueue]);
 
   return {
     isPublishing,

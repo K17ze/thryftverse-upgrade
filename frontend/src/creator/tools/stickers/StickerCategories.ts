@@ -10,7 +10,7 @@
  *   - Shapes:      decorative geometric shapes
  *   - Arrows:      directional arrows
  *   - Symbols:     punctuation / typographic symbols
- *   - Decorative:  ornamental stickers (sparkles, stars, hearts)
+ *   - Decorative:  ornamental stickers (stars, hearts, gems)
  *   - Interactive: poll / quiz / question / mention / location / hashtag / link
  *
  * Interactive stickers are gated by the capability registry — only
@@ -138,7 +138,7 @@ export const STICKER_CATEGORIES: StickerCategory[] = [
   {
     id: 'symbols',
     name: 'Symbols',
-    icon: 'pricetag-outline',
+    icon: 'bag-handle-outline',
     stickers: [
       { id: 'symbol-check', name: 'Check', iconRef: 'checkmark-circle-outline', category: 'symbols' },
       { id: 'symbol-cross', name: 'Cross', iconRef: 'close-circle-outline', category: 'symbols' },
@@ -153,7 +153,7 @@ export const STICKER_CATEGORIES: StickerCategory[] = [
     name: 'Decorative',
     icon: 'shapes-outline',
     stickers: [
-      { id: 'deco-sparkles', name: 'Sparkles', iconRef: 'sparkles', category: 'decorative' },
+      { id: 'deco-sparkles', name: 'Sparkles', iconRef: 'star-outline', category: 'decorative' },
       { id: 'deco-flower', name: 'Flower', iconRef: 'flower-outline', category: 'decorative' },
       { id: 'deco-ribbon', name: 'Ribbon', iconRef: 'gift-outline', category: 'decorative' },
       { id: 'deco-gem', name: 'Gem', iconRef: 'diamond-outline', category: 'decorative' },
@@ -172,13 +172,13 @@ export const STICKER_CATEGORIES: StickerCategory[] = [
     // render their interactions.
     stickers: ([
       { id: 'poll', name: 'Poll', iconRef: 'stats-chart-outline', category: 'interactive', description: '2-option vote', interactive: true, pickerMode: 'vote' },
-      { id: 'product', name: 'Item', iconRef: 'pricetag-outline', category: 'interactive', description: 'Tag a listing', interactive: true, pickerMode: 'product' },
+      { id: 'product', name: 'Item', iconRef: 'bag-handle-outline', category: 'interactive', description: 'Tag a listing', interactive: true, pickerMode: 'product' },
       { id: 'look', name: 'Look', iconRef: 'shirt-outline', category: 'interactive', description: 'Tag a look', interactive: true, pickerMode: 'look' },
       { id: 'quiz', name: 'Quiz', iconRef: 'help-circle-outline', category: 'interactive', description: 'Trivia with answer', interactive: true, pickerMode: 'quiz' },
       { id: 'question', name: 'Ask', iconRef: 'chatbubble-outline', category: 'interactive', description: 'Open Q&A', interactive: true, pickerMode: 'question' },
       { id: 'mention', name: '@Mention', iconRef: 'at-outline', category: 'interactive', description: 'Tag a user', interactive: true, pickerMode: 'mention' },
       { id: 'location', name: 'Location', iconRef: 'location-outline', category: 'interactive', description: 'Tag a place', interactive: true, pickerMode: 'location' },
-      { id: 'hashtag', name: 'Hashtag', iconRef: 'pricetag-outline', category: 'interactive', description: 'Topic tag', interactive: true, pickerMode: 'hashtag' },
+      { id: 'hashtag', name: 'Hashtag', iconRef: 'bag-handle-outline', category: 'interactive', description: 'Topic tag', interactive: true, pickerMode: 'hashtag' },
       { id: 'link', name: 'Link', iconRef: 'link-outline', category: 'interactive', description: 'Clickable URL', interactive: true, pickerMode: 'link' },
     ] as StickerDef[]).filter((s) => {
       // Map pickerMode to the layer type it creates, then check capability.

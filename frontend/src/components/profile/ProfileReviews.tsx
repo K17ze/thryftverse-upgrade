@@ -5,6 +5,8 @@ import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Stroke, AvatarSize, ThumbSize } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import type { SellerReviewItem, SellerReviewSummary } from '../../services/sellerReviewsApi';
 import { formatFullDate, formatShortDate } from '../../utils/dateFormat';
 
@@ -40,7 +42,15 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
           <Text style={styles.reviewSummaryAvgValue}>{avg.toFixed(1)}</Text>
           <View style={styles.reviewSummaryStars}>
             {[1, 2, 3, 4, 5].map((s) => (
-              <Ionicons key={s} name={s <= Math.round(avg) ? 'star' : 'star-outline'} size={13} color={colors.brand} />
+              <AppIcon
+                key={s}
+                name="star"
+                focused={s <= Math.round(avg)}
+                size={IconSize.xs}
+                color={s <= Math.round(avg) ? 'ratingStar' : 'textMuted'}
+                opticalCenter
+                accessible={false}
+              />
             ))}
           </View>
           <Text style={styles.reviewSummaryCount}>
@@ -54,7 +64,7 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
             return (
               <View key={star} style={styles.distRow}>
                 <Text style={styles.distStar}>{star}</Text>
-                <Ionicons name="star" size={9} color={colors.textMuted} />
+                <AppIcon name="star" focused size={IconSize.micro} color="#F59E0B" opticalCenter accessible={false} />
                 <View style={styles.distTrack}>
                   <View style={[styles.distFill, { width: `${Math.round(pct * 100)}%` }]} />
                 </View>
@@ -140,17 +150,20 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
           <View style={styles.reviewNameRow}>
             <Text style={styles.reviewName} numberOfLines={1}>{reviewerName}</Text>
             <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={10} color={colors.success} />
+              <AppIcon name="shieldCheck" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
               <Text style={styles.verifiedBadgeText}>Verified buyer</Text>
             </View>
           </View>
           <View style={styles.reviewMetaRow}>
             {[1, 2, 3, 4, 5].map((s) => (
-              <Ionicons
+              <AppIcon
                 key={s}
-                name={s <= item.rating ? 'star' : 'star-outline'}
-                size={11}
-                color={s <= item.rating ? colors.brand : colors.textMuted}
+                name="star"
+                focused={s <= item.rating}
+                size={IconSize.micro}
+                color={s <= item.rating ? 'ratingStar' : 'textMuted'}
+                opticalCenter
+                accessible={false}
               />
             ))}
             <Text style={styles.reviewDate}>{dateText}</Text>

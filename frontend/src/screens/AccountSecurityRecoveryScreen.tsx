@@ -18,6 +18,8 @@ import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/fla
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Typography, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import {
   fetchIncident,
   createRecoveryChallenge,
@@ -230,19 +232,22 @@ export default function AccountSecurityRecoveryScreen({ navigation, route }: Pro
             What is protected
           </Text>
           {incident.payoutHoldActive && (
-            <Text style={[styles.protectedRow, { color: colors.textPrimary }]}>
-              <Ionicons name="lock-closed-outline" size={14} color={colors.textSecondary} />  Payout details changes
-            </Text>
+            <View style={styles.protectedRowWrap}>
+              <AppIcon name="lock" size={IconSize.xs} color="textSecondary" opticalCenter accessible={false} />
+              <Text style={[styles.protectedRow, { color: colors.textPrimary }]}>Payout details changes</Text>
+            </View>
           )}
           {incident.withdrawalHoldActive && (
-            <Text style={[styles.protectedRow, { color: colors.textPrimary }]}>
-              <Ionicons name="lock-closed-outline" size={14} color={colors.textSecondary} />  Withdrawals
-            </Text>
+            <View style={styles.protectedRowWrap}>
+              <AppIcon name="lock" size={IconSize.xs} color="textSecondary" opticalCenter accessible={false} />
+              <Text style={[styles.protectedRow, { color: colors.textPrimary }]}>Withdrawals</Text>
+            </View>
           )}
           {incident.protectedChangeHoldActive && (
-            <Text style={[styles.protectedRow, { color: colors.textPrimary }]}>
-              <Ionicons name="lock-closed-outline" size={14} color={colors.textSecondary} />  Email, phone and password changes
-            </Text>
+            <View style={styles.protectedRowWrap}>
+              <AppIcon name="lock" size={IconSize.xs} color="textSecondary" opticalCenter accessible={false} />
+              <Text style={[styles.protectedRow, { color: colors.textPrimary }]}>Email, phone and password changes</Text>
+            </View>
           )}
           <Text style={[styles.protectedNote, { color: colors.textMuted }]}>
             Your funds are safe. These actions are paused until you confirm access.
@@ -393,7 +398,7 @@ function ChecklistStep({
         { backgroundColor: done ? colors.success : colors.surfaceAlt, borderColor: done ? colors.success : colors.border },
       ]}>
         {done ? (
-          <Ionicons name="checkmark" size={14} color={colors.background} />
+          <AppIcon name="check" size={IconSize.xs} color={colors.background} opticalCenter accessible={false} />
         ) : (
           <Text style={[styles.stepNumberText, { color: colors.textSecondary }]}>{number}</Text>
         )}
@@ -440,12 +445,17 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: TypographyV2.meta.letterSpacing,
       textTransform: 'uppercase',
       marginBottom: Space.sm },
+    protectedRowWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs,
+    },
     protectedRow: {
       fontSize: TypographyV2.body.size,
       fontFamily: TypographyV2.body.fontFamily,
       letterSpacing: TypographyV2.body.letterSpacing,
-      lineHeight: TypographyV2.body.lineHeight,
-      paddingVertical: Space.xs },
+      lineHeight: TypographyV2.body.lineHeight },
     protectedNote: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,

@@ -115,24 +115,6 @@ interface ProfileMediaOverride {
   cover: string | null;
 }
 
-export interface ListingPublicationRecovery {
-  clientPublicationId: string;
-  mode: 'sell_now' | 'auction';
-  stage:
-    | 'validating'
-    | 'uploading_media'
-    | 'creating_listing'
-    | 'attaching_media'
-    | 'finalising'
-    | 'completed'
-    | 'failed_recoverable';
-  listingId?: string;
-  uploadedMediaByAssetId: Record<string, string>;
-  uploadedFinalizationByAssetId?: Record<string, string>;
-  attachedAssetIds: string[];
-  lastError?: string;
-}
-
 interface DraftListing {
   categoryId?: string;
   subcategoryId?: string;
@@ -157,7 +139,6 @@ interface DraftListing {
   sharePriceInput?: string;
   offeringWindowHours?: number;
   authPhotos?: string[];
-  publicationRecovery?: ListingPublicationRecovery;
 }
 
 export interface UserLook {

@@ -439,7 +439,7 @@ export function LiveStreamSellerScreen() {
                 />
               ) : (
                 <View style={[styles.emptyLots, { borderColor: colors.border }]}>
-                  <Ionicons name="pricetags-outline" size={28} color={colors.textMuted} />
+                  <Ionicons name="bag-handle-outline" size={28} color={colors.textMuted} />
                   <Text style={[styles.emptyLotsText, { color: colors.textSecondary }]}>No lots added yet</Text>
                   <Text style={[styles.emptyLotsSubtext, { color: colors.textMuted }]}>Add listings to your stream before going live</Text>
                 </View>

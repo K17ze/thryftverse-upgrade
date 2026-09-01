@@ -1412,7 +1412,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                   ? "warning"
                   : conversationSafetyWarning.level === "caution"
                     ? "alert-circle-outline"
-                    : "shield-outline"
+                    : "lock-closed-outline"
               }
               size={14}
               color={
@@ -1745,7 +1745,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityHint="Open agent management"
               >
                 <Ionicons
-                  name={(deployedChatAgents[0]?.avatar as keyof typeof Ionicons.glyphMap) || 'cube-outline'}
+                  name={(deployedChatAgents[0]?.avatar as keyof typeof Ionicons.glyphMap) || 'bag-handle-outline'}
                   size={13}
                   color={colors.brand}
                 />

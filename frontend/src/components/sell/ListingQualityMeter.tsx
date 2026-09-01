@@ -28,7 +28,7 @@ import {
   Space,
   Radius,
   Stroke,
-  TypeStyles,
+  FontFamily,
   Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import {
@@ -64,8 +64,8 @@ const TYPE_ICON: Record<QualitySuggestionType, keyof typeof Ionicons.glyphMap> =
   photo: 'camera-outline',
   title: 'text-outline',
   description: 'document-text-outline',
-  pricing: 'pricetag-outline',
-  shipping: 'cube-outline' };
+  pricing: 'cash-outline',
+  shipping: 'car-outline' };
 
 /** Resolve a 0–100 score to a colour token from the theme. */
 function scoreColor(
@@ -108,7 +108,7 @@ export function ListingQualityMeter({ score }: ListingQualityMeterProps) {
     { key: 'photo', label: 'Photos', value: roundToBand(score.photoScore), icon: 'camera-outline' },
     { key: 'title', label: 'Title', value: roundToBand(score.titleScore), icon: 'text-outline' },
     { key: 'description', label: 'Description', value: roundToBand(score.descriptionScore), icon: 'document-text-outline' },
-    { key: 'pricing', label: 'Pricing', value: roundToBand(score.pricingScore), icon: 'pricetag-outline' },
+    { key: 'pricing', label: 'Pricing', value: roundToBand(score.pricingScore), icon: 'cash-outline' },
     { key: 'completeness', label: 'Completeness', value: roundToBand(score.completenessScore), icon: 'checkmark-circle-outline' },
   ];
 
@@ -320,23 +320,21 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     scoreNumber: {
       fontSize: TypographyV2.priceHero.size,
       lineHeight: TypographyV2.priceHero.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '700',
+      fontFamily: FontFamily.bold,
       letterSpacing: -0.5 },
     scoreMax: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: FontFamily.regular,
       color: colors.textMuted,
       marginLeft: 2 },
     headerText: {
       flex: 1 },
     title: {
       fontSize: TypographyV2.bodyStrong.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     band: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: FontFamily.regular,
       marginTop: 2 },
     progressTrack: {
       height: 6,
@@ -359,7 +357,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginRight: 2 },
     subScoreLabel: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: FontFamily.regular,
       width: 76 },
     subScoreBarWrap: {
       flex: 1 },
@@ -373,8 +371,8 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderRadius: Radius.sm },
     subScoreValue: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
+      fontFamily: FontFamily.semibold,
+      
       width: 28,
       textAlign: 'right' },
     suggestionsWrap: {
@@ -384,8 +382,8 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderTopColor: colors.borderSubtle },
     suggestionsTitle: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      fontWeight: '500',
+      fontFamily: FontFamily.regular,
+      
       marginBottom: Space.sm },
     suggestionRow: {
       flexDirection: 'row',
@@ -407,13 +405,13 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginBottom: 2 },
     suggestionType: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
+      fontFamily: FontFamily.semibold,
+      
       textTransform: 'capitalize',
       letterSpacing: 0.3 },
     suggestionMessage: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: FontFamily.regular,
       lineHeight: 17 },
     demoBadge: {
       flexDirection: 'row',
@@ -428,8 +426,8 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     demoText: {
       flex: 1,
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '500',
+      fontFamily: FontFamily.semibold,
+      
       color: colors.textMuted,
       letterSpacing: 0.15 } });
 }

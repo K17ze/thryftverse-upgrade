@@ -169,7 +169,7 @@ export default function SuccessScreen() {
                   isComplete={timelineStates.orderPlaced.isComplete}
                 />
                 <TimelineStep
-                  icon="cube-outline"
+                  icon="car-outline"
                   label="Seller prepares item"
                   detail={timelineStates.sellerPrep.detail}
                   isComplete={timelineStates.sellerPrep.isComplete}

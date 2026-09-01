@@ -62,7 +62,7 @@ export function CoOwnTrustPanel({
 
   if (authenticityStatus === 'verified') {
     const value = authenticityMethod ? `Verified · ${authenticityMethod}` : 'Verified';
-    items.push({ icon: 'shield-checkmark', label: 'Authenticity', value, positive: true });
+    items.push({ icon: 'checkmark-circle', label: 'Authenticity', value, positive: true });
   } else if (authenticityStatus === 'pending') {
     items.push({ icon: 'hourglass-outline', label: 'Authenticity', value: 'Verification pending', positive: false });
   } else if (authenticityStatus === 'unverified') {
@@ -76,7 +76,7 @@ export function CoOwnTrustPanel({
 
   if (custodianName) {
     const value = custodianLocation ? `${custodianName} · ${custodianLocation}` : custodianName;
-    items.push({ icon: 'cube-outline', label: 'Custodian', value, positive: true });
+    items.push({ icon: 'lock-closed-outline', label: 'Custodian', value, positive: true });
   }
 
   if (custodyInsured && custodyInsurer) {
@@ -87,7 +87,7 @@ export function CoOwnTrustPanel({
       : '';
     const policyStr = custodyPolicyRef ? ` · policy ${custodyPolicyRef}` : '';
     items.push({
-      icon: 'shield-checkmark-outline',
+      icon: 'checkmark-circle-outline',
       label: 'Insurance',
       value: `${custodyInsurer}${coverageStr}${policyStr}`,
       positive: true,

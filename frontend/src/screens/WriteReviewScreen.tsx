@@ -21,6 +21,8 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { RootStackParamList } from '../navigation/types';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { getOrder, CommerceOrder } from '../services/commerceApi';
 import { getOrderReview, createOrderReview, OrderReview } from '../services/reviewApi';
 import { parseApiError } from '../lib/apiClient';
@@ -187,7 +189,7 @@ export default function WriteReviewScreen() {
 
           {existingReview ? (
             <View style={styles.existingState}>
-              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+              <AppIcon name="checkmark-circle" focused size={IconSize.xl} color="success" opticalCenter accessible={false} />
               <Text style={styles.existingTitle}>Review published</Text>
               <Text style={styles.existingSub}>
                 {existingReview.rating} star{existingReview.rating > 1 ? 's' : ''} ·{' '}
@@ -228,10 +230,13 @@ export default function WriteReviewScreen() {
                       accessibilityLabel={`${star} of 5${star > 1 ? 's' : ''}${rating === star ? ', selected' : ''}`}
                       accessibilityState={{ selected: rating === star }}
                     >
-                      <Ionicons
-                        name={rating >= star ? 'star' : 'star-outline'}
-                        size={36}
-                        color={rating >= star ? colors.brand : colors.textMuted}
+                      <AppIcon
+                        name="star"
+                        focused={rating >= star}
+                        size={IconSize.hero}
+                        color={rating >= star ? 'ratingStar' : 'textMuted'}
+                        opticalCenter
+                        accessible={false}
                       />
                     </AnimatedPressable>
                   ))}
@@ -279,7 +284,7 @@ export default function WriteReviewScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Remove photo ${index + 1}`}
                         >
-                          <Ionicons name="close-circle" size={20} color={colors.danger} />
+                          <AppIcon name="close" size={IconSize.md} color="danger" opticalCenter accessible={false} />
                         </Pressable>
                       </View>
                     ))}
@@ -300,7 +305,7 @@ export default function WriteReviewScreen() {
                       <ActivityIndicator size="small" color={colors.brand} />
                     ) : (
                       <>
-                        <Ionicons name="camera-outline" size={20} color={colors.brand} />
+                        <AppIcon name="camera" size={IconSize.md} color="brand" opticalCenter accessible={false} />
                         <Text style={styles.photoAddText}>
                           {photoUris.length > 0 ? 'Add more' : 'Add photos'}
                         </Text>

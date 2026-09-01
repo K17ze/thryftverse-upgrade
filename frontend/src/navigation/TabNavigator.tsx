@@ -8,7 +8,7 @@ import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TabParamList, RootStackParamList } from './types';
-import { Space, Radius, Typography, Stroke, Elevation} from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Elevation, IconSize } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -17,6 +17,8 @@ import { useStore } from '../store/useStore';
 import { useIsGuest } from '../store/useStore';
 import { useSignupWall } from '../hooks/useSignupWall';
 import { CachedImage } from '../components/CachedImage';
+import { AppIcon } from '../components/common/AppIcon';
+import { type SemanticIconName } from '../theme/iconTokens';
 import { getStoredCreateMode, type PersistedCreateMode } from '../preferences/createModePreferences';
 import { useTabScroll } from '../context/TabScrollContext';
 import Reanimated, {
@@ -36,16 +38,14 @@ const CREATE_CONTROL_SIZE = 40;
 const AVATAR_SIZE = 27;
 
 interface TabIconProps {
-  name: keyof typeof Ionicons.glyphMap;
-  nameFocused?: keyof typeof Ionicons.glyphMap;
+  name: SemanticIconName | keyof typeof Ionicons.glyphMap;
   color: string;
   focused: boolean;
   badgeCount?: number;
 }
 
-const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps) => {
+const TabIcon = ({ name, color, focused, badgeCount }: TabIconProps) => {
   const { colors } = useAppTheme();
-  const iconName = focused && nameFocused ? nameFocused : name;
   const displayBadge = badgeCount !== undefined && badgeCount > 0;
   const badgeLabel = displayBadge
     ? badgeCount! > 99 ? '99+' : String(badgeCount)
@@ -53,7 +53,7 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
 
   return (
     <View style={tabStyles.tabIconWrap} accessible={false} importantForAccessibility="no-hide-descendants">
-      <Ionicons name={iconName} size={24} color={color} />
+      <AppIcon name={name} size={IconSize.lg} color={color} focused={focused} accessible={false} />
       {displayBadge && (
         <View
           style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
@@ -96,10 +96,12 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
         importantForAccessibility="no-hide-descendants"
         style={tabStyles.tabIconWrap}
       >
-        <Ionicons
-          name={focused ? 'person' : 'person-outline'}
-          size={24}
+        <AppIcon
+          name="profile"
+          size={IconSize.lg}
           color={color}
+          focused={focused}
+          accessible={false}
         />
       </View>
     );
@@ -180,7 +182,7 @@ const CreateTabButton = ({
       testID={testID}
     >
       <View style={[tabStyles.createControl, { backgroundColor: brandColor }]}>
-        <Ionicons name="add" size={24} color={surfaceColor} />
+        <AppIcon name="plus" size={IconSize.lg} color={surfaceColor} accessible={false} />
       </View>
     </AnimatedPressableRe>
   );
@@ -335,7 +337,7 @@ export default function TabNavigator() {
             tabBarLabel: 'Home',
             freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
+              <TabIcon name="home" color={color} focused={focused} />
             ),
             tabBarAccessibilityLabel: 'Home' }}
         />
@@ -346,7 +348,7 @@ export default function TabNavigator() {
             tabBarLabel: 'Explore',
             freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name={focused ? 'search' : 'search-outline'} color={color} focused={focused} />
+              <TabIcon name="explore" color={color} focused={focused} />
             ),
             tabBarAccessibilityLabel: 'Explore' }}
         />
@@ -380,7 +382,7 @@ export default function TabNavigator() {
             freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
-                name={focused ? 'paper-plane' : 'paper-plane-outline'}
+                name="inbox"
                 color={color}
                 focused={focused}
                 badgeCount={inboxBadgeCount > 0 ? inboxBadgeCount : undefined}

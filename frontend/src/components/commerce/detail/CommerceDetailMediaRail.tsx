@@ -1,7 +1,15 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space } from '../../../theme/designTokens';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolate } from 'react-native-reanimated';
+import { useAppTheme } from '../../../theme/ThemeContext';
+import { Space, PressScale, GlyphShadow } from '../../../theme/designTokens';
+import { Motion } from '../../../theme/motionTokens';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 
 /**
  * Media action rail — the visible utility controls over the hero.
@@ -43,13 +51,56 @@ export interface CommerceDetailMediaRailProps {
   topInset: number;
 }
 
+const PRESS_OPACITY = 0.85;
+
+function RailControl({
+  onPress,
+  label,
+  isActive,
+  reducedMotion,
+  children }: {
+  onPress: () => void;
+  label: string;
+  isActive?: boolean;
+  reducedMotion: boolean;
+  children: React.ReactNode;
+}) {
+  const pressed = useSharedValue(0);
+  const pressStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pressed.value, [0, 1], [1, PRESS_OPACITY]),
+    transform: [
+      { scale: interpolate(pressed.value, [0, 1], [1, reducedMotion ? 1 : PressScale.tap]) },
+    ],
+  }));
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => {
+        pressed.value = withTiming(1, { duration: Motion.duration.fast });
+      }}
+      onPressOut={() => {
+        pressed.value = withTiming(0, { duration: Motion.duration.fast });
+      }}
+      hitSlop={12}
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={isActive ? { selected: true } : undefined}
+      style={styles.hitTarget}
+    >
+      <Reanimated.View style={[styles.hitTarget, pressStyle]}>{children}</Reanimated.View>
+    </Pressable>
+  );
+}
+
 export function CommerceDetailMediaRail({
   onBack,
   rightActions = [],
   onOverflow,
   showOverflow = false,
-  topInset,
-}: CommerceDetailMediaRailProps) {
+  topInset }: CommerceDetailMediaRailProps) {
+  const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const hasOverflow = showOverflow || rightActions.length > 2;
   // Back is a navigation control, not a utility control. The three
   // utility slots are: Share, Save/Collection, and Overflow. This
@@ -61,48 +112,48 @@ export function CommerceDetailMediaRail({
       style={[styles.container, { paddingTop: Math.max(topInset, Space.sm) }]}
       pointerEvents="box-none"
     >
-      <Pressable
-        onPress={onBack}
-        hitSlop={12}
-        accessibilityLabel="Go back"
-        accessibilityRole="button"
-        style={({ pressed }) => [styles.hitTarget, pressed && styles.pressed]}
-      >
-        <Ionicons name="chevron-back" size={28} color="#fff" style={styles.scrimIcon} />
-      </Pressable>
+      <RailControl onPress={onBack} label="Go back" reducedMotion={reducedMotion}>
+        <Ionicons
+          name="chevron-back"
+          size={28}
+          color={colors.mediaOverlayText}
+          style={styles.scrimIcon}
+        />
+      </RailControl>
 
       <View style={styles.rightCluster} pointerEvents="box-none">
         {visibleRight.map((action) => {
           const icon = action.isActive && action.activeIcon ? action.activeIcon : action.icon;
           return (
-            <Pressable
+            <RailControl
               key={action.label}
               onPress={action.onPress}
-              hitSlop={12}
-              accessibilityLabel={action.label}
-              accessibilityRole="button"
-              accessibilityState={action.isActive ? { selected: true } : undefined}
-              style={({ pressed }) => [styles.hitTarget, pressed && styles.pressed]}
+              label={action.label}
+              isActive={action.isActive}
+              reducedMotion={reducedMotion}
             >
               <Ionicons
                 name={icon}
                 size={24}
-                color="#fff"
+                color={colors.mediaOverlayText}
                 style={styles.scrimIcon}
               />
-            </Pressable>
+            </RailControl>
           );
         })}
         {hasOverflow && onOverflow ? (
-          <Pressable
+          <RailControl
             onPress={onOverflow}
-            hitSlop={12}
-            accessibilityLabel="More actions"
-            accessibilityRole="button"
-            style={({ pressed }) => [styles.hitTarget, pressed && styles.pressed]}
+            label="More actions"
+            reducedMotion={reducedMotion}
           >
-            <Ionicons name="ellipsis-horizontal" size={22} color="#fff" style={styles.scrimIcon} />
-          </Pressable>
+            <Ionicons
+              name="ellipsis-horizontal"
+              size={22}
+              color={colors.mediaOverlayText}
+              style={styles.scrimIcon}
+            />
+          </RailControl>
         ) : null}
       </View>
     </View>
@@ -132,15 +183,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pressed: {
-    opacity: 0.5,
-    transform: [{ scale: 0.9 }],
-  },
   // Subtle media-contrast scrim behind the glyph. This is functional
   // (legibility over arbitrary imagery), not decorative chrome.
   scrimIcon: {
-    textShadowColor: 'rgba(0,0,0,0.45)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    ...GlyphShadow.glyph },
 });

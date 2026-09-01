@@ -140,7 +140,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
       >
         {error ? (
           <EmptyState
-            icon="cloud-offline-outline"
+            icon="offline"
             title="Couldn't load accounts"
             subtitle={error}
             ctaLabel="Retry"
@@ -152,14 +152,14 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
             description={`Manage the third-party accounts you use to sign in. Unlink an account as long as you have another way to access your ThryftVerse account.\n${accounts.length > 0 ? `${accounts.length} connected account${accounts.length !== 1 ? 's' : ''}` : 'Email and password'}`}
           >
             <SettingsRow
-              icon="mail-outline"
+              icon="mail"
               title="Email and password"
               subtitle="Active"
               isLast={accounts.length === 0}
             />
             {accounts.length === 0 ? (
               <SettingsRow
-                icon="link-outline"
+                icon="link"
                 title="No connected accounts"
                 subtitle="Connect Google, Apple, or Facebook from the sign-in screen"
                 isLast
@@ -168,7 +168,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
               accounts.map((account, idx) => {
                 const meta = PROVIDER_META[account.provider] ?? {
                   label: account.provider,
-                  icon: 'key-outline',
+                  icon: 'key',
                   color: colors.textMuted,
                 };
                 const isUnlinking = unlinkingId === account.id;
@@ -199,7 +199,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
 
         <SettingsInfoBanner
           tone="info"
-          icon="shield-checkmark-outline"
+          icon="lock"
           title="Account safety"
           description="For your security, you must keep at least one way to sign in. You cannot unlink your last connected account without a password."
         />

@@ -353,7 +353,7 @@ function buildDefaultTools(
       { icon: 'images', label: 'Media', action: () => onToolPress('media'), weight: 'primary' as const },
       { icon: 'text', label: 'Text', action: () => onToolPress('text'), weight: 'primary' as const },
       { icon: 'crop-outline', label: 'Crop', action: () => onToolPress('media') },
-      { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
+      { icon: 'bag-handle-outline', label: 'Product', action: () => onToolPress('product') },
       { icon: 'color-fill-outline', label: 'Background', action: () => onToolPress('shape') },
       { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
       { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
@@ -382,7 +382,7 @@ function buildDefaultTools(
       // Only Item (product tagging) and Add Page remain at the dock level —
       // they are distinct creative intents, not sticker variants. Everything
       // else is reachable via the Stickers picker.
-      { icon: 'pricetag-outline', label: 'Item', action: () => onToolPress('product') },
+      { icon: 'bag-handle-outline', label: 'Item', action: () => onToolPress('product') },
       ...(onAddPage ? [{ icon: 'add-circle-outline' as const, label: 'Add Page', action: onAddPage }] : []),
     ];
   }
@@ -440,7 +440,7 @@ function buildSelectionTools(
       }
     }
   } else if (layer.type === 'product') {
-    tools.push({ icon: 'pricetag-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
+    tools.push({ icon: 'bag-handle-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'mention') {
     tools.push({ icon: 'person-outline', label: 'Edit', action: () => onEditLayer(layer), weight: 'primary' as const });
   } else if (layer.type === 'vote') {

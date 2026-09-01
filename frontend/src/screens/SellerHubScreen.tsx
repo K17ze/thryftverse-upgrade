@@ -30,7 +30,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { track } from '../analytics';
-import { t } from '../i18n';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize, type SemanticIconName } from '../theme/iconTokens';
 
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -39,14 +40,14 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 // Single source of truth for how each task type renders. No branching
 // scattered across the screen — one map, one grammar.
 const TASK_META: Record<SellerHubTaskType, {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: SemanticIconName | React.ComponentProps<typeof Ionicons>['name'];
   route: keyof RootStackParamList;
 }> = {
-  ship_order: { icon: 'cube-outline', route: 'MyOrders' },
-  respond_offer: { icon: 'chatbubble-ellipses-outline', route: 'Inbox' },
-  listing_issue: { icon: 'create-outline', route: 'InventoryManagement' },
-  catalogue_awaiting: { icon: 'download-outline', route: 'CatalogImportProgress' },
-  payout_hold: { icon: 'wallet-outline', route: 'Wallet' } };
+  ship_order: { icon: 'car-outline', route: 'MyOrders' },
+  respond_offer: { icon: 'chat', route: 'Inbox' },
+  listing_issue: { icon: 'edit', route: 'InventoryManagement' },
+  catalogue_awaiting: { icon: 'download', route: 'CatalogImportProgress' },
+  payout_hold: { icon: 'wallet', route: 'Wallet' } };
 
 function formatDueAt(dueAt: string | null): string | null {
   if (!dueAt) return null;
@@ -251,7 +252,7 @@ export default function SellerHubScreen() {
             accessibilityLabel="Get verified to build buyer trust"
             accessibilityHint="Opens the identity verification flow"
           >
-            <Ionicons name="person-circle-outline" size={18} color={colors.warning} />
+            <AppIcon name="verified" size={IconSize.sm} color="warning" opticalCenter accessible={false} />
             <View style={styles.verificationBannerText}>
               <Text style={[styles.verificationBannerTitle, { color: colors.textPrimary }]}>
                 Get verified
@@ -260,7 +261,7 @@ export default function SellerHubScreen() {
                 Build buyer trust with a verified badge
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            <AppIcon name="forward" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
           </Pressable>
         )}
 
@@ -281,10 +282,12 @@ export default function SellerHubScreen() {
             accessibilityHint={`Opens ${topTask.actionLabel}`}
           >
             <View style={styles.topTaskIconWrap}>
-              <Ionicons
+              <AppIcon
                 name={TASK_META[topTask.type].icon}
-                size={22}
-                color={topTask.priority === 'critical' ? colors.danger : colors.brand}
+                size={IconSize.lg}
+                color={topTask.priority === 'critical' ? 'danger' : 'brand'}
+                opticalCenter
+                accessible={false}
               />
             </View>
             <View style={styles.topTaskContent}>
@@ -318,7 +321,7 @@ export default function SellerHubScreen() {
                 return null;
               })()}
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
           </Pressable>
         )}
 
@@ -392,7 +395,7 @@ export default function SellerHubScreen() {
             there are no tasks. */}
         {tasks.length === 0 && allTaskSourcesFresh && (
           <View style={styles.allCaughtUp}>
-            <Ionicons name="checkmark-circle-outline" size={20} color={colors.success} />
+            <AppIcon name="checkmark-circle" focused size={IconSize.md} color="success" opticalCenter accessible={false} />
             <Text style={[styles.allCaughtUpText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
               You're all caught up
             </Text>
@@ -404,7 +407,7 @@ export default function SellerHubScreen() {
             source and slice retry." Truthful labelling, not silent merge. */}
         {tasks.length === 0 && !allTaskSourcesFresh && (
           <View style={styles.partialNotice}>
-            <Ionicons name="cloud-offline-outline" size={16} color={colors.textMuted} />
+            <AppIcon name="offline" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             <Text style={[styles.partialNoticeText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
               Some data is unavailable. Pull to refresh.
             </Text>
@@ -460,7 +463,7 @@ export default function SellerHubScreen() {
                 key={batch.id}
                 title={IMPORT_SOURCE_LABEL[batch.source] ?? 'Catalogue import'}
                 subtitle={importBatchStatusText(batch)}
-                icon="download-outline"
+                icon="download"
                 onPress={() => navigation.navigate('CatalogImportProgress', { batchId: batch.id })}
                 accessibilityLabel={`${IMPORT_SOURCE_LABEL[batch.source] ?? 'Catalogue import'}, ${importBatchStatusText(batch)}`}
                 accessibilityHint="Opens the import progress screen"
@@ -470,7 +473,7 @@ export default function SellerHubScreen() {
             <FlagshipNavigationRow
               title="Import a shop"
               subtitle="Bring your existing listings from eBay or a file"
-              icon="download-outline"
+              icon="download"
               onPress={() => navigation.navigate('CatalogImportStart')}
               accessibilityLabel="Import a shop"
               accessibilityHint="Start a catalogue import from eBay or a file"
@@ -484,25 +487,25 @@ export default function SellerHubScreen() {
         {isNewSeller && (
           <View style={styles.newSellerCard}>
             <View style={styles.newSellerHeader}>
-              <Ionicons name="bulb-outline" size={16} color={colors.brand} />
+              <AppIcon name="storefront-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
               <Text style={[styles.newSellerTitle, { color: colors.textPrimary }]}>
                 New to selling?
               </Text>
             </View>
             <View style={styles.newSellerTipRow}>
-              <Ionicons name="camera-outline" size={14} color={colors.textMuted} />
+              <AppIcon name="camera" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
               <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
                 Start with a clear photo — it's the first thing buyers see
               </Text>
             </View>
             <View style={styles.newSellerTipRow}>
-              <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
+              <AppIcon name="cash-outline" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
               <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
                 Price competitively — check similar sold items for guidance
               </Text>
             </View>
             <View style={styles.newSellerTipRow}>
-              <Ionicons name="chatbubble-outline" size={14} color={colors.textMuted} />
+              <AppIcon name="chat" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
               <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
                 Respond quickly to buyer questions to build trust
               </Text>
@@ -514,7 +517,7 @@ export default function SellerHubScreen() {
         <View style={styles.ctaWrap}>
           <AppButton
             title="Create listing"
-            icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}
+            icon={<AppIcon name="plus" size={IconSize.sm} color={colors.background} opticalCenter accessible={false} />}
             variant="primary"
             size="lg"
             onPress={() => navigation.navigate('Sell')}
@@ -541,7 +544,7 @@ export default function SellerHubScreen() {
           <FlagshipNavigationRow
             title="Manage listings"
             subtitle="Active, draft, sold and paused"
-            icon="list-outline"
+            icon="list"
             onPress={() => navigation.navigate('MyListings')}
             accessibilityLabel="Manage all your listings"
             accessibilityHint="Opens your listings"
@@ -549,7 +552,7 @@ export default function SellerHubScreen() {
           <FlagshipNavigationRow
             title="Inventory dashboard"
             subtitle="Filters and bulk actions"
-            icon="grid-outline"
+            icon="grid"
             onPress={() => navigation.navigate('InventoryManagement')}
             accessibilityLabel="Open inventory management dashboard"
             accessibilityHint="Opens the inventory management screen"
@@ -561,7 +564,7 @@ export default function SellerHubScreen() {
           <FlagshipNavigationRow
             title="Analytics"
             subtitle="Views, sales and engagement"
-            icon="bar-chart-outline"
+            icon="analytics"
             onPress={() => navigation.navigate('SellerAnalytics')}
             accessibilityLabel="View seller analytics"
             accessibilityHint="Opens the seller analytics dashboard"
@@ -569,7 +572,7 @@ export default function SellerHubScreen() {
           <FlagshipNavigationRow
             title="Auctions"
             subtitle="Auction listings"
-            icon="hammer-outline"
+            icon="hammer"
             onPress={() => navigation.navigate('SellerAuctionCentre')}
             accessibilityLabel="Auctions"
             accessibilityHint="Opens the seller auction centre"
@@ -581,7 +584,7 @@ export default function SellerHubScreen() {
           <FlagshipNavigationRow
             title="Payouts"
             subtitle="Wallet and earnings"
-            icon="wallet-outline"
+            icon="wallet"
             onPress={() => navigation.navigate('Wallet')}
             accessibilityLabel="Payouts and wallet"
             accessibilityHint="Opens your wallet"
@@ -589,7 +592,7 @@ export default function SellerHubScreen() {
           <FlagshipNavigationRow
             title="Verification"
             subtitle={isVerified ? 'Verified' : 'ID and seller standards'}
-            icon={isVerified ? 'shield-checkmark-outline' : 'person-circle-outline'}
+            icon={isVerified ? 'checkmark-circle' : 'profile'}
             iconColor={isVerified ? colors.success : undefined}
             onPress={() => navigation.navigate('Verification')}
             accessibilityLabel="Verification status"

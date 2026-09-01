@@ -241,7 +241,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           ) : (
           <>
           <SettingsRow
-            icon="pricetags-outline"
+            icon="cash-outline"
             title="Offer notifications"
             subtitle="When buyers make an offer on your item"
             toggleValue={!!toggles.offers}
@@ -269,7 +269,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             syncing={syncingKeys.has('wishlist')}
           />
           <SettingsRow
-            icon="cube-outline"
+            icon="car-outline"
             title="Order notifications"
             subtitle="Shipping and delivery status changes"
             toggleValue={!!toggles.orderUpdates}
@@ -287,7 +287,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             syncing={syncingKeys.has('auctionAlerts')}
           />
           <SettingsRow
-            icon="pricetag-outline"
+            icon="cash-outline"
             title="Price drop alerts"
             subtitle="For items on your wishlist"
             toggleValue={!!toggles.priceDrops}

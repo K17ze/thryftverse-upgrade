@@ -21,9 +21,10 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { SettingsSection } from '../components/settings/SettingsSection';
-
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'AccountControl'>;
 
 type Phase = 'overview' | 'export' | 'delete-info' | 'delete-confirm';
@@ -152,12 +153,12 @@ export default function AccountControlScreen({ navigation }: Props) {
       </View>
 
       <SettingsSection title="What happens when you delete">
-        <ConsequenceRow icon="person-remove-outline" text="Your username, email, password and profile are erased immediately." isFirst />
-        <ConsequenceRow icon="location-outline" text="All saved delivery addresses are removed." />
-        <ConsequenceRow icon="card-outline" text="Saved payment methods and bank details are removed." />
-        <ConsequenceRow icon="wallet-outline" text="Wallet history and payout records are deleted." />
-        <ConsequenceRow icon="cube-outline" text="Active listings remain visible to buyers until they expire, but you'll no longer manage them from this account." />
-        <ConsequenceRow icon="alert-circle-outline" text="Pending payouts, open disputes or active orders may need to be resolved before full erasure. Contact support if you have outstanding obligations." isLast />
+        <ConsequenceRow icon="profile" text="Your username, email, password and profile are erased immediately." isFirst />
+        <ConsequenceRow icon="location" text="All saved delivery addresses are removed." />
+        <ConsequenceRow icon="card" text="Saved payment methods and bank details are removed." />
+        <ConsequenceRow icon="wallet" text="Wallet history and payout records are deleted." />
+        <ConsequenceRow icon="box" text="Active listings remain visible to buyers until they expire, but you'll no longer manage them from this account." />
+        <ConsequenceRow icon="warning" text="Pending payouts, open disputes or active orders may need to be resolved before full erasure. Contact support if you have outstanding obligations." isLast />
       </SettingsSection>
 
       <Text style={[styles.consequenceFootnote, { color: colors.textMuted }]}>
@@ -220,7 +221,7 @@ export default function AccountControlScreen({ navigation }: Props) {
         ) : null}
         {deleteError ? (
           <View style={styles.deleteErrorRow}>
-            <Ionicons name="alert-circle" size={14} color={colors.danger} accessible={false} />
+            <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
             <Text style={styles.deleteErrorText}>{deleteError}</Text>
           </View>
         ) : null}
@@ -298,14 +299,14 @@ export default function AccountControlScreen({ navigation }: Props) {
   );
 }
 
-function ConsequenceRow({ icon, text, isFirst, isLast }: { icon: React.ComponentProps<typeof Ionicons>['name']; text: string; isFirst?: boolean; isLast?: boolean }) {
+function ConsequenceRow({ icon, text, isFirst, isLast }: { icon: string; text: string; isFirst?: boolean; isLast?: boolean }) {
   const { colors } = useAppTheme();
   return (
     <View style={[
       { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: Space.md, paddingHorizontal: Space.md, gap: Space.sm, paddingTop: isFirst ? Space.sm : Space.md },
       !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
     ]}>
-      <Ionicons name={icon} size={20} color={colors.textMuted} accessible={false} />
+      <AppIcon name={icon} size={IconSize.md} color="textMuted" opticalCenter accessible={false} />
       <Text style={{ flex: 1, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, lineHeight: TypographyV2.body.lineHeight + 2, letterSpacing: TypographyV2.body.letterSpacing, color: colors.textSecondary }}>{text}</Text>
     </View>
   );

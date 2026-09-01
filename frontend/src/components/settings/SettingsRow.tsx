@@ -7,11 +7,16 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PremiumToggle } from '../PremiumToggle';
 
+import { AppIcon } from '../common/AppIcon';
+import { AppGlyph, type AppGlyphName } from '../common/AppGlyph';
+import { IconSize } from '../../theme/iconTokens';
+
 export interface SettingsRowProps {
   title: string;
   subtitle?: string;
   value?: string;
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  icon?: string;
+  glyph?: AppGlyphName;
   iconColor?: string;
   danger?: boolean;
   disabled?: boolean;
@@ -37,6 +42,7 @@ export function SettingsRow({
   subtitle,
   value,
   icon,
+  glyph,
   iconColor,
   danger,
   disabled,
@@ -97,14 +103,24 @@ export function SettingsRow({
           toggleDisabled && { opacity: 0.4 },
         ]}
       >
-        {icon ? (
+        {glyph ? (
           // Compact decorative slot for the leading glyph. The parent row owns the touch target.
           <View style={styles.iconTarget}>
-            <Ionicons
+            <AppGlyph
+              name={glyph}
+              size={20}
+              color={iconColor ?? colors.textSecondary}
+            />
+          </View>
+        ) : icon ? (
+          // Compact decorative slot for the leading glyph. The parent row owns the touch target.
+          <View style={styles.iconTarget}>
+            <AppIcon
               name={icon}
-              size={24}
-              color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
-              aria-hidden={true}
+              size={IconSize.lg}
+              color={iconColor ?? (danger ? 'danger' : 'textSecondary')}
+              opticalCenter={true}
+              accessible={false}
             />
           </View>
         ) : null}
@@ -146,7 +162,7 @@ export function SettingsRow({
               />
             </>
           ) : showChevron ? (
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} aria-hidden={true} />
+            <AppIcon name="forward" size={IconSize.md} color="textMuted" accessible={false} />
           ) : null}
           {children}
         </View>

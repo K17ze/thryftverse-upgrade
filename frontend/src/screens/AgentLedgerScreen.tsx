@@ -30,6 +30,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize, type IoniconsGlyphName } from '../theme/iconTokens';
 import { useStore } from '../store/useStore';
 import { useShallow } from 'zustand/react/shallow';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
@@ -38,15 +40,24 @@ import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AgentLedger'>;
 
-type RunStatus = AgentRunInfo['status'];
+type RunStatus =
+  | 'succeeded'
+  | 'failed'
+  | 'running'
+  | 'queued'
+  | 'cancelled'
+  | 'timed_out'
+  | 'unknown_outcome'
+  | 'waiting_for_approval'
+  | 'waiting_for_input';
 
-const STATUS_COLOR_KEY: Record<RunStatus, 'success' | 'danger' | 'social' | 'textMuted' | 'warning'> = {
+const STATUS_COLOR_KEY: Record<RunStatus, 'success' | 'danger' | 'brand' | 'textMuted' | 'warning'> = {
   succeeded: 'success',
   failed: 'danger',
-  running: 'social',
+  running: 'brand',
   queued: 'textMuted',
   cancelled: 'textMuted',
-  timed_out: 'warning',
+  timed_out: 'danger',
   unknown_outcome: 'warning',
   waiting_for_approval: 'warning',
   waiting_for_input: 'warning',
@@ -64,11 +75,11 @@ const STATUS_LABEL_KEY: Record<RunStatus, string> = {
   waiting_for_input: 'status.awaitingInput',
 };
 
-const TRIGGER_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
-  mention: 'at-outline',
-  command: 'terminal-outline',
-  always: 'infinite-outline',
-  manual: 'hand-right-outline',
+const TRIGGER_ICON: Record<string, IoniconsGlyphName> = {
+  mention: 'chat',
+  command: 'options',
+  always: 'repeat',
+  manual: 'play',
   test: 'flask-outline',
 };
 
@@ -331,7 +342,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       >
         <View style={styles.stateWrap}>
           <View style={[styles.stateIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
+            <AppIcon name="offline" size={IconSize.xl} color="textMuted" opticalCenter accessible={false} />
           </View>
           <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
             {t('error.title')}
@@ -367,7 +378,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       >
         <View style={styles.stateWrap}>
           <View style={[styles.stateIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="flash-outline" size={28} color={colors.textMuted} />
+            <AppIcon name="receipt-outline" size={IconSize.xl} color="textMuted" opticalCenter accessible={false} />
           </View>
           <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
             {t('empty.title')}
@@ -378,7 +389,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
         </View>
         <View style={styles.footerNote}>
           <Text style={[styles.footerNoteText, { color: colors.textMuted }]}>
-            {t('footer.note')}
+            {t('empty.footer')}
           </Text>
         </View>
       </FlagshipScreen>
@@ -395,6 +406,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
           onBack={() => navigation.goBack()}
         />
       }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
       <ScrollView
         style={styles.scrollView}
@@ -403,10 +416,13 @@ export default function AgentLedgerScreen({ navigation }: Props) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => load(true)}
-            tintColor={colors.textMuted}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
           />
         }
+        showsVerticalScrollIndicator={false}
       >
+        {/* Pending Approvals Section */}
         {pendingApprovals.length > 0 ? (
           <View style={styles.list}>
             <View style={styles.sectionHeader}>
@@ -417,14 +433,16 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                 {pendingApprovals.length}
               </Text>
             </View>
+
             {pendingApprovals.map((approval, index) => {
               const isLast = index === pendingApprovals.length - 1;
               const botName = botNameById.get(approval.botId) ?? approval.botId;
-              const isDraftReply = approval.toolName === 'draft_reply';
-              const argsText = formatToolArguments(approval.toolName, approval.toolArguments);
               const isApproving = approvingId === approval.id;
               const isRejecting = rejectingId === approval.id;
               const isBusy = isApproving || isRejecting;
+              const argsText = formatToolArguments(approval.toolName, approval.toolArguments);
+              const isDraftReply = approval.toolName === 'draft_reply' && argsText;
+
               return (
                 <View
                   key={approval.id}
@@ -434,7 +452,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                   ]}
                 >
                   <View style={[styles.triggerIcon, { backgroundColor: colors.surfaceAlt }]}>
-                    <Ionicons name="clipboard-outline" size={16} color={colors.textPrimary} />
+                    <AppIcon name="document" size={IconSize.sm} color="textPrimary" opticalCenter accessible={false} />
                   </View>
                   <View style={styles.rowBody}>
                     <View style={styles.rowHeader}>
@@ -509,7 +527,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
             const name = botNameById.get(run.botId) ?? run.botId;
             const duration = formatDuration(run.startedAt, run.completedAt);
             const canCancel = CANCELLABLE.has(run.status);
-            const triggerIcon = TRIGGER_ICON[run.triggerType] ?? 'play-outline';
+            const triggerIcon = TRIGGER_ICON[run.triggerType] ?? 'play';
             return (
               <View
                 key={run.id}
@@ -519,7 +537,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                 ]}
               >
                 <View style={[styles.triggerIcon, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name={triggerIcon} size={16} color={colors.textPrimary} />
+                  <AppIcon name={triggerIcon} size={IconSize.sm} color="textPrimary" opticalCenter accessible={false} />
                 </View>
                 <View style={styles.rowBody}>
                   <View style={styles.rowHeader}>

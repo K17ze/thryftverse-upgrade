@@ -171,7 +171,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
 
         {deployedBots.length === 0 && availableToDeploy.length === 0 && (
           <EmptyState
-            icon="hardware-chip-outline"
+            icon="bulb-outline"
             title="No agents configured"
             subtitle="No agents are ready to connect."
           />

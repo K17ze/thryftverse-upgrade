@@ -235,7 +235,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             {/* Trust note — bank-level encryption */}
             <SettingsInfoBanner
               tone="success"
-              icon="shield-checkmark-outline"
+              icon="checkmark-circle-outline"
               title="Bank-level security"
               description="Your account details are protected by bank-level encryption."
             />

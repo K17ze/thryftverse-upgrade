@@ -122,7 +122,7 @@ function LookTile({
           )}
           {isShoppable && (
             <View style={styles.shoppableInline}>
-              <Ionicons name="pricetag" size={10} color={colors.mediaOverlayText} />
+              <Ionicons name="bag-handle-outline" size={10} color={colors.mediaOverlayText} />
               <Text style={styles.shoppableText}>{look.tags.length}</Text>
             </View>
           )}

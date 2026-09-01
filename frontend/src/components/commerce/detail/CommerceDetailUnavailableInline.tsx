@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space } from '../../../theme/designTokens';
+import { Space, Control } from '../../../theme/designTokens';
+import { FontFamily } from '../../../theme/fontFamily';
 import { TypographyV2 } from '../../../theme/typography.v2';
 
 /**
@@ -44,7 +45,7 @@ export function CommerceDetailUnavailableInline({
       <View style={styles.textCluster}>
         <Ionicons
           name={icon}
-          size={18}
+          size={Control.iconCompact}
           color={critical ? colors.danger : colors.textMuted}
           style={styles.icon}
         />
@@ -105,19 +106,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
-    fontWeight: '500' },
+    fontFamily: FontFamily.medium },
   body: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight },
   retry: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
-    minHeight: 36,
+    minHeight: Control.hit,
     alignItems: 'center',
     justifyContent: 'center' },
   pressed: {
-    opacity: 0.6 },
+    opacity: 0.85 },
   retryText: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
-    fontWeight: '600' } });
+    fontFamily: FontFamily.semibold } });

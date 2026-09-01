@@ -24,6 +24,8 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, FontFamily, Control, IconGrammar, PressScale } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize, type SemanticIconName } from '../../theme/iconTokens';
 
 export interface FlagshipNavigationRowProps {
   /** Primary title — the row's identity. */
@@ -34,8 +36,8 @@ export interface FlagshipNavigationRowProps {
   titleStyle?: TextStyle;
   /** Style override for the subtitle text. */
   subtitleStyle?: TextStyle;
-  /** Optional leading icon name (Ionicons). Rendered directly — no circle. */
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** Optional leading icon name (SemanticIconName or Ionicons). Rendered directly — no circle. */
+  icon?: SemanticIconName | React.ComponentProps<typeof Ionicons>['name'];
   /** Leading icon color override. */
   iconColor?: string;
   /** Custom trailing node (overrides chevron). */
@@ -101,11 +103,12 @@ export function FlagshipNavigationRow({
     <View style={[styles.inner, { minHeight }, style]}>
       <View style={styles.contentRow}>
         {icon ? (
-          <Ionicons
+          <AppIcon
             name={icon}
-            size={Control.icon}
+            size={IconSize.md}
             color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
-            aria-hidden={true}
+            opticalCenter
+            accessible={false}
           />
         ) : null}
 
@@ -130,7 +133,7 @@ export function FlagshipNavigationRow({
           <View style={styles.trailing}>{trailing}</View>
         ) : resolvedShowChevron ? (
           <View style={styles.trailing}>
-            <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} aria-hidden={true} />
+            <AppIcon name="forward" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
           </View>
         ) : null}
       </View>

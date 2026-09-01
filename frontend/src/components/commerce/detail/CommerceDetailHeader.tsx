@@ -10,7 +10,7 @@ import Reanimated, {
   type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space } from '../../../theme/designTokens';
+import { Space, PressScale } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 
@@ -161,8 +161,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center' },
   pressed: {
-    opacity: 0.5,
-    transform: [{ scale: 0.9 }] },
+    opacity: 0.85,
+    transform: [{ scale: PressScale.tap }] },
   title: {
     flex: 1,
     fontSize: TypographyV2.body.size,

@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 export type ListingMode = 'sell_now' | 'co_own' | 'auction';
 
@@ -13,8 +14,8 @@ interface ListingModeSelectorProps {
   onChange: (mode: ListingMode) => void;
 }
 
-const MODES: { key: ListingMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name']; description: string }[] = [
-  { key: 'sell_now', label: 'Sell now', icon: 'pricetag-outline', description: 'List at a fixed price for immediate purchase.' },
+const MODES: { key: ListingMode; label: string; icon: string; description: string }[] = [
+  { key: 'sell_now', label: 'Sell now', icon: 'cash-outline', description: 'List at a fixed price for immediate purchase.' },
   { key: 'auction', label: 'Auction', icon: 'hammer-outline', description: 'Let buyers bid over a set duration.' },
   { key: 'co_own', label: 'Co-Own', icon: 'people-outline', description: 'Offer fractional shares to investors.' },
 ];
@@ -50,8 +51,8 @@ export function getListingModeDescription(mode: ListingMode): string {
 /**
  * Returns the icon name for a listing mode.
  */
-export function getListingModeIcon(mode: ListingMode): React.ComponentProps<typeof Ionicons>['name'] {
-  return MODES.find((m) => m.key === mode)?.icon ?? 'pricetag-outline';
+export function getListingModeIcon(mode: ListingMode): string {
+  return MODES.find((m) => m.key === mode)?.icon ?? 'cash-outline';
 }
 
 /**
@@ -82,10 +83,12 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
         accessibilityHint="Opens format options"
       >
         <View style={styles.formatRowLeft}>
-          <Ionicons
-            name={activeMode?.icon ?? 'pricetag-outline'}
-            size={18}
-            color={colors.textSecondary}
+          <AppIcon
+            name={activeMode?.icon ?? 'cash-outline'}
+            size={IconSize.md}
+            color="textSecondary"
+            opticalCenter
+            accessible={false}
             style={styles.formatIcon}
           />
           <View style={styles.formatTextWrap}>
@@ -97,7 +100,7 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
         </View>
         <View style={styles.formatRowRight}>
           <Text style={styles.formatChange}>Change</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </View>
       </Pressable>
       {description ? (

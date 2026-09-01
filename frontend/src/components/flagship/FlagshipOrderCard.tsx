@@ -68,7 +68,7 @@ export function FlagshipOrderCard({
           />
         ) : (
           <View style={[styles.image, styles.imageFallback]} accessibilityElementsHidden>
-            <Ionicons name="cube-outline" size={IconGrammar.hero} color={colors.textMuted} />
+            <Ionicons name="image-outline" size={IconGrammar.hero} color={colors.textMuted} />
           </View>
         )}
       </View>

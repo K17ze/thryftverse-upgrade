@@ -7,6 +7,9 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { ConfirmationSheet } from '../ConfirmationSheet';
 
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
+
 export interface SettingsSignOutRowProps {
   username?: string | null;
   onSignOut: () => Promise<void> | void;
@@ -71,7 +74,9 @@ export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowPr
         {isBusy ? (
           <ActivityIndicator size={20} color={colors.danger} style={styles.icon} />
         ) : (
-          <Ionicons name="log-out-outline" size={24} color={colors.danger} style={styles.icon} aria-hidden={true} />
+          <View style={styles.icon}>
+            <AppIcon name="log-out-outline" size={IconSize.lg} color="danger" accessible={false} />
+          </View>
         )}
         <Text style={styles.label}>
           {isBusy ? 'Signing out…' : 'Sign Out'}

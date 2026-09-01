@@ -3187,6 +3187,116 @@ app.get('/policies/:policyKey', async (request, reply) => {
   };
 });
 
+// ── POST /listings/:listingId/view — record a listing view interaction ──
+// Feeds the `interactions` table so seller analytics (views, conversion
+// rate, top performers) have real data. Idempotent via a per-view
+// idempotency key. Self-views (seller viewing own listing) are skipped.
+app.post('/listings/:listingId/view', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+
+  // Optional auth — anonymous views are still useful for aggregate counts.
+  await optionalAuthenticate(request, '/listings/:listingId/view');
+  const viewerUserId = (request as any).authUser?.userId as string | undefined;
+
+  const bodySchema = z.object({
+    idempotencyKey: z.string().min(4).max(200).optional(),
+    qualified: z.boolean().optional(),
+  });
+  const body = bodySchema.parse(request.body ?? {});
+
+  // Verify the listing exists and is public
+  const listingResult = await readDb.query<{ seller_id: string; status: string }>(
+    `SELECT seller_id, status FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId],
+  );
+  if (!listingResult.rows[0]) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  // Skip self-views — a seller viewing their own listing is not a
+  // meaningful engagement signal for their analytics.
+  if (viewerUserId && viewerUserId === listingResult.rows[0].seller_id) {
+    return { ok: true, recorded: false, reason: 'self_view' };
+  }
+
+  // Only record views for public listings
+  if (!['active', 'sold'].includes(listingResult.rows[0].status)) {
+    return { ok: true, recorded: false, reason: 'not_public' };
+  }
+
+  // Anonymous views use a synthetic user ID so the interaction is still
+  // recorded for aggregate counts. Authenticated views use the real ID.
+  const effectiveUserId = viewerUserId ?? `anon_${(request.ip ?? 'unknown').slice(0, 32)}`;
+  const action = body.qualified ? 'qualified_detail_view' : 'view';
+  const idempotencyKey = body.idempotencyKey ?? `view_${listingId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  try {
+    await db.query(
+      `INSERT INTO interactions (user_id, listing_id, action, strength, idempotency_key, created_at)
+       VALUES ($1, $2, $3, 1.0, $4, NOW())
+       ON CONFLICT DO NOTHING`,
+      [effectiveUserId, listingId, action, idempotencyKey],
+    );
+  } catch {
+    // Best-effort — analytics must never break the viewing flow.
+  }
+
+  return { ok: true, recorded: true };
+});
+
+// ── POST /listings/:listingId/interact — record a like/save/share ──
+// Feeds the `interactions` table for seller analytics engagement metrics.
+app.post('/listings/:listingId/interact', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+
+  await optionalAuthenticate(request, '/listings/:listingId/interact');
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+
+  const bodySchema = z.object({
+    action: z.enum(['like', 'save', 'share']),
+    idempotencyKey: z.string().min(4).max(200).optional(),
+  });
+  const body = bodySchema.parse(request.body ?? {});
+
+  // Verify the listing exists
+  const listingResult = await readDb.query<{ seller_id: string; status: string }>(
+    `SELECT seller_id, status FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId],
+  );
+  if (!listingResult.rows[0]) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  // Skip self-interactions
+  if (userId === listingResult.rows[0].seller_id) {
+    return { ok: true, recorded: false, reason: 'self_interaction' };
+  }
+
+  const idempotencyKey = body.idempotencyKey ?? `${body.action}_${listingId}_${userId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  try {
+    await db.query(
+      `INSERT INTO interactions (user_id, listing_id, action, strength, idempotency_key, created_at)
+       VALUES ($1, $2, $3, 1.0, $4, NOW())
+       ON CONFLICT DO NOTHING`,
+      [userId, listingId, body.action, idempotencyKey],
+    );
+  } catch {
+    // Best-effort
+  }
+
+  return { ok: true, recorded: true };
+});
+
 app.get('/listings/:listingId/sold-comparables', async (request, reply) => {
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const { listingId } = paramsSchema.parse(request.params);

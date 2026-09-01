@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { View, StyleSheet, Pressable, Text } from 'react-native';
+import { View, StyleSheet, Pressable, Text, type TextStyle } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,8 @@ import { Space, Typography, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useRenderTrace } from '../../performance/renderTrace';
 import { isLookVideo, isLookCarousel, isLookMultiLayer } from '../../utils/lookTemplates';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import type { LookApiItem } from '../../services/looksApi';
 
 export interface LookMasonryTileProps {
@@ -69,23 +71,30 @@ function LookMasonryTileImpl({
               Video → play icon, Carousel → stacked-layers icon,
               Multi-layer collage → layers icon. Single image → no badge. */}
           {(isVideo || isCarousel || isMultiLayer) && (
-            <Ionicons
-              name={isVideo ? 'play' : isCarousel ? 'copy' : 'layers'}
-              size={16}
-              color={styles.mediaBadgeIcon.color}
-              style={styles.mediaBadge}
-            />
+            <View style={styles.mediaBadge}>
+              <AppIcon
+                name={isVideo ? 'play' : isCarousel ? 'copy' : 'layers'}
+                size={IconSize.sm}
+                color={styles.mediaBadgeIcon.color}
+                focused={true}
+                opticalCenter={true}
+                accessible={false}
+              />
+            </View>
           )}
 
-          {/* Shoppable pricetag — bare glyph bottom-right with drop-shadow.
+          {/* Shoppable marker — bare glyph bottom-right with drop-shadow.
               No chip background — the glyph alone is the signal. */}
           {hasItems && (
-            <Ionicons
-              name="pricetag"
-              size={14}
-              color={styles.pricetagBadgeIcon.color}
-              style={styles.pricetagBadgeExplore}
-            />
+            <View style={styles.pricetagBadgeExplore}>
+              <AppIcon
+                name="pricetag"
+                size={IconSize.xs}
+                color={styles.pricetagBadgeIcon.color}
+                focused={true}
+                accessible={false}
+              />
+            </View>
           )}
         </View>
       </Pressable>
@@ -119,11 +128,13 @@ function LookMasonryTileImpl({
         />
         {hasItems && (
           <View style={styles.pricetagBadge}>
-            <Ionicons
+            <AppIcon
               name="pricetag"
-              size={14}
+              size={IconSize.xs}
               color={colors.mediaOverlayText}
-              style={{ textShadowColor: colors.mediaOverlayScrim, textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } }}
+              focused={true}
+              accessible={false}
+              style={{ textShadowColor: colors.mediaOverlayScrim, textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } } as TextStyle}
             />
           </View>
         )}

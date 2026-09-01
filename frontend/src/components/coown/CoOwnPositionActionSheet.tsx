@@ -55,7 +55,7 @@ export function CoOwnPositionActionSheet({
                 <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={200} />
               ) : (
                 <View style={styles.imageFallback}>
-                  <Ionicons name="cube-outline" size={22} color={colors.textMuted} />
+                  <Ionicons name="image-outline" size={22} color={colors.textMuted} />
                 </View>
               )}
             </View>

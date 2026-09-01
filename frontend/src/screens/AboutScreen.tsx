@@ -20,6 +20,8 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 
 import { Space, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'About'>;
 
 // Number of taps on the version row required to toggle developer mode.
@@ -97,7 +99,7 @@ export default function AboutScreen({ navigation }: Props) {
         <View style={styles.heroCard}>
           <View style={styles.heroRow}>
             <View style={styles.brandIcon}>
-              <Ionicons name="storefront-outline" size={32} color={colors.brand} />
+              <AppIcon name="storefront" size={IconSize.hero} color="brand" opticalCenter accessible={false} />
             </View>
             <View style={styles.heroText}>
               <Text style={styles.brandName}>Thryftverse</Text>
@@ -117,15 +119,15 @@ export default function AboutScreen({ navigation }: Props) {
         </View>
 
         <SettingsSection title="Legal">
-          <SettingsRow icon="document-text-outline" title="Terms of Service" onPress={() => void handleOpenExternal('https://thryftverse.app/terms')} />
-          <SettingsRow icon="lock-closed-outline" title="Privacy Policy" onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')} />
-          <SettingsRow icon="cube-outline" title="Cookie Policy" onPress={() => void handleOpenExternal('https://thryftverse.app/cookies')} isLast />
+          <SettingsRow icon="document" title="Terms of Service" onPress={() => void handleOpenExternal('https://thryftverse.app/terms')} />
+          <SettingsRow icon="lock" title="Privacy Policy" onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')} />
+          <SettingsRow icon="document" title="Cookie Policy" onPress={() => void handleOpenExternal('https://thryftverse.app/cookies')} isLast />
         </SettingsSection>
 
         <SettingsSection title="Support">
-          <SettingsRow icon="help-circle-outline" title="Help Centre" onPress={() => navigation.navigate('HelpSupport')} />
-          <SettingsRow icon="star-outline" title="Rate Thryftverse" onPress={handleRateApp} />
-          <SettingsRow icon="share-social-outline" title="Share with friends" onPress={() => void handleShareApp()} isLast />
+          <SettingsRow icon="help" title="Help Centre" onPress={() => navigation.navigate('HelpSupport')} />
+          <SettingsRow icon="star" title="Rate Thryftverse" onPress={handleRateApp} />
+          <SettingsRow icon="share" title="Share with friends" onPress={() => void handleShareApp()} isLast />
         </SettingsSection>
 
         <View style={{ height: Space.xl }} />

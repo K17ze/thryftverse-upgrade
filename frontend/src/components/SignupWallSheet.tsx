@@ -42,7 +42,7 @@ const ACTION_COPY: Record<
   create_listing: {
     title: 'List items',
     body: 'Sign up to sell your own items and reach thousands of buyers.',
-    icon: 'pricetag-outline' } };
+    icon: 'bag-handle-outline' } };
 
 interface SignupWallSheetProps {
   visible: boolean;

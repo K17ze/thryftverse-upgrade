@@ -256,7 +256,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                       </View>
                       {order.maxPriceGbpMinor != null && (
                         <View style={styles.orderMetaRow}>
-                          <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} />
+                          <Ionicons name="cash-outline" size={12} color={colors.textMuted} />
                           <Text style={styles.orderMaxPrice}>
                             Max {formatGbp(order.maxPriceGbpMinor)}/unit
                           </Text>

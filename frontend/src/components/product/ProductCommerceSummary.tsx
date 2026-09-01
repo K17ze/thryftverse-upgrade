@@ -45,7 +45,7 @@ export function ProductCommerceSummary({
 
   if (commerce.shippingMethod) {
     rows.push({
-      icon: 'cube-outline',
+      icon: 'car-outline',
       label: 'Shipping',
       value: commerce.shippingMethod,
       sheetContent: {
@@ -65,7 +65,7 @@ export function ProductCommerceSummary({
 
   if (commerce.protectionPolicy?.available) {
     rows.push({
-      icon: 'shield-checkmark-outline',
+      icon: 'checkmark-circle-outline',
       label: 'Buyer protection',
       value: commerce.protectionPolicy.label,
       sheetContent: {

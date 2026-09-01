@@ -8,7 +8,6 @@ import {
   Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useAppTheme } from '../theme/ThemeContext';
@@ -18,6 +17,9 @@ import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
+import { AppIcon } from '../components/common/AppIcon';
+import { AppIconButton } from '../components/common/AppIconButton';
+import { IconSize } from '../theme/iconTokens';
 import { CURRENCIES } from '../constants/currencies';
 import { useStore, useIsGuest } from '../store/useStore';
 import { useSignupWall } from '../hooks/useSignupWall';
@@ -445,7 +447,7 @@ export default function SellScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        setErrorMsg('Allow gallery access to upload media.');
+        setErrorMsg(t('listing.create.errorGalleryAccess'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -480,7 +482,7 @@ export default function SellScreen() {
         }
       }
     } catch (e) {
-      setErrorMsg('Could not open photo library. Try again.');
+      setErrorMsg(t('listing.create.errorPhotoLibrary'));
     }
   }, [appendPhotoAsset, mediaDraftItems]);
 
@@ -488,7 +490,7 @@ export default function SellScreen() {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        setErrorMsg('Allow camera access to capture listing media.');
+        setErrorMsg(t('listing.create.errorCameraAccess'));
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -518,7 +520,7 @@ export default function SellScreen() {
         }
       }
     } catch (e) {
-      setErrorMsg('Could not open camera. Try again.');
+      setErrorMsg(t('listing.create.errorCamera'));
     }
   }, [appendPhotoAsset, mediaDraftItems]);
 
@@ -670,22 +672,22 @@ export default function SellScreen() {
         description: desc.trim() || undefined,
         photos,
         shippingMethod: shippingMethod || undefined,
-        shippingPayer: shippingPayer || undefined },
+        shippingPayer: shippingPayer || undefined,
+        listingMode },
       origin: 'sell' });
-  }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, navigation]);
+  }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, listingMode, navigation]);
 
   return (
     <SafeAreaView ref={a11yRef} testID="sell-screen" style={[styles.root, themed.root]} edges={['top']}>
         {/* -- 1. COMPACT NAVIGATION HEADER -- */}
         <View style={[styles.navHeader, themed.navHeader, { paddingTop: 0 }]}>
-          <Pressable
-            style={({ pressed }) => [styles.navCloseBtn, pressed && { opacity: 0.5 }]}
+          <AppIconButton
+            name="close"
+            size={IconSize.md}
+            color="textPrimary"
             onPress={() => navigation.goBack()}
-            accessibilityRole="button"
             accessibilityLabel="Close and go back"
-          >
-            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
-          </Pressable>
+          />
           <Text style={[styles.navTitle, themed.navTitle]}>{t('listing.create.title')}</Text>
           {/* Transient "Saved" indicator — per audit 04: "visible 'Saved'
               only briefly; never spam toasts on every field." A subtle
@@ -697,7 +699,7 @@ export default function SellScreen() {
                 exiting={reducedMotion ? undefined : FadeOut.duration(200)}
                 style={styles.navDraftSavedRow}
               >
-                <Ionicons name="checkmark" size={12} color={colors.success} aria-hidden={true} />
+                <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
                 <Text style={[styles.navDraftText, { color: colors.success }]}>{t('listing.create.saved')}</Text>
               </Reanimated.View>
             ) : null}
@@ -717,7 +719,7 @@ export default function SellScreen() {
               intrusive. Auto-hides once the user starts editing. */}
           {hasDraftContent && !title.trim() && mediaDraftItems.length > 0 && (
             <View style={styles.draftHintRow}>
-              <Ionicons name="document-text-outline" size={16} color={colors.brand} aria-hidden={true} />
+              <AppIcon name="document" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
               <Text style={[styles.draftHintText, { color: colors.textSecondary }]}>
                 {t('listing.create.draftRestored')}
               </Text>
@@ -731,7 +733,7 @@ export default function SellScreen() {
               secondary affordances. */}
           {mediaDraftItems.length === 0 ? (
             <EmptyState
-              icon="camera-outline"
+              icon="camera"
               title={t('listing.create.addPhotosTitle')}
               subtitle={t('listing.create.addPhotosSubtitle')}
               ctaLabel={t('listing.create.uploadFromLibrary')}
@@ -769,18 +771,18 @@ export default function SellScreen() {
               // subtle expandable affordance — no stacked hint rows.
               return (
                 <Pressable
-                  style={({ pressed }) => [styles.photoAssistantToggle, pressed && { opacity: 0.6 }]}
+                  style={({ pressed }) => [styles.photoAssistantToggle, pressed && { opacity: 0.85 }]}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   onPress={() => setPhotoGuideCollapsed((v) => !v)}
                   accessibilityRole="button"
                   accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
                   accessibilityHint="Tips for taking great listing photos"
                 >
-                  <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
+                  <AppIcon name="camera" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
                   <Text style={[styles.photoAssistantToggleText, { color: colors.textSecondary }]}>
                     {t('listing.create.photoTips')}
                   </Text>
-                  <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color={colors.textMuted} aria-hidden={true} />
+                  <AppIcon name={photoGuideCollapsed ? 'chevronDown' : 'chevronUp'} size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                 </Pressable>
               );
             }
@@ -791,7 +793,7 @@ export default function SellScreen() {
               <View style={styles.contextualPrompts}>
                 {needsMore && (
                   <View style={styles.contextualPromptRow}>
-                    <Ionicons name="camera-outline" size={16} color={colors.brand} aria-hidden={true} />
+                    <AppIcon name="camera" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                     <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
                       {t('listing.create.addMorePhotos', { count: 3 - count, plural: 3 - count > 1 ? 's' : '' })}
                     </Text>
@@ -799,7 +801,7 @@ export default function SellScreen() {
                 )}
                 {prompts.map((prompt, i) => (
                   <View key={i} style={styles.contextualPromptRow}>
-                    <Ionicons name={prompt.icon as React.ComponentProps<typeof Ionicons>['name']} size={16} color={colors.brand} aria-hidden={true} />
+                    <AppIcon name={prompt.icon as any} size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                     <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
                       {prompt.text}
                     </Text>
@@ -813,15 +815,15 @@ export default function SellScreen() {
           {mediaDraftItems.length === 0 && !photoGuideCollapsed && (
             <View style={styles.photoAssistantTips}>
               <View style={styles.contextualPromptRow}>
-                <Ionicons name="sunny-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                <AppIcon name="bulb-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                 <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipLighting')}</Text>
               </View>
               <View style={styles.contextualPromptRow}>
-                <Ionicons name="camera-reverse-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                <AppIcon name="camera" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                 <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipAngles')}</Text>
               </View>
               <View style={styles.contextualPromptRow}>
-                <Ionicons name="leaf-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                <AppIcon name="image-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                 <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipBackground')}</Text>
               </View>
             </View>
@@ -834,33 +836,33 @@ export default function SellScreen() {
           {!hasDraftContent && (
             <View style={styles.sellQuickActions}>
               <Pressable
-                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.85 }]}
                 onPress={() => { haptics.tap(); navigation.navigate('BulkListing'); }}
                 accessibilityRole="button"
                 accessibilityLabel="Bulk listing — list multiple items at once"
                 accessibilityHint="Opens the bulk listing tool"
               >
-                <Ionicons name="layers-outline" size={22} color={colors.brand} aria-hidden={true} />
+                <AppIcon name="copy" size={IconSize.lg} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>{t('listing.create.bulkList')}</Text>
               </Pressable>
               <Pressable
-                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.85 }]}
                 onPress={() => { haptics.tap(); navigation.navigate('InventoryManagement'); }}
                 accessibilityRole="button"
                 accessibilityLabel="Inventory dashboard"
                 accessibilityHint="Opens the inventory management screen"
               >
-                <Ionicons name="grid-outline" size={22} color={colors.brand} aria-hidden={true} />
+                <AppIcon name="grid" size={IconSize.lg} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>{t('listing.create.inventory')}</Text>
               </Pressable>
               <Pressable
-                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.85 }]}
                 onPress={() => { haptics.tap(); navigation.navigate('SellerHub'); }}
                 accessibilityRole="button"
                 accessibilityLabel="Seller hub"
                 accessibilityHint="Opens the seller hub dashboard"
               >
-                <Ionicons name="storefront-outline" size={22} color={colors.brand} aria-hidden={true} />
+                <AppIcon name="storefront" size={IconSize.lg} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>{t('listing.create.hub')}</Text>
               </Pressable>
             </View>
@@ -874,7 +876,7 @@ export default function SellScreen() {
             <AnimatedPressable
               style={styles.importShopRow}
               onPress={() => { haptics.tap(); navigation.navigate('CatalogImportStart'); }}
-              activeOpacity={0.6}
+              activeOpacity={0.85}
               hapticFeedback="light"
               accessibilityRole="button"
               accessibilityLabel="Import a shop"
@@ -882,7 +884,7 @@ export default function SellScreen() {
             >
               <View style={[styles.importShopSeparator, { backgroundColor: colors.borderSubtle }]} />
               <View style={styles.importShopContent}>
-                <Ionicons name="download-outline" size={22} color={colors.brand} aria-hidden={true} />
+                <AppIcon name="download" size={IconSize.lg} color="brand" opticalCenter accessible={false} />
                 <View style={styles.importShopText}>
                   <Text style={[styles.importShopTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                     {t('listing.create.importShop')}
@@ -912,7 +914,7 @@ export default function SellScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.listingTitle')}</Text>
                 {title.trim().length > 0 ? (
-                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                  <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
                 ) : (
                   <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
@@ -940,7 +942,7 @@ export default function SellScreen() {
               When the flag is off, the current autofill-only behaviour runs. */}
           {aiListingAssistEnabled && mediaDraftItems.length > 0 ? (
             <View style={[styles.autofillCard, themed.autofillCard, { flexDirection: 'row', alignItems: 'center', gap: Space.sm }]}>
-              <Ionicons name="create-outline" size={18} color={colors.brand} aria-hidden={true} />
+              <AppIcon name="sparkles-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.autofillTitle, themed.autofillTitle]}>{t('listing.create.aiAssist')}</Text>
                 <Text style={[themed.autofillDesc, { marginTop: 2 }]}>
@@ -956,16 +958,16 @@ export default function SellScreen() {
           {autofillSuggestion.hasSuggestions && !autofillDismissed && (
             <View style={[styles.autofillCard, themed.autofillCard]}>
               <View style={styles.autofillHeader}>
-                <Ionicons name="bulb-outline" size={16} color={colors.brand} aria-hidden={true} />
+                <AppIcon name="sparkles-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.autofillTitle, themed.autofillTitle]}>{t('listing.create.suggestedDetails')}</Text>
                 <Pressable
                   hitSlop={8}
                   onPress={() => setAutofillDismissed(true)}
-                  style={({ pressed }) => pressed && { opacity: 0.5 }}
+                  style={({ pressed }) => pressed && { opacity: 0.85 }}
                   accessibilityLabel="Dismiss suggestions"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
+                  <AppIcon name="close" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                 </Pressable>
               </View>
               {/* Flattened rows — no nested bordered chips (AGENTS.md §4: no card-on-card) */}
@@ -988,12 +990,12 @@ export default function SellScreen() {
                 </View>
               )}
               <Pressable
-                style={({ pressed }) => [styles.autofillApplyBtn, themed.autofillApplyBtn, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.autofillApplyBtn, themed.autofillApplyBtn, pressed && { opacity: 0.85 }]}
                 onPress={handleApplyAutofill}
                 accessibilityLabel="Apply suggested fields"
                 accessibilityRole="button"
               >
-                <Ionicons name="checkmark" size={16} color={colors.brand} aria-hidden={true} />
+                <AppIcon name="verified" focused size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.autofillApplyText, themed.autofillApplyText]}>{t('listing.create.applyToEmptyFields')}</Text>
               </Pressable>
             </View>
@@ -1015,7 +1017,7 @@ export default function SellScreen() {
             <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.details')}</Text>
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => setPickerMode('Category')}
               accessibilityRole="button"
               accessibilityLabel="Select category"
@@ -1024,7 +1026,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.category')}</Text>
                   {category ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
                   ) : (
                     <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
@@ -1033,13 +1035,13 @@ export default function SellScreen() {
                   {category || t('listing.create.selectCategory')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             {errors.category ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.category}</Text> : null}
             <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => setPickerMode('Brand')}
               accessibilityRole="button"
               accessibilityLabel="Select brand"
@@ -1048,7 +1050,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.brand')}</Text>
                   {brand ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
                   ) : completeness.policy.brandlessValid ? (
                     <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                   ) : (
@@ -1059,7 +1061,7 @@ export default function SellScreen() {
                   {brand || t('listing.create.selectBrand')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             {!brand && (
               <Text style={[styles.fieldHelper, themed.fieldHelper]}>
@@ -1071,7 +1073,7 @@ export default function SellScreen() {
             <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => setPickerMode('Size')}
               accessibilityRole="button"
               accessibilityLabel="Select size"
@@ -1080,7 +1082,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.size')}</Text>
                   {size ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
                   ) : completeness.policy.sizelessValid ? (
                     <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                   ) : (
@@ -1091,7 +1093,7 @@ export default function SellScreen() {
                   {size || t('listing.create.selectSize')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             {errors.size ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.size}</Text> : null}
             <View style={[styles.hairline, themed.hairline]} />
@@ -1105,7 +1107,7 @@ export default function SellScreen() {
             <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.priceAndCondition')}</Text>
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => setPickerMode('Condition')}
               accessibilityRole="button"
               accessibilityLabel="Select condition"
@@ -1114,7 +1116,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.condition')}</Text>
                   {condition ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
                   ) : (
                     <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
@@ -1123,7 +1125,7 @@ export default function SellScreen() {
                   {condition || t('listing.create.selectCondition')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             {errors.condition ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.condition}</Text> : null}
             <View style={[styles.hairline, themed.hairline]} />
@@ -1150,15 +1152,14 @@ export default function SellScreen() {
                   {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null ? (
                     <View style={styles.priceSuggestionBlock}>
                       <View style={styles.soldCompsHint}>
-                        <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                        <AppIcon name="bag-handle-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                         <Text style={[styles.soldCompsText, themed.soldCompsText]}>
-                          Similar items sold for {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
-                          {' '}({soldComps.sampleSize} sold)
+                          {t('listing.create.soldCompsRange', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize })}
                         </Text>
                       </View>
                       {soldComps.medianPrice != null && (
                         <Pressable
-                          style={({ pressed }) => [styles.soldCompsHint, pressed && { opacity: 0.6 }]}
+                          style={({ pressed }) => [styles.soldCompsHint, pressed && { opacity: 0.85 }]}
                           onPress={() => {
                             if (!price) {
                               handlePriceChange(soldComps.medianPrice!.toFixed(2));
@@ -1168,45 +1169,45 @@ export default function SellScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Suggested price ${currencySymbol}${soldComps.medianPrice.toFixed(0)}. Tap to set suggested price.`}
                         >
-                          <Ionicons name="bulb-outline" size={12} color={colors.brand} aria-hidden={true} />
+                          <AppIcon name="sparkles-outline" size={IconSize.micro} color="brand" opticalCenter accessible={false} />
                           <Text style={[styles.soldCompsText, themed.priceSuggestion]}>
-                            Suggested price: {currencySymbol}{soldComps.medianPrice.toFixed(0)}
+                            {t('listing.create.suggestedPrice', { amount: `${currencySymbol}${soldComps.medianPrice.toFixed(0)}` })}
                           </Text>
                           {!price && (
-                            <Text style={[styles.soldCompsAction, themed.soldCompsAction]}>Tap to set</Text>
+                            <Text style={[styles.soldCompsAction, themed.soldCompsAction]}>{t('listing.create.tapToSet')}</Text>
                           )}
                         </Pressable>
                       )}
                       {priceVsMarket === 'above' && (
                         <View style={styles.soldCompsHint}>
-                          <Ionicons name="trending-up-outline" size={12} color={colors.warning} aria-hidden={true} />
+                          <AppIcon name="trending-up-outline" size={IconSize.micro} color="warning" opticalCenter accessible={false} />
                           <Text style={[styles.soldCompsText, themed.priceMarketHigh]}>
-                            Priced above recent sold range
+                            {t('listing.create.pricedAboveRange')}
                           </Text>
                         </View>
                       )}
                       {priceVsMarket === 'below' && (
                         <View style={styles.soldCompsHint}>
-                          <Ionicons name="trending-down-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                          <AppIcon name="trending-up-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                           <Text style={[styles.soldCompsText, themed.priceMarketLow]}>
-                            Priced below recent sold range
+                            {t('listing.create.pricedBelowRange')}
                           </Text>
                         </View>
                       )}
                       {priceVsMarket === 'in_range' && (
                         <View style={styles.soldCompsHint}>
-                          <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                          <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
                           <Text style={[styles.soldCompsText, themed.priceMarketGood]}>
-                            Within recent sold range
+                            {t('listing.create.pricedInRange')}
                           </Text>
                         </View>
                       )}
                     </View>
                   ) : (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                      <AppIcon name="information-circle-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                       <Text style={[styles.soldCompsText, themed.priceNoCompsHint]}>
-                        Price competitively for faster sales
+                        {t('listing.create.priceCompetitively')}
                       </Text>
                     </View>
                   )}
@@ -1221,9 +1222,9 @@ export default function SellScreen() {
                   {hasValidPrice && numericPrice > 0 && (
                     <View style={styles.proceedsRow}>
                       <View style={styles.proceedsLeft}>
-                        <Ionicons name="wallet-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
+                        <AppIcon name="card-outline" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
                         <Text style={[styles.proceedsLabel, themed.fieldHelper]}>
-                          You receive
+                          {t('listing.create.youReceive')}
                         </Text>
                       </View>
                       <View style={styles.proceedsRight}>
@@ -1231,7 +1232,7 @@ export default function SellScreen() {
                           {currencySymbol}{(numericPrice - calculatePlatformChargeGbp(numericPrice)).toFixed(2)}
                         </Text>
                         <Text style={[styles.proceedsFeeHint, themed.fieldHelper]}>
-                          after {currencySymbol}{calculatePlatformChargeGbp(numericPrice).toFixed(2)} fee
+                          {t('listing.create.afterFee', { amount: `${currencySymbol}${calculatePlatformChargeGbp(numericPrice).toFixed(2)}` })}
                         </Text>
                       </View>
                     </View>
@@ -1251,10 +1252,10 @@ export default function SellScreen() {
                     />
                   </View>
                   {hasDiscount && (
-                    <Text style={[styles.discountPreview, themed.discountPreview]}>-{discountPercent}% off original</Text>
+                    <Text style={[styles.discountPreview, themed.discountPreview]}>{t('listing.create.discountOffOriginal', { percent: discountPercent })}</Text>
                   )}
                   {!originalPrice && hasValidPrice && (
-                    <Text style={[styles.fieldHelper, themed.fieldHelper]}>Add original price to show value</Text>
+                    <Text style={[styles.fieldHelper, themed.fieldHelper]}>{t('listing.create.originalPriceHelper')}</Text>
                   )}
                   <View style={[styles.hairline, themed.hairline]} />
                 </View>
@@ -1279,7 +1280,7 @@ export default function SellScreen() {
             {listingMode === 'co_own' && (
               <>
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Total valuation</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.totalValuation')}</Text>
                   <View style={styles.priceInputRow}>
                     <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
@@ -1297,7 +1298,7 @@ export default function SellScreen() {
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Share count</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.shareCount')}</Text>
                   <TextInput
                     style={[styles.fieldInput, themed.fieldInput]}
                     placeholder="20"
@@ -1306,13 +1307,13 @@ export default function SellScreen() {
                     value={shareCountInput}
                     onChangeText={(t) => { handleShareCountChange(t); setErrors((p) => ({ ...p, shareCount: '' })); }}
                   />
-                  <Text style={[styles.fieldHelper, themed.fieldHelper]}>Maximum 20 units per co-own</Text>
+                  <Text style={[styles.fieldHelper, themed.fieldHelper]}>{t('listing.create.maxShares')}</Text>
                   {errors.shareCount ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.shareCount}</Text> : null}
                   <View style={[styles.hairline, themed.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Share price ({currency.currencyCode})</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.sharePrice', { code: currency.currencyCode })}</Text>
                   <View style={styles.priceInputRow}>
                     <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
@@ -1328,21 +1329,21 @@ export default function SellScreen() {
                   {errors.sharePrice ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.sharePrice}</Text> : null}
                   {Number(price) > 0 && Number(shareCountInput) > 0 && (
                     <Text style={[styles.fieldHelper, themed.fieldHelper]}>
-                      {currencySymbol}{(Number(price) / Number(shareCountInput)).toFixed(2)} per share
+                      {t('listing.create.perShare', { amount: `${currencySymbol}${(Number(price) / Number(shareCountInput)).toFixed(2)}` })}
                     </Text>
                   )}
                   <View style={[styles.hairline, themed.hairline]} />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Offering window</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.offeringWindow')}</Text>
                   <View style={styles.toggleRow}>
                     {[24, 48, 72, 168].map((h) => {
                       const active = offeringWindowHours === h;
                       return (
                         <Pressable
                           key={h}
-                          style={({ pressed }) => [styles.togglePill, themed.togglePill, active && styles.togglePillActive, active && themed.togglePillActive, pressed && { opacity: 0.7 }]}
+                          style={({ pressed }) => [styles.togglePill, themed.togglePill, active && styles.togglePillActive, active && themed.togglePillActive, pressed && { opacity: 0.85 }]}
                           onPress={() => setOfferingWindowHours(h)}
                           accessibilityRole="button"
                           accessibilityLabel={`Set offering window to ${h} hours`}
@@ -1362,15 +1363,15 @@ export default function SellScreen() {
 
           {/* -- 6. DESCRIPTION AND TAGS -- */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Description</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.description')}</Text>
 
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Description</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.description')}</Text>
                 {desc.trim().length >= 10 ? (
-                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
               </View>
               <DebouncedTextInput
@@ -1379,19 +1380,19 @@ export default function SellScreen() {
                 debounceMs={400}
                 onImmediateChange={() => { if (errors.description) setErrors((p) => ({ ...p, description: '' })); }}
                 onChangeText={setDesc}
-                placeholder="Describe the fit, fabric, flaws, and why you love it..."
+                placeholder={t('listing.create.descriptionPlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 multiline
                 textAlignVertical="top"
               />
               <Text style={[styles.fieldHelper, desc.trim().length < 10 ? themed.charCountWarn : themed.fieldHelper]}>
-                {desc.length} characters{desc.trim().length < 10 ? ' · min 10' : desc.length < 60 ? ' · add more detail' : ''}
+                {desc.trim().length < 10 ? t('listing.create.charCountMin', { count: desc.length }) : desc.length < 60 ? t('listing.create.charCountMore', { count: desc.length }) : t('listing.create.charCount', { count: desc.length })}
               </Text>
               {errors.description ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.description}</Text> : null}
               <View style={[styles.hairline, themed.hairline]} />
             </View>
 
-            <Text style={[styles.fieldLabel, themed.fieldLabel]}>Tags</Text>
+            <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.tags')}</Text>
             <TagInputWithSuggestions
               tags={tags}
               tagInput={tagInput}
@@ -1404,46 +1405,46 @@ export default function SellScreen() {
               onSuggestionsClear={() => setTagSuggestions([])}
               onSuggestionPick={handleTagSuggestionPick}
             />
-            <Text style={[styles.fieldHelper, themed.fieldHelper]}>Press space or comma to add. Up to 8 tags.</Text>
+            <Text style={[styles.fieldHelper, themed.fieldHelper]}>{t('listing.create.tagsHelper')}</Text>
             {tags.length > 0 && tags.length < 3 && (
-              <Text style={[styles.fieldHelper, themed.fieldHelper]}>Add {3 - tags.length} more tag{3 - tags.length > 1 ? 's' : ''} to improve discovery</Text>
+              <Text style={[styles.fieldHelper, themed.fieldHelper]}>{t('listing.create.addMoreTags', { count: 3 - tags.length, plural: 3 - tags.length > 1 ? 's' : '' })}</Text>
             )}
           </View>
 
           {/* -- 7. SHIPPING -- */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Shipping</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.shipping')}</Text>
             {!shippingMethod && (
               <View style={styles.contextualHintRow}>
-                <Ionicons name="cube-outline" size={16} color={colors.brand} aria-hidden={true} />
+                <AppIcon name="car-outline" size={16} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
-                  Set a shipping method so buyers know how it'll arrive
+                  {t('listing.create.shippingMethodHint')}
                 </Text>
               </View>
             )}
             {shippingMethod && !shippingPayer && (
               <View style={styles.contextualHintRow}>
-                <Ionicons name="card-outline" size={16} color={colors.brand} aria-hidden={true} />
+                <AppIcon name="card-outline" size={16} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
-                  Specify who pays for shipping
+                  {t('listing.create.shippingPayerHint')}
                 </Text>
               </View>
             )}
 
             <Pressable
               onPress={() => { setShippingSheetOpen(true); haptics.tap(); }}
-              style={({ pressed }) => [styles.shippingSummaryRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.shippingSummaryRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
               accessibilityLabel="Configure delivery"
               accessibilityHint="Opens shipping method and payment options"
             >
               <View style={{ flex: 1 }}>
-                <Text style={[styles.shippingSummaryLabel, { color: colors.textPrimary }]}>Delivery</Text>
+                <Text style={[styles.shippingSummaryLabel, { color: colors.textPrimary }]}>{t('listing.create.delivery')}</Text>
                 <Text style={[styles.shippingSummaryValue, { color: shippingMethod ? colors.textSecondary : colors.textMuted }]}>
                   {formatShippingSummary(shippingMethod, shippingPayer)}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="forward" size={16} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
           </View>
 
@@ -1460,13 +1461,18 @@ export default function SellScreen() {
           {/* -- CO-OWN AUTHENTICATION MEDIA -- */}
           {listingMode === 'co_own' && (
             <View style={styles.sectionGroup}>
-              <Text style={[styles.sectionHeading, themed.sectionHeading]}>Authentication photos</Text>
-              <Text style={[styles.fieldHelper, themed.fieldHelper]}>Attach proof-of-authenticity photos for investor confidence.</Text>
+              <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.authPhotos')}</Text>
+              <Text style={[styles.fieldHelper, themed.fieldHelper]}>{t('listing.create.authPhotosHelper')}</Text>
               {errors.authPhotos ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.authPhotos}</Text> : null}
               <View style={styles.authPhotoRow}>
                 {authPhotos.map((uri, i) => (
                   <View key={`auth_${i}_${uri}`} style={[styles.authThumb, themed.authThumb]}>
-                    <Image source={{ uri }} style={styles.authThumbImage} resizeMode="cover" />
+                    <Image
+                      source={{ uri }}
+                      style={styles.authThumbImage}
+                      resizeMode="cover"
+                      accessibilityLabel={`Authentication photo ${i + 1}`}
+                    />
                     <Pressable
                       style={[styles.authThumbRemove, { backgroundColor: colors.background }]}
                       onPress={() => {
@@ -1477,7 +1483,7 @@ export default function SellScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Remove authentication photo"
                     >
-                      <Ionicons name="close-circle" size={22} color={colors.textPrimary} aria-hidden={true} />
+                      <AppIcon name="close-circle" size={22} color="textPrimary" opticalCenter accessible={false} />
                     </Pressable>
                   </View>
                 ))}
@@ -1488,7 +1494,7 @@ export default function SellScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Add authentication photo"
                   >
-                    <Ionicons name="add" size={22} color={colors.textMuted} aria-hidden={true} />
+                    <AppIcon name="add" size={22} color="textMuted" opticalCenter accessible={false} />
                   </Pressable>
                 )}
               </View>
@@ -1498,7 +1504,7 @@ export default function SellScreen() {
           {/* -- error message (inline, above footer) -- */}
           {errorMsg && publicationStage === 'idle' && (
             <View style={styles.inlineErrorRow}>
-              <Ionicons name="alert-circle" size={16} color={colors.danger} aria-hidden={true} />
+              <AppIcon name="alert-circle-outline" size={16} color="danger" opticalCenter accessible={false} />
               <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
@@ -1511,10 +1517,12 @@ export default function SellScreen() {
               suggestions appear below when present.
               Flat inline — no card chrome (§4 surface budget). */}
           <View style={styles.completenessRow}>
-            <Ionicons
+            <AppIcon
               name={completeness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
               size={16}
               color={completeness.canActivate ? colors.success : colors.warning}
+              opticalCenter
+              accessible={false}
             />
             <View style={styles.completenessTextWrap}>
               <Text style={[styles.completenessLabel, { color: completeness.canActivate ? colors.success : colors.textSecondary }]}>
@@ -1538,10 +1546,12 @@ export default function SellScreen() {
               Flat inline — no card chrome (§4 surface budget). */}
           {(listingMode === 'auction' || listingMode === 'co_own') && publishReady && (
             <View style={styles.reviewSummaryRow}>
-              <Ionicons
+              <AppIcon
                 name={listingMode === 'auction' ? 'hammer-outline' : 'people-outline'}
                 size={16}
                 color={colors.textSecondary}
+                opticalCenter
+                accessible={false}
               />
               <Text style={[styles.reviewSummaryText, { color: colors.textSecondary }]} numberOfLines={2}>
                 {formatReviewSummary(
@@ -2024,9 +2034,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + Space.xs,
     paddingHorizontal: Space.md,
     minHeight: Control.hit,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#00000000', // themed inline
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   shippingSummaryLabel: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,

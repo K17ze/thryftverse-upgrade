@@ -20,6 +20,8 @@ import {
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 
 export interface AutoAdjustButtonProps {
   /** Called when the button is tapped — toggles the auto-adjust effect. */
@@ -144,10 +146,13 @@ export function AutoAdjustButton({
         {isLoading ? (
           <ActivityIndicator size="small" color={accentColor} style={styles.spinner} />
         ) : (
-          <Ionicons
-            name={showingApplied ? 'checkmark-circle' : 'bulb-outline'}
-            size={ICON_SIZE}
-            color={accentColor}
+          <AppIcon
+            name={showingApplied ? 'check' : 'sparkles'}
+            size={IconSize.sm}
+            color={active ? 'brand' : 'textSecondary'}
+            focused={showingApplied}
+            opticalCenter={true}
+            accessible={false}
           />
         )}
         <Text

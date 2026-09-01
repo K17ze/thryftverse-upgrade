@@ -194,7 +194,7 @@ function deploymentToAgent(d: ConversationBotDeployment): ChatAgent {
     id: d.botId,
     type: 'custom',
     name: d.botName,
-    avatar: 'hardware-chip-outline',
+    avatar: 'bulb-outline',
     description: d.commandHint,
     capabilities: d.permissionsSnapshot,
     isDemo: false };

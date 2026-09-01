@@ -453,7 +453,7 @@ export default function AppealScreen({ navigation, route }: Props) {
         <View style={styles.decisionSummaryHeader}>
           <View style={styles.decisionIcon}>
             <Ionicons
-              name="shield-outline"
+              name="lock-closed-outline"
               size={18}
               color={colors.textPrimary}
             />

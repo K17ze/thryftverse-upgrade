@@ -263,7 +263,7 @@ export function OfferToLikersSheet({
               <View style={styles.toggleLeft}>
                 <View style={[styles.toggleIconWrap, { backgroundColor: includeFreeShipping ? themed.successSubtle : themed.surfaceAlt }]}>
                   <Ionicons
-                    name="cube-outline"
+                    name="car-outline"
                     size={16}
                     color={includeFreeShipping ? themed.success : themed.textMuted}
                   />

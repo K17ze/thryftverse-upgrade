@@ -44,7 +44,6 @@ import {
   ActivityIndicator,
   ScrollView,
   Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -52,6 +51,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { Space, Radius, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import {
   AIProvider,
   PROVIDER_CONFIGS,
@@ -462,7 +463,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           accessibilityRole="header"
           accessibilityLabel="Demo mode"
         >
-          <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+          <AppIcon name="info" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
           <Text style={styles.demoBannerText}>
             {t('demo.banner')}
           </Text>
@@ -526,12 +527,13 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       </View>
 
       {/* ───────────────────────────────────────────────────────────────────
-          2. Your agents — flat list of custom bots
+          2. Your agents — flat list of custom bots, tap to open detail
       ──────────────────────────────────────────────────────────────────── */}
       <View style={styles.sectionLabelWrap}>
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>{t('sections.yourAgents')}</Text>
       </View>
 
+      {/* Agents flat list */}
       {agentsLoading ? (
         <View style={styles.agentListSkeleton}>
           {[0, 1].map((i) => (
@@ -591,7 +593,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                   <Text style={[styles.providerStatus, { color: statusColor }]} numberOfLines={1}>
                     {statusLabel}
                   </Text>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                  <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                 </Pressable>
                 {!isLast ? (
                   <View style={[styles.flatRowSeparator, { backgroundColor: colors.border }]} />
@@ -612,7 +614,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         accessibilityRole="button"
         accessibilityLabel="Create agent"
       >
-        <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
+        <AppIcon name="plus" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
         <Text style={[styles.createAgentText, { color: colors.brand }]}>{t('agents.create')}</Text>
       </Pressable>
 
@@ -628,10 +630,12 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             : `Pause all agents — ${activeAgentSessions} running`
         }
       >
-        <Ionicons
-          name="pause-circle-outline"
-          size={20}
-          color={activeAgentSessions > 0 ? colors.danger : colors.textMuted}
+        <AppIcon
+          name="pause"
+          size={IconSize.md}
+          color={activeAgentSessions > 0 ? 'danger' : 'textMuted'}
+          opticalCenter
+          accessible={false}
         />
         <View style={styles.flatRowText}>
           <Text
@@ -648,7 +652,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
               : t('agents.noSessionsRunning')}
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
       </Pressable>
       <View style={[styles.flatRowSeparator, { backgroundColor: colors.border }]} />
       <Pressable
@@ -657,7 +661,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         accessibilityRole="button"
         accessibilityLabel="View agent activity ledger"
       >
-        <Ionicons name="list-outline" size={20} color={colors.textPrimary} />
+        <AppIcon name="document" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
         <View style={styles.flatRowText}>
           <Text style={[styles.flatRowTitle, { color: colors.textPrimary }]}>
             {t('agents.activity')}
@@ -666,7 +670,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             {t('agents.activitySub')}
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
       </Pressable>
 
       {/* ───────────────────────────────────────────────────────────────────
@@ -687,7 +691,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Connect a provider server-side"
         >
-          <Ionicons name="server-outline" size={20} color={colors.brand} />
+          <AppIcon name="desktop" size={IconSize.md} color="brand" opticalCenter accessible={false} />
           <View style={styles.flatRowText}>
             <Text style={[styles.flatRowTitle, { color: colors.textPrimary }]}>
               {t('serverConnections.connectServerSide')}
@@ -696,7 +700,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
               {t('serverConnections.connectServerSideSub')}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </Pressable>
       ) : null}
 
@@ -741,7 +745,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           </View>
 
           <View style={[styles.inputWrap, { borderColor: colors.border }]}>
-            <Ionicons name="key-outline" size={16} color={colors.textMuted} />
+            <AppIcon name="key" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             <TextInput
               style={[styles.input, { color: colors.inputText }]}
               placeholder={t('connect.apiKey')}
@@ -756,7 +760,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           </View>
 
           <View style={[styles.inputWrap, { borderColor: colors.border }]}>
-            <Ionicons name="bookmark-outline" size={16} color={colors.textMuted} />
+            <AppIcon name="bookmark" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             <TextInput
               style={[styles.input, { color: colors.inputText }]}
               placeholder={t('connect.labelOptional')}
@@ -770,7 +774,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           </View>
 
           <View style={[styles.inputWrap, { borderColor: colors.border }]}>
-            <Ionicons name="link-outline" size={16} color={colors.textMuted} />
+            <AppIcon name="link" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             <TextInput
               style={[styles.input, { color: colors.inputText }]}
               placeholder={t('connect.baseUrl')}
@@ -847,7 +851,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
               >
                 <View style={styles.serverConnectionHeader}>
                   <View style={styles.providerIdentity}>
-                    <Ionicons name="server-outline" size={20} color={colors.textPrimary} />
+                    <AppIcon name="desktop" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
                     <View style={styles.providerNameWrap}>
                       <Text style={[styles.providerName, { color: colors.textPrimary }]} numberOfLines={1}>
                         {titleText}
@@ -937,10 +941,12 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
               borderColor: toast.kind === 'success' ? colors.successBorder : colors.dangerBorder },
           ]}
         >
-          <Ionicons
-            name={toast.kind === 'success' ? 'checkmark-circle-outline' : 'alert-circle-outline'}
-            size={16}
-            color={toast.kind === 'success' ? colors.success : colors.danger}
+          <AppIcon
+            name={toast.kind === 'success' ? 'verified' : 'warning'}
+            size={IconSize.sm}
+            color={toast.kind === 'success' ? 'success' : 'danger'}
+            opticalCenter
+            accessible={false}
           />
           <Text
             style={[
@@ -978,10 +984,12 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 {t('deviceLocal.note')}
               </Text>
             </View>
-            <Ionicons
-              name={showDeviceKeys ? 'chevron-up-outline' : 'chevron-down-outline'}
-              size={18}
-              color={colors.textMuted}
+            <AppIcon
+              name={showDeviceKeys ? 'chevronUp' : 'chevronDown'}
+              size={IconSize.sm}
+              color="textMuted"
+              opticalCenter
+              accessible={false}
             />
           </Pressable>
 
@@ -1014,7 +1022,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 {/* Provider header row */}
                 <View style={styles.providerHeader}>
                   <View style={styles.providerIdentity}>
-                    <Ionicons name={config.icon as keyof typeof Ionicons.glyphMap} size={20} color={colors.textPrimary} />
+                    <AppIcon name="bulb-outline" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
                     <View style={styles.providerNameWrap}>
                       <Text style={[styles.providerName, { color: colors.textPrimary }]} numberOfLines={1}>
                         {config.name}
@@ -1055,7 +1063,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 {!isComingSoon && state.stored && !state.editing ? (
                   <View style={styles.connectedBody}>
                     <View style={[styles.keyDisplay, { backgroundColor: colors.surfaceAlt }]}>
-                      <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
+                      <AppIcon name="lock" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
                       <Text style={[styles.keyText, { color: colors.textSecondary }]} numberOfLines={1}>
                         {maskApiKey(state.stored.apiKey)}
                       </Text>
@@ -1132,7 +1140,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                   <View style={styles.editBody}>
                     {config.supportsBaseUrl ? (
                       <View style={[styles.inputWrap, { borderColor: colors.border }]}>
-                        <Ionicons name="link-outline" size={16} color={colors.textMuted} />
+                        <AppIcon name="link" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                         <TextInput
                           style={[styles.input, { color: colors.inputText }]}
                           placeholder="https://your-endpoint/v1"
@@ -1151,7 +1159,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                       </View>
                     ) : null}
                     <View style={[styles.inputWrap, { borderColor: colors.border }]}>
-                      <Ionicons name="key-outline" size={16} color={colors.textMuted} />
+                      <AppIcon name="key" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                       <TextInput
                         style={[styles.input, { color: colors.inputText }]}
                         placeholder={config.keyPlaceholder}
@@ -1252,7 +1260,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       ──────────────────────────────────────────────────────────────────── */}
         <View style={styles.securityNote}>
           <View style={styles.securityHeader}>
-            <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} />
+            <AppIcon name="info" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
             <Text style={[styles.securityTitle, { color: colors.textPrimary }]}>{t('help.title')}</Text>
           </View>
           <Text style={[styles.securityBody, { color: colors.textSecondary }]}>

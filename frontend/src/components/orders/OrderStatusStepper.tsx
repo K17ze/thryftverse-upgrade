@@ -36,7 +36,7 @@ interface StageConfig {
 const STAGE_CONFIG: Record<OrderStepperStage, StageConfig> = {
   placed: { icon: 'receipt-outline', label: 'Placed' },
   paid: { icon: 'checkmark-circle-outline', label: 'Paid' },
-  shipped: { icon: 'cube-outline', label: 'Shipped' },
+  shipped: { icon: 'car-outline', label: 'Shipped' },
   in_transit: { icon: 'car-outline', label: 'In transit' },
   delivered: { icon: 'checkmark-done-circle-outline', label: 'Delivered' } };
 

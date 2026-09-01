@@ -11,6 +11,7 @@ import {
 import { Image } from 'expo-image';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
+import { AppGlyph } from '../components/common/AppGlyph';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
@@ -839,7 +840,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
       accessibilityRole="button"
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
     >
-      <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.textPrimary} aria-hidden={true} />
+      <AppGlyph name="camera" size={IconGrammar.hero} color={colors.textPrimary} />
       <Text style={[styles.mediaCameraHeroLabel, { color: colors.textPrimary }]}>
         Camera
       </Text>
@@ -1036,7 +1037,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
               accessibilityLabel="Limited photo access — tap to select more photos"
               accessibilityRole="button"
             >
-              <Ionicons name="images-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />
+              <AppGlyph name="media-image" size={IconGrammar.metadata} color={colors.textSecondary} />
               <Text style={[styles.limitedAccessText, { color: colors.textSecondary }]}>
                 Limited access — tap to add more photos
               </Text>
@@ -1426,7 +1427,7 @@ const ProductPicker = React.memo(function ProductPicker({ onClose, onAddLayer }:
   const renderProductItem = useCallback<ListRenderItem<ListingSearchResult>>(({ item }) => (
     <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
       <View style={styles.resultThumb}>
-        {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />}
+        {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <AppGlyph name="store-bag" size={IconGrammar.metadata} color={colors.textSecondary} />}
       </View>
       <View style={styles.resultInfo}>
         <Text style={styles.resultName} numberOfLines={1}>{item.title}</Text>
@@ -3691,7 +3692,7 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
       label: 'Interactive',
       stickers: [
         { key: 'poll', label: 'Poll', icon: 'stats-chart-outline', mode: 'vote', description: '2-option vote' },
-        { key: 'product', label: 'Item', icon: 'pricetag-outline', mode: 'product', description: 'Tag a listing' },
+        { key: 'product', label: 'Item', icon: 'bag-handle-outline', mode: 'product', description: 'Tag a listing' },
         { key: 'look', label: 'Look', icon: 'shirt-outline', mode: 'look', description: 'Tag a look' },
         { key: 'quiz', label: 'Quiz', icon: 'help-circle-outline', mode: 'quiz', description: 'Trivia with answer' },
         { key: 'question', label: 'Ask', icon: 'chatbubble-outline', mode: 'question', description: 'Open Q&A' },
@@ -3704,7 +3705,7 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
       stickers: [
         { key: 'mention', label: '@Mention', icon: 'at-outline', mode: 'mention', description: 'Tag a user' },
         { key: 'location', label: 'Location', icon: 'location-outline', mode: 'location', description: 'Tag a place' },
-        { key: 'hashtag', label: 'Hashtag', icon: 'pricetag-outline', mode: 'hashtag', description: 'Topic tag' },
+        { key: 'hashtag', label: 'Hashtag', icon: 'bag-handle-outline', mode: 'hashtag', description: 'Topic tag' },
       ] },
     {
       key: 'media',
@@ -4049,7 +4050,7 @@ const HashtagPicker = React.memo(function HashtagPicker({ onClose, onAddLayer, e
     <PickerShell title={isEditing ? 'Edit Hashtag' : 'Add Hashtag'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={styles.stickerPreviewPill}>
-          <Ionicons name="pricetag-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
+          <Ionicons name="bag-handle-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
           <Text style={styles.stickerPreviewPillText}>#{tag.replace(/^#/, '') || 'hashtag'}</Text>
         </View>
         <Text style={styles.pickerSectionLabel}>Hashtag</Text>

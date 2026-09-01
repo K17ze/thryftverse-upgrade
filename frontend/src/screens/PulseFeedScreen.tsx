@@ -48,7 +48,7 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
 
   const iconMap: Record<ActivityType, React.ComponentProps<typeof Ionicons>['name']> = {
     auction_live: 'flame-outline',
-    fresh_drop: 'cube-outline',
+    fresh_drop: 'bag-handle-outline',
     price_drop: 'trending-down-outline',
     sold: 'checkmark-circle-outline' };
   const accentMap: Record<ActivityType, string> = {

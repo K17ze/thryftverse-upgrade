@@ -127,7 +127,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
             accessibilityRole="button"
             accessibilityLabel="Link to marketplace listing"
           >
-            <Ionicons name="pricetag-outline" size={16} color={colors.textSecondary} />
+            <Ionicons name="bag-handle-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.linkBtnText}>
               {isSearching ? 'Cancel linking' : 'Link to listing (optional)'}
             </Text>
@@ -184,7 +184,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
   if (tags.length === 0) {
     return (
       <View style={styles.emptyWrap}>
-        <Ionicons name="pricetag-outline" size={24} color={colors.textMuted} />
+        <Ionicons name="bag-handle-outline" size={24} color={colors.textMuted} />
         <Text style={styles.emptyText}>
           Tap on your photo to tag outfit pieces. Each tag can optionally link to a marketplace listing.
         </Text>

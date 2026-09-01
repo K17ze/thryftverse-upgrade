@@ -153,7 +153,7 @@ export function BiometricGate({
               borderColor: colors.warningBorder },
           ]}
         >
-          <Ionicons name="shield-outline" size={16} color={colors.warning} />
+          <Ionicons name="lock-closed-outline" size={16} color={colors.warning} />
           <Text style={[styles.warningText, { color: colors.textSecondary }]}>
             Biometric protection is not set up on this device. Use a strong
             password and keep your device locked.

@@ -52,7 +52,7 @@ export function CoOwnDiscoveryCard({
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
           ) : (
             <View style={[styles.image, styles.imageFallback]}>
-              <Ionicons name="cube-outline" size={28} color={colors.textMuted} />
+              <Ionicons name="image-outline" size={28} color={colors.textMuted} />
             </View>
           )}
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />

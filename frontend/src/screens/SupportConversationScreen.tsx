@@ -65,8 +65,8 @@ type ListItem =
 // ─── Context label mapping ───────────────────────────────────────────────────
 const CONTEXT_LABELS: Record<SupportContextKind, { label: string; icon: string }> = {
   general: { label: 'General enquiry', icon: 'help-circle-outline' },
-  order: { label: 'Order', icon: 'cube-outline' },
-  listing: { label: 'Listing', icon: 'pricetag-outline' },
+  order: { label: 'Order', icon: 'bag-handle-outline' },
+  listing: { label: 'Listing', icon: 'document-text-outline' },
   payout: { label: 'Payout', icon: 'card-outline' },
   report: { label: 'Report', icon: 'flag-outline' },
   auction: { label: 'Auction', icon: 'trophy-outline' },

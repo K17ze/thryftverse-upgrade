@@ -22,7 +22,7 @@ export interface BuyerProtectionStripProps {
  * (Vinted/eBay model).
  *
  * Visual language: surface card with success-tinted background, rounded corners,
- * shield icon in a circular success-tinted badge. Feels like an authored trust
+ * verified icon in a circular success-tinted badge. Feels like an authored trust
  * element, not a pasted text block.
  */
 export function BuyerProtectionStrip({

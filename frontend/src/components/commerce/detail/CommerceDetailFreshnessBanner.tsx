@@ -49,7 +49,7 @@ export function CommerceDetailFreshnessBanner({
           {
             backgroundColor: colors.dangerSubtle,
             borderColor: colors.dangerBorder },
-          pressed && { opacity: 0.6 },
+          pressed && { opacity: 0.85 },
         ]}
         accessibilityRole="button"
         accessibilityLabel="Couldn't refresh. Tap to retry."

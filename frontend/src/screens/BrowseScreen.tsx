@@ -42,7 +42,9 @@ import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 
-import { Space, Radius, Elevation, Typography, AspectRatio, Control } from '../theme/designTokens';
+import { Space, Radius, Elevation, Typography, AspectRatio, Control, IconSize } from '../theme/designTokens';
+import { AppIcon } from '../components/common/AppIcon';
+import { AppIconButton } from '../components/common/AppIconButton';
 import { TypographyV2 } from '../theme/typography.v2';
 const GRID_SPACING = 16;
 
@@ -658,30 +660,30 @@ export default function BrowseScreen() {
 
       {/* Heavy Typography Header */}
       <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} aria-hidden={true} />
-        </AnimatedPressable>
+        <AppIconButton
+          name="back"
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Go back"
+        />
         <View style={styles.headerActions}>
-          <AnimatedPressable
-            style={styles.gridToggleBtn}
-            activeOpacity={0.8}
+          <AppIconButton
+            name={gridDensity === 'comfortable' ? 'grid-outline' : 'grid'}
             onPress={() => handleGridDensityChange(gridDensity === 'comfortable' ? 'compact' : 'comfortable')}
-            accessibilityRole="button"
             accessibilityLabel={gridDensity === 'comfortable' ? 'Switch to compact 3 column grid' : 'Switch to comfortable 2 column grid'}
-            accessibilityState={{ selected: true }}
-          >
-            <Ionicons name={gridDensity === 'comfortable' ? 'grid-outline' : 'grid-sharp'} size={22} color={colors.textPrimary} aria-hidden={true} />
-          </AnimatedPressable>
-          <AnimatedPressable style={styles.searchBtn} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityRole="button" accessibilityLabel="Search listings">
-            <Ionicons name="search" size={22} color={colors.textPrimary} aria-hidden={true} />
-          </AnimatedPressable>
+            selected={true}
+          />
+          <AppIconButton
+            name="search"
+            onPress={() => navigation.navigate('GlobalSearch')}
+            accessibilityLabel="Search listings"
+          />
         </View>
       </View>
 
       <View style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
         <View style={styles.itemCountPill} accessibilityLiveRegion="polite" accessibilityLabel={backendLoading ? 'Loading items' : `${displayCount} items`}>
-          <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+          <AppIcon name="bag-handle-outline" size={IconSize.micro} color="textMuted" accessible={false} />
           <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
         </View>
       </View>
@@ -697,7 +699,12 @@ export default function BrowseScreen() {
             accessibilityState={{ selected: hasActiveFilters }}
             accessibilityHint={hasActiveFilters ? 'Filters are applied' : 'Opens filter options'}
           >
-            <Ionicons name="options-outline" size={16} color={hasActiveFilters ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon
+              name="options"
+              size={IconSize.sm}
+              color={hasActiveFilters ? 'textPrimary' : 'textMuted'}
+              accessible={false}
+            />
             <Text style={[styles.filterPillText, hasActiveFilters && styles.filterPillTextActive]}>{hasActiveFilters ? 'Filter on' : 'Filter'}</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -708,9 +715,19 @@ export default function BrowseScreen() {
             accessibilityLabel={`Sort by ${browseFilters.sort}`}
             accessibilityState={{ expanded: sortMenuOpen }}
           >
-            <Ionicons name="swap-vertical" size={16} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon
+              name="filter"
+              size={IconSize.sm}
+              color={browseFilters.sort !== 'Recommended' ? 'textPrimary' : 'textMuted'}
+              accessible={false}
+            />
             <Text style={[styles.sortTriggerText, browseFilters.sort !== 'Recommended' && styles.sortTriggerTextActive]}>{browseFilters.sort}</Text>
-            <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon
+              name={sortMenuOpen ? 'chevronUp' : 'chevronDown'}
+              size={IconSize.micro}
+              color={browseFilters.sort !== 'Recommended' ? 'textPrimary' : 'textMuted'}
+              accessible={false}
+            />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -721,7 +738,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.brands.length > 0 ? `${browseFilters.brands.length} brands selected` : 'Opens brand filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.brands.length > 0 && styles.filterPillTextActive]}>{browseFilters.brands.length > 0 ? `Brand (${browseFilters.brands.length})` : 'Brand'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.brands.length > 0 ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon name="chevronDown" size={IconSize.micro} color={browseFilters.brands.length > 0 ? 'textPrimary' : 'textMuted'} accessible={false} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -732,7 +749,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.sizes.length > 0 ? `${browseFilters.sizes.length} sizes selected` : 'Opens size filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.sizes.length > 0 && styles.filterPillTextActive]}>{browseFilters.sizes.length > 0 ? `Size (${browseFilters.sizes.length})` : 'Size'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.sizes.length > 0 ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon name="chevronDown" size={IconSize.micro} color={browseFilters.sizes.length > 0 ? 'textPrimary' : 'textMuted'} accessible={false} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -743,7 +760,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.condition !== 'Any' ? `Condition: ${browseFilters.condition}` : 'Opens condition filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.condition !== 'Any' && styles.filterPillTextActive]}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.condition !== 'Any' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon name="chevronDown" size={IconSize.micro} color={browseFilters.condition !== 'Any' ? 'textPrimary' : 'textMuted'} accessible={false} />
           </AnimatedPressable>
           <AnimatedPressable
             style={[styles.filterPillOutline, browseFilters.sustainableOnly && styles.filterPillActive]}
@@ -756,11 +773,12 @@ export default function BrowseScreen() {
             accessibilityState={{ checked: browseFilters.sustainableOnly }}
             accessibilityLabel="Toggle sustainable items only"
           >
-            <Ionicons
+            <AppIcon
               name="leaf"
-              size={16}
-              color={browseFilters.sustainableOnly ? colors.textPrimary : colors.textMuted}
-              aria-hidden={true}
+              size={IconSize.sm}
+              color={browseFilters.sustainableOnly ? 'textPrimary' : 'textMuted'}
+              focused={browseFilters.sustainableOnly}
+              accessible={false}
             />
             <Text
               style={[
@@ -980,7 +998,7 @@ export default function BrowseScreen() {
           // from filtered-empty: there is nothing to show regardless of filters.
           <View style={{ flex: 1 }}>
             <EmptyState
-              icon="pricetag-outline"
+              icon="bag-handle-outline"
               title="No items here yet"
               subtitle="New listings are added every day. Check back soon or explore everything."
               ctaLabel="Explore all"

@@ -36,6 +36,8 @@ import { CreatorSlider } from '../../controls/CreatorSlider';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { AIEffectGrid } from './AIEffectGrid';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 import {
   type EffectDefinition,
   getAllEffects,
@@ -151,7 +153,7 @@ export function AIEffectBrowserSheet({
             accessibilityHint="Closes the effect browser sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
 

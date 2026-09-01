@@ -79,7 +79,7 @@ export function CoOwnAssetTile({
                 <CachedImage uri={imageUri} style={styles.marketImage} contentFit="cover" transition={200} />
               ) : (
                 <View style={[styles.marketImage, styles.imageFallback, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="cube-outline" size={16} color={colors.textMuted} />
+                  <Ionicons name="image-outline" size={16} color={colors.textMuted} />
                 </View>
               )}
             </View>

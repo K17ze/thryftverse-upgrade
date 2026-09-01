@@ -253,7 +253,7 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
       {/* ── Shipping & packaging ── */}
       <SettingsSection title="Shipping & packaging" noCard>
         <SettingsRow
-          icon="cube-outline"
+          icon="leaf-outline"
           title="Plastic-free packaging"
           subtitle="Prefer sellers using plastic-free packaging"
           toggleValue={plasticFreePackaging}
@@ -274,7 +274,7 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
           isFirst
         />
         <SettingsRow
-          icon="analytics-outline"
+          icon="leaf-outline"
           title="Impact tracking"
           subtitle="Track your personal sustainability impact"
           toggleValue={trackImpact}

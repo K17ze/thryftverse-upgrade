@@ -527,7 +527,7 @@ export default function WalletScreen({ navigation }: Props) {
         {/* ── Seller earnings summary (spec 17: "Seller earnings · {currencySymbol}X available · {currencySymbol}Y pending") ── */}
         {sellerBalances !== null && (sellerBalances.pendingGbp > 0 || sellerBalances.availableGbp > 0 || sellerBalances.heldInReserveGbp > 0) && (
           <FlagshipNavigationRow
-            icon="pricetag-outline"
+            icon="cash-outline"
             iconColor={colors.brand}
             title={t('commerce.wallet.sellerEarnings')}
             subtitle={t('commerce.wallet.sellerEarningsSubtitle', { available: formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' }) })}

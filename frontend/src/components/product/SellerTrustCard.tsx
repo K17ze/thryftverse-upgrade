@@ -66,7 +66,7 @@ export function SellerTrustCard({
 
   if (dispatchTimeLabel) {
     trustMetrics.push({
-      icon: 'cube',
+      icon: 'car-outline',
       label: 'Dispatch',
       value: dispatchTimeLabel });
   }
@@ -80,7 +80,7 @@ export function SellerTrustCard({
 
   if (activeListingCount != null) {
     trustMetrics.push({
-      icon: 'pricetags',
+      icon: 'bag-handle-outline',
       label: 'Listings',
       value: `${activeListingCount} active` });
   }

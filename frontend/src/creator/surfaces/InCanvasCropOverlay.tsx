@@ -36,6 +36,8 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -534,7 +536,7 @@ export function InCanvasCropOverlay({
             accessibilityRole="button"
             hitSlop={Space.xs}
           >
-            <Ionicons name="close" size={22} color={colors.scrimTextPrimary} />
+            <AppIcon name="close" size={IconSize.lg} color="textInverse" opticalCenter={true} accessible={false} />
           </Pressable>
           <Pressable
             onPress={handleConfirm}
@@ -543,7 +545,7 @@ export function InCanvasCropOverlay({
             accessibilityRole="button"
             hitSlop={Space.xs}
           >
-            <Ionicons name="checkmark" size={22} color={colors.textInverse} />
+            <AppIcon name="check" size={IconSize.lg} color="textInverse" opticalCenter={true} accessible={false} />
           </Pressable>
         </View>
 

@@ -57,7 +57,7 @@ interface OnboardingSlide {
 
 const SLIDES: OnboardingSlide[] = [
   {
-    icon: 'compass-outline',
+    icon: 'search-outline',
     iconBackground: 'discovery',
     title: 'Find pieces no one else has',
     body: 'Curated fashion from independent sellers — hand-listed, never mass-market.',

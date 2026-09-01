@@ -332,6 +332,59 @@
     "userProfile": "{name}'s profile"
   },
   "listing": {
+    "edit": {
+      "couldNotLoad": "Couldn't load this listing",
+      "retryLoad": "Retry",
+      "discardTitle": "Discard changes?",
+      "discardMessage": "Your changes haven't been saved.",
+      "discard": "Discard",
+      "keepEditing": "Keep editing",
+      "unsaved": "Unsaved changes",
+      "updated": "Listing updated",
+      "updateFailed": "Couldn't update the listing. Try again.",
+      "titlePlaceholder": "e.g. Vintage Levi's 501 Denim Jacket",
+      "descriptionPlaceholder": "Describe the item's condition, size, and details",
+      "selectCategory": "Select category",
+      "selectCondition": "Select condition",
+      "selectSize": "Select size",
+      "selectBrand": "Select brand",
+      "select": "Select",
+      "remove": "Remove",
+      "pricing": "Pricing",
+      "format": "Format",
+      "formatFixedPrice": "Fixed price",
+      "formatHelper": "Choose how buyers can purchase this item",
+      "restricted": "Some categories can't be listed yet",
+      "shipping": "Shipping",
+      "shippingMethod": "Shipping method",
+      "shippingStandard": "Standard",
+      "shippingExpress": "Express",
+      "selectMethod": "Select method",
+      "whoPays": "Who pays shipping?",
+      "selectPayer": "Select payer",
+      "payerSeller": "You pay",
+      "payerBuyer": "Buyer pays",
+      "toggleShippingMethod": "Change shipping method",
+      "toggleShippingPayer": "Change who pays shipping",
+      "expandPhotoTips": "Photo tips",
+      "collapsePhotoTips": "Hide photo tips",
+      "showTips": "Show tips",
+      "hideTips": "Hide tips",
+      "tipsToImprove": "Tips to improve your listing",
+      "listingQuality": "Listing quality",
+      "allowCamera": "Allow camera access",
+      "allowGallery": "Allow photo library access",
+      "noPermission": "Camera access is off. Enable it in Settings.",
+      "couldNotOpenCamera": "Couldn't open the camera",
+      "couldNotOpenLibrary": "Couldn't open your photo library",
+      "mediaFailedRetry": "A photo failed to load. Retry.",
+      "retry": "Retry",
+      "lockedPhotos": "Photos locked while editing",
+      "statusDraft": "Draft",
+      "statusActive": "Active",
+      "statusPaused": "Paused",
+      "statusSold": "Sold"
+    },
     "create": {
       "title": "Sell",
       "createListing": "Create listing",
@@ -1129,7 +1182,9 @@
       "currentBid": "Current bid",
       "minNextBid": "Minimum next bid",
       "cancel": "Cancel",
-      "close": "Close"
+      "close": "Close",
+      "riskDisclosure": "Bids are binding. If you win, you must complete payment within 48 hours. No retraction after confirmation.",
+      "paymentDeadline": "Payment due within 48 hours of auction close."
     },
     "unknown": {
       "title": "Bid status unknown",
@@ -1678,6 +1733,20 @@
       "singleUploadFailed": "Unable to upload photo. Try again.",
       "photoAttached": "Photo attached.",
       "appealFailed": "The appeal could not be submitted. Check your connection and try again."
+    }
+  },
+  "coOwn": {
+    "tradeComposer": {
+      "riskDisclosure": "Fractional ownership is irrevocable. Shares are subject to corporate actions and market volatility. Past performance does not guarantee future returns. You may lose some or all of your investment.",
+      "noGuarantee": "No guaranteed returns",
+      "irrevocable": "Irrevocable commitment"
+    },
+    "detail": {
+      "issuerTrust": "Issuer",
+      "sharePrice": "Share price",
+      "totalValue": "Total asset value",
+      "ownershipPercent": "Your ownership",
+      "distributions": "Distributions"
     }
   }
 }

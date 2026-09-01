@@ -489,7 +489,7 @@ function DiscoveryFeedView({
       <View style={styles.stateWrap}>
         <EmptyState
           density="compact"
-          icon="pricetags-outline"
+          icon="bag-handle-outline"
           title={`No ${activeCategory.toLowerCase()} items yet`}
           subtitle="Try another category or check back soon."
           ctaLabel="Browse all"
@@ -504,7 +504,7 @@ function DiscoveryFeedView({
       <View style={styles.stateWrap}>
         <EmptyState
           density="compact"
-          icon="compass-outline"
+          icon="search-outline"
           title="Nothing to explore yet"
           subtitle="New items are uploaded every day. Check back soon."
           ctaLabel="Refresh"

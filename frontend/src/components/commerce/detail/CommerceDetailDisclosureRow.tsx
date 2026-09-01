@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius } from '../../../theme/designTokens';
+import { Space, Radius, Control, PressScale } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -65,7 +65,7 @@ export function CommerceDetailDisclosureRow({
         {leadingIcon ? (
           <Ionicons
             name={leadingIcon}
-            size={18}
+            size={Control.iconCompact}
             color={critical ? colors.danger : colors.textSecondary}
             style={styles.leadingIcon}
           />
@@ -99,7 +99,7 @@ export function CommerceDetailDisclosureRow({
         ) : null}
         <Ionicons
           name="chevron-forward"
-          size={18}
+          size={Control.iconCompact}
           color={colors.textMuted}
           style={styles.chevron}
         />
@@ -118,8 +118,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderTopWidth: StyleSheet.hairlineWidth },
   pressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.985 }] },
+    opacity: 0.85,
+    transform: [{ scale: PressScale.gentle }] },
   labelCluster: {
     flexDirection: 'row',
     alignItems: 'center',

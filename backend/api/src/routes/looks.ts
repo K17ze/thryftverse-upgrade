@@ -1324,16 +1324,25 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       body: string;
       created_at: string;
       updated_at: string;
+      deleted_at: string | null;
       author_username: string | null;
       author_avatar: string | null;
+      author_verified: boolean;
       like_count: string;
       reply_count: string;
       liked_by_viewer: boolean;
     }>(
       `
         SELECT c.id, c.look_id, c.author_id, c.parent_id, c.body, c.created_at, c.updated_at,
+          c.deleted_at,
           u.username AS author_username,
           u.avatar AS author_avatar,
+          EXISTS (
+            SELECT 1 FROM seller_trust_evidence ste
+            WHERE ste.seller_id = c.author_id
+              AND ste.code IN ('identity_checked', 'trader_verified')
+              AND (ste.expires_at IS NULL OR ste.expires_at > NOW())
+          ) AS author_verified,
           COALESCE(lc.like_count, '0') AS like_count,
           COALESCE(rc.reply_count, '0') AS reply_count,
           COALESCE(lv.liked, false) AS liked_by_viewer
@@ -1345,13 +1354,22 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
         ) lc ON lc.comment_id = c.id
         LEFT JOIN (
           SELECT parent_id, COUNT(*)::text AS reply_count
-          FROM look_comments WHERE parent_id IS NOT NULL GROUP BY parent_id
+          FROM look_comments
+          WHERE parent_id IS NOT NULL AND deleted_at IS NULL
+          GROUP BY parent_id
         ) rc ON rc.parent_id = c.id
         LEFT JOIN (
           SELECT comment_id, true AS liked
           FROM look_comment_likes WHERE user_id = $2
         ) lv ON lv.comment_id = c.id
         WHERE c.look_id = $1
+          AND (
+            c.deleted_at IS NULL
+            OR EXISTS (
+              SELECT 1 FROM look_comments r
+              WHERE r.parent_id = c.id AND r.deleted_at IS NULL
+            )
+          )
         ORDER BY c.parent_id NULLS FIRST, c.created_at ASC
         LIMIT 500
       `,
@@ -1368,8 +1386,12 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
           id: row.author_id,
           username: row.author_username,
           avatar: row.author_avatar,
+          verified: Boolean(row.author_verified),
         },
-        body: row.body,
+        // Tombstones never serve their body (privacy) — the UI renders a
+        // "Deleted comment" placeholder so live replies keep their context.
+        body: row.deleted_at ? '' : row.body,
+        deleted: row.deleted_at !== null,
         likeCount: Number(row.like_count),
         likedByViewer: row.liked_by_viewer,
         replyCount: Number(row.reply_count),
@@ -1390,15 +1412,15 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       return { ok: false, error: 'Look not found' };
     }
 
-    // Validate parentId if provided: must be a root comment on the same look
+    // Validate parentId if provided: must be a live root comment on the same look
     let resolvedParentId: string | null = null;
     if (payload.parentId) {
-      const parentResult = await db.query<{ id: string; parent_id: string | null }>(
-        `SELECT id, parent_id FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
+      const parentResult = await db.query<{ id: string; parent_id: string | null; deleted_at: string | null }>(
+        `SELECT id, parent_id, deleted_at FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
         [payload.parentId, lookId]
       );
       const parent = parentResult.rows[0];
-      if (!parent) {
+      if (!parent || parent.deleted_at) {
         reply.code(404);
         return { ok: false, error: 'Parent comment not found' };
       }
@@ -1406,8 +1428,12 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       resolvedParentId = parent.parent_id ?? parent.id;
     }
 
+    // Idempotent insert: replaying the same client-generated id after an
+    // unknown-outcome network drop must never duplicate the comment (§37.7).
     await db.query(
-      `INSERT INTO look_comments (id, look_id, author_id, body, parent_id) VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO look_comments (id, look_id, author_id, body, parent_id)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (id) DO NOTHING`,
       [payload.id, lookId, actorUserId, payload.body, resolvedParentId]
     );
 
@@ -1420,11 +1446,18 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       updated_at: string;
       author_username: string | null;
       author_avatar: string | null;
+      author_verified: boolean;
     }>(
       `
         SELECT c.id, c.author_id, c.parent_id, c.body, c.created_at, c.updated_at,
           u.username AS author_username,
-          u.avatar AS author_avatar
+          u.avatar AS author_avatar,
+          EXISTS (
+            SELECT 1 FROM seller_trust_evidence ste
+            WHERE ste.seller_id = c.author_id
+              AND ste.code IN ('identity_checked', 'trader_verified')
+              AND (ste.expires_at IS NULL OR ste.expires_at > NOW())
+          ) AS author_verified
         FROM look_comments c
         LEFT JOIN users u ON u.id = c.author_id
         WHERE c.id = $1 LIMIT 1
@@ -1438,12 +1471,10 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       return { ok: false, error: 'Failed to create comment' };
     }
 
-    // Update parent's reply count if this is a reply
-    if (resolvedParentId) {
-      await db.query(
-        `UPDATE look_comments SET updated_at = NOW() WHERE id = $1`,
-        [resolvedParentId]
-      );
+    // A conflicting id owned by someone else is a client bug, not a replay.
+    if (row.author_id !== actorUserId) {
+      reply.code(409);
+      return { ok: false, error: 'Comment id already in use' };
     }
 
     reply.code(201);
@@ -1458,8 +1489,10 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
           id: row.author_id,
           username: row.author_username,
           avatar: row.author_avatar,
+          verified: Boolean(row.author_verified),
         },
         body: row.body,
+        deleted: false,
         likeCount: 0,
         likedByViewer: false,
         replyCount: 0,
@@ -1479,13 +1512,13 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       return { ok: false, error: 'Look not found' };
     }
 
-    const commentResult = await db.query<{ author_id: string }>(
-      `SELECT author_id FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
+    const commentResult = await db.query<{ author_id: string; deleted_at: string | null }>(
+      `SELECT author_id, deleted_at FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
       [commentId, lookId]
     );
 
     const comment = commentResult.rows[0];
-    if (!comment) {
+    if (!comment || comment.deleted_at) {
       reply.code(404);
       return { ok: false, error: 'Comment not found' };
     }
@@ -1495,7 +1528,19 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       return { ok: false, error: 'Forbidden' };
     }
 
-    await db.query(`DELETE FROM look_comments WHERE id = $1`, [commentId]);
+    // Tombstone model (X/Threads): a deleted comment with live replies keeps
+    // its row so the reply thread survives; leaf comments are hard-deleted.
+    const repliesResult = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM look_comments WHERE parent_id = $1 AND deleted_at IS NULL`,
+      [commentId]
+    );
+    const hasLiveReplies = Number(repliesResult.rows[0]?.count ?? 0) > 0;
+
+    if (hasLiveReplies) {
+      await db.query(`UPDATE look_comments SET deleted_at = NOW() WHERE id = $1`, [commentId]);
+    } else {
+      await db.query(`DELETE FROM look_comments WHERE id = $1`, [commentId]);
+    }
     return { ok: true };
   });
 

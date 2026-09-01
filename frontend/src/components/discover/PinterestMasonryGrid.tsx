@@ -499,7 +499,7 @@ function LookDiscoveryTile({
         {unit.itemIds.length > 0 ? (
           <View style={{ position: 'absolute', top: Space.sm, right: Space.sm }}>
             <Ionicons
-              name="pricetag"
+              name="bag-handle-outline"
               size={15}
               color={colors.scrimTextPrimary}
               style={{ textShadowColor: colors.mediaOverlayScrim, textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } }}

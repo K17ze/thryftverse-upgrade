@@ -117,7 +117,7 @@ export function ChatComposerBar({
       {/* Info-level static safety reminder */}
       {safetyWarning && !dangerWarning && !cautionWarning ? (
         <View style={styles.safetyBanner}>
-          <Ionicons name="shield-outline" size={12} color={colors.textMuted} />
+          <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
           <Text style={styles.safetyBannerText} numberOfLines={2}>{safetyWarning}</Text>
         </View>
       ) : null}

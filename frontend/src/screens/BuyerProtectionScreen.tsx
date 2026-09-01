@@ -226,7 +226,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                 onPress={() => { haptics.tap(); setShowClaimForm(true); }}
                 variant="primary"
                 size="lg"
-                icon={<Ionicons name="shield-outline" size={18} color={colors.textInverse} />}
+                icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />}
                 style={{ marginHorizontal: Space.md, marginTop: Space.md }}
               />
             ) : (

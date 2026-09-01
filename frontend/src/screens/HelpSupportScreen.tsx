@@ -487,7 +487,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
                 isFirst
               />
               <SettingsRow
-                icon="shield-outline"
+                icon="lock-closed-outline"
                 title="Appeal a moderation decision"
                 subtitle="Request a review of a decision made on your account"
                 onPress={handleAppealModeration}
@@ -504,7 +504,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
                 isFirst
               />
               <SettingsRow
-                icon="shield-checkmark-outline"
+                icon="lock-closed-outline"
                 title="Privacy Policy"
                 onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
               />

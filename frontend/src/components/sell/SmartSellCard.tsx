@@ -5,7 +5,8 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  Switch } from 'react-native';
+  Switch,
+  Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -31,14 +32,18 @@ import {
   fetchSmartSellDecisions } from '../../services/smartSellApi';
 
 export interface SmartSellCardProps {
-  /** Listing id the policy applies to. */
-  listingId: string;
-  /** Current Smart Sell policy. */
-  policy: SmartSellPolicy;
+  /** Listing id the policy applies to. Omitted in preview contexts without a policy yet. */
+  listingId?: string;
+  /** Current Smart Sell policy. Omitted in preview contexts — the card renders nothing. */
+  policy?: SmartSellPolicy;
   /** Called whenever the seller edits the policy. */
-  onPolicyChange: (policy: SmartSellPolicy) => void;
+  onPolicyChange?: (policy: SmartSellPolicy) => void;
   /** Optional listing price (GBP) used to seed sensible threshold defaults. */
   listingPrice?: number;
+  /** Listing context for category-aware threshold defaults. */
+  category?: string;
+  /** Listing context for condition-aware threshold defaults. */
+  condition?: string;
   /** Server policy ID for fetching decision history. Omitted in preview mode. */
   serverPolicyId?: string;
 }
@@ -72,11 +77,16 @@ export function SmartSellCard({
 
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  // Preview contexts (e.g. the AI listing composer) pass listing context
+  // without a policy — nothing to render until a listing exists.
+  if (!policy || !onPolicyChange || !listingId) return null;
+
   const isPreview = policy.capability.kind === 'preview';
 
   const handleToggle = useCallback(
     (next: boolean) => {
       haptic.light();
+      if (!onPolicyChange || !listingId) return;
       if (next) {
         const updated = enableSmartSell(listingId, listingPrice);
         onPolicyChange(updated);
@@ -95,6 +105,7 @@ export function SmartSellCard({
 
   const handlePolicyUpdate = useCallback(
     (patch: Partial<SmartSellPolicy>) => {
+      if (!onPolicyChange || !listingId) return;
       const updated = updateSmartSellPolicy(listingId, patch);
       onPolicyChange(updated);
     },
@@ -115,20 +126,24 @@ export function SmartSellCard({
 
   return (
     <>
-      <Pressable
-        style={({ pressed }) => [
+      <View
+        style={[
           styles.row,
           { borderColor: colors.border },
-          pressed && { opacity: 0.6 },
         ]}
-        onPress={handleRowPress}
-        accessibilityRole="button"
-        accessibilityLabel="Smart Sell auto-negotiation"
-        accessibilityHint="Opens Smart Sell settings"
       >
-        <View style={styles.rowLeft}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.rowLeft,
+            pressed && { opacity: 0.6 },
+          ]}
+          onPress={handleRowPress}
+          accessibilityRole="button"
+          accessibilityLabel="Smart Sell auto-negotiation"
+          accessibilityHint="Opens Smart Sell settings"
+        >
           <Ionicons
-            name="pricetag-outline"
+            name="cash-outline"
             size={18}
             color={policy.enabled ? colors.brand : colors.textSecondary}
             aria-hidden={true}
@@ -144,7 +159,7 @@ export function SmartSellCard({
               {summary}
             </Text>
           </View>
-        </View>
+        </Pressable>
         <Switch
           value={policy.enabled}
           onValueChange={handleToggle}
@@ -155,10 +170,11 @@ export function SmartSellCard({
           accessibilityLabel="Toggle Smart Sell"
           accessibilityHint="Enable or disable auto-negotiation"
         />
-      </Pressable>
+      </View>
 
       {sheetOpen && (
         <SmartSellSheet
+          visible
           policy={policy}
           onUpdate={handlePolicyUpdate}
           onClose={() => setSheetOpen(false)}
@@ -178,6 +194,7 @@ export function SmartSellCard({
 // ---------------------------------------------------------------------------
 
 interface SmartSellSheetProps {
+  visible: boolean;
   policy: SmartSellPolicy;
   onUpdate: (patch: Partial<SmartSellPolicy>) => void;
   onClose: () => void;
@@ -189,6 +206,7 @@ interface SmartSellSheetProps {
 }
 
 function SmartSellSheet({
+  visible,
   policy,
   onUpdate,
   onClose,
@@ -280,25 +298,29 @@ function SmartSellSheet({
   );
 
   return (
-    <Pressable
-      style={styles.overlay}
-      onPress={onClose}
-      accessibilityRole="button"
-      accessibilityLabel="Close Smart Sell settings"
-      accessibilityHint="Dismiss the sheet and return to the listing"
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
     >
       <Pressable
-        style={[
-          styles.sheet,
-          {
-            backgroundColor: colors.background,
-            paddingBottom: insets.bottom + Space.md,
-            borderTopColor: colors.border },
-        ]}
-        onPress={(e) => e.stopPropagation()}
+        style={styles.overlay}
+        onPress={onClose}
         accessibilityRole="button"
-        accessibilityLabel="Smart Sell settings panel"
+        accessibilityLabel="Close Smart Sell settings"
+        accessibilityHint="Dismiss the sheet and return to the listing"
       >
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: colors.background,
+              paddingBottom: insets.bottom + Space.md,
+              borderTopColor: colors.border },
+          ]}
+          accessibilityViewIsModal={true}
+        >
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
         {/* Title */}
@@ -609,8 +631,9 @@ function SmartSellSheet({
         >
           <Text style={styles.doneBtnText}>Done</Text>
         </Pressable>
+        </View>
       </Pressable>
-    </Pressable>
+    </Modal>
   );
 }
 

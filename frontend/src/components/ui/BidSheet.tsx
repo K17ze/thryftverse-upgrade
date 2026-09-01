@@ -96,6 +96,7 @@ export function BidSheet({
     danger: colors.danger,
     dangerSubtle: colors.dangerSubtle,
     success: colors.success,
+    successSubtle: colors.successSubtle,
     warning: colors.warning,
     background: colors.background,
     textInverse: colors.textInverse };
@@ -196,6 +197,7 @@ export function BidSheet({
   };
 
   const handleQuickIncrement = (pct: number) => {
+    haptics.selection();
     setBidInput(applyQuickIncrement(bidInput, pct, currentMinimum, currencyCode, fxRates));
     setError(null);
   };
@@ -386,6 +388,7 @@ export function BidSheet({
         fxRates,
       );
       setError(txError);
+      haptics.error();
 
       if (txError.isAmbiguous) {
         // Ambiguous failure — the server may have committed the bid.
@@ -576,6 +579,7 @@ export function BidSheet({
               <Switch
                 value={proxyEnabled}
                 onValueChange={(v) => {
+                  haptics.selection();
                   setProxyEnabled(v);
                   setError(null);
                   if (!v) setMaxBidInput('');
@@ -615,7 +619,7 @@ export function BidSheet({
               const wouldLead = bidGbp >= currentMinimum && bidGbp > 0;
               if (bidGbp <= 0) return null;
               return (
-                <View style={[styles.confidenceRow, { backgroundColor: wouldLead ? `${themed.success}10` /* TODO: replace with successSubtle once themed is resolved */ : `${themed.danger}10` /* TODO: replace with dangerSubtle once themed is resolved */ }]}>
+                <View style={[styles.confidenceRow, { backgroundColor: wouldLead ? themed.successSubtle : themed.dangerSubtle }]}>
                   <Ionicons
                     name={wouldLead ? 'checkmark-circle-outline' : 'alert-circle-outline'}
                     size={14}
@@ -702,13 +706,21 @@ export function BidSheet({
               </View>
             </View>
 
-            {/* P1-C: Pre-submit confirmation must state amount, binding
-                nature, fees/total if applicable, and cancellation rule. */}
+            {/* P0: Risk disclosure — binding bid, payment deadline, no
+                retraction. Presented above the confirm button, not buried
+                in fine print. The user must acknowledge these terms before
+                committing to an irreversible action. */}
             <View style={styles.commitmentBlock}>
               <View style={styles.commitmentRow}>
                 <Ionicons name="information-circle-outline" size={14} color={themed.textSecondary} />
                 <Text style={styles.commitmentText}>
                   Bids are binding once accepted.
+                </Text>
+              </View>
+              <View style={styles.commitmentRow}>
+                <Ionicons name="time-outline" size={14} color={themed.textSecondary} />
+                <Text style={styles.commitmentText}>
+                  If you win, payment is due promptly after the auction ends.
                 </Text>
               </View>
               <View style={styles.commitmentRow}>
@@ -879,8 +891,8 @@ const createStyles = (themed: {
   textPrimary: string; textSecondary: string; textMuted: string;
   brand: string; border: string; borderSubtle: string;
   surface: string; surfaceAlt: string; surfaceElevated: string;
-  danger: string; dangerSubtle: string; success: string; warning: string;
-  background: string; textInverse: string;
+  danger: string; dangerSubtle: string; success: string; successSubtle: string;
+  warning: string; background: string; textInverse: string;
 }) => StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
@@ -968,13 +980,15 @@ const createStyles = (themed: {
   bidContextValue: {
     fontSize: TypographyV2.bodyStrong.size,
     color: themed.textPrimary,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    fontVariant: ['tabular-nums'] },
+    fontFamily: TypographyV2.priceList.fontFamily,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right' },
   bidContextValueSecondary: {
     fontSize: TypographyV2.body.size,
     color: themed.textSecondary,
     fontFamily: TypographyV2.body.fontFamily,
-    fontVariant: ['tabular-nums'] },
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right' },
   dominantAction: {
     width: '100%',
     marginTop: Space.xs },
@@ -1036,7 +1050,9 @@ const createStyles = (themed: {
   reviewReceiptValue: {
     fontSize: TypographyV2.body.size,
     color: themed.textPrimary,
-    fontFamily: TypographyV2.body.fontFamily },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right' },
   countdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1070,7 +1086,7 @@ const createStyles = (themed: {
     justifyContent: 'center' },
   incrementChipPressed: {
     backgroundColor: themed.border,
-    opacity: 0.7 },
+    opacity: 0.85 },
   incrementText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,

@@ -1104,7 +1104,6 @@ export default function HomeScreen() {
                 <View style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
-                    icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
                     title={followingFeed.hasFollowing ? 'No new drops yet' : 'Follow sellers to see their drops'}
                     subtitle={followingFeed.hasFollowing
                       ? 'Pull to refresh.'
@@ -1133,7 +1132,7 @@ export default function HomeScreen() {
                 <View style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
-                    icon="compass-outline"
+                    icon="thumbs-up-outline"
                     title="No recommendations yet"
                     subtitle="We're learning what you like. Browse listings and save items to build your feed."
                     ctaLabel="Browse all"
@@ -1149,7 +1148,6 @@ export default function HomeScreen() {
                 <View style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
-                    icon="cube-outline"
                     title="No drops live yet"
                     subtitle="Pull to refresh or browse categories."
                     ctaLabel="Browse all"

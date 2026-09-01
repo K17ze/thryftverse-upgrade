@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
@@ -41,6 +41,15 @@ function TagInputWithSuggestions({
   onSuggestionPick }: TagInputWithSuggestionsProps) {
   const { colors } = useAppTheme();
 
+  // Dismissal timer is ref-guarded and cleaned up so a blur followed by an
+  // unmount (or a re-focus) never fires a stale dismissal.
+  const blurDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (blurDismissTimerRef.current) clearTimeout(blurDismissTimerRef.current);
+    };
+  }, []);
+
   const renderTagSuggestion: ListRenderItem<AutocompleteSuggestion> = useCallback(
     ({ item }) => (
       <Pressable
@@ -50,7 +59,7 @@ function TagInputWithSuggestions({
         accessibilityRole="button"
         accessibilityLabel={`Add tag ${item.query}`}
       >
-        <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} aria-hidden={true} />
+        <Ionicons name="bag-handle-outline" size={16} color={colors.textMuted} aria-hidden={true} />
         <Text style={[styles.tagSuggestionText, { color: colors.textPrimary }]} numberOfLines={1}>
           {item.query}
         </Text>
@@ -76,9 +85,13 @@ function TagInputWithSuggestions({
           placeholderTextColor={colors.textMuted}
           value={tagInput}
           onChangeText={onTagInputChange}
-          onFocus={() => onSuggestionsVisibleChange(true)}
+          onFocus={() => {
+            if (blurDismissTimerRef.current) clearTimeout(blurDismissTimerRef.current);
+            onSuggestionsVisibleChange(true);
+          }}
           onBlur={() => {
-            setTimeout(() => onSuggestionsVisibleChange(false), 150);
+            if (blurDismissTimerRef.current) clearTimeout(blurDismissTimerRef.current);
+            blurDismissTimerRef.current = setTimeout(() => onSuggestionsVisibleChange(false), 150);
           }}
           onSubmitEditing={() => {
             onTagSubmit();

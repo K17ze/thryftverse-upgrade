@@ -458,46 +458,85 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     };
     const interval = intervalMap[period];
 
-    const listingsResult = await db.query<{
-      total_listings: string | number;
-      total_views: string | number;
-      total_likes: string | number;
-      total_saves: string | number;
-    }>(
-      `
-        SELECT
-          COUNT(DISTINCT l.id) AS total_listings,
-          COALESCE(SUM(l.views_count), 0) AS total_views,
-          COALESCE(SUM(l.likes_count), 0) AS total_likes,
-          COALESCE(SUM(l.saved_count), 0) AS total_saves
-        FROM listings l
-        WHERE l.seller_id = $1
-      `,
-      [sellerId]
-    );
+    // ── Parallel query block ──────────────────────────────────────────
+    // All four queries are independent — run them concurrently to eliminate
+    // the sequential waterfall (was 5–7 round-trips, now 1 round-trip batch).
+    //
+    // Engagement metrics come from the `interactions` table (migration 001 +
+    // vocabulary expansion in 143), NOT from non-existent denormalized counter
+    // columns. Views = action IN ('view', 'qualified_detail_view'); likes =
+    // action = 'wishlist'; saves = action = 'save'. All are period-scoped
+    // via interactions.created_at.
+    const [engagementResult, ordersResult, reviewsResult, trustResult] =
+      await Promise.all([
+        // 1. Listing inventory count + period-scoped engagement from interactions
+        db.query<{
+          total_listings: string | number;
+          active_listings: string | number;
+          total_views: string | number;
+          total_likes: string | number;
+          total_saves: string | number;
+        }>(
+          `
+            SELECT
+              COUNT(DISTINCT l.id) AS total_listings,
+              COUNT(DISTINCT l.id) FILTER (WHERE l.status = 'active') AS active_listings,
+              COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS total_views,
+              COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS total_likes,
+              COUNT(i.id) FILTER (WHERE i.action = 'save') AS total_saves
+            FROM listings l
+            LEFT JOIN interactions i ON i.listing_id = l.id
+              AND i.created_at >= NOW() - ${interval}
+            WHERE l.seller_id = $1
+          `,
+          [sellerId]
+        ),
+        // 2. Revenue and items sold from settled order facts (migration 076).
+        //    paid_at is the authoritative sale timestamp.
+        db.query<{
+          items_sold: string | number;
+          revenue_gbp_minor: string | number;
+        }>(
+          `
+            SELECT
+              COUNT(*) AS items_sold,
+              COALESCE(SUM(subtotal_gbp) * 100, 0)::bigint AS revenue_gbp_minor
+            FROM orders
+            WHERE seller_id = $1
+              AND status IN ('paid', 'shipped', 'delivered')
+              AND paid_at IS NOT NULL
+              AND paid_at >= NOW() - ${interval}
+          `,
+          [sellerId]
+        ),
+        // 3. Reviews for the period
+        db.query<{
+          avg_rating: string | number | null;
+          review_count: string | number;
+        }>(
+          `
+            SELECT AVG(r.rating) AS avg_rating, COUNT(r.id) AS review_count
+            FROM order_reviews r
+            WHERE r.seller_id = $1 AND r.created_at > NOW() - ${interval}
+          `,
+          [sellerId]
+        ),
+        // 4. Trust projection (response rate, dispatch time)
+        db.query<{
+          response_rate: string | number | null;
+          ship_within_days: number | null;
+          total_sales: string | number | null;
+          positive_rating_pct: string | number | null;
+        }>(
+          `SELECT response_rate, ship_within_days, total_sales, positive_rating_pct
+           FROM seller_trust WHERE user_id = $1 LIMIT 1`,
+          [sellerId]
+        ),
+      ]);
 
-    // Revenue and items sold come from settled order facts (orders.subtotal_gbp
-    // for paid/shipped/delivered orders), NOT from listings.price_gbp_minor
-    // (asking price). paid_at is the authoritative sale timestamp (migration 076).
-    const ordersResult = await db.query<{
-      items_sold: string | number;
-      revenue_gbp_minor: string | number;
-    }>(
-      `
-        SELECT
-          COUNT(*) AS items_sold,
-          COALESCE(SUM(subtotal_gbp) * 100, 0)::bigint AS revenue_gbp_minor
-        FROM orders
-        WHERE seller_id = $1
-          AND status IN ('paid', 'shipped', 'delivered')
-          AND paid_at IS NOT NULL
-          AND paid_at >= NOW() - ${interval}
-      `,
-      [sellerId]
-    );
-
-    // Refunds and fees from ledger_entries (if available). When the ledger
-    // tables are absent, completeness is 'partial' and these are null.
+    // 5. Ledger refunds/fees — dependent on a schema check, so runs after
+    //    the parallel batch. When ledger tables are absent, completeness is
+    //    'partial' and these remain null.
     let refundsGbpMinor: number | null = null;
     let feesGbpMinor: number | null = null;
     let completeness: 'complete' | 'partial' = 'partial';
@@ -507,66 +546,44 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     );
     if (ledgerCheck.rows[0]?.exists) {
       completeness = 'complete';
-      const refundsResult = await db.query<{ refunds: string | null }>(
-        `
-          SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS refunds
-          FROM ledger_entries
-          WHERE account_id = (
-            SELECT id FROM ledger_accounts
-            WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
-            LIMIT 1
-          )
-          AND source_type = 'refund'
-          AND direction = 'debit'
-          AND created_at >= NOW() - ${interval}
-        `,
-        [sellerId]
-      );
+      const [refundsResult, feesResult] = await Promise.all([
+        db.query<{ refunds: string | null }>(
+          `
+            SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS refunds
+            FROM ledger_entries
+            WHERE account_id = (
+              SELECT id FROM ledger_accounts
+              WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+              LIMIT 1
+            )
+            AND source_type = 'refund'
+            AND direction = 'debit'
+            AND created_at >= NOW() - ${interval}
+          `,
+          [sellerId]
+        ),
+        db.query<{ fees: string | null }>(
+          `
+            SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS fees
+            FROM ledger_entries
+            WHERE account_id = (
+              SELECT id FROM ledger_accounts
+              WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+              LIMIT 1
+            )
+            AND source_type = 'order_payment'
+            AND direction = 'debit'
+            AND line_type = 'platform_fee'
+            AND created_at >= NOW() - ${interval}
+          `,
+          [sellerId]
+        ),
+      ]);
       refundsGbpMinor = Number(refundsResult.rows[0]?.refunds ?? 0);
-
-      const feesResult = await db.query<{ fees: string | null }>(
-        `
-          SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS fees
-          FROM ledger_entries
-          WHERE account_id = (
-            SELECT id FROM ledger_accounts
-            WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
-            LIMIT 1
-          )
-          AND source_type = 'order_payment'
-          AND direction = 'debit'
-          AND line_type = 'platform_fee'
-          AND created_at >= NOW() - ${interval}
-        `,
-        [sellerId]
-      );
       feesGbpMinor = Number(feesResult.rows[0]?.fees ?? 0);
     }
 
-    const reviewsResult = await db.query<{
-      avg_rating: string | number | null;
-      review_count: string | number;
-    }>(
-      `
-        SELECT AVG(r.rating) AS avg_rating, COUNT(r.id) AS review_count
-        FROM order_reviews r
-        WHERE r.seller_id = $1 AND r.created_at > NOW() - ${interval}
-      `,
-      [sellerId]
-    );
-
-    const trustResult = await db.query<{
-      response_rate: string | number | null;
-      ship_within_days: number | null;
-      total_sales: string | number | null;
-      positive_rating_pct: string | number | null;
-    }>(
-      `SELECT response_rate, ship_within_days, total_sales, positive_rating_pct
-       FROM seller_trust WHERE user_id = $1 LIMIT 1`,
-      [sellerId]
-    );
-
-    const row = listingsResult.rows[0] ?? {};
+    const row = engagementResult.rows[0] ?? {};
     const orders = ordersResult.rows[0] ?? {};
     const reviews = reviewsResult.rows[0] ?? {};
     const trust = trustResult.rows[0] ?? {};
@@ -581,6 +598,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       ok: true,
       analytics: {
         totalListings: Number(row.total_listings ?? 0),
+        activeListings: Number(row.active_listings ?? 0),
         totalViews: Number(row.total_views ?? 0),
         totalLikes: Number(row.total_likes ?? 0),
         totalSaves: Number(row.total_saves ?? 0),
@@ -620,21 +638,36 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     });
     const { limit } = querySchema.parse(request.query);
 
+    // ── Top performers from real interaction counts ──────────────────
+    // Aggregates views (view + qualified_detail_view), likes (wishlist),
+    // and saves (save) from the interactions table, joined to the seller's
+    // listings. The engagement score weights saves > likes > views to
+    // reflect intent strength. No non-existent denormalized columns.
     const result = await db.query<{
       id: string;
       title: string;
       price_gbp_minor: number | string;
-      views_count: number;
-      likes_count: number;
-      saved_count: number;
+      views_count: string | number;
+      likes_count: string | number;
+      saved_count: string | number;
       status: string;
       created_at: string;
     }>(
       `
-        SELECT id, title, price_gbp_minor, views_count, likes_count, saved_count, status, created_at
-        FROM listings
-        WHERE seller_id = $1
-        ORDER BY (views_count + likes_count * 3 + saved_count * 5) DESC
+        SELECT
+          l.id, l.title, l.price_gbp_minor, l.status, l.created_at,
+          COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views_count,
+          COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes_count,
+          COUNT(i.id) FILTER (WHERE i.action = 'save') AS saved_count
+        FROM listings l
+        LEFT JOIN interactions i ON i.listing_id = l.id
+        WHERE l.seller_id = $1
+        GROUP BY l.id, l.title, l.price_gbp_minor, l.status, l.created_at
+        ORDER BY (
+          COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view'))
+          + COUNT(i.id) FILTER (WHERE i.action = 'wishlist') * 3
+          + COUNT(i.id) FILTER (WHERE i.action = 'save') * 5
+        ) DESC
         LIMIT $2
       `,
       [sellerId, limit]
@@ -642,17 +675,22 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
     return {
       ok: true,
-      items: result.rows.map((row) => ({
-        id: row.id,
-        title: row.title,
-        priceGbpMinor: Number(row.price_gbp_minor),
-        viewsCount: row.views_count,
-        likesCount: row.likes_count,
-        savedCount: row.saved_count,
-        status: row.status,
-        createdAt: row.created_at,
-        engagementScore: row.views_count + row.likes_count * 3 + row.saved_count * 5,
-      })),
+      items: result.rows.map((row) => {
+        const views = Number(row.views_count ?? 0);
+        const likes = Number(row.likes_count ?? 0);
+        const saves = Number(row.saved_count ?? 0);
+        return {
+          id: row.id,
+          title: row.title,
+          priceGbpMinor: Number(row.price_gbp_minor),
+          viewsCount: views,
+          likesCount: likes,
+          savedCount: saves,
+          status: row.status,
+          createdAt: row.created_at,
+          engagementScore: views + likes * 3 + saves * 5,
+        };
+      }),
     };
   });
 

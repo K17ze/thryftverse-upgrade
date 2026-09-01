@@ -897,7 +897,7 @@ export function LiveStreamViewerScreen() {
                 <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>{formatFromFiat(currentLot.currentPrice, currencyCode)}</Text>
               </View>
               <View style={styles.itemSheetBidCount}>
-                <Ionicons name="pricetag" size={14} color={colors.textSecondary} />
+                <Ionicons name="cash-outline" size={14} color={colors.textSecondary} />
                 <Text style={[styles.itemSheetBidCountText, { color: colors.textSecondary }]}>{currentLot.bidCount} {t('product.bids')}</Text>
               </View>
             </View>

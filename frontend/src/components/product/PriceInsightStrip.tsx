@@ -90,7 +90,7 @@ export function PriceInsightStrip({
   // Sold comparables — truthful market context from similar sold items
   if (soldComps && soldComps.sampleSize > 0) {
     rows.push({
-      icon: 'pricetag-outline',
+      icon: 'cash-outline',
       label: 'Similar sold',
       value: `${currencySymbol}${soldComps.minPrice.toFixed(0)}–${currencySymbol}${soldComps.maxPrice.toFixed(0)}`,
       tone: 'neutral' });

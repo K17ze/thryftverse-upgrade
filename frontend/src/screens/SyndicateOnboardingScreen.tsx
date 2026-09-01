@@ -25,7 +25,7 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 // Co-Own specific educational slides — not generic explainer content.
 const SLIDES = [
   {
-    icon: 'cube-outline' as const,
+    icon: 'layers-outline' as const,
     title: 'Own a piece of something desirable',
     body: 'Co-Own lets you buy units of fashion, luxury, and collectable items. You own a real fraction of the item, not the item itself.',
   },
@@ -40,7 +40,7 @@ const SLIDES = [
     body: 'List your units for sale at market price or set a limit. Buyers must match your offer for the trade to fill. Liquidity is not guaranteed.',
   },
   {
-    icon: 'shield-checkmark-outline' as const,
+    icon: 'checkmark-circle-outline' as const,
     title: 'Trust and protection',
     body: 'Issuers are verified sellers. Authenticity, buyer protection, and storage information are shown on each item. Risks are clearly disclosed.',
   },

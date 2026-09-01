@@ -13,6 +13,8 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Typography, FontFamily, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AppButton } from '../components/ui/AppButton';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { secureStorage } from '../utils/security';
@@ -124,7 +126,7 @@ export default function AgeVerificationScreen({ navigation }: Props) {
         <View
           style={[styles.logoBadge, { backgroundColor: colors.brand }]}
         >
-          <Ionicons name="storefront" size={28} color={colors.background} />
+          <AppIcon name="storefront" focused size={IconSize.xl} color={colors.background} opticalCenter accessible={false} />
         </View>
       </View>
 
@@ -186,7 +188,7 @@ export default function AgeVerificationScreen({ navigation }: Props) {
           accessibilityLiveRegion="polite"
         >
           <View style={[styles.deniedIcon, { backgroundColor: colors.surface }]}>
-            <Ionicons name="lock-closed" size={32} color={colors.textSecondary} />
+            <AppIcon name="lock" focused size={IconSize.hero} color="textSecondary" opticalCenter accessible={false} />
           </View>
           <Text
             style={[styles.title, { color: colors.textPrimary }]}

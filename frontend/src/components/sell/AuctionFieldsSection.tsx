@@ -52,6 +52,7 @@ function AuctionFieldsSection({
             placeholder="0"
             placeholderTextColor={colors.textMuted}
             keyboardType="decimal-pad"
+            returnKeyType="done"
             value={startingBid}
             onChangeText={onStartingBidChange}
             maxLength={8}
@@ -94,6 +95,7 @@ function AuctionFieldsSection({
             placeholder="0"
             placeholderTextColor={colors.textMuted}
             keyboardType="decimal-pad"
+            returnKeyType="done"
             value={reservePrice}
             onChangeText={onReservePriceChange}
             maxLength={8}

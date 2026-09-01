@@ -17,7 +17,6 @@ import {
   CoOwnLeaderboardSkeleton,
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
-  CoOwnReconciliationBanner,
 } from '../components/coown';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -145,12 +144,7 @@ export default function AssetLeaderboardScreen() {
     sectionIndex: number
   ) => data.length > 0 ? (
     <View style={[styles.section, sectionIndex > 0 && styles.sectionSeparated, sectionIndex > 0 && { borderTopColor: colors.border }]}>
-      <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIcon, { backgroundColor: colors.surfaceAlt }]}>
-          <Ionicons name={icon} size={15} color={colors.textSecondary} />
-        </View>
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>{title}</Text>
-      </View>
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>{title}</Text>
 
       {data.map((asset, idx) => {
         const metricValue = metric(asset);
@@ -171,7 +165,7 @@ export default function AssetLeaderboardScreen() {
               containerStyle={styles.thumbContainer}
               contentFit="cover"
               emptyLabel={asset.title}
-              emptyIcon="diamond-outline"
+              emptyIcon="image-outline"
             />
             <View style={styles.rowBody}>
               <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>{asset.title}</Text>
@@ -267,7 +261,6 @@ export default function AssetLeaderboardScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
-      <CoOwnReconciliationBanner isActive={false} />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -324,23 +317,11 @@ const styles = StyleSheet.create({
   sectionSeparated: {
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginBottom: Space.sm,
-  },
-  sectionIcon: {
-    width: Control.chromeCompact,
-    height: Control.chromeCompact,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   sectionTitle: {
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: TypographyV2.sectionTitle.fontFamily,
     letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    marginBottom: Space.sm,
   },
   row: {
     minHeight: Space.xxl + Space.lg,

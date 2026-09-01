@@ -157,7 +157,7 @@ export function RelatedItemsRail({
           <Pressable
             onPress={onSeeAll}
             hitSlop={8}
-            style={({ pressed }) => [styles.seeAllHitTarget, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.seeAllHitTarget, pressed && styles.seeAllPressed]}
             accessibilityLabel={`See all ${headerLabel.toLowerCase()}`}
             accessibilityRole="button"
           >
@@ -204,6 +204,8 @@ function createStyles(colors: ThemeColors) {
     seeAllHitTarget: {
       minHeight: Control.hit,
       justifyContent: 'center' },
+    seeAllPressed: {
+      opacity: 0.85 },
     seeAll: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,

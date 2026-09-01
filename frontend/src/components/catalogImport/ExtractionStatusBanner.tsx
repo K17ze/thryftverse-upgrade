@@ -81,7 +81,7 @@ export function ExtractionStatusBanner({
   if (outcome === 'unavailable_no_model') {
     return (
       <View style={styles.row}>
-        <Ionicons name="cube-outline" size={Control.iconCompact} color={colors.textMuted} />
+        <Ionicons name="bag-handle-outline" size={Control.iconCompact} color={colors.textMuted} />
         <Text style={styles.statusText}>Extraction unavailable — fill fields manually</Text>
       </View>
     );

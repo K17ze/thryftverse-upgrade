@@ -713,7 +713,7 @@ export default function FilterScreen() {
                             >
                               <AppButton
                                 title={s}
-                                icon={isMySize ? <Ionicons name="star" size={12} color={colors.brand} aria-hidden={true} /> : undefined}
+                                icon={isMySize ? <Ionicons name="checkmark-circle-outline" size={12} color={colors.brand} aria-hidden={true} /> : undefined}
                                 variant="secondary"
                                 size="sm"
                                 style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}

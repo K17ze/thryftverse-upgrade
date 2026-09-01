@@ -2,7 +2,6 @@ import React, { useRef } from 'react';
 import {
   View,
   StyleSheet,
-  ScrollView,
   RefreshControl,
   Pressable,
   Text,
@@ -27,13 +26,13 @@ import { haptics } from '../utils/haptics';
 import { HapticPatterns } from '../utils/hapticPatterns';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { toIze, formatIzeAmount } from '../utils/currency';
-import { Space, FontFamily, DockConstants, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, LetterSpacing, PressScale } from '../theme/designTokens';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { TypographyV2 } from '../theme/typography.v2';
 import { BidSheet } from '../components/ui/BidSheet';
 import { BuyNowSheet } from '../components/ui/BuyNowSheet';
 import { FullscreenMediaViewer } from '../components/product/FullscreenMediaViewer';
-import { RecommendationRail, ProductDetailSkeleton } from '../components/product';
+import { RecommendationRail } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
@@ -521,15 +520,11 @@ export default function AuctionDetailScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: Space.md }}
-          accessibilityLabel="Loading auction details"
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        >
-          <ProductDetailSkeleton />
-        </ScrollView>
+        <CommerceStateCanvas
+          state="loading"
+          family="auction"
+          heroFraction={isCompact ? 0.54 : 0.58}
+        />
       </View>
     );
   }
@@ -872,7 +867,7 @@ export default function AuctionDetailScreen() {
               disabled={isCancelLoading}
               accessibilityRole="button"
               accessibilityLabel="Cancel this auction"
-              style={({ pressed }) => pressed && { opacity: 0.5 }}
+              style={({ pressed }) => pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }}
             >
               <Text style={[styles.sellerCancelText, { color: colors.textMuted }]}>
                 {isCancelLoading ? 'Cancelling…' : 'Cancel auction'}
@@ -954,8 +949,11 @@ export default function AuctionDetailScreen() {
           ) : null}
           {!bidActivityError && auction.bidCount > 0 && (
             <Pressable
-              style={styles.bidActivityViewAll}
-              onPress={() => setBidHistorySheetVisible(true)}
+              style={({ pressed }) => [styles.bidActivityViewAll, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
+              onPress={() => {
+                haptics.selection();
+                setBidHistorySheetVisible(true);
+              }}
               accessibilityRole="button"
               accessibilityLabel={`View all ${auction.bidCount} bids`}
             >
@@ -1321,7 +1319,7 @@ export default function AuctionDetailScreen() {
                     HapticPatterns.bidPlaced();
                     openBidSheet();
                   } else if (primaryType === 'watchAuction') {
-                    haptics.tap();
+                    haptics.selection();
                     void handleToggleWatch();
                   } else if (primaryType === 'viewSimilar') {
                     haptics.tap();
@@ -1536,6 +1534,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
   bidActivityViewAll: {
     flexDirection: 'row',
@@ -1606,6 +1605,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.priceHero.letterSpacing,
     fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
   terminalResultNote: {
     fontSize: TypographyV2.body.size,
@@ -1679,6 +1679,7 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
   transactionMinRow: {
     flexDirection: 'row',
@@ -1699,6 +1700,7 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
   transactionStatusRow: {
     gap: Space.xs,

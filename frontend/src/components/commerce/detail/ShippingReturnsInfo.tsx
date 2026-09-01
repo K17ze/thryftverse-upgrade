@@ -16,7 +16,7 @@ import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius } from '../../../theme/designTokens';
+import { Space, Radius, Control } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -105,7 +105,7 @@ export function ShippingReturnsInfo({
             {isFreeShipping ? (
               <Ionicons name="checkmark-circle" size={14} color={colors.success} />
             ) : hasKnownShippingCost ? (
-              <Ionicons name="cube-outline" size={14} color={colors.textSecondary} />
+              <Ionicons name="car-outline" size={14} color={colors.textSecondary} />
             ) : (
               <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
             )}
@@ -116,7 +116,7 @@ export function ShippingReturnsInfo({
         </View>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
-          size={18}
+          size={Control.iconCompact}
           color={colors.textMuted}
         />
       </Pressable>
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     minHeight: 44 },
   pressed: {
-    opacity: 0.7 },
+    opacity: 0.85 },
   headerLeft: {
     flex: 1,
     gap: Space.xs / 2 },

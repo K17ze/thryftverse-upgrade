@@ -43,6 +43,8 @@ import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { CreatorSlider } from '../../controls/CreatorSlider';
 import { getBuiltInLUTs, type BuiltInLUT } from './LUTEffect';
 import { LUTPreviewThumb } from './LUTPreviewThumb';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -148,7 +150,7 @@ export function LUTBrowserSheet({
             accessibilityHint="Closes the color grade browser"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
 

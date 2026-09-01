@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import type { SellerTrustSummary } from '../../platform/product';
 
 interface ReputationMetric {
@@ -42,7 +44,7 @@ function buildReputationMetrics(seller: SellerTrustSummary | null): ReputationMe
   const dispatchTimeLabel = seller.dispatchTimeLabel ?? null;
   if (dispatchTimeLabel) {
     metrics.push({
-      icon: 'cube',
+      icon: 'car-outline',
       label: 'Ship time',
       value: dispatchTimeLabel });
   }
@@ -88,7 +90,7 @@ export function SellerReputationCard({ seller }: SellerReputationCardProps) {
             accessibilityLabel={`${metric.label}: ${metric.value}`}
           >
             <View style={styles.metricIconWrap}>
-              <Ionicons name={metric.icon} size={16} color={colors.textSecondary} />
+              <AppIcon name={metric.icon} size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
             </View>
             <View style={styles.metricBody}>
               <View style={styles.metricLabelRow}>

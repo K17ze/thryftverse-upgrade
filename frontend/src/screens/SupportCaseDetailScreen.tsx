@@ -222,9 +222,9 @@ function contextLinkLabel(kind: ContextLinkKind): string {
 function contextLinkIcon(kind: ContextLinkKind): keyof typeof Ionicons.glyphMap {
   switch (kind) {
     case 'order':
-      return 'cube-outline';
+      return 'bag-handle-outline';
     case 'listing':
-      return 'pricetag-outline';
+      return 'document-text-outline';
     case 'payout':
       return 'card-outline';
   }

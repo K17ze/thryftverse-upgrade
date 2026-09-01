@@ -6,6 +6,7 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,13 +19,17 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Clipboard from 'expo-clipboard';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
+import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Stroke, Control, AvatarSize } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useToast } from '../../context/ToastContext';
+import { useStore } from '../../store/useStore';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 import { FlagshipState } from '../flagship/FlagshipState';
 import {
@@ -42,6 +47,8 @@ import { makeStableId } from '../../utils/createStableId';
 
 export interface LookCommentsSheetProps {
   lookId: string;
+  /** The look creator's user id — their comments get an "Author" chip. */
+  lookCreatorId?: string;
   currentUserId?: string;
   visible: boolean;
   onClose: () => void;
@@ -57,6 +64,7 @@ type FlatItem =
   | { type: 'separator' };
 
 type LoadStatus = 'idle' | 'loading' | 'error' | 'loaded';
+type CommentSort = 'latest' | 'top';
 
 const REPLIES_PREVIEW_COUNT = 2;
 const ROOT_AVATAR = AvatarSize.sm; // 32
@@ -68,10 +76,17 @@ const REPLY_INDENT = Space.lg; // 24
 function flattenComments(
   comments: LookCommentApiItem[],
   expandedRoots: Set<string>,
+  sort: CommentSort,
 ): FlatItem[] {
   const roots = comments
     .filter((c) => !c.parentId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)); // newest first
+    .sort((a, b) => {
+      if (sort === 'top') {
+        // Engagement-weighted: likes first, recency breaks ties (X "Most relevant")
+        if (b.likeCount !== a.likeCount) return b.likeCount - a.likeCount;
+      }
+      return b.createdAt.localeCompare(a.createdAt); // newest first
+    });
 
   const repliesByParent = new Map<string, LookCommentApiItem[]>();
   for (const c of comments) {
@@ -133,22 +148,25 @@ function CommentLikeButton({
   onToggle: () => void;
 }) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
 
   const handlePress = useCallback(() => {
-    if (!liked) {
-      scale.value = withSequence(
-        withTiming(1.25, { duration: 140, easing: Easing.out(Easing.quad) }),
-        withTiming(1, { duration: 120, easing: Easing.inOut(Easing.quad) }),
-      );
-    } else {
-      scale.value = withSequence(
-        withTiming(0.85, { duration: 80 }),
-        withTiming(1, { duration: 120, easing: Easing.out(Easing.quad) }),
-      );
+    if (!reducedMotion) {
+      if (!liked) {
+        scale.value = withSequence(
+          withTiming(1.25, { duration: 140, easing: Easing.out(Easing.quad) }),
+          withTiming(1, { duration: 120, easing: Easing.inOut(Easing.quad) }),
+        );
+      } else {
+        scale.value = withSequence(
+          withTiming(0.85, { duration: 80 }),
+          withTiming(1, { duration: 120, easing: Easing.out(Easing.quad) }),
+        );
+      }
     }
     onToggle();
-  }, [liked, onToggle, scale]);
+  }, [liked, onToggle, scale, reducedMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -205,24 +223,34 @@ interface CommentRowProps {
   comment: LookCommentApiItem;
   depth: 0 | 1;
   isOwner: boolean;
+  isLookAuthor: boolean;
   isAuthenticated: boolean;
+  /** Client-side send state for optimistic rows (undefined = settled). */
+  sendState?: 'pending' | 'failed';
   onLike: (comment: LookCommentApiItem) => void;
   onReply: (comment: LookCommentApiItem) => void;
-  onDelete: (commentId: string) => void;
+  onLongPress: (comment: LookCommentApiItem) => void;
+  onRetry: (commentId: string) => void;
 }
 
 const CommentRow = React.memo(function CommentRow({
   comment,
   depth,
   isOwner,
+  isLookAuthor,
   isAuthenticated,
+  sendState,
   onLike,
   onReply,
-  onDelete,
+  onLongPress,
+  onRetry,
 }: CommentRowProps) {
   const { colors } = useAppTheme();
+  const rowStyles = React.useMemo(() => createRowStyles(colors), [colors]);
   const isReply = depth === 1;
   const avatarSize = isReply ? REPLY_AVATAR : ROOT_AVATAR;
+  const isPending = sendState === 'pending';
+  const isFailed = sendState === 'failed';
 
   const handleReply = useCallback(() => {
     onReply(comment);
@@ -232,15 +260,45 @@ const CommentRow = React.memo(function CommentRow({
     onLike(comment);
   }, [comment, onLike]);
 
-  const handleDelete = useCallback(() => {
-    onDelete(comment.id);
-  }, [comment.id, onDelete]);
+  const handleLongPress = useCallback(() => {
+    onLongPress(comment);
+  }, [comment, onLongPress]);
+
+  const handleRetry = useCallback(() => {
+    onRetry(comment.id);
+  }, [comment.id, onRetry]);
+
+  // Tombstone: deleted parent kept for its live replies (X/Threads model).
+  // A quiet placeholder — no avatar, no actions, no drama.
+  if (comment.deleted) {
+    return (
+      <View style={[rowStyles.row, isReply && rowStyles.replyRow]}>
+        {isReply && <View style={rowStyles.connector} />}
+        <View style={rowStyles.tombstoneBody}>
+          <Text style={rowStyles.tombstoneText}>Comment deleted</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <View style={[rowStyles(colors).row, isReply && rowStyles(colors).replyRow]}>
-      {isReply && <View style={rowStyles(colors).connector} />}
+    <Pressable
+      onLongPress={handleLongPress}
+      delayLongPress={400}
+      disabled={isPending || isFailed}
+      accessibilityActions={[{ name: 'longpress', label: 'Show comment actions' }]}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === 'longpress') handleLongPress();
+      }}
+      style={({ pressed }) => [
+        rowStyles.row,
+        isReply && rowStyles.replyRow,
+        pressed && rowStyles.rowPressed,
+      ]}
+    >
+      {isReply && <View style={rowStyles.connector} />}
 
-      <View style={[rowStyles(colors).avatarWrap, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
+      <View style={[rowStyles.avatarWrap, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
         {comment.author.avatar ? (
           <CachedImage
             uri={comment.author.avatar}
@@ -252,55 +310,76 @@ const CommentRow = React.memo(function CommentRow({
         )}
       </View>
 
-      <View style={rowStyles(colors).body}>
-        <Text style={rowStyles(colors).author} numberOfLines={1}>
-          {comment.author.username ?? 'unknown'}
-        </Text>
-        <Text style={rowStyles(colors).text}>{comment.body}</Text>
-
-        <View style={rowStyles(colors).metaRow}>
-          <Text style={rowStyles(colors).time}>{formatRelativeTime(comment.createdAt)}</Text>
-
-          <CommentLikeButton
-            liked={comment.likedByViewer}
-            likeCount={comment.likeCount}
-            onToggle={handleLike}
-          />
-
-          {isAuthenticated && (
-            <Pressable
-              onPress={handleReply}
-              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-              accessibilityRole="button"
-              accessibilityLabel="Reply to comment"
-            >
-              <Text style={rowStyles(colors).replyAction}>Reply</Text>
-            </Pressable>
+      <View style={[rowStyles.body, (isPending || isFailed) && rowStyles.bodyPending]}>
+        <View style={rowStyles.authorRow}>
+          <Text style={rowStyles.author} numberOfLines={1}>
+            {comment.author.username ?? 'unknown'}
+          </Text>
+          {/* Fail-closed trust: badge only when a backend row evidences it */}
+          {comment.author.verified && (
+            <Ionicons
+              name="checkmark-circle"
+              size={13}
+              color={colors.brand}
+              accessibilityLabel="Verified"
+            />
           )}
-
-          {isOwner && isAuthenticated && (
-            <Pressable
-              onPress={handleDelete}
-              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-              accessibilityRole="button"
-              accessibilityLabel="Delete comment"
-            >
-              <Text style={rowStyles(colors).deleteAction}>Delete</Text>
-            </Pressable>
+          {isLookAuthor && (
+            <View style={rowStyles.authorChip}>
+              <Text style={rowStyles.authorChipText}>Author</Text>
+            </View>
           )}
         </View>
+        <Text style={rowStyles.text}>{comment.body}</Text>
+
+        {isFailed ? (
+          <Pressable
+            onPress={handleRetry}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel="Retry posting comment"
+          >
+            <Text style={rowStyles.retryAction}>Tap to retry</Text>
+          </Pressable>
+        ) : (
+          <View style={rowStyles.metaRow}>
+            <Text style={rowStyles.time}>{formatRelativeTime(comment.createdAt)}</Text>
+
+            <CommentLikeButton
+              liked={comment.likedByViewer}
+              likeCount={comment.likeCount}
+              onToggle={handleLike}
+            />
+
+            {isAuthenticated && (
+              <Pressable
+                onPress={handleReply}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                accessibilityRole="button"
+                accessibilityLabel="Reply to comment"
+              >
+                <Text style={rowStyles.replyAction}>Reply</Text>
+              </Pressable>
+            )}
+
+            {isPending && <ActivityIndicator size="small" color={colors.textMuted} />}
+          </View>
+        )}
       </View>
-    </View>
+    </Pressable>
   );
 });
 
-function rowStyles(colors: ThemeColors) {
+function createRowStyles(colors: ThemeColors) {
   return StyleSheet.create({
     row: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.sm,
       paddingVertical: Space.sm,
+    },
+    rowPressed: {
+      backgroundColor: colors.rowPressed,
     },
     replyRow: {
       marginLeft: REPLY_INDENT,
@@ -324,10 +403,29 @@ function rowStyles(colors: ThemeColors) {
       flex: 1,
       gap: Space.xxs,
     },
+    bodyPending: {
+      opacity: 0.55,
+    },
+    authorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+    },
     author: {
       fontSize: TypographyV2.bodyStrong.size,
       fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
+    },
+    authorChip: {
+      backgroundColor: colors.brandSubtle,
+      borderRadius: Radius.sm,
+      paddingHorizontal: Space.xs + 2,
+      paddingVertical: 1,
+    },
+    authorChipText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.brand,
     },
     text: {
       fontSize: TypographyV2.body.size,
@@ -352,10 +450,20 @@ function rowStyles(colors: ThemeColors) {
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
     },
-    deleteAction: {
+    retryAction: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.danger,
+      marginTop: 2,
+    },
+    tombstoneBody: {
+      flex: 1,
+      paddingVertical: Space.xs,
+    },
+    tombstoneText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
     },
   });
 }
@@ -364,6 +472,7 @@ function rowStyles(colors: ThemeColors) {
 
 export function LookCommentsSheet({
   lookId,
+  lookCreatorId,
   currentUserId,
   visible,
   onClose,
@@ -375,18 +484,25 @@ export function LookCommentsSheet({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const scrollTargetIdRef = useRef<string | null>(null);
   const [comments, setComments] = useState<LookCommentApiItem[]>([]);
   const [status, setStatus] = useState<LoadStatus>('idle');
   const [commentText, setCommentText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [replyTarget, setReplyTarget] = useState<LookCommentApiItem | null>(null);
   const [expandedRoots, setExpandedRoots] = useState<Set<string>>(new Set());
+  const [sort, setSort] = useState<CommentSort>('latest');
+  /** Client-side send state for optimistic rows, keyed by temp id. */
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
+  const [menuComment, setMenuComment] = useState<LookCommentApiItem | null>(null);
   const flatListRef = useRef<FlashListRef<FlatItem>>(null);
   const inputRef = useRef<TextInput>(null);
+  const storeUser = useStore((s) => s.currentUser);
 
   const flatItems = useMemo(
-    () => flattenComments(comments, expandedRoots),
-    [comments, expandedRoots],
+    () => flattenComments(comments, expandedRoots, sort),
+    [comments, expandedRoots, sort],
   );
 
   const loadComments = useCallback(async () => {
@@ -406,8 +522,30 @@ export function LookCommentsSheet({
       loadComments();
       setReplyTarget(null);
       setExpandedRoots(new Set());
+      setPendingIds(new Set());
+      setFailedIds(new Set());
+      setMenuComment(null);
     }
   }, [visible, loadComments]);
+
+  // Scroll a freshly posted comment into view — placement is the receipt.
+  useEffect(() => {
+    const targetId = scrollTargetIdRef.current;
+    if (!targetId || status !== 'loaded') return;
+    scrollTargetIdRef.current = null;
+    const index = flatItems.findIndex(
+      (it) => it.type === 'comment' && it.comment.id === targetId,
+    );
+    if (index < 0) return;
+    const id = setTimeout(() => {
+      try {
+        flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+      } catch {
+        // Item not measurable yet — the list is short enough to see it anyway.
+      }
+    }, 120);
+    return () => clearTimeout(id);
+  }, [flatItems, status]);
 
   // ── Like handler (optimistic, S1 — no haptic) ──────────────────────
 
@@ -485,6 +623,56 @@ export function LookCommentsSheet({
 
   // ── Send handler (comment or reply) ────────────────────────────────
 
+  const postComment = useCallback(
+    async (tempId: string, body: string, parentId?: string) => {
+      try {
+        const res = await createLookCommentOnApi(lookId, { id: tempId, body, parentId });
+        setComments((prev) =>
+          prev.map((c) => (c.id === tempId ? res.comment : c)),
+        );
+        setPendingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(tempId);
+          return next;
+        });
+        setFailedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(tempId);
+          return next;
+        });
+      } catch {
+        // On-row failure marker (never toast-only): the row stays with a
+        // "Tap to retry" affordance. Retry reuses the same client id, so a
+        // replay after an unknown-outcome can never duplicate the comment.
+        setPendingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(tempId);
+          return next;
+        });
+        setFailedIds((prev) => new Set(prev).add(tempId));
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [lookId],
+  );
+
+  const handleRetry = useCallback(
+    (commentId: string) => {
+      const comment = comments.find((c) => c.id === commentId);
+      if (!comment) return;
+      setFailedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(commentId);
+        return next;
+      });
+      setPendingIds((prev) => new Set(prev).add(commentId));
+      setIsSending(true);
+      void postComment(commentId, comment.body, comment.parentId ?? undefined);
+    },
+    [comments, postComment],
+  );
+
   const handleSend = useCallback(async () => {
     if (!isAuthenticated) {
       onSignInRequired?.();
@@ -497,14 +685,19 @@ export function LookCommentsSheet({
     const tempId = makeStableId('comment', 6);
     const parentId = replyTarget?.parentId ?? replyTarget?.id ?? undefined;
 
-    // Optimistic insert
+    // Optimistic insert — real identity from the auth store, never fabricated
     const optimisticComment: LookCommentApiItem = {
       id: tempId,
       lookId,
       authorId: currentUserId ?? '',
       parentId: parentId ?? null,
-      author: { id: currentUserId ?? '', username: 'you', avatar: null },
+      author: {
+        id: currentUserId ?? '',
+        username: storeUser?.username ?? null,
+        avatar: storeUser?.avatar ?? null,
+      },
       body,
+      deleted: false,
       likeCount: 0,
       likedByViewer: false,
       replyCount: 0,
@@ -517,52 +710,48 @@ export function LookCommentsSheet({
       onCommentCountChange?.(next.length);
       return next;
     });
+    setPendingIds((prev) => new Set(prev).add(tempId));
 
     // Auto-expand the parent's replies if replying
     if (parentId) {
       setExpandedRoots((prev) => new Set(prev).add(parentId));
     }
 
+    scrollTargetIdRef.current = tempId;
     setCommentText('');
     setReplyTarget(null);
 
-    try {
-      const res = await createLookCommentOnApi(lookId, { id: tempId, body, parentId });
-      setComments((prev) =>
-        prev.map((c) => (c.id === tempId ? res.comment : c)),
-      );
-    } catch {
-      // Remove optimistic comment
-      setComments((prev) => {
-        const next = prev.filter((c) => c.id !== tempId);
-        onCommentCountChange?.(next.length);
-        return next;
-      });
-      show('Failed to post comment', 'error');
-    } finally {
-      setIsSending(false);
-    }
+    await postComment(tempId, body, parentId);
   }, [
     commentText,
     isSending,
     lookId,
     haptic,
-    show,
     isAuthenticated,
     onSignInRequired,
     onCommentCountChange,
     replyTarget,
     currentUserId,
+    storeUser,
+    postComment,
   ]);
 
-  // ── Delete handler (optimistic with rollback) ──────────────────────
+  // ── Delete handler (tombstone-aware optimistic) ────────────────────
 
   const handleDelete = useCallback(
     async (commentId: string) => {
       haptic.medium();
       const prev = comments;
       const prevCount = prev.length;
-      setComments(prev.filter((c) => c.id !== commentId));
+      const target = prev.find((c) => c.id === commentId);
+      if (!target) return;
+
+      if (target.replyCount > 0) {
+        // Keep the row as a tombstone so its live replies keep their context.
+        setComments(prev.map((c) => (c.id === commentId ? { ...c, deleted: true, body: '' } : c)));
+      } else {
+        setComments(prev.filter((c) => c.id !== commentId));
+      }
       onCommentCountChange?.(Math.max(0, prevCount - 1));
       try {
         await deleteLookCommentOnApi(lookId, commentId);
@@ -574,6 +763,36 @@ export function LookCommentsSheet({
     },
     [comments, lookId, haptic, show, onCommentCountChange],
   );
+
+  // ── Long-press context menu (Reply / Copy text / Delete) ───────────
+
+  const openMenu = useCallback(
+    (comment: LookCommentApiItem) => {
+      haptic.light();
+      setMenuComment(comment);
+    },
+    [haptic],
+  );
+
+  const closeMenu = useCallback(() => setMenuComment(null), []);
+
+  const handleMenuReply = useCallback(() => {
+    if (menuComment) handleReply(menuComment);
+    setMenuComment(null);
+  }, [menuComment, handleReply]);
+
+  const handleMenuCopy = useCallback(async () => {
+    if (menuComment?.body) {
+      await Clipboard.setStringAsync(menuComment.body);
+      show('Copied', 'success');
+    }
+    setMenuComment(null);
+  }, [menuComment, show]);
+
+  const handleMenuDelete = useCallback(() => {
+    if (menuComment) void handleDelete(menuComment.id);
+    setMenuComment(null);
+  }, [menuComment, handleDelete]);
 
   // ── Render ─────────────────────────────────────────────────────────
 
@@ -614,19 +833,39 @@ export function LookCommentsSheet({
       }
 
       const isOwner = currentUserId && item.comment.authorId === currentUserId;
+      const sendState = failedIds.has(item.comment.id)
+        ? ('failed' as const)
+        : pendingIds.has(item.comment.id)
+          ? ('pending' as const)
+          : undefined;
       return (
         <CommentRow
           comment={item.comment}
           depth={item.depth}
           isOwner={!!isOwner}
+          isLookAuthor={!!lookCreatorId && item.comment.authorId === lookCreatorId}
           isAuthenticated={isAuthenticated}
+          sendState={sendState}
           onLike={handleLike}
           onReply={handleReply}
-          onDelete={handleDelete}
+          onLongPress={openMenu}
+          onRetry={handleRetry}
         />
       );
     },
-    [currentUserId, isAuthenticated, handleLike, handleReply, handleDelete, toggleExpandReplies, styles],
+    [
+      currentUserId,
+      lookCreatorId,
+      isAuthenticated,
+      pendingIds,
+      failedIds,
+      handleLike,
+      handleReply,
+      openMenu,
+      handleRetry,
+      toggleExpandReplies,
+      styles,
+    ],
   );
 
   const keyExtractor = useCallback((item: FlatItem, index: number) => {
@@ -637,7 +876,37 @@ export function LookCommentsSheet({
 
   const listEmpty = useMemo(() => {
     if (status === 'loading') {
-      return <FlagshipState variant="loading" style={{ marginTop: 40 }} />;
+      // Skeleton mirrors the final row geometry (avatar circle + name + body
+      // lines, one indented reply) — same wait, shorter feel.
+      return (
+        <View style={styles.skeletonWrap}>
+          {[0, 1, 2].map((row) => (
+            <View key={row} style={styles.skeletonRow}>
+              <SkeletonLoader
+                width={ROOT_AVATAR}
+                height={ROOT_AVATAR}
+                borderRadius={ROOT_AVATAR / 2}
+              />
+              <View style={styles.skeletonLines}>
+                <SkeletonLoader width="42%" height={TypographyV2.bodyStrong.size} borderRadius={Radius.sm} />
+                <SkeletonLoader width="88%" height={TypographyV2.body.size} borderRadius={Radius.sm} />
+                <SkeletonLoader width="64%" height={TypographyV2.body.size} borderRadius={Radius.sm} />
+              </View>
+            </View>
+          ))}
+          <View style={[styles.skeletonRow, { marginLeft: REPLY_INDENT }]}>
+            <SkeletonLoader
+              width={REPLY_AVATAR}
+              height={REPLY_AVATAR}
+              borderRadius={REPLY_AVATAR / 2}
+            />
+            <View style={styles.skeletonLines}>
+              <SkeletonLoader width="38%" height={TypographyV2.bodyStrong.size} borderRadius={Radius.sm} />
+              <SkeletonLoader width="76%" height={TypographyV2.body.size} borderRadius={Radius.sm} />
+            </View>
+          </View>
+        </View>
+      );
     }
     if (status === 'error') {
       return (
@@ -684,6 +953,29 @@ export function LookCommentsSheet({
             <Ionicons name="close" size={22} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
+
+        {/* Sort toggle — per-post, non-persisted (X/Threads pattern) */}
+        {comments.length > 1 && (
+          <View style={styles.sortRow}>
+            <Pressable
+              onPress={() => setSort('top')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sort === 'top' }}
+              accessibilityLabel="Sort by top"
+            >
+              <Text style={[styles.sortText, sort === 'top' && styles.sortTextActive]}>Top</Text>
+            </Pressable>
+            <View style={styles.sortDivider} />
+            <Pressable
+              onPress={() => setSort('latest')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sort === 'latest' }}
+              accessibilityLabel="Sort by latest"
+            >
+              <Text style={[styles.sortText, sort === 'latest' && styles.sortTextActive]}>Latest</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* Comment list */}
         <FlashList<FlatItem>
@@ -756,6 +1048,36 @@ export function LookCommentsSheet({
           </View>
         )}
       </SafeAreaView>
+
+      {/* Long-press context menu — destructive actions live one level deep */}
+      <Modal transparent visible={menuComment !== null} animationType="fade" onRequestClose={closeMenu}>
+        <Pressable style={styles.menuBackdrop} onPress={closeMenu} accessibilityLabel="Close menu">
+          <View style={styles.menuSheet}>
+            <Text style={styles.menuTitle} numberOfLines={1}>
+              {menuComment?.author.username ?? 'Comment'}
+            </Text>
+            <Pressable style={styles.menuItem} onPress={handleMenuReply} accessibilityRole="button">
+              <Ionicons name="arrow-undo" size={20} color={colors.textPrimary} />
+              <Text style={styles.menuItemText}>Reply</Text>
+            </Pressable>
+            {!!menuComment?.body && (
+              <Pressable style={styles.menuItem} onPress={handleMenuCopy} accessibilityRole="button">
+                <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
+                <Text style={styles.menuItemText}>Copy text</Text>
+              </Pressable>
+            )}
+            {menuComment && currentUserId === menuComment.authorId && isAuthenticated && (
+              <Pressable style={styles.menuItem} onPress={handleMenuDelete} accessibilityRole="button">
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                <Text style={[styles.menuItemText, { color: colors.danger }]}>Delete comment</Text>
+              </Pressable>
+            )}
+            <Pressable style={styles.menuCancel} onPress={closeMenu} accessibilityRole="button">
+              <Text style={styles.menuCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </Reanimated.View>
   );
 }
@@ -792,6 +1114,88 @@ const createStyles = (colors: ThemeColors) =>
     listContent: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
+    },
+    sortRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.xs,
+    },
+    sortText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      paddingHorizontal: Space.xs,
+      paddingVertical: Space.xs,
+    },
+    sortTextActive: {
+      color: colors.textPrimary,
+      fontFamily: TypographyV2.meta.fontFamily,
+    },
+    sortDivider: {
+      width: StyleSheet.hairlineWidth,
+      height: 12,
+      backgroundColor: colors.border,
+    },
+    skeletonWrap: {
+      gap: Space.md,
+      paddingVertical: Space.sm,
+    },
+    skeletonRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.sm,
+    },
+    skeletonLines: {
+      flex: 1,
+      gap: Space.xs + 2,
+    },
+    menuBackdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: 'flex-end',
+    },
+    menuSheet: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: Radius.xl,
+      borderTopRightRadius: Radius.xl,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.md,
+      paddingBottom: Space.xl,
+      gap: Space.xs,
+    },
+    menuTitle: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      marginBottom: Space.xs,
+    },
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.smMd,
+      minHeight: Control.hit,
+      borderRadius: Radius.md,
+      paddingHorizontal: Space.xs,
+    },
+    menuItemText: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary,
+    },
+    menuCancel: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: Control.hit,
+      marginTop: Space.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    menuCancelText: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textSecondary,
     },
     separator: {
       height: StyleSheet.hairlineWidth,

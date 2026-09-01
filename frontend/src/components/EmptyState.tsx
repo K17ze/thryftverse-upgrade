@@ -1,13 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Reanimated, {
-  FadeIn } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Radius, Space, Stroke} from '../theme/designTokens';
+import { Radius, Space, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { AppIcon } from './common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 
 interface SuggestedAction {
   label: string;
@@ -15,7 +16,7 @@ interface SuggestedAction {
 }
 
 interface Props {
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof Ionicons.glyphMap | string;
   title: string;
   subtitle?: string;
   /** Contextual hint shown below the subtitle as a subtle tip */
@@ -46,7 +47,13 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
         </Reanimated.View>
       ) : icon ? (
         <Reanimated.View entering={enter}>
-          <Ionicons name={icon} size={compact ? 22 : 28} color={resolvedIconColor} />
+          <AppIcon
+            name={icon}
+            size={compact ? IconSize.lg : IconSize.hero}
+            color={resolvedIconColor}
+            opticalCenter
+            accessible={false}
+          />
         </Reanimated.View>
       ) : null}
 
@@ -68,7 +75,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
 
       {hint ? (
         <Reanimated.View entering={enter} style={styles.hintWrap}>
-          <Ionicons name="bulb-outline" size={12} color={colors.textMuted} />
+          <AppIcon name="image-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
           <Text style={styles.hintText}>{hint}</Text>
         </Reanimated.View>
       ) : null}
@@ -127,7 +134,7 @@ export interface EmptyStatePreset {
  * The CTA should be the primary creation action.
  */
 export const EMPTY_PRESET_FIRST_TIME: EmptyStatePreset = {
-  icon: 'cube-outline',
+  icon: 'bag-handle-outline',
   title: 'Nothing here yet',
   subtitle: 'Your saves and creations will show up here once you get started.' };
 
@@ -171,7 +178,7 @@ export const EMPTY_PRESET_FILTERED_NO_RESULTS: EmptyStatePreset = {
  * "No listings yet" — for seller's own shop with no listings.
  */
 export const EMPTY_PRESET_NO_LISTINGS: EmptyStatePreset = {
-  icon: 'pricetag-outline',
+  icon: 'bag-handle-outline',
   title: 'Your shop is empty',
   subtitle: 'List your first item to start selling. It takes less than a minute.' };
 
@@ -227,7 +234,7 @@ export const EMPTY_PRESET_NO_WISHLIST: EmptyStatePreset = {
  * "No orders" — for order history.
  */
 export const EMPTY_PRESET_NO_ORDERS: EmptyStatePreset = {
-  icon: 'cube-outline',
+  icon: 'receipt-outline',
   title: 'No orders yet',
   subtitle: 'Your purchase history will appear here once you buy your first item.' };
 

@@ -25,6 +25,8 @@ import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { EffectPreviewThumb } from './EffectPreviewThumb';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 import {
   type AIEffectCategory,
   type AIEffectDefinition,
@@ -180,7 +182,7 @@ interface TabMeta {
 
 const TAB_META: TabMeta[] = [
   { key: 'all', label: 'All', icon: 'apps-outline' },
-  { key: 'ml', label: 'ML', icon: 'hardware-chip-outline' },
+  { key: 'ml', label: 'ML', icon: 'bulb-outline' },
   { key: 'portrait', label: 'Portrait', icon: 'person-outline' },
   { key: 'creative', label: 'Creative', icon: 'color-palette-outline' },
   { key: 'color', label: 'Color', icon: 'color-filter-outline' },
@@ -267,10 +269,12 @@ export function AIEffectGrid({
                 isActive && { borderColor: colors.brand, backgroundColor: colors.brandSubtle },
               ]}
             >
-              <Ionicons
+              <AppIcon
                 name={tab.icon}
-                size={IconGrammar.badge}
-                color={isActive ? colors.brand : colors.textSecondary}
+                size={IconSize.xs}
+                color={isActive ? 'brand' : 'textSecondary'}
+                opticalCenter={true}
+                accessible={false}
               />
               <Text
                 style={[
@@ -334,7 +338,7 @@ export function AIEffectGrid({
         contentContainerStyle={styles.gridContent}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="bulb-outline" size={IconGrammar.hero} color={colors.textMuted} />
+            <AppIcon name="sparkles" size={IconSize.hero} color="textMuted" opticalCenter={true} accessible={false} />
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
               {activeTab === 'ml'
                 ? 'ML effects require an on-device model'

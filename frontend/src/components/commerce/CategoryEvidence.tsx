@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import type { EvidenceGroup } from '../../platform/commerce/categoryEvidence';
 
@@ -50,10 +50,11 @@ export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
         return (
           <View key={group.title} style={styles.groupGap}>
             <Pressable
-              style={({ pressed }) => [styles.expandableHeader, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.expandableHeader, pressed && styles.headerPressed]}
               onPress={() => setExpandedGroup(isExpanded ? null : group.title)}
               accessibilityRole="button"
               accessibilityLabel={isExpanded ? `Collapse ${group.title}` : `Expand ${group.title}`}
+              accessibilityState={{ expanded: isExpanded }}
             >
               <Text style={styles.expandableTitle}>{group.title}</Text>
               <Ionicons
@@ -114,7 +115,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.xs },
+    paddingVertical: Space.xs,
+    minHeight: Control.hit },
+  headerPressed: {
+    opacity: 0.85 },
   expandableTitle: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,

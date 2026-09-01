@@ -684,7 +684,7 @@ export default function AuctionHomeScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`Search ${world.displayName} auctions`}
                     >
-                      <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+                      <Ionicons name="bag-handle-outline" size={13} color={colors.textMuted} />
                       <Text style={styles.searchIdleChipText} numberOfLines={1}>{world.displayName}</Text>
                     </Pressable>
                   ))}
@@ -759,7 +759,7 @@ export default function AuctionHomeScreen() {
           }
         >
           <EmptyState
-            icon="pricetag-outline"
+            icon="bag-handle-outline"
             title="Nothing live right now"
             subtitle="New Auctions will appear here when they are scheduled."
             ctaLabel="Create Auction"

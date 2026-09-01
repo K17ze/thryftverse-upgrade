@@ -128,7 +128,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
 
         {trackingLine && (
           <Text style={styles.tracking} numberOfLines={1}>
-            <Ionicons name="cube-outline" size={11} color={colors.textMuted} /> {trackingLine}
+            <Ionicons name="car-outline" size={11} color={colors.textMuted} /> {trackingLine}
           </Text>
         )}
 

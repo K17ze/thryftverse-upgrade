@@ -209,7 +209,7 @@ function MessageBubbleBase({
         isAgent ? (
           <View style={[styles.agentAvatar, { backgroundColor: colors.brandSubtle, borderColor: colors.borderSubtle }]}>
             <Ionicons
-              name={(agentAvatar ?? 'cube-outline') as keyof typeof Ionicons.glyphMap}
+              name={(agentAvatar ?? 'bulb-outline') as keyof typeof Ionicons.glyphMap}
               size={14}
               color={colors.brand}
             />
@@ -229,7 +229,7 @@ function MessageBubbleBase({
             <Text style={styles.senderName}>{senderLabel}</Text>
             {isAgent ? (
               <View style={[styles.aiChip, { backgroundColor: colors.brandSubtle, borderColor: colors.borderSubtle }]}>
-                <Ionicons name="cube-outline" size={9} color={colors.brand} />
+                <Ionicons name="bulb-outline" size={9} color={colors.brand} />
                 <Text style={[styles.aiChipText, { color: colors.brand }]}>AI</Text>
               </View>
             ) : null}

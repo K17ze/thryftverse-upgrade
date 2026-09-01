@@ -33,6 +33,8 @@ import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { withAlpha } from '../../../components/poster/shared/colorUtils';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 import {
   type EffectPreset,
   IDENTITY_MATRIX,
@@ -157,10 +159,12 @@ export function EffectPreviewThumb({
         {isOriginal ? (
           // Lightroom "no adjustment" signal — crossed-circle, not the image.
           <View style={[styles.noneGlyph, { width: size, height: size }]}>
-            <Ionicons
-              name="close-circle-outline"
-              size={Math.round(size * 0.5)}
-              color={selected ? colors.brand : colors.textMuted}
+            <AppIcon
+              name="closeCircle"
+              size={IconSize.xl}
+              color={selected ? 'brand' : 'textMuted'}
+              opticalCenter={true}
+              accessible={false}
             />
           </View>
         ) : skiaImage ? (

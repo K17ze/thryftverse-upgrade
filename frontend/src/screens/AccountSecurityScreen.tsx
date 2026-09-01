@@ -17,6 +17,8 @@ import { AppButton } from '../components/ui/AppButton';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { Space, Radius, Stroke, IconGrammar } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize, type SemanticIconName } from '../theme/iconTokens';
 import { haptics } from '../utils/haptics';
 import {
   fetchInterventionState,
@@ -49,10 +51,10 @@ function formatLastActive(iso: string | null): string {
   return date.toLocaleDateString();
 }
 
-function platformIcon(platform: string): React.ComponentProps<typeof Ionicons>['name'] {
-  if (platform === 'iOS' || platform === 'Android') return 'phone-portrait-outline';
-  if (platform === 'Web') return 'desktop-outline';
-  return 'hardware-chip-outline';
+function platformIcon(platform: string): SemanticIconName {
+  if (platform === 'iOS' || platform === 'Android') return 'phone';
+  if (platform === 'Web') return 'desktop';
+  return 'desktop';
 }
 
 /**
@@ -400,7 +402,7 @@ export default function AccountSecurityScreen({ navigation }: Props) {
         <FlagshipNavigationRow
           title="Something looks wrong"
           subtitle="Secure your account if you see activity you do not recognise"
-          icon="shield-checkmark-outline"
+          icon="lock-closed-outline"
           onPress={handleDeclareCompromise}
           separator={false}
           accessibilityLabel="Secure your account"
@@ -454,7 +456,7 @@ function SessionRow({
   return (
     <View style={[styles.sessionRow, !isLast && { borderBottomColor: colors.borderSubtle }]}>
       <View style={styles.sessionIconWrap}>
-        <Ionicons name={icon} size={20} color={colors.textSecondary} />
+        <AppIcon name={icon} size={IconSize.md} color="textSecondary" opticalCenter accessible={false} />
       </View>
       <View style={styles.sessionContent}>
         <Text style={[styles.sessionDevice, { color: colors.textPrimary }]}>
@@ -587,7 +589,7 @@ function PasskeyRow({
   return (
     <View style={[styles.sessionRow, !isLast && { borderBottomColor: colors.borderSubtle }]}>
       <View style={styles.sessionIconWrap}>
-        <Ionicons name="key-outline" size={20} color={colors.textSecondary} />
+        <AppIcon name="key" size={IconSize.md} color="textSecondary" opticalCenter accessible={false} />
       </View>
       <View style={styles.sessionContent}>
         <Text style={[styles.sessionDevice, { color: colors.textPrimary }]}>

@@ -55,12 +55,12 @@ export function TrustFactsSection({ seller, commerce, colors }: TrustFactsSectio
   // 4. Dispatch time — when will it arrive?
   if (seller?.dispatchTimeLabel) {
     trustRows.push({
-      icon: 'cube-outline',
+      icon: 'car-outline',
       label: seller.dispatchTimeLabel,
     });
   } else if (commerce.shippingMethod) {
     trustRows.push({
-      icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'cube-outline',
+      icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'car-outline',
       label: commerce.shippingPayer === 'seller'
         ? `Free ${commerce.shippingMethod}`
         : commerce.shippingMethod,
@@ -70,7 +70,7 @@ export function TrustFactsSection({ seller, commerce, colors }: TrustFactsSectio
   // exists, the first viewport must still carry at least one trust signal.
   if (trustRows.length === 0 && commerce.protectionPolicy?.available) {
     trustRows.push({
-      icon: 'shield-checkmark-outline',
+      icon: 'checkmark-circle-outline',
       label: commerce.protectionPolicy.label ?? 'Buyer Protection',
     });
   }
