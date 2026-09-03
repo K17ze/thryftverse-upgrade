@@ -31,6 +31,8 @@ export interface FlagshipStateProps {
   secondaryActionLabel?: string;
   onSecondaryAction?: () => void;
   style?: StyleProp<ViewStyle>;
+  /** Optional children rendered below the subtitle (e.g. dev error detail). */
+  children?: React.ReactNode;
 }
 
 const DEFAULT_TITLES: Record<string, string> = {
@@ -76,7 +78,8 @@ export function FlagshipState({
   icon,
   secondaryActionLabel,
   onSecondaryAction,
-  style }: FlagshipStateProps) {
+  style,
+  children }: FlagshipStateProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
@@ -146,6 +149,7 @@ export function FlagshipState({
       >
         {subtitle ?? DEFAULT_SUBTITLES[variant]}
       </Reanimated.Text>
+      {children}
       {actionLabel && onAction && (
         <Reanimated.View entering={enter}>
           <AnimatedPressable

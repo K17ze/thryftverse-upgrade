@@ -17,6 +17,7 @@ import {
 import { mapLanguageOptionToLocale, mapLocaleToLanguageOption, setI18nLocale, hydratePersistedLocale } from '../i18n';
 import { setAnalyticsOptOut } from '../lib/telemetry';
 import { setAnalyticsOptOut as setGateOptOut } from '../analytics/analyticsGate';
+import { patchPrivacyConsent } from '../services/consentApi';
 import { makeStableId } from '../utils/createStableId';
 
 interface SettingsPreferencesContextValue {
@@ -250,6 +251,12 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
     // honours the preference immediately.
     setAnalyticsOptOut(optOut);
     setGateOptOut(optOut);
+    // Persist to the backend so the opt-out survives device resets and
+    // is enforced server-side (GDPR / privacy compliance).
+    patchPrivacyConsent({ analyticsOptOut: optOut }).catch(() => {
+      // Best-effort sync — the local flag is already set. The backend
+      // will be reconciled on next consent fetch.
+    });
   }, []);
 
   const toggleAnalyticsOptOut = React.useCallback(() => {
@@ -257,6 +264,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       const next = !prev;
       setAnalyticsOptOut(next);
       setGateOptOut(next);
+      patchPrivacyConsent({ analyticsOptOut: next }).catch(() => {});
       return next;
     });
   }, []);

@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import { AnimatedPressable } from '../AnimatedPressable';
 
 export interface CoOwnEducationTopic {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -72,17 +71,19 @@ export function CoOwnEducationCard({
       </View>
 
       {onLearnMore ? (
-        <AnimatedPressable
+        <Pressable
           onPress={onLearnMore}
-          scaleValue={0.97}
-          hapticFeedback="light"
-          style={[styles.learnMoreBtn, { borderColor: colors.border }]}
+          style={({ pressed }) => [
+            styles.learnMoreBtn,
+            { borderColor: colors.border },
+            pressed && styles.learnMorePressed,
+          ]}
           accessibilityRole="button"
           accessibilityLabel={learnMoreLabel}
         >
           <Text style={[styles.learnMoreText, { color: colors.textPrimary }]}>{learnMoreLabel}</Text>
           <Ionicons name="arrow-forward" size={15} color={colors.textPrimary} />
-        </AnimatedPressable>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -138,6 +139,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     marginTop: Space.xs,
+  },
+  learnMorePressed: {
+    opacity: 0.6,
   },
   learnMoreText: {
     fontSize: TypographyV2.body.size,

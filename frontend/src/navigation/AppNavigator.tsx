@@ -21,6 +21,7 @@ import {
   saveNavigationState,
   clearNavigationState,
 } from './navigationPersistence';
+import { withScreenErrorBoundary } from '../components/ScreenErrorBoundary';
 
 // Eager — initial routes needed immediately at startup.
 // AuthLandingScreen is the initial route when unauthenticated;
@@ -291,17 +292,17 @@ export default function AppNavigator() {
       {/* ── Chat & Messaging ── */}
       <Stack.Screen name="Chat" getComponent={() => require('../screens/ChatScreen').default} />
       <Stack.Screen name="Inbox" getComponent={() => require('../screens/InboxScreen').default} />
-      <Stack.Screen name="CreateGroupChat" getComponent={() => require('../screens/CreateGroupChatScreen').default} options={modalScreenOptions} />
-      <Stack.Screen name="GroupChat" getComponent={() => require('../screens/GroupChatScreen').default} />
-      <Stack.Screen name="GroupChatInfo" getComponent={() => require('../screens/GroupChatInfoScreen').default} />
-      <Stack.Screen name="GroupMembers" getComponent={() => require('../screens/GroupMembersScreen').default} />
-      <Stack.Screen name="GroupPermissions" getComponent={() => require('../screens/GroupPermissionsScreen').default} />
-      <Stack.Screen name="GroupBotManagement" getComponent={() => require('../screens/GroupBotManagementScreen').default} />
-      <Stack.Screen name="BotDirectory" getComponent={() => require('../screens/BotDirectoryScreen').default} />
-      <Stack.Screen name="BotDetail" getComponent={() => require('../screens/BotDetailScreen').default} />
-      <Stack.Screen name="CustomBots" getComponent={() => require('../screens/CustomBotsScreen').default} />
-      <Stack.Screen name="BotBuilder" getComponent={() => require('../screens/BotBuilderScreen').default} options={modalScreenOptions} />
-      <Stack.Screen name="EditGroup" getComponent={() => require('../screens/EditGroupScreen').default} />
+      <Stack.Screen name="CreateGroupChat" getComponent={withScreenErrorBoundary(() => require('../screens/CreateGroupChatScreen').default, 'CreateGroupChat')} options={modalScreenOptions} />
+      <Stack.Screen name="GroupChat" getComponent={withScreenErrorBoundary(() => require('../screens/GroupChatScreen').default, 'GroupChat')} />
+      <Stack.Screen name="GroupChatInfo" getComponent={withScreenErrorBoundary(() => require('../screens/GroupChatInfoScreen').default, 'GroupChatInfo')} />
+      <Stack.Screen name="GroupMembers" getComponent={withScreenErrorBoundary(() => require('../screens/GroupMembersScreen').default, 'GroupMembers')} />
+      <Stack.Screen name="GroupPermissions" getComponent={withScreenErrorBoundary(() => require('../screens/GroupPermissionsScreen').default, 'GroupPermissions')} />
+      <Stack.Screen name="GroupBotManagement" getComponent={withScreenErrorBoundary(() => require('../screens/GroupBotManagementScreen').default, 'GroupBotManagement')} />
+      <Stack.Screen name="BotDirectory" getComponent={withScreenErrorBoundary(() => require('../screens/BotDirectoryScreen').default, 'BotDirectory')} />
+      <Stack.Screen name="BotDetail" getComponent={withScreenErrorBoundary(() => require('../screens/BotDetailScreen').default, 'BotDetail')} />
+      <Stack.Screen name="CustomBots" getComponent={withScreenErrorBoundary(() => require('../screens/CustomBotsScreen').default, 'CustomBots')} />
+      <Stack.Screen name="BotBuilder" getComponent={withScreenErrorBoundary(() => require('../screens/BotBuilderScreen').default, 'BotBuilder')} options={modalScreenOptions} />
+      <Stack.Screen name="EditGroup" getComponent={withScreenErrorBoundary(() => require('../screens/EditGroupScreen').default, 'EditGroup')} />
 
       {/* ── Social / Profile ── */}
       <Stack.Screen name="UserProfile" getComponent={() => require('../screens/UserProfileScreen').default} />

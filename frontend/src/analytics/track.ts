@@ -27,6 +27,7 @@
 import { getPostHogClient } from './PostHogProvider';
 import { isAnalyticsEnabled } from './analyticsGate';
 import { sanitizeEvent } from './piiSanitizer';
+import { trackTelemetryEvent } from '../lib/telemetry';
 import type { EventName, EventProperties } from './types';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -84,16 +85,21 @@ export function track<E extends EventName>(
   properties?: PropertiesFor<E>,
 ): void {
   if (!isAnalyticsEnabled()) return;
-  const client = getPostHogClient();
-  if (!client) return;
   const sanitized = sanitizeEvent(
     event,
     properties as Record<string, unknown> | undefined,
   );
-  client.capture(
-    sanitized.eventName,
-    sanitized.properties as PostHogProperties | undefined,
-  );
+  // Send to PostHog (if configured).
+  const client = getPostHogClient();
+  if (client) {
+    client.capture(
+      sanitized.eventName,
+      sanitized.properties as PostHogProperties | undefined,
+    );
+  }
+  // Also persist to the backend durable store so analytics data is
+  // available in the app's own database, not only in PostHog.
+  trackTelemetryEvent(sanitized.eventName, sanitized.properties as Record<string, unknown>);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -125,13 +131,15 @@ export function trackRaw(
   properties?: Record<string, EventPropertyValue>,
 ): void {
   if (!isAnalyticsEnabled()) return;
-  const client = getPostHogClient();
-  if (!client) return;
   const sanitized = sanitizeEvent(event, properties as Record<string, unknown> | undefined);
-  client.capture(
-    sanitized.eventName,
-    sanitized.properties as PostHogProperties | undefined,
-  );
+  const client = getPostHogClient();
+  if (client) {
+    client.capture(
+      sanitized.eventName,
+      sanitized.properties as PostHogProperties | undefined,
+    );
+  }
+  trackTelemetryEvent(sanitized.eventName, sanitized.properties as Record<string, unknown>);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -168,14 +176,16 @@ export function trackFunnelStep(
   properties?: Record<string, EventPropertyValue>,
 ): void {
   if (!isAnalyticsEnabled()) return;
-  const client = getPostHogClient();
-  if (!client) return;
   const sanitized = sanitizeEvent(step, {
     funnel,
     ...(properties as Record<string, unknown> | undefined),
   });
-  client.capture(
-    sanitized.eventName,
-    sanitized.properties as PostHogProperties | undefined,
-  );
+  const client = getPostHogClient();
+  if (client) {
+    client.capture(
+      sanitized.eventName,
+      sanitized.properties as PostHogProperties | undefined,
+    );
+  }
+  trackTelemetryEvent(sanitized.eventName, sanitized.properties as Record<string, unknown>);
 }

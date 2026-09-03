@@ -15,6 +15,12 @@ interface ScreenErrorBoundaryState {
   // Monotonic counter bumped on every recovery attempt so the wrapped screen
   // re-mounts with a fresh key — prevents re-crashing on the same render.
   recoveryAttempt: number;
+  // The error message from the most recent crash — shown in dev mode so the
+  // developer can see what actually threw without the red screen.
+  errorMessage?: string;
+  // The error stack from the most recent crash — shown in dev mode so the
+  // developer can see the exact call site that threw.
+  errorStack?: string;
 }
 
 /**
@@ -41,8 +47,12 @@ class ScreenErrorBoundaryInner extends React.Component<
     this.state = { hasError: false, recoveryAttempt: 0 };
   }
 
-  static getDerivedStateFromError(): Partial<ScreenErrorBoundaryState> {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): Partial<ScreenErrorBoundaryState> {
+    return {
+      hasError: true,
+      errorMessage: error?.message ?? String(error),
+      errorStack: error?.stack ?? '',
+    };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -101,6 +111,8 @@ class ScreenErrorBoundaryInner extends React.Component<
       return (
         <ErrorFallback
           screenName={this.props.screenName}
+          errorMessage={this.state.errorMessage}
+          errorStack={this.state.errorStack}
           onRetry={this.handleRetry}
           onGoBack={this.handleGoBack}
         />

@@ -20,7 +20,7 @@
  * handler registration are cleaned up automatically on unmount.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRealtime, type RealtimeConnectionState, type RealtimeEnvelope } from '../platform/realtime';
+import { useRealtimeSafe, type RealtimeConnectionState, type RealtimeEnvelope } from '../platform/realtime';
 import { useStore } from '../store/useStore';
 import type { Message as ConversationMessage } from '../domain';
 
@@ -169,8 +169,8 @@ export function chatConversationTopic(conversationId: string): string {
  * realtime client. Returns the current state and re-renders on changes.
  */
 export function useRealtimeConnection(): RealtimeConnectionState {
-  const { connectionState } = useRealtime();
-  return connectionState;
+  const ctx = useRealtimeSafe();
+  return ctx?.connectionState ?? 'idle';
 }
 
 // ── Payload → domain mapper ─────────────────────────────────────────
@@ -228,12 +228,13 @@ export function useChatMessageEvent(
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
 
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatMessageCreatedPayload>(topic, (envelope) => {
@@ -258,12 +259,13 @@ export function useChatMessageEvent(
 export function useTypingIndicator(conversationId: string | undefined): boolean {
   const [isTyping, setIsTyping] = useState(false);
   const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) {
+    if (!topic || !client) {
       setIsTyping(false);
       return;
     }
@@ -317,13 +319,15 @@ export function useInboxMessageEvent(
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
   const conversations = useStore((state) => state.conversations);
 
   // Build the desired topic set from the current conversation list.
   const desiredTopics = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    if (!client) return;
     const next = new Set(conversations.map((c) => chatConversationTopic(c.id)));
     const prev = desiredTopics.current;
 
@@ -341,6 +345,7 @@ export function useInboxMessageEvent(
   // Register a handler on every desired topic. Each handler filters by
   // event type and forwards to the caller's callback.
   useEffect(() => {
+    if (!client) return;
     const unsubscribers: Array<() => void> = [];
     for (const topic of desiredTopics.current) {
       const unsubscribe = client.on<ChatMessageCreatedPayload>(topic, (envelope) => {
@@ -369,12 +374,13 @@ export function useChatGroupIdentityEvent(
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
 
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatGroupIdentityUpdatedPayload>(topic, (envelope) => {
@@ -396,11 +402,12 @@ export function useChatGroupSettingsEvent(
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatGroupSettingsUpdatedPayload>(topic, (envelope) => {
       if (envelope.type !== CHAT_GROUP_SETTINGS_UPDATED_EVENT) return;
@@ -420,11 +427,12 @@ export function useChatGroupMembershipEvent(
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
     client.subscribe([topic]);
     const unsubscribe = client.on<unknown>(topic, (envelope) => {
       if (
@@ -456,12 +464,14 @@ export function useInboxGroupIdentityEvent(
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
   const conversations = useStore((state) => state.conversations);
 
   const desiredTopics = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    if (!client) return;
     const next = new Set(conversations.map((c) => chatConversationTopic(c.id)));
     const prev = desiredTopics.current;
 
@@ -474,6 +484,7 @@ export function useInboxGroupIdentityEvent(
   }, [client, conversations]);
 
   useEffect(() => {
+    if (!client) return;
     const unsubscribers: Array<() => void> = [];
     for (const topic of desiredTopics.current) {
       const unsubscribe = client.on<ChatGroupIdentityUpdatedPayload>(topic, (envelope) => {
@@ -506,12 +517,13 @@ export function useChatReadReceiptEvent(
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
 
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatMessageReadPayload>(topic, (envelope) => {
@@ -543,12 +555,13 @@ export function useChatMessageDeletedEvent(
 ): void {
   const handlerRef = useRef(onDeleted);
   handlerRef.current = onDeleted;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
 
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatMessageDeletedPayload>(topic, (envelope) => {
@@ -591,12 +604,13 @@ export function useChatMessageEditedEvent(
 ): void {
   const handlerRef = useRef(onEdited);
   handlerRef.current = onEdited;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
 
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatMessageEditedPayload>(topic, (envelope) => {
@@ -633,12 +647,13 @@ export function useChatReactionEvent(
 ): void {
   const handlerRef = useRef(onReaction);
   handlerRef.current = onReaction;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
 
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatReactionPayload>(topic, (envelope) => {

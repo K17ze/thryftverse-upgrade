@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { haptics } from '../../utils/haptics';
 
@@ -209,12 +208,13 @@ export function CoOwnFirstTradeGuide({
 
           {/* Footer */}
           <View style={[styles.footer, { borderTopColor: colors.border }]}>
-            <AnimatedPressable
-              style={[styles.backBtn, { borderColor: colors.border }]}
+            <Pressable
+              style={({ pressed }) => [
+                styles.backBtn,
+                { borderColor: colors.border },
+                pressed && styles.backBtnPressed,
+              ]}
               onPress={handleBack}
-              activeOpacity={0.8}
-              scaleValue={0.97}
-              hapticFeedback="light"
               accessibilityRole="button"
               accessibilityLabel={currentStep === 0 ? 'Close guide' : 'Previous step'}
             >
@@ -222,7 +222,7 @@ export function CoOwnFirstTradeGuide({
               <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>
                 {currentStep === 0 ? 'Close' : 'Back'}
               </Text>
-            </AnimatedPressable>
+            </Pressable>
 
             {isLastStep ? (
               <View style={styles.footerRight}>
@@ -434,6 +434,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: 44,
+  },
+  backBtnPressed: {
+    opacity: 0.6,
   },
   backBtnText: {
     fontSize: TypographyV2.body.size,
